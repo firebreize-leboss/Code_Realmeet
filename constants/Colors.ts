@@ -2,7 +2,6 @@ const tintColorLight = "#0a7ea4";
 const tintColorDark = "#fff";
 
 export const zincColors = {
-  tt
   50: "#fafafa",
   100: "#f4f4f5",
   200: "#e4e4e7",
