@@ -1,4 +1,3 @@
-
 import React from 'react';
 import {
   View,
@@ -181,7 +180,10 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.logoutButton}>
+        <TouchableOpacity 
+          style={styles.logoutButton}
+          onPress={() => router.push('/auth/account-type')}
+        >
           <Text style={styles.logoutText}>Log Out</Text>
         </TouchableOpacity>
       </ScrollView>

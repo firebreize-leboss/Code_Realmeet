@@ -28,6 +28,7 @@ const MAPPING = {
   "chevron.down": "keyboard-arrow-down",
   "arrow.clockwise": "refresh",
   "arrow.counterclockwise": "refresh",
+  "arrow.up.circle.fill": "arrow-circle-up",
 
   // Communication & Social
   "paperplane.fill": "send",
@@ -92,6 +93,7 @@ const MAPPING = {
   "exclamationmark.triangle": "warning-amber",
   "questionmark.circle.fill": "help",
   "questionmark.circle": "help-outline",
+  "shield.fill": "shield",
 
   // Shapes & Symbols
   "square": "square",
@@ -151,7 +153,6 @@ const MAPPING = {
   "square.and.arrow.up": "share",
   "square.and.arrow.down": "download",
   "arrow.up.doc.fill": "upload-file",
-  "arrow.up.circle.fill": "arrow-circle-up",
   "link": "link",
 
   // Search & Discovery
@@ -165,6 +166,20 @@ const MAPPING = {
   "lightbulb.fill": "lightbulb",
   "moon.fill": "dark-mode",
   "sun.max.fill": "light-mode",
+
+  // Business & Buildings
+  "building.2.fill": "business",
+  "building.2": "business",
+  
+  // Charts & Analytics
+  "chart.bar.fill": "bar-chart",
+  
+  // Support
+  "headphones": "headset",
+
+  // Logos (Social)
+  "logo.apple": "apple",
+  "logo.google": "google",
 
   // ⭐ CATÉGORIES - ICÔNES AJOUTÉES
   "figure.hiking": "hiking",
