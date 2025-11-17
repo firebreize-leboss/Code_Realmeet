@@ -31,10 +31,7 @@ export default function ProfileScreen() {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[
-          styles.contentContainer,
-          Platform.OS !== 'ios' && styles.contentContainerWithTabBar,
-        ]}
+        contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.profileHeader}>
@@ -110,10 +107,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
-  contentContainerWithTabBar: {
-    paddingBottom: 100, // Padding supplémentaire pour Android pour éviter le chevauchement avec le tab bar
+    paddingBottom: Platform.OS === 'ios' ? 124 : 120, // ✅ CORRIGÉ
   },
   profileHeader: {
     alignItems: 'center',
@@ -206,7 +200,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 8,
-    marginBottom: Platform.OS === 'android' ? 20 : 0, // Marge supplémentaire sur Android
+    marginBottom: 20, // ✅ NOUVEAU : marge supplémentaire
   },
   editButtonText: {
     fontSize: 16,
