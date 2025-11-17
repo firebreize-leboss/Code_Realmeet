@@ -7,15 +7,52 @@ import {
   Image,
   TouchableOpacity,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
-import { mockUser } from '@/data/mockData';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { user, profile, loading, refreshProfile } = useAuth();
+
+  // État de chargement
+  if (loading) {
+    return (
+      <SafeAreaView style={commonStyles.container} edges={['top']}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Chargement du profil...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Si pas connecté
+  if (!user || !profile) {
+    return (
+      <SafeAreaView style={commonStyles.container} edges={['top']}>
+        <View style={styles.notConnectedContainer}>
+          <View style={styles.notConnectedIcon}>
+            <IconSymbol name="person.circle" size={80} color={colors.textSecondary} />
+          </View>
+          <Text style={styles.notConnectedTitle}>Non connecté</Text>
+          <Text style={styles.notConnectedText}>
+            Connectez-vous pour accéder à votre profil et profiter de toutes les fonctionnalités
+          </Text>
+          <TouchableOpacity 
+            style={styles.connectButton}
+            onPress={() => router.push('/auth/account-type')}
+          >
+            <Text style={styles.connectButtonText}>Se connecter</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={commonStyles.container} edges={['top']}>
@@ -31,35 +68,45 @@ export default function ProfileScreen() {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.contentContainer}
+        contentContainerStyle={[
+          styles.contentContainer,
+          Platform.OS !== 'ios' && styles.contentContainerWithTabBar,
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.profileHeader}>
-          <Image source={{ uri: mockUser.avatar }} style={styles.avatar} />
-          <Text style={styles.name}>{mockUser.name}</Text>
+          <Image 
+            source={{ uri: profile.avatar_url || 'https://via.placeholder.com/120' }} 
+            style={styles.avatar} 
+          />
+          <Text style={styles.name}>{profile.full_name || profile.username}</Text>
           <View style={styles.locationRow}>
             <IconSymbol name="location.fill" size={16} color={colors.textSecondary} />
-            <Text style={styles.city}>{mockUser.city}</Text>
+            <Text style={styles.city}>{profile.city || 'Ville non renseignée'}</Text>
           </View>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>About</Text>
           <View style={styles.card}>
-            <Text style={styles.bio}>{mockUser.bio}</Text>
+            <Text style={styles.bio}>
+              {profile.bio || 'Aucune bio renseignée'}
+            </Text>
           </View>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Interests</Text>
-          <View style={styles.interestsContainer}>
-            {mockUser.interests.map((interest, index) => (
-              <View key={index} style={styles.interestBadge}>
-                <Text style={styles.interestText}>{interest}</Text>
-              </View>
-            ))}
+        {profile.interests && profile.interests.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Interests</Text>
+            <View style={styles.interestsContainer}>
+              {profile.interests.map((interest, index) => (
+                <View key={index} style={styles.interestBadge}>
+                  <Text style={styles.interestText}>{interest}</Text>
+                </View>
+              ))}
+            </View>
           </View>
-        </View>
+        )}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Stats</Text>
@@ -107,7 +154,53 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     paddingHorizontal: 20,
-    paddingBottom: Platform.OS === 'ios' ? 124 : 120, // ✅ CORRIGÉ
+    paddingBottom: 20,
+  },
+  contentContainerWithTabBar: {
+    paddingBottom: 100,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: colors.textSecondary,
+  },
+  notConnectedContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  notConnectedIcon: {
+    marginBottom: 24,
+  },
+  notConnectedTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 12,
+  },
+  notConnectedText: {
+    fontSize: 16,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 32,
+  },
+  connectButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 12,
+  },
+  connectButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.background,
   },
   profileHeader: {
     alignItems: 'center',
@@ -200,7 +293,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 8,
-    marginBottom: 20, // ✅ NOUVEAU : marge supplémentaire
+    marginBottom: Platform.OS === 'android' ? 20 : 0,
   },
   editButtonText: {
     fontSize: 16,

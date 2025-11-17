@@ -1,0 +1,96 @@
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { authService } from '@/services/auth.service';
+import { userService } from '@/services/user.service';
+import { User } from '@supabase/supabase-js';
+import { Database } from '@/lib/supabase';
+
+type Profile = Database['public']['Tables']['profiles']['Row'];
+
+interface AuthContextType {
+  user: User | null;
+  profile: Profile | null;
+  loading: boolean;
+  signOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Vérifier la session au démarrage
+    checkUser();
+
+    // Écouter les changements d'auth
+    const { data: { subscription } } = authService.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth event:', event);
+        if (session?.user) {
+          setUser(session.user);
+          await loadProfile(session.user.id);
+        } else {
+          setUser(null);
+          setProfile(null);
+        }
+        setLoading(false);
+      }
+    );
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  async function checkUser() {
+    try {
+      const currentUser = await authService.getCurrentUser();
+      if (currentUser) {
+        setUser(currentUser);
+        await loadProfile(currentUser.id);
+      }
+    } catch (error) {
+      console.error('Erreur vérification utilisateur:', error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadProfile(userId: string) {
+    try {
+      const profileData = await userService.getProfile(userId);
+      setProfile(profileData);
+    } catch (error) {
+      console.error('Erreur chargement profil:', error);
+    }
+  }
+
+  async function signOut() {
+    await authService.logoutUser();
+    setUser(null);
+    setProfile(null);
+  }
+
+  async function refreshProfile() {
+    if (user) {
+      await loadProfile(user.id);
+    }
+  }
+
+  return (
+    <AuthContext.Provider value={{ user, profile, loading, signOut, refreshProfile }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+}

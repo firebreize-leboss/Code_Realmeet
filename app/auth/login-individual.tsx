@@ -7,28 +7,44 @@ import {
   TextInput,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
+import { authService } from '@/services/auth.service';
 
 export default function LoginIndividualScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!email || !password) {
       Alert.alert('Erreur', 'Veuillez remplir tous les champs');
       return;
     }
-    
-    // Simuler une connexion réussie
-    Alert.alert('Connexion réussie', 'Bienvenue sur RealMeet !', [
-      { text: 'OK', onPress: () => router.replace('/(tabs)/browse') },
-    ]);
+
+    setLoading(true);
+
+    try {
+      const result = await authService.loginUser({ email, password });
+
+      if (result.success) {
+        Alert.alert('Succès', result.message, [
+          { text: 'OK', onPress: () => router.replace('/(tabs)/browse') },
+        ]);
+      } else {
+        Alert.alert('Erreur', result.error);
+      }
+    } catch (error: any) {
+      Alert.alert('Erreur', error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -102,8 +118,13 @@ export default function LoginIndividualScreen() {
           <TouchableOpacity
             style={styles.loginButton}
             onPress={handleLogin}
+            disabled={loading}
           >
-            <Text style={styles.loginButtonText}>Se connecter</Text>
+            {loading ? (
+              <ActivityIndicator color={colors.background} />
+            ) : (
+              <Text style={styles.loginButtonText}>Se connecter</Text>
+            )}
           </TouchableOpacity>
         </View>
 

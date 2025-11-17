@@ -9,11 +9,15 @@ import {
   Image,
   Alert,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
+import { authService } from '@/services/auth.service';
+import { storageService } from '@/services/storage.service';
+import { userService } from '@/services/user.service';
 
 export default function SignupIndividualScreen() {
   const router = useRouter();
@@ -28,8 +32,9 @@ export default function SignupIndividualScreen() {
   const [profileImage, setProfileImage] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleSignup = () => {
+  const handleSignup = async () => {
     if (!firstName || !lastName || !email || !password || !confirmPassword || !birthDate || !city) {
       Alert.alert('Erreur', 'Veuillez remplir tous les champs obligatoires');
       return;
@@ -48,15 +53,64 @@ export default function SignupIndividualScreen() {
       return;
     }
 
-    // Simuler une inscription réussie
-    Alert.alert('Inscription réussie', 'Bienvenue sur RealMeet !', [
-      { text: 'OK', onPress: () => router.replace('/(tabs)/browse') },
-    ]);
+    setLoading(true);
+
+    try {
+      // 1. Vérifier si le username est disponible
+      const username = `${firstName.toLowerCase()}.${lastName.toLowerCase()}`;
+      const isAvailable = await userService.isUsernameAvailable(username);
+      
+      if (!isAvailable) {
+        Alert.alert('Erreur', 'Ce nom d\'utilisateur existe déjà');
+        setLoading(false);
+        return;
+      }
+
+      // 2. Upload de l'avatar si présent
+      let avatarUrl = null;
+      if (profileImage) {
+        const uploadResult = await storageService.uploadAvatar(
+          profileImage,
+          'temp'
+        );
+        if (uploadResult.success) {
+          avatarUrl = uploadResult.url;
+        }
+      }
+
+      // 3. Créer le compte
+      const result = await authService.registerUser({
+        email,
+        password,
+        username,
+        full_name: `${firstName} ${lastName}`,
+        avatar_url: avatarUrl,
+        city,
+        date_of_birth: birthDate,
+        phone,
+      });
+
+      if (result.success) {
+        Alert.alert('Succès', result.message, [
+          { text: 'OK', onPress: () => router.replace('/(tabs)/browse') },
+        ]);
+      } else {
+        Alert.alert('Erreur', result.error);
+      }
+    } catch (error: any) {
+      Alert.alert('Erreur', error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleImagePick = () => {
-    // Simuler la sélection d'image
-    Alert.alert('Photo de profil', 'Fonctionnalité de sélection d\'image à implémenter');
+  const handleImagePick = async () => {
+    const result = await storageService.pickImage();
+    if (result.success && result.uri) {
+      setProfileImage(result.uri);
+    } else if (result.error) {
+      Alert.alert('Erreur', result.error);
+    }
   };
 
   return (
@@ -260,17 +314,22 @@ export default function SignupIndividualScreen() {
           <TouchableOpacity
             style={styles.signupButton}
             onPress={handleSignup}
+            disabled={loading}
           >
-            <Text style={styles.signupButtonText}>Créer mon compte</Text>
+            {loading ? (
+              <ActivityIndicator color={colors.background} />
+            ) : (
+              <Text style={styles.signupButtonText}>Créer mon compte</Text>
+            )}
           </TouchableOpacity>
         </View>
 
         <View style={styles.loginSection}>
           <Text style={styles.loginText}>Vous avez déjà un compte ?</Text>
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text style={styles.loginLink}>Se connecter</Text>
-          </TouchableOpacity>
         </View>
+        <TouchableOpacity onPress={() => router.back()}>
+          <Text style={styles.loginLink}>Se connecter</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -417,19 +476,19 @@ const styles = StyleSheet.create({
     color: colors.background,
   },
   loginSection: {
-    flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    gap: 6,
+    marginBottom: 8,
     marginTop: 32,
   },
   loginText: {
     fontSize: 15,
     color: colors.textSecondary,
+    textAlign: 'center',
   },
   loginLink: {
     fontSize: 15,
     color: colors.primary,
     fontWeight: '600',
+    textAlign: 'center',
   },
 });

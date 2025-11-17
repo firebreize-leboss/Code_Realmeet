@@ -7,11 +7,13 @@ import {
   TextInput,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
+import { authService } from '@/services/auth.service';
 
 export default function LoginBusinessScreen() {
   const router = useRouter();
@@ -19,8 +21,9 @@ export default function LoginBusinessScreen() {
   const [siret, setSiret] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!email || !siret || !password) {
       Alert.alert('Erreur', 'Veuillez remplir tous les champs');
       return;
@@ -32,10 +35,27 @@ export default function LoginBusinessScreen() {
       return;
     }
 
-    // Simuler une connexion réussie
-    Alert.alert('Connexion réussie', 'Bienvenue sur RealMeet Business !', [
-      { text: 'OK', onPress: () => router.replace('/(tabs)/browse') },
-    ]);
+    setLoading(true);
+
+    try {
+      // Pour l'instant, login normal (à adapter selon vos besoins entreprise)
+      const result = await authService.loginUser({ 
+        email, 
+        password 
+      });
+
+      if (result.success) {
+        Alert.alert('Succès', result.message, [
+          { text: 'OK', onPress: () => router.replace('/(tabs)/browse') },
+        ]);
+      } else {
+        Alert.alert('Erreur', result.error);
+      }
+    } catch (error: any) {
+      Alert.alert('Erreur', error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const formatSiret = (text: string) => {
@@ -146,8 +166,13 @@ export default function LoginBusinessScreen() {
           <TouchableOpacity
             style={[styles.loginButton, { backgroundColor: colors.secondary }]}
             onPress={handleLogin}
+            disabled={loading}
           >
-            <Text style={styles.loginButtonText}>Se connecter</Text>
+            {loading ? (
+              <ActivityIndicator color={colors.background} />
+            ) : (
+              <Text style={styles.loginButtonText}>Se connecter</Text>
+            )}
           </TouchableOpacity>
         </View>
 

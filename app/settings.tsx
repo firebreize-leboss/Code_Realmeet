@@ -7,11 +7,13 @@ import {
   TouchableOpacity,
   Switch,
   Platform,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
+import { authService } from '@/services/auth.service';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -79,6 +81,15 @@ export default function SettingsScreen() {
       />
     </View>
   );
+
+  const handleLogout = async () => {
+    const result = await authService.logoutUser();
+    if (result.success) {
+      router.push('/auth/account-type');
+    } else {
+      Alert.alert('Erreur', result.error);
+    }
+  };
 
   return (
     <SafeAreaView style={commonStyles.container} edges={['top']}>
@@ -182,7 +193,7 @@ export default function SettingsScreen() {
 
         <TouchableOpacity 
           style={styles.logoutButton}
-          onPress={() => router.push('/auth/account-type')}
+          onPress={handleLogout}
         >
           <Text style={styles.logoutText}>Log Out</Text>
         </TouchableOpacity>
