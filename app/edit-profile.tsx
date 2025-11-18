@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import {
   View,
@@ -9,6 +8,7 @@ import {
   TouchableOpacity,
   Image,
   Alert,
+  ActivityIndicator,   // ✅ Import ajouté
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -21,7 +21,7 @@ import { storageService } from '@/services/storage.service';
 export default function EditProfileScreen() {
   const router = useRouter();
   const { user, profile, refreshProfile } = useAuth();
-  
+
   const [name, setName] = useState(profile?.full_name || '');
   const [bio, setBio] = useState(profile?.bio || '');
   const [city, setCity] = useState(profile?.city || '');
@@ -30,6 +30,7 @@ export default function EditProfileScreen() {
   const [newInterest, setNewInterest] = useState('');
   const [profileImage, setProfileImage] = useState(profile?.avatar_url || '');
   const [loading, setLoading] = useState(false);
+
   const handleSave = async () => {
     if (!user || !profile) return;
 
@@ -38,15 +39,10 @@ export default function EditProfileScreen() {
     try {
       let avatarUrl = profile.avatar_url;
 
-      // Upload nouvelle image si changée
+      // Upload nouvelle image
       if (profileImage && profileImage !== profile.avatar_url) {
-        const uploadResult = await storageService.uploadAvatar(
-          profileImage,
-          user.id
-        );
-        if (uploadResult.success) {
-          avatarUrl = uploadResult.url;
-        }
+        const uploadResult = await storageService.uploadAvatar(profileImage, user.id);
+        if (uploadResult.success) avatarUrl = uploadResult.url;
       }
 
       // Mise à jour du profil
@@ -61,9 +57,13 @@ export default function EditProfileScreen() {
 
       if (result.success) {
         await refreshProfile();
-        Alert.alert('Succès', 'Profil mis à jour !', [
-          { text: 'OK', onPress: () => router.back() },
-        ]);
+        Alert.alert('Succès', 'Profil mis à jour !');
+
+        // ⛔ FIX navigation : timeout obligatoire pour Expo Router
+        setTimeout(() => {
+          router.back();
+        }, 150);
+
       } else {
         Alert.alert('Erreur', result.error);
       }
@@ -73,7 +73,7 @@ export default function EditProfileScreen() {
       setLoading(false);
     }
   };
-  
+
   const handleImagePick = async () => {
     const result = await storageService.pickImage();
     if (result.success && result.uri) {
@@ -83,7 +83,6 @@ export default function EditProfileScreen() {
     }
   };
 
-  
   const handleAddInterest = () => {
     if (newInterest.trim() && !interests.includes(newInterest.trim())) {
       setInterests([...interests, newInterest.trim()]);
@@ -91,7 +90,6 @@ export default function EditProfileScreen() {
     }
   };
 
-  
   const handleRemoveInterest = (index: number) => {
     setInterests(interests.filter((_, i) => i !== index));
   };
@@ -99,10 +97,7 @@ export default function EditProfileScreen() {
   return (
     <SafeAreaView style={commonStyles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <IconSymbol name="chevron.left" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Edit Profile</Text>
@@ -115,20 +110,18 @@ export default function EditProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.avatarSection}>
-          <Image 
-            source={{ uri: profileImage || 'https://via.placeholder.com/120' }} 
-            style={styles.avatar} 
+          <Image
+            source={{ uri: profileImage || 'https://via.placeholder.com/120' }}
+            style={styles.avatar}
           />
-          <TouchableOpacity 
-            style={styles.changePhotoButton}
-            onPress={handleImagePick}
-          >
+          <TouchableOpacity style={styles.changePhotoButton} onPress={handleImagePick}>
             <IconSymbol name="camera.fill" size={20} color={colors.primary} />
             <Text style={styles.changePhotoText}>Changer la photo</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.form}>
+          {/* NAME */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Name</Text>
             <TextInput
@@ -140,6 +133,7 @@ export default function EditProfileScreen() {
             />
           </View>
 
+          {/* BIO */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Bio</Text>
             <TextInput
@@ -153,6 +147,7 @@ export default function EditProfileScreen() {
             />
           </View>
 
+          {/* CITY */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>City</Text>
             <TextInput
@@ -163,6 +158,8 @@ export default function EditProfileScreen() {
               onChangeText={setCity}
             />
           </View>
+
+          {/* PHONE */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Téléphone</Text>
             <TextInput
@@ -175,21 +172,25 @@ export default function EditProfileScreen() {
             />
           </View>
 
+          {/* INTERESTS */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Centres d'intérêt</Text>
+
             <View style={styles.inputContainer}>
               <TextInput
-                style={styles.input}
+                style={styles.inputInside}
                 placeholder="Ajouter un intérêt"
                 placeholderTextColor={colors.textSecondary}
                 value={newInterest}
                 onChangeText={setNewInterest}
                 onSubmitEditing={handleAddInterest}
               />
+
               <TouchableOpacity onPress={handleAddInterest}>
                 <IconSymbol name="plus.circle.fill" size={28} color={colors.primary} />
               </TouchableOpacity>
             </View>
+
             <View style={styles.interestsContainer}>
               {interests.map((interest, index) => (
                 <View key={index} style={styles.interestBadge}>
@@ -203,11 +204,8 @@ export default function EditProfileScreen() {
           </View>
         </View>
 
-        <TouchableOpacity
-          style={styles.saveButton}
-          onPress={handleSave}
-          disabled={loading}
-        >
+        {/* SAVE BUTTON */}
+        <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={loading}>
           {loading ? (
             <ActivityIndicator color={colors.background} />
           ) : (
@@ -273,17 +271,21 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.primary,
   },
+
   form: {
     gap: 20,
   },
+
   inputGroup: {
     gap: 8,
   },
+
   label: {
     fontSize: 16,
     fontWeight: '600',
     color: colors.text,
   },
+
   input: {
     backgroundColor: colors.card,
     borderRadius: 12,
@@ -293,57 +295,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+
+  inputInside: {
+    flex: 1,
+    fontSize: 16,
+    color: colors.text,
+    paddingVertical: 8,
+  },
+
   textArea: {
     height: 120,
     textAlignVertical: 'top',
   },
-  interestsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  interestBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.primary + '20',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    gap: 8,
-  },
-  interestText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.primary,
-  },
-  addInterestButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    gap: 4,
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-  addInterestText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.primary,
-  },
-  saveButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 32,
-  },
-  saveButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.background,
-  },
+
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -355,5 +319,40 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     gap: 12,
   },
-});
 
+  interestsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+
+  interestBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary + '20',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 8,
+  },
+
+  interestText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+
+  saveButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 32,
+  },
+
+  saveButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.background,
+  },
+});

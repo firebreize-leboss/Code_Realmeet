@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+// ✅ important : on utilise l’API legacy conseillée par Expo
+import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
 
 class StorageService {
@@ -14,9 +15,9 @@ class StorageService {
       console.log('🔵 Upload avatar - URI:', uri);
       console.log('🔵 Upload avatar - UserID:', userId);
 
-      // 1. Lire le fichier en base64 - FIX : utiliser 'base64' string au lieu de l'enum
+      // 1. Lire le fichier en base64 via l’API legacy
       const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: 'base64', // ← FIX: string directement, pas FileSystem.EncodingType.Base64
+        encoding: 'base64',
       });
 
       console.log('✅ Image convertie en base64');
@@ -28,7 +29,7 @@ class StorageService {
 
       console.log('🔵 Chemin fichier:', filePath);
 
-      // 3. Upload vers Supabase Storage
+      // 3. Upload vers Supabase Storage (ArrayBuffer)
       const { data, error } = await supabase.storage
         .from(this.bucketName)
         .upload(filePath, decode(base64), {
@@ -52,13 +53,13 @@ class StorageService {
         success: true,
         path: data.path,
         url: publicUrl,
-        message: 'Avatar uploadé avec succès !',
+        message: "Avatar uploadé avec succès !",
       };
     } catch (error: any) {
       console.error('❌ Erreur upload avatar:', error);
       return {
         success: false,
-        error: error.message || 'Erreur lors de l\'upload',
+        error: error.message || "Erreur lors de l'upload",
       };
     }
   }
@@ -67,10 +68,7 @@ class StorageService {
    * Récupérer l'URL publique d'un avatar
    */
   getAvatarUrl(path: string): string {
-    const { data } = supabase.storage
-      .from(this.bucketName)
-      .getPublicUrl(path);
-
+    const { data } = supabase.storage.from(this.bucketName).getPublicUrl(path);
     return data.publicUrl;
   }
 
@@ -103,9 +101,8 @@ class StorageService {
    */
   async pickImage() {
     try {
-      // Demander la permission
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      
+
       if (status !== 'granted') {
         return {
           success: false,
@@ -113,7 +110,6 @@ class StorageService {
         };
       }
 
-      // Ouvrir la galerie
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
@@ -146,9 +142,8 @@ class StorageService {
    */
   async takePhoto() {
     try {
-      // Demander la permission
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      
+
       if (status !== 'granted') {
         return {
           success: false,
@@ -156,7 +151,6 @@ class StorageService {
         };
       }
 
-      // Ouvrir la caméra
       const result = await ImagePicker.launchCameraAsync({
         allowsEditing: true,
         aspect: [1, 1],
