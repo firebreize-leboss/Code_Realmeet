@@ -29,10 +29,46 @@ export default function SignupIndividualScreen() {
   const [birthDate, setBirthDate] = useState('');
   const [city, setCity] = useState('');
   const [phone, setPhone] = useState('');
+  const [bio, setBio] = useState('');
+  const [interest, setInterest] = useState('');
+  const [interests, setInterests] = useState<string[]>([]);
   const [profileImage, setProfileImage] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Formatter la date automatiquement
+  const handleDateChange = (text: string) => {
+    // Supprimer tout sauf les chiffres
+    const cleaned = text.replace(/[^\d]/g, '');
+    
+    // Formatter en JJ/MM/AAAA
+    let formatted = '';
+    if (cleaned.length > 0) {
+      formatted = cleaned.substring(0, 2);
+      if (cleaned.length > 2) {
+        formatted += '/' + cleaned.substring(2, 4);
+      }
+      if (cleaned.length > 4) {
+        formatted += '/' + cleaned.substring(4, 8);
+      }
+    }
+    
+    setBirthDate(formatted);
+  };
+
+  // Ajouter un centre d'intérêt
+  const handleAddInterest = () => {
+    if (interest.trim() && !interests.includes(interest.trim())) {
+      setInterests([...interests, interest.trim()]);
+      setInterest('');
+    }
+  };
+
+  // Supprimer un centre d'intérêt
+  const handleRemoveInterest = (indexToRemove: number) => {
+    setInterests(interests.filter((_, index) => index !== indexToRemove));
+  };
 
   const handleSignup = async () => {
     if (!firstName || !lastName || !email || !password || !confirmPassword || !birthDate || !city) {
@@ -45,8 +81,20 @@ export default function SignupIndividualScreen() {
       return;
     }
 
+    if (password.length < 6) {
+      Alert.alert('Erreur', 'Le mot de passe doit contenir au moins 6 caractères');
+      return;
+    }
+
+    // Validation de la date
+    if (birthDate.length !== 10) {
+      Alert.alert('Erreur', 'La date doit être au format JJ/MM/AAAA');
+      return;
+    }
+
     // Validation de l'âge (au moins 18 ans)
-    const birthYear = parseInt(birthDate.split('/')[2]);
+    const [day, month, year] = birthDate.split('/').map(Number);
+    const birthYear = year;
     const currentYear = new Date().getFullYear();
     if (currentYear - birthYear < 18) {
       Alert.alert('Erreur', 'Vous devez avoir au moins 18 ans pour créer un compte');
@@ -66,39 +114,69 @@ export default function SignupIndividualScreen() {
         return;
       }
 
-      // 2. Upload de l'avatar si présent
-      let avatarUrl = null;
-      if (profileImage) {
-        const uploadResult = await storageService.uploadAvatar(
-          profileImage,
-          'temp'
-        );
-        if (uploadResult.success) {
-          avatarUrl = uploadResult.url;
-        }
-      }
-
-      // 3. Créer le compte
-      const result = await authService.registerUser({
+      // 2. Créer d'abord le compte (pour avoir l'ID utilisateur)
+      const accountResult = await authService.registerUser({
         email,
         password,
         username,
         full_name: `${firstName} ${lastName}`,
-        avatar_url: avatarUrl,
+        avatar_url: null, // On l'ajoutera après
         city,
         date_of_birth: birthDate,
         phone,
       });
 
-      if (result.success) {
-        Alert.alert('Succès', result.message, [
-          { text: 'OK', onPress: () => router.replace('/(tabs)/browse') },
-        ]);
-      } else {
-        Alert.alert('Erreur', result.error);
+      if (!accountResult.success) {
+        Alert.alert('Erreur', accountResult.error);
+        setLoading(false);
+        return;
       }
+
+      const userId = accountResult.user!.id;
+
+      // 3. Upload de l'avatar si présent
+      let avatarUrl = null;
+      if (profileImage) {
+        console.log('🔵 Début upload avatar...');
+        const uploadResult = await storageService.uploadAvatar(
+          profileImage,
+          userId
+        );
+        if (uploadResult.success) {
+          avatarUrl = uploadResult.url;
+          console.log('✅ Avatar uploadé:', avatarUrl);
+        } else {
+          console.error('❌ Erreur upload avatar:', uploadResult.error);
+          Alert.alert('Avertissement', 'Votre compte a été créé mais la photo de profil n\'a pas pu être uploadée.');
+        }
+      }
+
+      // 4. Mettre à jour le profil avec l'avatar, bio et interests
+      const updateResult = await userService.updateProfile(userId, {
+        avatar_url: avatarUrl,
+        bio: bio || null,
+        interests: interests.length > 0 ? interests : null,
+      });
+
+      if (!updateResult.success) {
+        console.error('❌ Erreur mise à jour profil:', updateResult.error);
+      }
+
+      // 5. La connexion est automatique grâce à Supabase !
+      // On redirige directement
+      Alert.alert(
+        'Bienvenue !', 
+        'Votre compte a été créé avec succès !', 
+        [
+          { 
+            text: 'Commencer', 
+            onPress: () => router.replace('/(tabs)/browse')
+          }
+        ]
+      );
     } catch (error: any) {
-      Alert.alert('Erreur', error.message);
+      console.error('❌ Erreur inscription:', error);
+      Alert.alert('Erreur', error.message || 'Une erreur est survenue');
     } finally {
       setLoading(false);
     }
@@ -108,7 +186,7 @@ export default function SignupIndividualScreen() {
     const result = await storageService.pickImage();
     if (result.success && result.uri) {
       setProfileImage(result.uri);
-    } else if (result.error) {
+    } else if (result.error && result.error !== 'Sélection annulée') {
       Alert.alert('Erreur', result.error);
     }
   };
@@ -197,8 +275,9 @@ export default function SignupIndividualScreen() {
                 placeholder="JJ/MM/AAAA"
                 placeholderTextColor={colors.textSecondary}
                 value={birthDate}
-                onChangeText={setBirthDate}
+                onChangeText={handleDateChange}
                 keyboardType="numeric"
+                maxLength={10}
               />
             </View>
             <Text style={styles.helperText}>Vous devez avoir au moins 18 ans</Text>
@@ -252,6 +331,54 @@ export default function SignupIndividualScreen() {
             </View>
           </View>
 
+          {/* Bio */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Bio</Text>
+            <TextInput
+              style={[styles.inputContainer, styles.textArea]}
+              placeholder="Parlez-nous de vous..."
+              placeholderTextColor={colors.textSecondary}
+              value={bio}
+              onChangeText={setBio}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+            />
+            <Text style={styles.helperText}>Optionnel - Décrivez-vous en quelques mots</Text>
+          </View>
+
+          {/* Centres d'intérêt */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Centres d'intérêt</Text>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                placeholder="Ex: Randonnée, Cuisine, Musique..."
+                placeholderTextColor={colors.textSecondary}
+                value={interest}
+                onChangeText={setInterest}
+                onSubmitEditing={handleAddInterest}
+                returnKeyType="done"
+              />
+              <TouchableOpacity onPress={handleAddInterest}>
+                <IconSymbol name="plus.circle.fill" size={28} color={colors.primary} />
+              </TouchableOpacity>
+            </View>
+            {interests.length > 0 && (
+              <View style={styles.interestsContainer}>
+                {interests.map((item, index) => (
+                  <View key={index} style={styles.interestBadge}>
+                    <Text style={styles.interestText}>{item}</Text>
+                    <TouchableOpacity onPress={() => handleRemoveInterest(index)}>
+                      <IconSymbol name="xmark" size={14} color={colors.primary} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            )}
+            <Text style={styles.helperText}>Appuyez sur + pour ajouter un intérêt</Text>
+          </View>
+
           {/* Mot de passe */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Mot de passe *</Text>
@@ -274,7 +401,7 @@ export default function SignupIndividualScreen() {
               </TouchableOpacity>
             </View>
             <Text style={styles.helperText}>
-              Minimum 8 caractères avec majuscules et chiffres
+              Minimum 6 caractères
             </Text>
           </View>
 
@@ -438,6 +565,11 @@ const styles = StyleSheet.create({
     color: colors.text,
     paddingVertical: 12,
   },
+  textArea: {
+    height: 100,
+    alignItems: 'flex-start',
+    paddingVertical: 12,
+  },
   helperText: {
     fontSize: 13,
     color: colors.textSecondary,
@@ -449,6 +581,26 @@ const styles = StyleSheet.create({
   },
   halfWidth: {
     flex: 1,
+  },
+  interestsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  interestBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary + '20',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 8,
+  },
+  interestText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.primary,
   },
   termsSection: {
     marginTop: 8,

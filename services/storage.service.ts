@@ -11,15 +11,22 @@ class StorageService {
    */
   async uploadAvatar(uri: string, userId: string) {
     try {
-      // 1. Lire le fichier en base64
+      console.log('🔵 Upload avatar - URI:', uri);
+      console.log('🔵 Upload avatar - UserID:', userId);
+
+      // 1. Lire le fichier en base64 - FIX : utiliser 'base64' string au lieu de l'enum
       const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64,
+        encoding: 'base64', // ← FIX: string directement, pas FileSystem.EncodingType.Base64
       });
 
+      console.log('✅ Image convertie en base64');
+
       // 2. Générer un nom de fichier unique
-      const fileExt = uri.split('.').pop() || 'jpg';
+      const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
       const fileName = `${userId}-${Date.now()}.${fileExt}`;
       const filePath = `${userId}/${fileName}`;
+
+      console.log('🔵 Chemin fichier:', filePath);
 
       // 3. Upload vers Supabase Storage
       const { data, error } = await supabase.storage
@@ -29,10 +36,17 @@ class StorageService {
           upsert: true,
         });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Erreur upload Supabase:', error);
+        throw error;
+      }
+
+      console.log('✅ Upload réussi:', data);
 
       // 4. Récupérer l'URL publique
       const publicUrl = this.getAvatarUrl(data.path);
+
+      console.log('✅ URL publique:', publicUrl);
 
       return {
         success: true,
@@ -41,7 +55,7 @@ class StorageService {
         message: 'Avatar uploadé avec succès !',
       };
     } catch (error: any) {
-      console.error('Erreur upload avatar:', error);
+      console.error('❌ Erreur upload avatar:', error);
       return {
         success: false,
         error: error.message || 'Erreur lors de l\'upload',

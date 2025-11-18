@@ -14,18 +14,86 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
-import { mockUser } from '@/data/mockData';
+import { useAuth } from '@/contexts/AuthContext';
+import { userService } from '@/services/user.service';
+import { storageService } from '@/services/storage.service';
 
 export default function EditProfileScreen() {
   const router = useRouter();
-  const [name, setName] = useState(mockUser.name);
-  const [bio, setBio] = useState(mockUser.bio);
-  const [city, setCity] = useState(mockUser.city);
+  const { user, profile, refreshProfile } = useAuth();
+  
+  const [name, setName] = useState(profile?.full_name || '');
+  const [bio, setBio] = useState(profile?.bio || '');
+  const [city, setCity] = useState(profile?.city || '');
+  const [phone, setPhone] = useState(profile?.phone || '');
+  const [interests, setInterests] = useState<string[]>(profile?.interests || []);
+  const [newInterest, setNewInterest] = useState('');
+  const [profileImage, setProfileImage] = useState(profile?.avatar_url || '');
+  const [loading, setLoading] = useState(false);
+  const handleSave = async () => {
+    if (!user || !profile) return;
 
-  const handleSave = () => {
-    Alert.alert('Success', 'Profile updated successfully!', [
-      { text: 'OK', onPress: () => router.back() },
-    ]);
+    setLoading(true);
+
+    try {
+      let avatarUrl = profile.avatar_url;
+
+      // Upload nouvelle image si changée
+      if (profileImage && profileImage !== profile.avatar_url) {
+        const uploadResult = await storageService.uploadAvatar(
+          profileImage,
+          user.id
+        );
+        if (uploadResult.success) {
+          avatarUrl = uploadResult.url;
+        }
+      }
+
+      // Mise à jour du profil
+      const result = await userService.updateProfile(user.id, {
+        full_name: name,
+        bio: bio || null,
+        city: city || null,
+        phone: phone || null,
+        interests: interests.length > 0 ? interests : null,
+        avatar_url: avatarUrl,
+      });
+
+      if (result.success) {
+        await refreshProfile();
+        Alert.alert('Succès', 'Profil mis à jour !', [
+          { text: 'OK', onPress: () => router.back() },
+        ]);
+      } else {
+        Alert.alert('Erreur', result.error);
+      }
+    } catch (error: any) {
+      Alert.alert('Erreur', error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const handleImagePick = async () => {
+    const result = await storageService.pickImage();
+    if (result.success && result.uri) {
+      setProfileImage(result.uri);
+    } else if (result.error && result.error !== 'Sélection annulée') {
+      Alert.alert('Erreur', result.error);
+    }
+  };
+
+  
+  const handleAddInterest = () => {
+    if (newInterest.trim() && !interests.includes(newInterest.trim())) {
+      setInterests([...interests, newInterest.trim()]);
+      setNewInterest('');
+    }
+  };
+
+  
+  const handleRemoveInterest = (index: number) => {
+    setInterests(interests.filter((_, i) => i !== index));
   };
 
   return (
@@ -47,10 +115,16 @@ export default function EditProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.avatarSection}>
-          <Image source={{ uri: mockUser.avatar }} style={styles.avatar} />
-          <TouchableOpacity style={styles.changePhotoButton}>
+          <Image 
+            source={{ uri: profileImage || 'https://via.placeholder.com/120' }} 
+            style={styles.avatar} 
+          />
+          <TouchableOpacity 
+            style={styles.changePhotoButton}
+            onPress={handleImagePick}
+          >
             <IconSymbol name="camera.fill" size={20} color={colors.primary} />
-            <Text style={styles.changePhotoText}>Change Photo</Text>
+            <Text style={styles.changePhotoText}>Changer la photo</Text>
           </TouchableOpacity>
         </View>
 
@@ -89,22 +163,42 @@ export default function EditProfileScreen() {
               onChangeText={setCity}
             />
           </View>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Téléphone</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="+33 6 12 34 56 78"
+              placeholderTextColor={colors.textSecondary}
+              value={phone}
+              onChangeText={setPhone}
+              keyboardType="phone-pad"
+            />
+          </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Interests</Text>
+            <Text style={styles.label}>Centres d'intérêt</Text>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                placeholder="Ajouter un intérêt"
+                placeholderTextColor={colors.textSecondary}
+                value={newInterest}
+                onChangeText={setNewInterest}
+                onSubmitEditing={handleAddInterest}
+              />
+              <TouchableOpacity onPress={handleAddInterest}>
+                <IconSymbol name="plus.circle.fill" size={28} color={colors.primary} />
+              </TouchableOpacity>
+            </View>
             <View style={styles.interestsContainer}>
-              {mockUser.interests.map((interest, index) => (
+              {interests.map((interest, index) => (
                 <View key={index} style={styles.interestBadge}>
                   <Text style={styles.interestText}>{interest}</Text>
-                  <TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleRemoveInterest(index)}>
                     <IconSymbol name="xmark" size={14} color={colors.primary} />
                   </TouchableOpacity>
                 </View>
               ))}
-              <TouchableOpacity style={styles.addInterestButton}>
-                <IconSymbol name="plus" size={16} color={colors.primary} />
-                <Text style={styles.addInterestText}>Add</Text>
-              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -112,8 +206,13 @@ export default function EditProfileScreen() {
         <TouchableOpacity
           style={styles.saveButton}
           onPress={handleSave}
+          disabled={loading}
         >
-          <Text style={styles.saveButtonText}>Save Changes</Text>
+          {loading ? (
+            <ActivityIndicator color={colors.background} />
+          ) : (
+            <Text style={styles.saveButtonText}>Enregistrer</Text>
+          )}
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -245,4 +344,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.background,
   },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 12,
+  },
 });
+
