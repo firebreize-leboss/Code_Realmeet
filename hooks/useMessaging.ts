@@ -22,14 +22,42 @@ export function useFriends() {
       setLoading(true);
       const { data: currentUser } = await supabase.auth.getUser();
       
-      const { data, error } = await supabase
-        .from('friends_with_profiles')
-        .select('*')
-        .eq('user_id', currentUser?.user?.id)
-        .order('created_at', { ascending: false });
+      // Récupérer les friendships
+      const { data: friendships, error: friendError } = await supabase
+        .from('friendships')
+        .select('friend_id, created_at')
+        .eq('user_id', currentUser?.user?.id);
 
-      if (error) throw error;
-      setFriends(data || []);
+      if (friendError) throw friendError;
+
+      if (!friendships || friendships.length === 0) {
+        setFriends([]);
+        setLoading(false);
+        return;
+      }
+
+      // Récupérer les profils des amis
+      const friendIds = friendships.map(f => f.friend_id);
+      const { data: profiles, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, full_name, avatar_url, city')
+        .in('id', friendIds);
+
+      if (profileError) throw profileError;
+
+      // Combiner les données
+      const formatted = friendships.map(f => {
+        const profile = profiles?.find(p => p.id === f.friend_id);
+        return {
+          friend_id: f.friend_id,
+          full_name: profile?.full_name || 'Inconnu',
+          avatar_url: profile?.avatar_url || '',
+          city: profile?.city || '',
+          created_at: f.created_at,
+        };
+      });
+
+      setFriends(formatted);
     } catch (err) {
       setError(err as Error);
     } finally {
@@ -145,144 +173,179 @@ export function useConversations() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  useEffect(() => {
-    loadConversations();
-    subscribeToMessages();
-  }, []);
+  // Dans useConversations
+useEffect(() => {
+  loadConversations();
+  
+  // Subscribe aux nouveaux messages pour rafraîchir la liste
+  const channel = supabase
+    .channel('all_messages')
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+      },
+      () => {
+        loadConversations();
+      }
+    )
+    .subscribe();
 
-  const loadConversations = async () => {
-    try {
-      setLoading(true);
-      const { data: currentUser } = await supabase.auth.getUser();
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}, []);
 
-      // Récupérer les IDs de conversations
-      const { data: participantData, error: participantError } = await supabase
+ const loadConversations = async () => {
+  try {
+    setLoading(true);
+    const { data: currentUser } = await supabase.auth.getUser();
+    console.log('👤 Loading conversations for user:', currentUser?.user?.id);
+
+    // Récupérer les IDs de conversations
+    const { data: participantData, error: participantError } = await supabase
+      .from('conversation_participants')
+      .select('conversation_id')
+      .eq('user_id', currentUser?.user?.id);
+
+    console.log('📋 Participant data:', participantData);
+
+    if (participantError) throw participantError;
+
+    const conversationIds = participantData?.map(p => p.conversation_id) || [];
+    console.log('🆔 Conversation IDs:', conversationIds);
+
+    if (conversationIds.length === 0) {
+      setConversations([]);
+      setLoading(false);
+      return;
+    }
+
+    // Récupérer les détails des conversations
+    const { data, error } = await supabase
+      .from('conversations')
+      .select(`
+        *,
+        conversation_participants!inner (
+          user_id,
+          profiles:user_id (
+            id,
+            full_name,
+            avatar_url
+          )
+        )
+      `)
+      .in('id', conversationIds)
+      .order('updated_at', { ascending: false });
+
+    console.log('💬 Conversations data:', data);
+    console.log('❌ Conversations error:', error);
+
+    if (error) throw error;
+
+    const transformedConversations = data?.map(conv => {
+      console.log('🔄 Processing conv:', conv);
+      const otherParticipant = conv.conversation_participants.find(
+        (p: any) => p.user_id !== currentUser?.user?.id
+      );
+      console.log('👥 Other participant:', otherParticipant);
+
+      return {
+        id: conv.id,
+        name: otherParticipant?.profiles?.full_name || 'Inconnu',
+        image: otherParticipant?.profiles?.avatar_url || '',
+        lastMessage: '',
+        lastMessageTime: '',
+        isGroup: conv.conversation_participants.length > 2,
+        updated_at: conv.updated_at,
+      };
+    }) || [];
+
+    console.log('✅ Final conversations:', transformedConversations);
+    setConversations(transformedConversations);
+  } catch (err) {
+    console.error('💥 Load conversations error:', err);
+    setError(err as Error);
+  } finally {
+    setLoading(false);
+  }
+};
+
+  
+
+ const createConversation = async (participantIds: string[]) => {
+  try {
+    const { data: currentUser } = await supabase.auth.getUser();
+
+    // Vérifier si une conversation existe déjà avec ce participant (discussion 1-à-1)
+    if (participantIds.length === 1) {
+      const friendId = participantIds[0];
+      
+      // Récupérer toutes les conversations de l'utilisateur
+      const { data: myParticipations } = await supabase
         .from('conversation_participants')
         .select('conversation_id')
         .eq('user_id', currentUser?.user?.id);
 
-      if (participantError) throw participantError;
+      if (myParticipations && myParticipations.length > 0) {
+        const myConvIds = myParticipations.map(p => p.conversation_id);
 
-      const conversationIds = participantData?.map(p => p.conversation_id) || [];
+        // Vérifier si le friend participe à l'une de ces conversations
+        const { data: friendParticipations } = await supabase
+          .from('conversation_participants')
+          .select('conversation_id')
+          .eq('user_id', friendId)
+          .in('conversation_id', myConvIds);
 
-      if (conversationIds.length === 0) {
-        setConversations([]);
-        setLoading(false);
-        return;
-      }
+        if (friendParticipations && friendParticipations.length > 0) {
+          // Vérifier que c'est bien une conversation à 2 personnes
+          for (const fp of friendParticipations) {
+            const { count } = await supabase
+              .from('conversation_participants')
+              .select('*', { count: 'exact', head: true })
+              .eq('conversation_id', fp.conversation_id);
 
-      // Récupérer les détails des conversations
-      const { data, error } = await supabase
-        .from('conversations')
-        .select(`
-          *,
-          conversation_participants!inner (
-            user_id,
-            profiles:user_id (
-              id,
-              full_name,
-              avatar_url
-            )
-          ),
-          messages (
-            content,
-            message_type,
-            created_at
-          )
-        `)
-        .in('id', conversationIds)
-        .order('last_message_at', { ascending: false });
-
-      if (error) throw error;
-
-      // Transformer les données
-      const transformedConversations = data?.map(conv => {
-        const otherParticipant = conv.conversation_participants.find(
-          (p: any) => p.user_id !== currentUser?.user?.id
-        );
-
-        const lastMessage = conv.messages
-          ?.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
-
-        return {
-          id: conv.id,
-          name: otherParticipant?.profiles?.full_name || 'Inconnu',
-          image: otherParticipant?.profiles?.avatar_url,
-          lastMessage: lastMessage?.content || '',
-          lastMessageTime: lastMessage?.created_at
-            ? new Date(lastMessage.created_at).toLocaleTimeString('fr-FR', {
-                hour: '2-digit',
-                minute: '2-digit',
-              })
-            : '',
-          isGroup: conv.conversation_participants.length > 2,
-          updated_at: conv.last_message_at,
-        };
-      }) || [];
-
-      setConversations(transformedConversations);
-    } catch (err) {
-      setError(err as Error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const subscribeToMessages = () => {
-    const channel = supabase
-      .channel('all_messages')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-        },
-        () => {
-          loadConversations();
+            if (count === 2) {
+              // Conversation existante trouvée
+              return fp.conversation_id;
+            }
+          }
         }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  };
-
-  const createConversation = async (participantIds: string[]) => {
-    try {
-      const { data: currentUser } = await supabase.auth.getUser();
-
-      // Créer la conversation
-      const { data: conversation, error: convError } = await supabase
-        .from('conversations')
-        .insert({})
-        .select()
-        .single();
-
-      if (convError) throw convError;
-
-      // Ajouter les participants
-      const participants = [
-        currentUser?.user?.id,
-        ...participantIds,
-      ].map(userId => ({
-        conversation_id: conversation.id,
-        user_id: userId,
-      }));
-
-      const { error: partError } = await supabase
-        .from('conversation_participants')
-        .insert(participants);
-
-      if (partError) throw partError;
-
-      await loadConversations();
-      return conversation.id;
-    } catch (err) {
-      throw err;
+      }
     }
-  };
+
+    // Créer nouvelle conversation
+    const { data: conversation, error: convError } = await supabase
+      .from('conversations')
+      .insert({})
+      .select()
+      .single();
+
+    if (convError) throw convError;
+
+    // Ajouter les participants
+    const participants = [
+      currentUser?.user?.id,
+      ...participantIds,
+    ].map(userId => ({
+      conversation_id: conversation.id,
+      user_id: userId,
+    }));
+
+    const { error: partError } = await supabase
+      .from('conversation_participants')
+      .insert(participants);
+
+    if (partError) throw partError;
+
+    await loadConversations();
+    return conversation.id;
+  } catch (err) {
+    throw err;
+  }
+};
 
   return {
     conversations,
@@ -302,13 +365,6 @@ export function useMessages(conversationId: string) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  useEffect(() => {
-    if (conversationId) {
-      loadMessages();
-      subscribeToMessages();
-    }
-  }, [conversationId]);
-
   const loadMessages = async () => {
     try {
       setLoading(true);
@@ -323,6 +379,7 @@ export function useMessages(conversationId: string) {
           )
         `)
         .eq('conversation_id', conversationId)
+        .is('deleted_at', null)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
@@ -351,9 +408,18 @@ export function useMessages(conversationId: string) {
     }
   };
 
-  const subscribeToMessages = () => {
+  useEffect(() => {
+    if (!conversationId) return;
+
+    loadMessages();
+
+    // Configuration du realtime
     const channel = supabase
-      .channel(`messages:${conversationId}`)
+      .channel(`room:${conversationId}`, {
+        config: {
+          broadcast: { self: true },
+        },
+      })
       .on(
         'postgres_changes',
         {
@@ -362,16 +428,44 @@ export function useMessages(conversationId: string) {
           table: 'messages',
           filter: `conversation_id=eq.${conversationId}`,
         },
-        () => {
-          loadMessages();
+        async (payload: any) => {
+          console.log('🔔 New message received:', payload);
+          
+          // Récupérer le profil
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('full_name, avatar_url')
+            .eq('id', payload.new.sender_id)
+            .single();
+
+          const newMessage = {
+            id: payload.new.id,
+            senderId: payload.new.sender_id,
+            senderName: profile?.full_name || 'Inconnu',
+            senderAvatar: profile?.avatar_url,
+            text: payload.new.content,
+            imageUrl: payload.new.message_type === 'image' ? payload.new.media_url : undefined,
+            voiceUrl: payload.new.message_type === 'voice' ? payload.new.media_url : undefined,
+            voiceDuration: payload.new.media_duration,
+            type: payload.new.message_type,
+            timestamp: new Date(payload.new.created_at).toLocaleTimeString('fr-FR', {
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+          };
+
+          setMessages((prev) => [...prev, newMessage]);
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('📡 Subscription status:', status);
+      });
 
     return () => {
+      console.log('🔌 Cleaning up realtime subscription');
       supabase.removeChannel(channel);
     };
-  };
+  }, [conversationId]);
 
   const sendMessage = async (
     content: string,

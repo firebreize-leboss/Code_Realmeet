@@ -46,19 +46,25 @@ export default function ChatScreen() {
 
   // État local pour stocker la liste d'amis formatée
   const [friends, setFriends] = useState<Friend[]>([]);
-  useEffect(() => {
-    if (friendData) {
-      const formatted = (friendData as any[]).map(f => ({
-        id: f.friend_id || f.id,
-        name: f.friend_name || (f.profiles?.full_name ?? 'Inconnu'),
-        avatar: f.friend_avatar || (f.profiles?.avatar_url ?? ''),
+useEffect(() => {
+  console.log('📦 friendData reçu:', JSON.stringify(friendData, null, 2));
+  
+  if (friendData) {
+    const formatted = (friendData as any[]).map(f => {
+      console.log('🔄 Formatting friend:', f);
+      return {
+        id: f.friend_id,
+        name: f.full_name || 'Inconnu',
+        avatar: f.avatar_url || '',
         is_online: false,
-      }));
-      setFriends(formatted);
-    } else {
-      setFriends([]);
-    }
-  }, [friendData]);
+      };
+    });
+    console.log('✅ Friends formatted:', formatted);
+    setFriends(formatted);
+  } else {
+    setFriends([]);
+  }
+}, [friendData]);
 
   const handleCreateConversation = async (friendId: string) => {
     try {

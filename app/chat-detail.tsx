@@ -94,6 +94,7 @@ export default function ChatDetailScreen() {
               if (other) {
                 setConvName(other.profiles?.full_name || 'Conversation');
                 setConvImage(other.profiles?.avatar_url || '');
+                setOtherUserId(other.user_id);
               }
             }
           }
