@@ -309,12 +309,15 @@ useEffect(() => {
 
             if (count === 2) {
               // Conversation existante trouvée
+              console.log('✅ Conversation existante trouvée:', fp.conversation_id);
               return fp.conversation_id;
             }
           }
         }
       }
     }
+
+    console.log('🆕 Création d\'une nouvelle conversation');
 
     // Créer nouvelle conversation
     const { data: conversation, error: convError } = await supabase
@@ -343,6 +346,7 @@ useEffect(() => {
     await loadConversations();
     return conversation.id;
   } catch (err) {
+    console.error('💥 Error in createConversation:', err);
     throw err;
   }
 };

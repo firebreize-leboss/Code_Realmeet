@@ -145,36 +145,74 @@ export default function UserProfileScreen() {
   };
 
   const handleStartConversation = async () => {
-    if (!profile) return;
-    setLoading(true);
-    try {
-      // Créer une nouvelle conversation vide
-      const { data: newConv, error: convError } = await supabase
-        .from('conversations')
-        .insert({})
-        .select()
-        .single();
-      if (convError) throw convError;
-      // Ajouter les deux participants (utilisateur actuel et l'ami)
-      const { data: currentUserData } = await supabase.auth.getUser();
-      const currentUser = currentUserData?.user;
-      if (!currentUser) throw new Error("Utilisateur non connecté");
-      const participants = [
-        { conversation_id: newConv.id, user_id: currentUser.id },
-        { conversation_id: newConv.id, user_id: profile.id },
-      ];
-      const { error: partError } = await supabase
+  if (!profile) return;
+  setLoading(true);
+  try {
+    const { data: currentUserData } = await supabase.auth.getUser();
+    const currentUser = currentUserData?.user;
+    if (!currentUser) throw new Error("Utilisateur non connecté");
+
+    // Vérifier si une conversation existe déjà
+    const { data: myParticipations } = await supabase
+      .from('conversation_participants')
+      .select('conversation_id')
+      .eq('user_id', currentUser.id);
+
+    if (myParticipations && myParticipations.length > 0) {
+      const myConvIds = myParticipations.map(p => p.conversation_id);
+
+      // Vérifier si le profil participe à l'une de ces conversations
+      const { data: friendParticipations } = await supabase
         .from('conversation_participants')
-        .insert(participants);
-      if (partError) throw partError;
-      // Ouvrir la conversation
-      router.push(`/chat-detail?id=${newConv.id}`);
-    } catch (error) {
-      console.error('Error starting conversation:', error);
-    } finally {
-      setLoading(false);
+        .select('conversation_id')
+        .eq('user_id', profile.id)
+        .in('conversation_id', myConvIds);
+
+      if (friendParticipations && friendParticipations.length > 0) {
+        // Vérifier que c'est bien une conversation à 2 personnes
+        for (const fp of friendParticipations) {
+          const { count } = await supabase
+            .from('conversation_participants')
+            .select('*', { count: 'exact', head: true })
+            .eq('conversation_id', fp.conversation_id);
+
+          if (count === 2) {
+            // Conversation existante trouvée, rediriger vers celle-ci
+            router.push(`/chat-detail?id=${fp.conversation_id}`);
+            setLoading(false);
+            return;
+          }
+        }
+      }
     }
-  };
+
+    // Aucune conversation existante, en créer une nouvelle
+    const { data: newConv, error: convError } = await supabase
+      .from('conversations')
+      .insert({})
+      .select()
+      .single();
+    
+    if (convError) throw convError;
+
+    const participants = [
+      { conversation_id: newConv.id, user_id: currentUser.id },
+      { conversation_id: newConv.id, user_id: profile.id },
+    ];
+    
+    const { error: partError } = await supabase
+      .from('conversation_participants')
+      .insert(participants);
+    
+    if (partError) throw partError;
+
+    router.push(`/chat-detail?id=${newConv.id}`);
+  } catch (error) {
+    console.error('Error starting conversation:', error);
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>

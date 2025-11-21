@@ -56,10 +56,10 @@ export default function ChatDetailScreen() {
   const [message, setMessage] = useState('');
   const [recording, setRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
-  const [showMediaOptions, setShowMediaOptions] = useState(false);
 
   // Stockage local des messages non envoyés (images/voix simulées)
   const [localMessages, setLocalMessages] = useState<Message[]>([]);
+  const [otherUserId, setOtherUserId] = useState<string | null>(null);
 
   // Charger l'utilisateur actuel et les participants de la conversation pour définir le titre
   useEffect(() => {
@@ -152,7 +152,6 @@ export default function ChatDetailScreen() {
           }),
         };
         setLocalMessages(prev => [...prev, newMsg]);
-        setShowMediaOptions(false);
       }
     } catch (error) {
       console.error('Error picking image:', error);
@@ -337,21 +336,31 @@ export default function ChatDetailScreen() {
   return (
     <SafeAreaView style={commonStyles.container} edges={['top']}>
       {/* En-tête de la conversation */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <IconSymbol name="chevron.left" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <View style={styles.headerInfo}>
-          <Image source={{ uri: convImage }} style={styles.headerAvatar} />
-          <View>
-            <Text style={styles.headerTitle}>{convName}</Text>
-            {isGroup && <Text style={styles.headerSubtitle}>Groupe</Text>}
-          </View>
-        </View>
-        <TouchableOpacity style={styles.headerButton}>
-          <IconSymbol name="info.circle" size={24} color={colors.text} />
-        </TouchableOpacity>
-      </View>
+  <View style={styles.header}>
+  <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+    <IconSymbol name="chevron.left" size={24} color={colors.text} />
+  </TouchableOpacity>
+  
+  <TouchableOpacity 
+    style={styles.headerInfo}
+    onPress={() => {
+      if (otherUserId && !isGroup) {
+        router.push(`/user-profile?id=${otherUserId}`);
+      }
+    }}
+    activeOpacity={0.7}
+  >
+    <Image source={{ uri: convImage }} style={styles.headerAvatar} />
+    <View>
+      <Text style={styles.headerTitle}>{convName}</Text>
+      {isGroup && <Text style={styles.headerSubtitle}>Groupe</Text>}
+    </View>
+  </TouchableOpacity>
+  
+  <TouchableOpacity style={styles.headerButton}>
+    <IconSymbol name="info.circle" size={24} color={colors.text} />
+  </TouchableOpacity>
+  </View>
 
       {/* Contenu de la conversation et zone de saisie */}
       <KeyboardAvoidingView
@@ -393,7 +402,7 @@ export default function ChatDetailScreen() {
 
         {/* Zone d'entrée de message */}
         <View style={styles.inputContainer}>
-          <TouchableOpacity style={styles.attachButton} onPress={() => setShowMediaOptions(true)}>
+          <TouchableOpacity style={styles.attachButton} onPress={handlePickImage}>
             <IconSymbol name="plus.circle.fill" size={28} color={colors.primary} />
           </TouchableOpacity>
 
@@ -418,15 +427,7 @@ export default function ChatDetailScreen() {
         </View>
 
         {/* Modal (placeholder) pour options média (par ex. choix Photo vs Appareil) */}
-        <Modal
-          visible={showMediaOptions}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowMediaOptions(false)}
-        >
-          <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowMediaOptions(false)} />
-          {/* Vous pouvez implémenter ici un menu d'options d'envoi (Photo, Caméra, etc.) */}
-        </Modal>
+        
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
