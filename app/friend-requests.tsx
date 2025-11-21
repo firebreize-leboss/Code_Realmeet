@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
-import { messagingService } from '@/services/messaging.service';
+import { supabase } from '@/lib/supabase';
 
 interface FriendRequest {
   id: string;
@@ -26,39 +26,62 @@ interface FriendRequest {
 
 export default function FriendRequestsScreen() {
   const router = useRouter();
-  const [requests, setRequests] = useState<any[]>([]);
-  const [processing, setProcessing] = useState<string | null>(null);
+  const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState<string | null>(null);
 
   useEffect(() => {
+    const loadRequests = async () => {
+      try {
+        const { data: currentUserData } = await supabase.auth.getUser();
+        const currentUser = currentUserData?.user;
+        if (!currentUser) throw new Error("Utilisateur non connecté");
+        const { data, error } = await supabase
+          .from('friend_requests_with_profiles')
+          .select('*')
+          .eq('receiver_id', currentUser.id)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false });
+        if (error) throw error;
+        setRequests(data || []);
+      } catch (err) {
+        console.error('Error loading friend requests:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
     loadRequests();
   }, []);
 
-  const loadRequests = async () => {
-    setLoading(true);
-    const result = await messagingService.getFriendRequests();
-    if (result.success) {
-      setRequests(result.data || []);
-    }
-    setLoading(false);
-  };
-
   const handleAcceptRequest = async (requestId: string) => {
     setProcessing(requestId);
-    const result = await messagingService.acceptFriendRequest(requestId);
-    if (result.success) {
+    try {
+      const { error } = await supabase.rpc('accept_friend_request', { p_request_id: requestId });
+      if (error) throw error;
+      // Retirer la demande acceptée de la liste locale
       setRequests(prev => prev.filter(req => req.id !== requestId));
+    } catch (error) {
+      console.error('Error accepting friend request:', error);
+    } finally {
+      setProcessing(null);
     }
-    setProcessing(null);
   };
 
   const handleRejectRequest = async (requestId: string) => {
     setProcessing(requestId);
-    const result = await messagingService.rejectFriendRequest(requestId);
-    if (result.success) {
+    try {
+      const { error } = await supabase
+        .from('friend_requests')
+        .update({ status: 'rejected' })
+        .eq('id', requestId);
+      if (error) throw error;
+      // Retirer la demande rejetée de la liste locale
       setRequests(prev => prev.filter(req => req.id !== requestId));
+    } catch (error) {
+      console.error('Error rejecting friend request:', error);
+    } finally {
+      setProcessing(null);
     }
-    setProcessing(null);
   };
 
   const formatDate = (dateString: string) => {
@@ -66,38 +89,32 @@ export default function FriendRequestsScreen() {
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - date.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
     if (diffDays === 1) return "Aujourd'hui";
     if (diffDays === 2) return 'Hier';
     if (diffDays <= 7) return `Il y a ${diffDays} jours`;
     return date.toLocaleDateString('fr-FR');
   };
 
-  const renderRequestItem = ({ item }: { item: any }) => {
+  const renderRequestItem = ({ item }: { item: FriendRequest }) => {
     const isProcessing = processing === item.id;
-
     return (
       <View style={styles.requestItem}>
         <TouchableOpacity
           onPress={() => router.push(`/user-profile?id=${item.sender_id}`)}
           style={styles.userInfo}
         >
-          <Image
-            source={{ uri: item.sender?.avatar_url }}
-            style={styles.userAvatar}
-          />
+          <Image source={{ uri: item.sender_avatar }} style={styles.userAvatar} />
           <View style={styles.userDetails}>
-            <Text style={styles.userName}>{item.sender?.full_name || 'Inconnu'}</Text>
-            {item.sender?.city && (
+            <Text style={styles.userName}>{item.sender_name}</Text>
+            {item.sender_city && (
               <View style={styles.locationRow}>
                 <IconSymbol name="location.fill" size={14} color={colors.textSecondary} />
-                <Text style={styles.userCity}>{item.sender.city}</Text>
+                <Text style={styles.userCity}>{item.sender_city}</Text>
               </View>
             )}
             <Text style={styles.requestDate}>{formatDate(item.created_at)}</Text>
           </View>
         </TouchableOpacity>
-
         <View style={styles.actionButtons}>
           <TouchableOpacity
             style={[styles.rejectButton, isProcessing && styles.buttonDisabled]}
@@ -110,7 +127,6 @@ export default function FriendRequestsScreen() {
               <Text style={styles.rejectButtonText}>Refuser</Text>
             )}
           </TouchableOpacity>
-
           <TouchableOpacity
             style={[styles.acceptButton, isProcessing && styles.buttonDisabled]}
             onPress={() => handleAcceptRequest(item.id)}
@@ -127,15 +143,40 @@ export default function FriendRequestsScreen() {
     );
   };
 
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <IconSymbol name="chevron.left" size={24} color={colors.text} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Demandes d'amitié</Text>
+        <View style={styles.placeholder} />
+      </View>
+
+      {loading ? (
+        <View style={styles.emptyState}>
           <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.emptyText}>Chargement...</Text>
         </View>
-      </SafeAreaView>
-    );
-  }
+      ) : requests.length === 0 ? (
+        <View style={styles.emptyState}>
+          <IconSymbol name="envelope.fill" size={64} color={colors.textSecondary} />
+          <Text style={styles.emptyText}>Aucune demande</Text>
+          <Text style={styles.emptySubtext}>
+            Les demandes d'amitié que vous recevez apparaîtront ici
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={requests}
+          renderItem={renderRequestItem}
+          keyExtractor={item => item.id}
+          contentContainerStyle={styles.listContainer}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
+    </SafeAreaView>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -232,6 +273,7 @@ const styles = StyleSheet.create({
   actionButtons: {
     flexDirection: 'row',
     gap: 12,
+    marginTop: 12,
   },
   rejectButton: {
     flex: 1,

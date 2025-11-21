@@ -1,3 +1,4 @@
+// app/(tabs)/chat.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -15,77 +16,61 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
-import { messagingService } from '@/services/messaging.service';
-import { useAuth } from '@/contexts/AuthContext';
+import { useFriends, useFriendRequests, useConversations } from '@/hooks/useMessaging';
+
+interface Friend {
+  id: string;
+  name: string;
+  avatar: string;
+  is_online: boolean;
+}
+
+interface Conversation {
+  id: string;
+  name: string;
+  image: string;
+  lastMessage: string;
+  lastMessageTime: string;
+  isGroup: boolean;
+  unreadCount?: number;
+}
 
 export default function ChatScreen() {
   const router = useRouter();
-  const { user } = useAuth();
-  const [conversations, setConversations] = useState<any[]>([]);
-  const [friends, setFriends] = useState<any[]>([]);
-  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
   const [showFriendsModal, setShowFriendsModal] = useState(false);
-  const [loading, setLoading] = useState(true);
 
+  // Obtenir les données via les hooks de messagerie
+  const { pendingCount: pendingRequestsCount } = useFriendRequests();
+  const { friends: friendData, loading: friendsLoading } = useFriends();
+  const { conversations, createConversation, loading: convLoading } = useConversations();
+
+  // État local pour stocker la liste d'amis formatée
+  const [friends, setFriends] = useState<Friend[]>([]);
   useEffect(() => {
-    if (user) {
-      loadData();
-      
-      const unsubConv = messagingService.subscribeToConversations(() => {
-        loadConversations();
-      });
-
-      const unsubReq = messagingService.subscribeToFriendRequests(() => {
-        loadFriendRequests();
-      });
-
-      return () => {
-        unsubConv();
-        unsubReq();
-      };
+    if (friendData) {
+      const formatted = (friendData as any[]).map(f => ({
+        id: f.friend_id || f.id,
+        name: f.friend_name || (f.profiles?.full_name ?? 'Inconnu'),
+        avatar: f.friend_avatar || (f.profiles?.avatar_url ?? ''),
+        is_online: false,
+      }));
+      setFriends(formatted);
+    } else {
+      setFriends([]);
     }
-  }, [user]);
-
-  const loadData = async () => {
-    setLoading(true);
-    await Promise.all([
-      loadConversations(),
-      loadFriends(),
-      loadFriendRequests(),
-    ]);
-    setLoading(false);
-  };
-
-  const loadConversations = async () => {
-    const result = await messagingService.getConversations();
-    if (result.success) {
-      setConversations(result.data || []);
-    }
-  };
-
-  const loadFriends = async () => {
-    const result = await messagingService.getFriends();
-    if (result.success) {
-      setFriends(result.data || []);
-    }
-  };
-
-  const loadFriendRequests = async () => {
-    const result = await messagingService.getFriendRequests();
-    if (result.success) {
-      setPendingRequestsCount(result.data?.length || 0);
-    }
-  };
+  }, [friendData]);
 
   const handleCreateConversation = async (friendId: string) => {
-    const result = await messagingService.createConversation(friendId);
-    if (result.success) {
+    try {
+      const convId = await createConversation([friendId]);
       setShowFriendsModal(false);
-      router.push(`/chat-detail?id=${result.conversationId}`);
+      router.push(`/chat-detail?id=${convId}`);
+    } catch (error) {
+      console.error('Error creating conversation:', error);
     }
   };
 
-  const renderChatItem = (chat: any) => (
+  const renderChatItem = (chat: Conversation) => (
     <TouchableOpacity
       key={chat.id}
       style={styles.chatItem}
@@ -107,14 +92,21 @@ export default function ChatScreen() {
           </Text>
           <Text style={styles.chatTime}>{chat.lastMessageTime}</Text>
         </View>
-        <Text style={styles.lastMessage} numberOfLines={2}>
-          {chat.lastMessage || 'Commencez une conversation...'}
-        </Text>
+        <View style={styles.lastMessageRow}>
+          <Text style={styles.lastMessage} numberOfLines={2}>
+            {chat.lastMessage || 'Commencez une conversation...'}
+          </Text>
+          {chat.unreadCount && chat.unreadCount > 0 && (
+            <View style={styles.unreadBadge}>
+              <Text style={styles.unreadText}>{chat.unreadCount}</Text>
+            </View>
+          )}
+        </View>
       </View>
     </TouchableOpacity>
   );
 
-  const renderFriendItem = ({ item }: { item: any }) => (
+  const renderFriendItem = ({ item }: { item: Friend }) => (
     <TouchableOpacity
       style={styles.friendItem}
       onPress={() => handleCreateConversation(item.id)}
@@ -134,21 +126,12 @@ export default function ChatScreen() {
     </TouchableOpacity>
   );
 
-  if (loading) {
-    return (
-      <SafeAreaView style={commonStyles.container} edges={['top']}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
   return (
     <SafeAreaView style={commonStyles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Messages</Text>
         <View style={styles.headerButtons}>
+          {/* Bouton demandes d'amitié */}
           <TouchableOpacity
             style={styles.headerButton}
             onPress={() => router.push('/friend-requests')}
@@ -163,6 +146,7 @@ export default function ChatScreen() {
             )}
           </TouchableOpacity>
 
+          {/* Bouton ajouter des amis */}
           <TouchableOpacity
             style={styles.headerButton}
             onPress={() => router.push('/add-friends')}
@@ -170,6 +154,7 @@ export default function ChatScreen() {
             <IconSymbol name="person.2.fill" size={22} color={colors.text} />
           </TouchableOpacity>
 
+          {/* Bouton nouvelle conversation */}
           <TouchableOpacity
             style={styles.headerButton}
             onPress={() => setShowFriendsModal(true)}
@@ -187,7 +172,11 @@ export default function ChatScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {conversations.length > 0 ? (
+        {convLoading ? (
+          <View style={styles.emptyState}>
+            <ActivityIndicator size="large" color={colors.primary} />
+          </View>
+        ) : conversations.length > 0 ? (
           conversations.map(renderChatItem)
         ) : (
           <View style={styles.emptyState}>
@@ -206,6 +195,7 @@ export default function ChatScreen() {
         )}
       </ScrollView>
 
+      {/* Modal de sélection d'ami */}
       <Modal
         visible={showFriendsModal}
         animationType="slide"
@@ -223,26 +213,35 @@ export default function ChatScreen() {
             </TouchableOpacity>
           </View>
 
-          <FlatList
-            data={friends}
-            renderItem={renderFriendItem}
-            keyExtractor={item => item.id}
-            contentContainerStyle={styles.friendsList}
-            showsVerticalScrollIndicator={false}
-          />
+          {friendsLoading ? (
+            <View style={styles.emptyState}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={styles.emptyText}>Chargement...</Text>
+            </View>
+          ) : friends.length === 0 ? (
+            <View style={styles.emptyState}>
+              <IconSymbol name="person.2.fill" size={64} color={colors.textSecondary} />
+              <Text style={styles.emptyText}>Aucun ami</Text>
+              <Text style={styles.emptySubtext}>
+                Ajoutez des amis pour démarrer une conversation
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={friends}
+              renderItem={renderFriendItem}
+              keyExtractor={item => item.id}
+              contentContainerStyle={styles.friendsList}
+              showsVerticalScrollIndicator={false}
+            />
+          )}
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );
 }
 
-// Garder les mêmes styles
 const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -348,10 +347,30 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.textSecondary,
   },
+  lastMessageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   lastMessage: {
+    flex: 1,
     fontSize: 14,
     color: colors.textSecondary,
     lineHeight: 20,
+  },
+  unreadBadge: {
+    backgroundColor: colors.primary,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+  },
+  unreadText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.background,
   },
   emptyState: {
     alignItems: 'center',
@@ -384,6 +403,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.background,
   },
+  // Styles du modal de nouvelle conversation
   modalContainer: {
     flex: 1,
     backgroundColor: colors.background,
@@ -394,7 +414,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 16,
-borderBottomWidth: 1,
+    borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
   modalTitle: {
@@ -434,14 +454,14 @@ borderBottomWidth: 1,
   },
   onlineIndicator: {
     position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: colors.primary,
+    bottom: 4,
+    right: 4,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: colors.success,
     borderWidth: 2,
-    borderColor: colors.card,
+    borderColor: colors.background,
   },
   friendInfo: {
     flex: 1,

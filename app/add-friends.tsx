@@ -16,8 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
-import { userService } from '@/services/user.service';
-import { messagingService } from '@/services/messaging.service';
+import { supabase } from '@/lib/supabase';
 
 interface UserSearchResult {
   id: string;
@@ -31,10 +30,11 @@ interface UserSearchResult {
 export default function AddFriendsScreen() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchResults, setSearchResults] = useState<UserSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [sendingRequest, setSendingRequest] = useState<string | null>(null);
 
+  // Déclenche la recherche avec un léger délai (debounce)
   useEffect(() => {
     const timer = setTimeout(() => {
       if (searchQuery.trim().length >= 2) {
@@ -43,28 +43,83 @@ export default function AddFriendsScreen() {
         setSearchResults([]);
       }
     }, 300);
-
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
   const searchUsers = async () => {
     setLoading(true);
-    const results = await userService.searchProfiles(searchQuery);
-    setSearchResults(results);
-    setLoading(false);
+    try {
+      // Récupérer l'utilisateur actuel pour l'exclure des résultats
+      const { data: currentUserData } = await supabase.auth.getUser();
+      const currentUser = currentUserData?.user;
+      if (!currentUser) throw new Error("Utilisateur non connecté");
+
+      // Rechercher des profils correspondant à la requête (nom/prénom)
+      const { data: profiles, error: searchError } = await supabase
+        .from('profiles')
+        .select('id, full_name, avatar_url, city')
+        .ilike('full_name', `%${searchQuery}%`)
+        .neq('id', currentUser.id)
+        .limit(10);
+      if (searchError) throw searchError;
+
+      // Récupérer la liste des amis de l'utilisateur actuel et ses demandes envoyées
+      const { data: friendships } = await supabase
+        .from('friendships')
+        .select('friend_id')
+        .eq('user_id', currentUser.id);
+      const { data: requests } = await supabase
+        .from('friend_requests')
+        .select('receiver_id')
+        .eq('sender_id', currentUser.id)
+        .eq('status', 'pending');
+
+      const friendIds = new Set(friendships?.map(f => f.friend_id) || []);
+      const pendingIds = new Set(requests?.map(r => r.receiver_id) || []);
+
+      // Construire les résultats à afficher
+      const results: UserSearchResult[] = (profiles || []).map(profile => ({
+        id: profile.id,
+        full_name: profile.full_name,
+        avatar_url: profile.avatar_url || undefined,
+        city: profile.city || undefined,
+        is_friend: friendIds.has(profile.id),
+        request_sent: pendingIds.has(profile.id),
+      }));
+      setSearchResults(results);
+    } catch (error) {
+      console.error('Error searching users:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSendFriendRequest = async (userId: string) => {
     setSendingRequest(userId);
-    const result = await messagingService.sendFriendRequest(userId);
-    if (result.success) {
+    try {
+      // Envoi d'une demande d'amitié dans la base de données
+      const { data: currentUserData } = await supabase.auth.getUser();
+      const currentUser = currentUserData?.user;
+      if (!currentUser) throw new Error("Utilisateur non connecté");
+      const { error } = await supabase.from('friend_requests').insert({
+        sender_id: currentUser.id,
+        receiver_id: userId,
+        status: 'pending',
+      });
+      if (error && !error.message.toLowerCase().includes('duplicate')) {
+        throw error; // Erreur autre qu'une duplication de demande
+      }
+      // Mettre à jour l'état local (marquer la demande comme envoyée)
       setSearchResults(prev =>
         prev.map(user =>
           user.id === userId ? { ...user, request_sent: true } : user
         )
       );
+    } catch (error) {
+      console.error('Error sending friend request:', error);
+    } finally {
+      setSendingRequest(null);
     }
-    setSendingRequest(null);
   };
 
   const handleViewProfile = (userId: string) => {
@@ -77,10 +132,7 @@ export default function AddFriendsScreen() {
       onPress={() => handleViewProfile(item.id)}
       activeOpacity={0.7}
     >
-      <Image
-        source={{ uri: item.avatar_url }}
-        style={styles.userAvatar}
-      />
+      <Image source={{ uri: item.avatar_url }} style={styles.userAvatar} />
       <View style={styles.userInfo}>
         <Text style={styles.userName}>{item.full_name}</Text>
         {item.city && (
@@ -121,10 +173,7 @@ export default function AddFriendsScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <IconSymbol name="chevron.left" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Ajouter des amis</Text>
@@ -152,7 +201,7 @@ export default function AddFriendsScreen() {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
-      ) : searchQuery.length < 2 ? (
+      ) : searchQuery.trim().length < 2 ? (
         <View style={styles.emptyState}>
           <IconSymbol name="person.2.fill" size={64} color={colors.textSecondary} />
           <Text style={styles.emptyText}>Rechercher des personnes</Text>
@@ -164,9 +213,7 @@ export default function AddFriendsScreen() {
         <View style={styles.emptyState}>
           <IconSymbol name="magnifyingglass" size={64} color={colors.textSecondary} />
           <Text style={styles.emptyText}>Aucun résultat</Text>
-          <Text style={styles.emptySubtext}>
-            Essayez avec un autre pseudo
-          </Text>
+          <Text style={styles.emptySubtext}>Essayez avec un autre nom ou prénom</Text>
         </View>
       ) : (
         <FlatList

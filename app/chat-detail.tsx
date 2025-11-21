@@ -1,4 +1,5 @@
-// app/chat-detail.tsx - Version améliorée avec support média
+// app/chat-detail.tsx
+// Écran de détail d'une conversation (messages)
 
 import React, { useState, useRef, useEffect } from 'react';
 import {
@@ -13,17 +14,17 @@ import {
   Platform,
   Modal,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
-import { messagingService } from '@/services/messaging.service';
-import { useAuth } from '@/contexts/AuthContext';
-import { storageService } from '@/services/storage.service';
 import * as ImagePicker from 'expo-image-picker';
+import { supabase } from '@/lib/supabase';
+import { useMessages } from '@/hooks/useMessaging';
 
-type MessageType = 'text' | 'image' | 'voice';
+type MessageType = 'text' | 'image' | 'voice' | 'system';
 
 interface Message {
   id: string;
@@ -40,125 +41,166 @@ interface Message {
 
 export default function ChatDetailScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams();
-  const { user } = useAuth();
+  const { id: conversationId } = useLocalSearchParams();
   const scrollViewRef = useRef<ScrollView>(null);
-  
+
+  // Informations de la conversation (nom, image) et de l'utilisateur courant
+  const [convName, setConvName] = useState('Conversation');
+  const [convImage, setConvImage] = useState('');
+  const [isGroup, setIsGroup] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserName, setCurrentUserName] = useState('Moi');
+  const [currentUserAvatar, setCurrentUserAvatar] = useState('');
+
+  // État du message en saisie et enregistrement vocal en cours
   const [message, setMessage] = useState('');
-  const [messages, setMessages] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [recording, setRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [showMediaOptions, setShowMediaOptions] = useState(false);
-  
-  const [conversation, setConversation] = useState<any>(null);
 
+  // Stockage local des messages non envoyés (images/voix simulées)
+  const [localMessages, setLocalMessages] = useState<Message[]>([]);
+
+  // Charger l'utilisateur actuel et les participants de la conversation pour définir le titre
   useEffect(() => {
-    if (id && user) {
-      loadMessages();
-      
-      const unsubscribe = messagingService.subscribeToMessages(
-        id as string,
-        (newMessage) => {
-          setMessages(prev => [...prev, newMessage]);
-          setTimeout(() => {
-            scrollViewRef.current?.scrollToEnd({ animated: true });
-          }, 100);
+    const loadConversationInfo = async () => {
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        const currentUser = userData?.user;
+        if (currentUser) {
+          setCurrentUserId(currentUser.id);
+          // Récupérer le profil de l'utilisateur actuel pour nom/avatar
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('full_name, avatar_url')
+            .eq('id', currentUser.id)
+            .single();
+          if (profileData) {
+            setCurrentUserName(profileData.full_name || 'Moi');
+            setCurrentUserAvatar(profileData.avatar_url || '');
+          }
         }
-      );
+        if (conversationId) {
+          // Récupérer les participants de la conversation (avec profil)
+          const { data: participants } = await supabase
+            .from('conversation_participants')
+            .select('user_id, profiles: user_id (full_name, avatar_url)')
+            .eq('conversation_id', conversationId);
+          if (participants) {
+            setIsGroup(participants.length > 2);
+            // Identifier l'autre participant pour une discussion 1-à-1
+            if (currentUser) {
+              const other = participants.find(p => p.user_id !== currentUser.id);
+              if (other) {
+                setConvName(other.profiles?.full_name || 'Conversation');
+                setConvImage(other.profiles?.avatar_url || '');
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error loading conversation info:', error);
+      }
+    };
+    loadConversationInfo();
+  }, [conversationId]);
 
-      return () => unsubscribe();
-    }
-  }, [id, user]);
+  // Utiliser le hook de messages pour récupérer/envoyer les messages de la conversation
+  const { messages, loading: messagesLoading, sendMessage } = useMessages(conversationId as string);
 
-  const loadMessages = async () => {
-    setLoading(true);
-    const result = await messagingService.getMessages(id as string);
-    if (result.success) {
-      setMessages(result.data || []);
-      setTimeout(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: false });
-      }, 100);
-    }
-    setLoading(false);
-  };
+  // Combiner les messages de la BDD et les messages locaux (images/voix non partagés)
+  const combinedMessages: Message[] = [...(messages || []), ...localMessages];
+
+  // Faire défiler vers le bas à chaque mise à jour de la liste de messages
+  useEffect(() => {
+    scrollViewRef.current?.scrollToEnd({ animated: true });
+  }, [combinedMessages]);
 
   const handleSendText = async () => {
     if (message.trim()) {
-      const result = await messagingService.sendMessage(
-        id as string,
-        message.trim()
-      );
-
-      if (result.success) {
-        setMessage('');
+      try {
+        await sendMessage(message.trim(), 'text');
+        setMessage(''); // Réinitialiser le champ de saisie
+      } catch (error) {
+        console.error('Error sending message:', error);
+        Alert.alert('Erreur', "Le message n'a pas pu être envoyé");
       }
     }
   };
 
   const handlePickImage = async () => {
     try {
-      const imageResult = await storageService.pickImage();
-      if (!imageResult.success || !imageResult.uri) return;
-
-      setShowMediaOptions(false);
-
-      // Upload l'image
-      const uploadResult = await storageService.uploadAvatar(
-        imageResult.uri,
-        `chat_${Date.now()}`
-      );
-
-      if (uploadResult.success) {
-        await messagingService.sendMessage(
-          id as string,
-          '',
-          'image',
-          uploadResult.url
-        );
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets[0]) {
+        // Ajouter un message local pour l'image (non envoyé à Supabase)
+        const newMsg: Message = {
+          id: Date.now().toString(),
+          senderId: currentUserId || '',
+          senderName: currentUserName || 'Moi',
+          senderAvatar: currentUserAvatar || '',
+          imageUrl: result.assets[0].uri,
+          type: 'image',
+          timestamp: new Date().toLocaleTimeString('fr-FR', {
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+        };
+        setLocalMessages(prev => [...prev, newMsg]);
+        setShowMediaOptions(false);
       }
     } catch (error) {
       console.error('Error picking image:', error);
+      Alert.alert('Erreur', "Impossible d'accéder à la galerie");
     }
   };
 
   const handleTakePhoto = async () => {
     try {
-      const photoResult = await storageService.takePhoto();
-      if (!photoResult.success || !photoResult.uri) return;
-
-      setShowMediaOptions(false);
-
-      // Upload la photo
-      const uploadResult = await storageService.uploadAvatar(
-        photoResult.uri,
-        `chat_${Date.now()}`
-      );
-
-      if (uploadResult.success) {
-        await messagingService.sendMessage(
-          id as string,
-          '',
-          'image',
-          uploadResult.url
-        );
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (permission.granted) {
+        const result = await ImagePicker.launchCameraAsync({
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.8,
+        });
+        if (!result.canceled && result.assets[0]) {
+          const newMsg: Message = {
+            id: Date.now().toString(),
+            senderId: currentUserId || '',
+            senderName: currentUserName || 'Moi',
+            senderAvatar: currentUserAvatar || '',
+            imageUrl: result.assets[0].uri,
+            type: 'image',
+            timestamp: new Date().toLocaleTimeString('fr-FR', {
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+          };
+          setLocalMessages(prev => [...prev, newMsg]);
+          setShowMediaOptions(false);
+        }
+      } else {
+        Alert.alert('Permission refusée', 'Accès à la caméra nécessaire');
       }
     } catch (error) {
       console.error('Error taking photo:', error);
+      Alert.alert('Erreur', "Impossible d'accéder à la caméra");
     }
   };
 
   const handleStartRecording = () => {
-    // TODO: Implémenter l'enregistrement vocal avec expo-av
+    // Commencer l'enregistrement vocal (simulation)
     setRecording(true);
     setRecordingTime(0);
-    
-    // Simuler l'enregistrement
     const interval = setInterval(() => {
       setRecordingTime(prev => prev + 1);
     }, 1000);
-
-    // Arrêter après 60 secondes max
+    // Arrêter automatiquement après 60 secondes maximum
     setTimeout(() => {
       clearInterval(interval);
       if (recording) {
@@ -169,13 +211,12 @@ export default function ChatDetailScreen() {
 
   const handleStopRecording = () => {
     setRecording(false);
-    
-    // Créer un message vocal
-    const newMessage: Message = {
+    // Créer un message vocal local simulé (non envoyé à Supabase)
+    const newMsg: Message = {
       id: Date.now().toString(),
-      senderId: currentUser.id,
-      senderName: currentUser.name,
-      senderAvatar: currentUser.avatar,
+      senderId: currentUserId || '',
+      senderName: currentUserName || 'Moi',
+      senderAvatar: currentUserAvatar || '',
       voiceUrl: 'mock_voice_url',
       voiceDuration: recordingTime,
       type: 'voice',
@@ -184,13 +225,8 @@ export default function ChatDetailScreen() {
         minute: '2-digit',
       }),
     };
-    
-    setMessages(prev => [...prev, newMessage]);
+    setLocalMessages(prev => [...prev, newMsg]);
     setRecordingTime(0);
-    
-    setTimeout(() => {
-      scrollViewRef.current?.scrollToEnd({ animated: true });
-    }, 100);
   };
 
   const formatDuration = (seconds: number) => {
@@ -200,8 +236,7 @@ export default function ChatDetailScreen() {
   };
 
   const renderMessage = (msg: Message) => {
-    const isOwnMessage = msg.senderId === currentUser.id;
-
+    const isOwnMessage = msg.senderId === currentUserId;
     return (
       <View
         key={msg.id}
@@ -211,12 +246,8 @@ export default function ChatDetailScreen() {
         ]}
       >
         {!isOwnMessage && (
-          <Image
-            source={{ uri: msg.senderAvatar }}
-            style={styles.messageAvatar}
-          />
+          <Image source={{ uri: msg.senderAvatar }} style={styles.messageAvatar} />
         )}
-        
         <View
           style={[
             styles.messageBubble,
@@ -226,7 +257,7 @@ export default function ChatDetailScreen() {
         >
           {msg.type === 'text' && (
             <>
-              {!isOwnMessage && conversation.isGroup && (
+              {!isOwnMessage && isGroup && (
                 <Text style={styles.senderName}>{msg.senderName}</Text>
               )}
               <Text
@@ -242,11 +273,7 @@ export default function ChatDetailScreen() {
 
           {msg.type === 'image' && (
             <>
-              <Image
-                source={{ uri: msg.imageUrl }}
-                style={styles.messageImage}
-                resizeMode="cover"
-              />
+              <Image source={{ uri: msg.imageUrl }} style={styles.messageImage} resizeMode="cover" />
               <View style={[styles.imageTimestamp, isOwnMessage && styles.imageTimestampOwn]}>
                 <Text style={styles.imageTimeText}>{msg.timestamp}</Text>
               </View>
@@ -263,7 +290,7 @@ export default function ChatDetailScreen() {
                 />
               </TouchableOpacity>
               <View style={styles.waveformContainer}>
-                {/* Simuler une forme d'onde */}
+                {/* Barres de simulation de la forme d'onde */}
                 {[...Array(20)].map((_, i) => (
                   <View
                     key={i}
@@ -290,6 +317,7 @@ export default function ChatDetailScreen() {
             </View>
           )}
 
+          {/* Heure pour les messages texte et voix */}
           {msg.type !== 'image' && (
             <Text
               style={[
@@ -305,29 +333,110 @@ export default function ChatDetailScreen() {
     );
   };
 
-  if (loading) {
-    return (
-      <SafeAreaView style={commonStyles.container} edges={['top']}>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" color={colors.primary} />
+  return (
+    <SafeAreaView style={commonStyles.container} edges={['top']}>
+      {/* En-tête de la conversation */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <IconSymbol name="chevron.left" size={24} color={colors.text} />
+        </TouchableOpacity>
+        <View style={styles.headerInfo}>
+          <Image source={{ uri: convImage }} style={styles.headerAvatar} />
+          <View>
+            <Text style={styles.headerTitle}>{convName}</Text>
+            {isGroup && <Text style={styles.headerSubtitle}>Groupe</Text>}
+          </View>
         </View>
-      </SafeAreaView>
-    );
-}
+        <TouchableOpacity style={styles.headerButton}>
+          <IconSymbol name="info.circle" size={24} color={colors.text} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Contenu de la conversation et zone de saisie */}
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      >
+        <ScrollView
+          ref={scrollViewRef}
+          style={styles.messagesContainer}
+          contentContainerStyle={styles.messagesContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {messagesLoading ? (
+            // Spinner de chargement si les messages sont en cours de récupération
+            <ActivityIndicator size="large" color={colors.primary} />
+          ) : (
+            combinedMessages.map(renderMessage)
+          )}
+        </ScrollView>
+
+        {/* Barre de statut d'enregistrement vocal */}
+        {recording && (
+          <View style={styles.recordingBar}>
+            <View style={styles.recordingIndicator}>
+              <View style={styles.recordingDot} />
+              <Text style={styles.recordingText}>
+                Enregistrement... {formatDuration(recordingTime)}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.stopRecordingButton}
+              onPress={handleStopRecording}
+            >
+              <IconSymbol name="stop.fill" size={24} color={colors.background} />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Zone d'entrée de message */}
+        <View style={styles.inputContainer}>
+          <TouchableOpacity style={styles.attachButton} onPress={() => setShowMediaOptions(true)}>
+            <IconSymbol name="plus.circle.fill" size={28} color={colors.primary} />
+          </TouchableOpacity>
+
+          <TextInput
+            style={styles.input}
+            placeholder="Message..."
+            placeholderTextColor={colors.textSecondary}
+            value={message}
+            onChangeText={setMessage}
+            multiline
+          />
+
+          {message.trim() ? (
+            <TouchableOpacity style={styles.sendButton} onPress={handleSendText}>
+              <IconSymbol name="arrow.up.circle.fill" size={32} color={colors.primary} />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={styles.voiceButton} onPress={handleStartRecording}>
+              <IconSymbol name="mic.fill" size={24} color={colors.primary} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Modal (placeholder) pour options média (par ex. choix Photo vs Appareil) */}
+        <Modal
+          visible={showMediaOptions}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowMediaOptions(false)}
+        >
+          <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowMediaOptions(false)} />
+          {/* Vous pouvez implémenter ici un menu d'options d'envoi (Photo, Caméra, etc.) */}
+        </Modal>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    gap: 12,
   },
   backButton: {
     width: 40,
@@ -336,241 +445,190 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 8,
   },
   headerInfo: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    flex: 1,
   },
   headerAvatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
     backgroundColor: colors.border,
+    marginRight: 12,
   },
   headerTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
     color: colors.text,
   },
   headerSubtitle: {
-    fontSize: 13,
+    fontSize: 14,
     color: colors.textSecondary,
   },
   headerButton: {
     padding: 8,
   },
+  container: {
+    flex: 1,
+  },
   messagesContainer: {
     flex: 1,
   },
   messagesContent: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
   },
   messageWrapper: {
     flexDirection: 'row',
+    marginBottom: 12,
     alignItems: 'flex-end',
-    gap: 8,
-    marginBottom: 8,
   },
   messageWrapperOwn: {
-    flexDirection: 'row-reverse',
+    justifyContent: 'flex-end',
   },
   messageAvatar: {
     width: 32,
     height: 32,
     borderRadius: 16,
     backgroundColor: colors.border,
+    marginRight: 8,
   },
   messageBubble: {
-    maxWidth: '70%',
+    maxWidth: '80%',
+    padding: 8,
+    borderRadius: 12,
     backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 12,
-    gap: 4,
   },
   messageBubbleOwn: {
     backgroundColor: colors.primary,
+  },
+  messageText: {
+    fontSize: 15,
+    color: colors.text,
+  },
+  messageTextOwn: {
+    color: colors.background,
+  },
+  senderName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginBottom: 2,
+  },
+  messageImage: {
+    width: 200,
+    height: 150,
+    borderRadius: 8,
+    backgroundColor: colors.border,
   },
   imageBubble: {
     padding: 0,
     overflow: 'hidden',
   },
-  senderName: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.primary,
-    marginBottom: 2,
+  imageTimestamp: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    backgroundColor: '#00000060',
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
   },
-  messageText: {
-    fontSize: 15,
-    color: colors.text,
-    lineHeight: 20,
+  imageTimestampOwn: {
+    backgroundColor: '#00000040',
   },
-  messageTextOwn: {
+  imageTimeText: {
+    fontSize: 10,
+    color: '#fff',
+  },
+  voiceMessage: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  playButton: {
+    padding: 8,
+    borderRadius: 16,
+    backgroundColor: colors.card,
+  },
+  waveformContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  waveformBar: {
+    width: 3,
+    borderRadius: 2,
+  },
+  voiceDuration: {
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  voiceDurationOwn: {
     color: colors.background,
   },
   messageTime: {
     fontSize: 11,
     color: colors.textSecondary,
     alignSelf: 'flex-end',
+    marginTop: 4,
   },
   messageTimeOwn: {
-    color: colors.background + 'CC',
-  },
-  messageImage: {
-    width: 250,
-    height: 250,
-    borderRadius: 16,
-  },
-  imageTimestamp: {
-    position: 'absolute',
-    bottom: 8,
-    right: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  imageTimestampOwn: {
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  imageTimeText: {
-    fontSize: 11,
-    color: colors.text,
-    fontWeight: '600',
-  },
-  voiceMessage: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 4,
-  },
-  playButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.primary + '20',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  waveformContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    height: 32,
-  },
-  waveformBar: {
-    flex: 1,
-    borderRadius: 2,
-  },
-  voiceDuration: {
-    fontSize: 12,
-    color: colors.text,
-    fontWeight: '600',
-  },
-  voiceDurationOwn: {
     color: colors.background,
   },
   recordingBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     backgroundColor: colors.card,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   recordingIndicator: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
   recordingDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: colors.error,
   },
   recordingText: {
-    fontSize: 16,
+    fontSize: 15,
     color: colors.text,
-    fontWeight: '600',
   },
   stopRecordingButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    padding: 8,
     backgroundColor: colors.error,
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderRadius: 16,
   },
   inputContainer: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    alignItems: 'center',
+    padding: 8,
     backgroundColor: colors.background,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    gap: 8,
   },
   attachButton: {
     padding: 4,
+    marginRight: 8,
   },
   input: {
     flex: 1,
-    backgroundColor: colors.card,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    fontSize: 16,
+    fontSize: 15,
     color: colors.text,
-    maxHeight: 100,
+    paddingVertical: 8,
   },
   sendButton: {
     padding: 4,
+    marginLeft: 8,
   },
   voiceButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.card,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  mediaOptionsContainer: {
-    backgroundColor: colors.card,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 24,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  mediaOption: {
-    alignItems: 'center',
-    gap: 8,
-  },
-  mediaOptionIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  mediaOptionText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text,
+    padding: 4,
+    marginLeft: 8,
   },
 });
