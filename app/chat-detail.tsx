@@ -1,6 +1,6 @@
 // app/chat-detail.tsx - Version améliorée avec support média
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
+import { messagingService } from '@/services/messaging.service';
+import { useAuth } from '@/contexts/AuthContext';
+import { storageService } from '@/services/storage.service';
 import * as ImagePicker from 'expo-image-picker';
 
 type MessageType = 'text' | 'image' | 'voice';
@@ -38,148 +41,110 @@ interface Message {
 export default function ChatDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
+  const { user } = useAuth();
   const scrollViewRef = useRef<ScrollView>(null);
   
   const [message, setMessage] = useState('');
+  const [messages, setMessages] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [recording, setRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [showMediaOptions, setShowMediaOptions] = useState(false);
   
-  // Mock conversation info
-  const conversation = {
-    id: id as string,
-    name: 'Marie Dubois',
-    image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400',
-    isGroup: false,
-  };
+  const [conversation, setConversation] = useState<any>(null);
 
-  // Mock current user
-  const currentUser = {
-    id: '1',
-    name: 'Moi',
-    avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400',
-  };
-
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      senderId: '2',
-      senderName: 'Marie Dubois',
-      senderAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400',
-      text: 'Salut ! Comment vas-tu ?',
-      type: 'text',
-      timestamp: '10:30',
-    },
-    {
-      id: '2',
-      senderId: currentUser.id,
-      senderName: currentUser.name,
-      senderAvatar: currentUser.avatar,
-      text: 'Très bien merci ! Et toi ?',
-      type: 'text',
-      timestamp: '10:32',
-    },
-  ]);
-
-  const handleSendText = () => {
-    if (message.trim()) {
-      const newMessage: Message = {
-        id: Date.now().toString(),
-        senderId: currentUser.id,
-        senderName: currentUser.name,
-        senderAvatar: currentUser.avatar,
-        text: message.trim(),
-        type: 'text',
-        timestamp: new Date().toLocaleTimeString('fr-FR', {
-          hour: '2-digit',
-          minute: '2-digit',
-        }),
-      };
+  useEffect(() => {
+    if (id && user) {
+      loadMessages();
       
-      setMessages(prev => [...prev, newMessage]);
-      setMessage('');
-      
-      // Scroll to bottom
+      const unsubscribe = messagingService.subscribeToMessages(
+        id as string,
+        (newMessage) => {
+          setMessages(prev => [...prev, newMessage]);
+          setTimeout(() => {
+            scrollViewRef.current?.scrollToEnd({ animated: true });
+          }, 100);
+        }
+      );
+
+      return () => unsubscribe();
+    }
+  }, [id, user]);
+
+  const loadMessages = async () => {
+    setLoading(true);
+    const result = await messagingService.getMessages(id as string);
+    if (result.success) {
+      setMessages(result.data || []);
       setTimeout(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: true });
+        scrollViewRef.current?.scrollToEnd({ animated: false });
       }, 100);
+    }
+    setLoading(false);
+  };
+
+  const handleSendText = async () => {
+    if (message.trim()) {
+      const result = await messagingService.sendMessage(
+        id as string,
+        message.trim()
+      );
+
+      if (result.success) {
+        setMessage('');
+      }
     }
   };
 
   const handlePickImage = async () => {
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
-      });
+      const imageResult = await storageService.pickImage();
+      if (!imageResult.success || !imageResult.uri) return;
 
-      if (!result.canceled && result.assets[0]) {
-        const newMessage: Message = {
-          id: Date.now().toString(),
-          senderId: currentUser.id,
-          senderName: currentUser.name,
-          senderAvatar: currentUser.avatar,
-          imageUrl: result.assets[0].uri,
-          type: 'image',
-          timestamp: new Date().toLocaleTimeString('fr-FR', {
-            hour: '2-digit',
-            minute: '2-digit',
-          }),
-        };
-        
-        setMessages(prev => [...prev, newMessage]);
-        setShowMediaOptions(false);
-        
-        setTimeout(() => {
-          scrollViewRef.current?.scrollToEnd({ animated: true });
-        }, 100);
+      setShowMediaOptions(false);
+
+      // Upload l'image
+      const uploadResult = await storageService.uploadAvatar(
+        imageResult.uri,
+        `chat_${Date.now()}`
+      );
+
+      if (uploadResult.success) {
+        await messagingService.sendMessage(
+          id as string,
+          '',
+          'image',
+          uploadResult.url
+        );
       }
     } catch (error) {
       console.error('Error picking image:', error);
-      Alert.alert('Erreur', "Impossible d'accéder à la galerie");
     }
   };
 
   const handleTakePhoto = async () => {
     try {
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
-      
-      if (permission.granted) {
-        const result = await ImagePicker.launchCameraAsync({
-          allowsEditing: true,
-          aspect: [4, 3],
-          quality: 0.8,
-        });
+      const photoResult = await storageService.takePhoto();
+      if (!photoResult.success || !photoResult.uri) return;
 
-        if (!result.canceled && result.assets[0]) {
-          const newMessage: Message = {
-            id: Date.now().toString(),
-            senderId: currentUser.id,
-            senderName: currentUser.name,
-            senderAvatar: currentUser.avatar,
-            imageUrl: result.assets[0].uri,
-            type: 'image',
-            timestamp: new Date().toLocaleTimeString('fr-FR', {
-              hour: '2-digit',
-              minute: '2-digit',
-            }),
-          };
-          
-          setMessages(prev => [...prev, newMessage]);
-          setShowMediaOptions(false);
-          
-          setTimeout(() => {
-            scrollViewRef.current?.scrollToEnd({ animated: true });
-          }, 100);
-        }
-      } else {
-        Alert.alert('Permission refusée', 'Accès à la caméra nécessaire');
+      setShowMediaOptions(false);
+
+      // Upload la photo
+      const uploadResult = await storageService.uploadAvatar(
+        photoResult.uri,
+        `chat_${Date.now()}`
+      );
+
+      if (uploadResult.success) {
+        await messagingService.sendMessage(
+          id as string,
+          '',
+          'image',
+          uploadResult.url
+        );
       }
     } catch (error) {
       console.error('Error taking photo:', error);
-      Alert.alert('Erreur', "Impossible d'accéder à la caméra");
     }
   };
 
@@ -340,140 +305,15 @@ export default function ChatDetailScreen() {
     );
   };
 
-  return (
-    <SafeAreaView style={commonStyles.container} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <IconSymbol name="chevron.left" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <View style={styles.headerInfo}>
-          <Image source={{ uri: conversation.image }} style={styles.headerAvatar} />
-          <View>
-            <Text style={styles.headerTitle}>{conversation.name}</Text>
-            {conversation.isGroup && (
-              <Text style={styles.headerSubtitle}>Groupe</Text>
-            )}
-          </View>
+  if (loading) {
+    return (
+      <SafeAreaView style={commonStyles.container} edges={['top']}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
-        <TouchableOpacity style={styles.headerButton}>
-          <IconSymbol name="info.circle" size={24} color={colors.text} />
-        </TouchableOpacity>
-      </View>
-
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-      >
-        <ScrollView
-          ref={scrollViewRef}
-          style={styles.messagesContainer}
-          contentContainerStyle={styles.messagesContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {messages.map(renderMessage)}
-        </ScrollView>
-
-        {recording && (
-          <View style={styles.recordingBar}>
-            <View style={styles.recordingIndicator}>
-              <View style={styles.recordingDot} />
-              <Text style={styles.recordingText}>
-                Enregistrement... {formatDuration(recordingTime)}
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={styles.stopRecordingButton}
-              onPress={handleStopRecording}
-            >
-              <IconSymbol name="stop.fill" size={24} color={colors.background} />
-            </TouchableOpacity>
-          </View>
-        )}
-
-        <View style={styles.inputContainer}>
-          <TouchableOpacity
-            style={styles.attachButton}
-            onPress={() => setShowMediaOptions(true)}
-          >
-            <IconSymbol name="plus.circle.fill" size={28} color={colors.primary} />
-          </TouchableOpacity>
-          
-          <TextInput
-            style={styles.input}
-            placeholder="Message..."
-            placeholderTextColor={colors.textSecondary}
-            value={message}
-            onChangeText={setMessage}
-            multiline
-          />
-          
-          {message.trim() ? (
-            <TouchableOpacity
-              style={styles.sendButton}
-              onPress={handleSendText}
-            >
-              <IconSymbol
-                name="arrow.up.circle.fill"
-                size={32}
-                color={colors.primary}
-              />
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={styles.voiceButton}
-              onPress={handleStartRecording}
-            >
-              <IconSymbol
-                name="mic.fill"
-                size={24}
-                color={colors.primary}
-              />
-            </TouchableOpacity>
-          )}
-        </View>
-      </KeyboardAvoidingView>
-
-      {/* Modal options média */}
-      <Modal
-        visible={showMediaOptions}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowMediaOptions(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalBackdrop}
-          activeOpacity={1}
-          onPress={() => setShowMediaOptions(false)}
-        >
-          <View style={styles.mediaOptionsContainer}>
-            <TouchableOpacity
-              style={styles.mediaOption}
-              onPress={handlePickImage}
-            >
-              <View style={[styles.mediaOptionIcon, { backgroundColor: colors.secondary + '20' }]}>
-                <IconSymbol name="photo.fill" size={24} color={colors.secondary} />
-              </View>
-              <Text style={styles.mediaOptionText}>Galerie</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.mediaOption}
-              onPress={handleTakePhoto}
-            >
-              <View style={[styles.mediaOptionIcon, { backgroundColor: colors.accent + '20' }]}>
-                <IconSymbol name="camera.fill" size={24} color={colors.accent} />
-              </View>
-              <Text style={styles.mediaOptionText}>Caméra</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-    </SafeAreaView>
-  );
+      </SafeAreaView>
+    );
+}
 }
 
 const styles = StyleSheet.create({

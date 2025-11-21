@@ -1,6 +1,4 @@
-// app/(tabs)/chat.tsx - Version mise à jour avec fonctionnalités amis
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,92 +9,83 @@ import {
   Platform,
   Modal,
   FlatList,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
-
-interface Friend {
-  id: string;
-  name: string;
-  avatar: string;
-  is_online: boolean;
-}
-
-interface Conversation {
-  id: string;
-  name: string;
-  image: string;
-  lastMessage: string;
-  lastMessageTime: string;
-  isGroup: boolean;
-  unreadCount?: number;
-}
+import { messagingService } from '@/services/messaging.service';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function ChatScreen() {
   const router = useRouter();
-  const [pendingRequestsCount, setPendingRequestsCount] = useState(3);
+  const { user } = useAuth();
+  const [conversations, setConversations] = useState<any[]>([]);
+  const [friends, setFriends] = useState<any[]>([]);
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
   const [showFriendsModal, setShowFriendsModal] = useState(false);
-  
-  // Liste de conversations (vide au début)
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  
-  // Liste d'amis pour le modal
-  const [friends] = useState<Friend[]>([
-    {
-      id: '1',
-      name: 'Marie Dubois',
-      avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400',
-      is_online: true,
-    },
-    {
-      id: '2',
-      name: 'Pierre Martin',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400',
-      is_online: false,
-    },
-    {
-      id: '3',
-      name: 'Sophie Bernard',
-      avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400',
-      is_online: true,
-    },
-    {
-      id: '4',
-      name: 'Thomas Leclerc',
-      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400',
-      is_online: false,
-    },
-  ]);
+  const [loading, setLoading] = useState(true);
 
-  const handleCreateConversation = (friendId: string) => {
-    // Trouver l'ami sélectionné
-    const friend = friends.find(f => f.id === friendId);
-    if (!friend) return;
+  useEffect(() => {
+    if (user) {
+      loadData();
+      
+      const unsubConv = messagingService.subscribeToConversations(() => {
+        loadConversations();
+      });
 
-    // Créer une nouvelle conversation
-    const newConversation: Conversation = {
-      id: `conv_${Date.now()}`,
-      name: friend.name,
-      image: friend.avatar,
-      lastMessage: '',
-      lastMessageTime: 'Maintenant',
-      isGroup: false,
-      unreadCount: 0,
-    };
+      const unsubReq = messagingService.subscribeToFriendRequests(() => {
+        loadFriendRequests();
+      });
 
-    // Ajouter la conversation à la liste
-    setConversations(prev => [newConversation, ...prev]);
-    
-    // Fermer le modal
-    setShowFriendsModal(false);
-    
-    // Rediriger vers la conversation
-    router.push(`/chat-detail?id=${newConversation.id}`);
+      return () => {
+        unsubConv();
+        unsubReq();
+      };
+    }
+  }, [user]);
+
+  const loadData = async () => {
+    setLoading(true);
+    await Promise.all([
+      loadConversations(),
+      loadFriends(),
+      loadFriendRequests(),
+    ]);
+    setLoading(false);
   };
 
-  const renderChatItem = (chat: Conversation) => (
+  const loadConversations = async () => {
+    const result = await messagingService.getConversations();
+    if (result.success) {
+      setConversations(result.data || []);
+    }
+  };
+
+  const loadFriends = async () => {
+    const result = await messagingService.getFriends();
+    if (result.success) {
+      setFriends(result.data || []);
+    }
+  };
+
+  const loadFriendRequests = async () => {
+    const result = await messagingService.getFriendRequests();
+    if (result.success) {
+      setPendingRequestsCount(result.data?.length || 0);
+    }
+  };
+
+  const handleCreateConversation = async (friendId: string) => {
+    const result = await messagingService.createConversation(friendId);
+    if (result.success) {
+      setShowFriendsModal(false);
+      router.push(`/chat-detail?id=${result.conversationId}`);
+    }
+  };
+
+  const renderChatItem = (chat: any) => (
     <TouchableOpacity
       key={chat.id}
       style={styles.chatItem}
@@ -118,21 +107,14 @@ export default function ChatScreen() {
           </Text>
           <Text style={styles.chatTime}>{chat.lastMessageTime}</Text>
         </View>
-        <View style={styles.lastMessageRow}>
-          <Text style={styles.lastMessage} numberOfLines={2}>
-            {chat.lastMessage || 'Commencez une conversation...'}
-          </Text>
-          {chat.unreadCount && chat.unreadCount > 0 && (
-            <View style={styles.unreadBadge}>
-              <Text style={styles.unreadText}>{chat.unreadCount}</Text>
-            </View>
-          )}
-        </View>
+        <Text style={styles.lastMessage} numberOfLines={2}>
+          {chat.lastMessage || 'Commencez une conversation...'}
+        </Text>
       </View>
     </TouchableOpacity>
   );
 
-  const renderFriendItem = ({ item }: { item: Friend }) => (
+  const renderFriendItem = ({ item }: { item: any }) => (
     <TouchableOpacity
       style={styles.friendItem}
       onPress={() => handleCreateConversation(item.id)}
@@ -152,12 +134,21 @@ export default function ChatScreen() {
     </TouchableOpacity>
   );
 
+  if (loading) {
+    return (
+      <SafeAreaView style={commonStyles.container} edges={['top']}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={commonStyles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Messages</Text>
         <View style={styles.headerButtons}>
-          {/* Bouton demandes d'amitié */}
           <TouchableOpacity
             style={styles.headerButton}
             onPress={() => router.push('/friend-requests')}
@@ -172,7 +163,6 @@ export default function ChatScreen() {
             )}
           </TouchableOpacity>
 
-          {/* Bouton ajouter des amis */}
           <TouchableOpacity
             style={styles.headerButton}
             onPress={() => router.push('/add-friends')}
@@ -180,7 +170,6 @@ export default function ChatScreen() {
             <IconSymbol name="person.2.fill" size={22} color={colors.text} />
           </TouchableOpacity>
 
-          {/* Bouton nouvelle conversation */}
           <TouchableOpacity
             style={styles.headerButton}
             onPress={() => setShowFriendsModal(true)}
@@ -217,7 +206,6 @@ export default function ChatScreen() {
         )}
       </ScrollView>
 
-      {/* Modal de sélection d'ami */}
       <Modal
         visible={showFriendsModal}
         animationType="slide"
@@ -248,7 +236,13 @@ export default function ChatScreen() {
   );
 }
 
+// Garder les mêmes styles
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -354,30 +348,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.textSecondary,
   },
-  lastMessageRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
   lastMessage: {
-    flex: 1,
     fontSize: 14,
     color: colors.textSecondary,
     lineHeight: 20,
-  },
-  unreadBadge: {
-    backgroundColor: colors.primary,
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-  },
-  unreadText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.background,
   },
   emptyState: {
     alignItems: 'center',
@@ -410,7 +384,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.background,
   },
-  // Styles du modal
   modalContainer: {
     flex: 1,
     backgroundColor: colors.background,
@@ -421,7 +394,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
+borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
   modalTitle: {

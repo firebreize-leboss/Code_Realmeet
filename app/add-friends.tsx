@@ -16,6 +16,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
+import { userService } from '@/services/user.service';
+import { messagingService } from '@/services/messaging.service';
 
 interface UserSearchResult {
   id: string;
@@ -29,11 +31,10 @@ interface UserSearchResult {
 export default function AddFriendsScreen() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<UserSearchResult[]>([]);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [sendingRequest, setSendingRequest] = useState<string | null>(null);
 
-  // Simuler la recherche d'utilisateurs avec debounce
   useEffect(() => {
     const timer = setTimeout(() => {
       if (searchQuery.trim().length >= 2) {
@@ -48,80 +49,22 @@ export default function AddFriendsScreen() {
 
   const searchUsers = async () => {
     setLoading(true);
-    try {
-      // TODO: Implémenter la vraie recherche avec Supabase
-      // const { data, error } = await supabase
-      //   .from('profiles')
-      //   .select('id, full_name, avatar_url, city')
-      //   .ilike('full_name', `%${searchQuery}%`)
-      //   .limit(10);
-
-      // Données de test
-      const mockResults: UserSearchResult[] = [
-        {
-          id: '1',
-          full_name: 'Marie Dubois',
-          avatar_url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400',
-          city: 'Paris',
-          is_friend: false,
-          request_sent: false,
-        },
-        {
-          id: '2',
-          full_name: 'Pierre Martin',
-          avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400',
-          city: 'Lyon',
-          is_friend: false,
-          request_sent: false,
-        },
-        {
-          id: '3',
-          full_name: 'Sophie Bernard',
-          avatar_url: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400',
-          city: 'Marseille',
-          is_friend: true,
-          request_sent: false,
-        },
-      ];
-
-      setSearchResults(
-        mockResults.filter(user =>
-          user.full_name.toLowerCase().includes(searchQuery.toLowerCase())
-        )
-      );
-    } catch (error) {
-      console.error('Error searching users:', error);
-    } finally {
-      setLoading(false);
-    }
+    const results = await userService.searchProfiles(searchQuery);
+    setSearchResults(results);
+    setLoading(false);
   };
 
   const handleSendFriendRequest = async (userId: string) => {
     setSendingRequest(userId);
-    try {
-      // TODO: Implémenter l'envoi de demande d'amitié avec Supabase
-      // const { error } = await supabase
-      //   .from('friend_requests')
-      //   .insert({
-      //     sender_id: currentUser.id,
-      //     receiver_id: userId,
-      //     status: 'pending'
-      //   });
-
-      // Simuler un délai
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Mettre à jour l'état local
+    const result = await messagingService.sendFriendRequest(userId);
+    if (result.success) {
       setSearchResults(prev =>
         prev.map(user =>
           user.id === userId ? { ...user, request_sent: true } : user
         )
       );
-    } catch (error) {
-      console.error('Error sending friend request:', error);
-    } finally {
-      setSendingRequest(null);
     }
+    setSendingRequest(null);
   };
 
   const handleViewProfile = (userId: string) => {
