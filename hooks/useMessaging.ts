@@ -508,32 +508,6 @@ export function useMessages(conversationId: string) {
     }).select().single();
 
     if (error) throw error;
-
-    // Récupérer le profil pour afficher immédiatement
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('full_name, avatar_url')
-      .eq('id', currentUser?.user?.id)
-      .single();
-
-    // Ajouter immédiatement le message sans attendre le realtime
-    const newMessage = {
-      id: data.id,
-      senderId: data.sender_id,
-      senderName: profile?.full_name || 'Moi',
-      senderAvatar: profile?.avatar_url,
-      text: data.content,
-      imageUrl: data.message_type === 'image' ? data.media_url : undefined,
-      voiceUrl: data.message_type === 'voice' ? data.media_url : undefined,
-      voiceDuration: data.media_duration,
-      type: data.message_type,
-      timestamp: new Date(data.created_at).toLocaleTimeString('fr-FR', {
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
-    };
-
-    setMessages((prev) => [...prev, newMessage]);
   } catch (err) {
     throw err;
   }
