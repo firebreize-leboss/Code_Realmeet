@@ -412,88 +412,132 @@ export function useMessages(conversationId: string) {
     }
   };
 
-  useEffect(() => {
-    if (!conversationId) return;
+ useEffect(() => {
+  if (!conversationId) return;
 
-    loadMessages();
+  loadMessages();
 
-    // Configuration du realtime
-    const channel = supabase
-      .channel(`room:${conversationId}`, {
-        config: {
-          broadcast: { self: true },
-        },
-      })
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `conversation_id=eq.${conversationId}`,
-        },
-        async (payload: any) => {
-          console.log('🔔 New message received:', payload);
-          
-          // Récupérer le profil
-          const { data: profile } = await supabase
+  // Configuration du realtime
+  const channel = supabase
+    .channel(`room:${conversationId}`, {
+      config: {
+        broadcast: { self: true },
+      },
+    })
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `conversation_id=eq.${conversationId}`,
+      },
+      async (payload: any) => {
+        console.log('🔔 New message received:', payload);
+        
+        // Vérifier si le message existe déjà (éviter les doublons)
+        setMessages((prev) => {
+          const exists = prev.some(msg => msg.id === payload.new.id);
+          if (exists) {
+            console.log('⚠️ Message already exists, skipping');
+            return prev;
+          }
+
+          // Récupérer le profil de l'expéditeur de manière asynchrone
+          supabase
             .from('profiles')
             .select('full_name, avatar_url')
             .eq('id', payload.new.sender_id)
-            .single();
+            .single()
+            .then(({ data: profile }) => {
+              const newMessage = {
+                id: payload.new.id,
+                senderId: payload.new.sender_id,
+                senderName: profile?.full_name || 'Inconnu',
+                senderAvatar: profile?.avatar_url,
+                text: payload.new.content,
+                imageUrl: payload.new.message_type === 'image' ? payload.new.media_url : undefined,
+                voiceUrl: payload.new.message_type === 'voice' ? payload.new.media_url : undefined,
+                voiceDuration: payload.new.media_duration,
+                type: payload.new.message_type,
+                timestamp: new Date(payload.new.created_at).toLocaleTimeString('fr-FR', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                }),
+              };
 
-          const newMessage = {
-            id: payload.new.id,
-            senderId: payload.new.sender_id,
-            senderName: profile?.full_name || 'Inconnu',
-            senderAvatar: profile?.avatar_url,
-            text: payload.new.content,
-            imageUrl: payload.new.message_type === 'image' ? payload.new.media_url : undefined,
-            voiceUrl: payload.new.message_type === 'voice' ? payload.new.media_url : undefined,
-            voiceDuration: payload.new.media_duration,
-            type: payload.new.message_type,
-            timestamp: new Date(payload.new.created_at).toLocaleTimeString('fr-FR', {
-              hour: '2-digit',
-              minute: '2-digit',
-            }),
-          };
+              setMessages((prevMsgs) => {
+                // Double vérification avant d'ajouter
+                if (prevMsgs.some(m => m.id === newMessage.id)) {
+                  return prevMsgs;
+                }
+                return [...prevMsgs, newMessage];
+              });
+            });
 
-          setMessages((prev) => [...prev, newMessage]);
-        }
-      )
-      .subscribe((status) => {
-        console.log('📡 Subscription status:', status);
-      });
+          return prev; // Retourner prev immédiatement pour éviter le re-render
+        });
+      }
+    )
+    .subscribe((status) => {
+      console.log('📡 Subscription status:', status);
+    });
 
-    return () => {
-      console.log('🔌 Cleaning up realtime subscription');
-      supabase.removeChannel(channel);
-    };
-  }, [conversationId]);
+  return () => {
+    console.log('🔌 Cleaning up realtime subscription');
+    supabase.removeChannel(channel);
+  };
+}, [conversationId]);
 
   const sendMessage = async (
-    content: string,
-    type: 'text' | 'image' | 'voice' = 'text',
-    mediaUrl?: string,
-    mediaDuration?: number
-  ) => {
-    try {
-      const { data: currentUser } = await supabase.auth.getUser();
+  content: string,
+  type: 'text' | 'image' | 'voice' = 'text',
+  mediaUrl?: string,
+  mediaDuration?: number
+) => {
+  try {
+    const { data: currentUser } = await supabase.auth.getUser();
 
-      const { error } = await supabase.from('messages').insert({
-        conversation_id: conversationId,
-        sender_id: currentUser?.user?.id,
-        content: type === 'text' ? content : null,
-        message_type: type,
-        media_url: mediaUrl,
-        media_duration: mediaDuration,
-      });
+    const { data, error } = await supabase.from('messages').insert({
+      conversation_id: conversationId,
+      sender_id: currentUser?.user?.id,
+      content: type === 'text' ? content : null,
+      message_type: type,
+      media_url: mediaUrl,
+      media_duration: mediaDuration,
+    }).select().single();
 
-      if (error) throw error;
-    } catch (err) {
-      throw err;
-    }
-  };
+    if (error) throw error;
+
+    // Récupérer le profil pour afficher immédiatement
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('full_name, avatar_url')
+      .eq('id', currentUser?.user?.id)
+      .single();
+
+    // Ajouter immédiatement le message sans attendre le realtime
+    const newMessage = {
+      id: data.id,
+      senderId: data.sender_id,
+      senderName: profile?.full_name || 'Moi',
+      senderAvatar: profile?.avatar_url,
+      text: data.content,
+      imageUrl: data.message_type === 'image' ? data.media_url : undefined,
+      voiceUrl: data.message_type === 'voice' ? data.media_url : undefined,
+      voiceDuration: data.media_duration,
+      type: data.message_type,
+      timestamp: new Date(data.created_at).toLocaleTimeString('fr-FR', {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+    };
+
+    setMessages((prev) => [...prev, newMessage]);
+  } catch (err) {
+    throw err;
+  }
+};
 
   return {
     messages,
