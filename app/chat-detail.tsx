@@ -340,7 +340,7 @@ export default function ChatDetailScreen() {
   };
 
   return (
-    <SafeAreaView style={commonStyles.container} edges={['top']}>
+    <SafeAreaView style={commonStyles.container} edges={['top','bottom']}>
       {/* En-tête de la conversation */}
   <View style={styles.header}>
   <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>

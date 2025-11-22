@@ -1,28 +1,35 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  Image,
   TouchableOpacity,
-  Platform,
+  Image,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { useAuth } from '@/contexts/AuthContext';
+import { Keyboard } from 'react-native';
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { user, profile, loading, refreshProfile } = useAuth();
+  const { user, profile, loading } = useAuth();
 
-  // État de chargement
+  // Fermer le clavier à chaque fois que l'écran est focus
+  useFocusEffect(
+    React.useCallback(() => {
+      Keyboard.dismiss();
+    }, [])
+  );
+
   if (loading) {
     return (
-      <SafeAreaView style={commonStyles.container} edges={['top']}>
+      <SafeAreaView style={commonStyles.container} edges={['top','bottom']}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Chargement du profil...</Text>
@@ -31,21 +38,18 @@ export default function ProfileScreen() {
     );
   }
 
-  // Si pas connecté
   if (!user || !profile) {
     return (
-      <SafeAreaView style={commonStyles.container} edges={['top']}>
+      <SafeAreaView style={commonStyles.container} edges={['top','bottom']}>
         <View style={styles.notConnectedContainer}>
-          <View style={styles.notConnectedIcon}>
-            <IconSymbol name="person.circle" size={80} color={colors.textSecondary} />
-          </View>
+          <IconSymbol name="person.fill" size={64} color={colors.textSecondary} style={styles.notConnectedIcon} />
           <Text style={styles.notConnectedTitle}>Non connecté</Text>
           <Text style={styles.notConnectedText}>
-            Connectez-vous pour accéder à votre profil et profiter de toutes les fonctionnalités
+            Vous devez être connecté pour voir votre profil
           </Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.connectButton}
-            onPress={() => router.push('/auth/account-type')}
+            onPress={() => router.push('/')}
           >
             <Text style={styles.connectButtonText}>Se connecter</Text>
           </TouchableOpacity>
@@ -55,7 +59,7 @@ export default function ProfileScreen() {
   }
 
   return (
-    <SafeAreaView style={commonStyles.container} edges={['top']}>
+    <SafeAreaView style={commonStyles.container} edges={['top','bottom']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Profile</Text>
         <TouchableOpacity
@@ -68,10 +72,7 @@ export default function ProfileScreen() {
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={[
-          styles.contentContainer,
-          Platform.OS !== 'ios' && styles.contentContainerWithTabBar,
-        ]}
+        contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.profileHeader}>
@@ -154,10 +155,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
-  contentContainerWithTabBar: {
-    paddingBottom: 100,
+    paddingBottom: Platform.OS === 'ios' ? 100 : 120,
   },
   loadingContainer: {
     flex: 1,
@@ -293,7 +291,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 8,
-    marginBottom: Platform.OS === 'android' ? 20 : 0,
+    marginBottom: 20,
   },
   editButtonText: {
     fontSize: 16,

@@ -133,7 +133,7 @@ useEffect(() => {
   );
 
   return (
-    <SafeAreaView style={commonStyles.container} edges={['top']}>
+    <SafeAreaView style={commonStyles.container} edges={['top','bottom']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Messages</Text>
         <View style={styles.headerButtons}>
@@ -208,7 +208,7 @@ useEffect(() => {
         presentationStyle="pageSheet"
         onRequestClose={() => setShowFriendsModal(false)}
       >
-        <SafeAreaView style={styles.modalContainer} edges={['top']}>
+        <SafeAreaView style={styles.modalContainer} edges={['top',"bottom"]}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Nouvelle conversation</Text>
             <TouchableOpacity
