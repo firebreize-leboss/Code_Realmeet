@@ -23,6 +23,7 @@ import { colors, commonStyles } from '@/styles/commonStyles';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 import { useMessages } from '@/hooks/useMessaging';
+import { Keyboard } from 'react-native';
 
 type MessageType = 'text' | 'image' | 'voice' | 'system';
 
@@ -104,6 +105,11 @@ export default function ChatDetailScreen() {
       }
     };
     loadConversationInfo();
+  }, [conversationId]);
+  
+  useEffect(() => {
+    // Fermer le clavier au montage du composant
+    Keyboard.dismiss();
   }, [conversationId]);
 
   // Utiliser le hook de messages pour récupérer/envoyer les messages de la conversation

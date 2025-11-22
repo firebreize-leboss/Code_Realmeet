@@ -13,6 +13,7 @@ import {
   Theme,
   ThemeProvider,
 } from "@react-navigation/native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Button } from "@/components/button";
 import { WidgetProvider } from "@/contexts/WidgetContext";
@@ -82,47 +83,49 @@ export default function RootLayout() {
   return (
     <>
       <StatusBar style="auto" animated />
-      <AuthProvider>
-        <ThemeProvider
-          value={colorScheme === "dark" ? CustomDarkTheme : CustomDefaultTheme}
-        >
-          <WidgetProvider>
-            <GestureHandlerRootView>
-              <Stack>
-                {/* Main app with tabs */}
-                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <SafeAreaProvider>
+        <AuthProvider>
+          <ThemeProvider
+            value={colorScheme === "dark" ? CustomDarkTheme : CustomDefaultTheme}
+          >
+            <SystemBars style="auto" />
+            <GestureHandlerRootView style={{ flex: 1 }}>
+              <WidgetProvider>
+                <Stack>
+                  {/* Main app with tabs */}
+                  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
 
-                {/* Modal Demo Screens */}
-                <Stack.Screen
-                  name="modal"
-                  options={{
-                    presentation: "modal",
-                    title: "Standard Modal",
-                  }}
-                />
-                <Stack.Screen
-                  name="formsheet"
-                  options={{
-                    presentation: "formSheet",
-                    title: "Form Sheet Modal",
-                    sheetGrabberVisible: true,
-                    sheetAllowedDetents: [0.5, 0.8, 1.0],
-                    sheetCornerRadius: 20,
-                  }}
-                />
-                <Stack.Screen
-                  name="transparent-modal"
-                  options={{
-                    presentation: "transparentModal",
-                    headerShown: false,
-                  }}
-                />
-              </Stack>
-              <SystemBars style={"auto"} />
+                  {/* Modal Demo Screens */}
+                  <Stack.Screen
+                    name="modal"
+                    options={{
+                      presentation: "modal",
+                      title: "Standard Modal",
+                    }}
+                  />
+                  <Stack.Screen
+                    name="formsheet"
+                    options={{
+                      presentation: "formSheet",
+                      title: "Form Sheet Modal",
+                      sheetGrabberVisible: true,
+                      sheetAllowedDetents: [0.5, 0.8, 1.0],
+                      sheetCornerRadius: 20,
+                    }}
+                  />
+                  <Stack.Screen
+                    name="transparent-modal"
+                    options={{
+                      presentation: "transparentModal",
+                      headerShown: false,
+                    }}
+                  />
+                </Stack>
+              </WidgetProvider>
             </GestureHandlerRootView>
-          </WidgetProvider>
-        </ThemeProvider>
-      </AuthProvider>
+          </ThemeProvider>
+        </AuthProvider>
+      </SafeAreaProvider>
     </>
   );
 }
