@@ -1,11 +1,40 @@
 // hooks/useMessaging.ts
-// Hooks personnalisés pour le système de messagerie
+// Hooks personnalisés pour le système de messagerie avec système de statut
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 
 // ============================================
-// HOOKS POUR LES AMIS
+// TYPES
+// ============================================
+
+export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'failed';
+
+export interface TransformedMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderAvatar?: string;
+  text?: string;
+  imageUrl?: string;
+  voiceUrl?: string;
+  voiceDuration?: number;
+  type: 'text' | 'image' | 'voice' | 'system';
+  timestamp: string;
+  status?: MessageStatus;
+}
+
+interface ConversationParticipant {
+  user_id: string;
+  profiles?: {
+    id: string;
+    full_name: string;
+    avatar_url?: string;
+  };
+}
+
+// ============================================
+// HOOK POUR LES AMIS
 // ============================================
 
 export function useFriends() {
@@ -13,20 +42,21 @@ export function useFriends() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  useEffect(() => {
-    loadFriends();
-  }, []);
-
-  const loadFriends = async () => {
+  const loadFriends = useCallback(async () => {
     try {
       setLoading(true);
       const { data: currentUser } = await supabase.auth.getUser();
-      
-      // Récupérer les friendships
+
+      if (!currentUser?.user?.id) {
+        setFriends([]);
+        setLoading(false);
+        return;
+      }
+
       const { data: friendships, error: friendError } = await supabase
         .from('friendships')
         .select('friend_id, created_at')
-        .eq('user_id', currentUser?.user?.id);
+        .eq('user_id', currentUser.user.id);
 
       if (friendError) throw friendError;
 
@@ -36,7 +66,6 @@ export function useFriends() {
         return;
       }
 
-      // Récupérer les profils des amis
       const friendIds = friendships.map(f => f.friend_id);
       const { data: profiles, error: profileError } = await supabase
         .from('profiles')
@@ -45,7 +74,6 @@ export function useFriends() {
 
       if (profileError) throw profileError;
 
-      // Combiner les données
       const formatted = friendships.map(f => {
         const profile = profiles?.find(p => p.id === f.friend_id);
         return {
@@ -59,17 +87,22 @@ export function useFriends() {
 
       setFriends(formatted);
     } catch (err) {
+      console.error('Error loading friends:', err);
       setError(err as Error);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadFriends();
+  }, [loadFriends]);
 
   return { friends, loading, error, refresh: loadFriends };
 }
 
 // ============================================
-// HOOKS POUR LES DEMANDES D'AMITIÉ
+// HOOK POUR LES DEMANDES D'AMITIÉ
 // ============================================
 
 export function useFriendRequests() {
@@ -78,36 +111,42 @@ export function useFriendRequests() {
   const [error, setError] = useState<Error | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
 
-  useEffect(() => {
-    loadRequests();
-    subscribeToRequests();
-  }, []);
-
-  const loadRequests = async () => {
+  const loadRequests = useCallback(async () => {
     try {
       setLoading(true);
       const { data: currentUser } = await supabase.auth.getUser();
-      
+
+      if (!currentUser?.user?.id) {
+        setRequests([]);
+        setPendingCount(0);
+        setLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('friend_requests_with_profiles')
         .select('*')
-        .eq('receiver_id', currentUser?.user?.id)
+        .eq('receiver_id', currentUser.user.id)
         .eq('status', 'pending')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
+
       setRequests(data || []);
       setPendingCount(data?.length || 0);
     } catch (err) {
+      console.error('Error loading friend requests:', err);
       setError(err as Error);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const subscribeToRequests = () => {
+  useEffect(() => {
+    loadRequests();
+
     const channel = supabase
-      .channel('friend_requests')
+      .channel('friend_requests_changes')
       .on(
         'postgres_changes',
         {
@@ -124,7 +163,7 @@ export function useFriendRequests() {
     return () => {
       supabase.removeChannel(channel);
     };
-  };
+  }, [loadRequests]);
 
   const acceptRequest = async (requestId: string) => {
     try {
@@ -135,6 +174,7 @@ export function useFriendRequests() {
       if (error) throw error;
       await loadRequests();
     } catch (err) {
+      console.error('Error accepting friend request:', err);
       throw err;
     }
   };
@@ -149,6 +189,7 @@ export function useFriendRequests() {
       if (error) throw error;
       await loadRequests();
     } catch (err) {
+      console.error('Error rejecting friend request:', err);
       throw err;
     }
   };
@@ -165,7 +206,7 @@ export function useFriendRequests() {
 }
 
 // ============================================
-// HOOKS POUR LES CONVERSATIONS
+// HOOK POUR LES CONVERSATIONS
 // ============================================
 
 export function useConversations() {
@@ -173,183 +214,165 @@ export function useConversations() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  // Dans useConversations
-useEffect(() => {
-  loadConversations();
-  
-  // Subscribe aux nouveaux messages pour rafraîchir la liste
-  const channel = supabase
-    .channel('all_messages')
-    .on(
-      'postgres_changes',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'messages',
-      },
-      () => {
-        loadConversations();
+  const loadConversations = useCallback(async () => {
+    try {
+      setLoading(true);
+      const { data: currentUser } = await supabase.auth.getUser();
+
+      if (!currentUser?.user?.id) {
+        setConversations([]);
+        setLoading(false);
+        return;
       }
-    )
-    .subscribe();
 
-  return () => {
-    supabase.removeChannel(channel);
-  };
-}, []);
-
- const loadConversations = async () => {
-  try {
-    setLoading(true);
-    const { data: currentUser } = await supabase.auth.getUser();
-    console.log('👤 Loading conversations for user:', currentUser?.user?.id);
-
-    // Récupérer les IDs de conversations
-    const { data: participantData, error: participantError } = await supabase
-      .from('conversation_participants')
-      .select('conversation_id')
-      .eq('user_id', currentUser?.user?.id);
-
-    console.log('📋 Participant data:', participantData);
-
-    if (participantError) throw participantError;
-
-    const conversationIds = participantData?.map(p => p.conversation_id) || [];
-    console.log('🆔 Conversation IDs:', conversationIds);
-
-    if (conversationIds.length === 0) {
-      setConversations([]);
-      setLoading(false);
-      return;
-    }
-
-    // Récupérer les détails des conversations
-    const { data, error } = await supabase
-      .from('conversations')
-      .select(`
-        *,
-        conversation_participants!inner (
-          user_id,
-          profiles:user_id (
-            id,
-            full_name,
-            avatar_url
-          )
-        )
-      `)
-      .in('id', conversationIds)
-      .order('updated_at', { ascending: false });
-
-    console.log('💬 Conversations data:', data);
-    console.log('❌ Conversations error:', error);
-
-    if (error) throw error;
-
-    const transformedConversations = data?.map(conv => {
-      console.log('🔄 Processing conv:', conv);
-      const otherParticipant = conv.conversation_participants.find(
-        (p: any) => p.user_id !== currentUser?.user?.id
-      );
-      console.log('👥 Other participant:', otherParticipant);
-
-      return {
-        id: conv.id,
-        name: otherParticipant?.profiles?.full_name || 'Inconnu',
-        image: otherParticipant?.profiles?.avatar_url || '',
-        lastMessage: '',
-        lastMessageTime: '',
-        isGroup: conv.conversation_participants.length > 2,
-        updated_at: conv.updated_at,
-      };
-    }) || [];
-
-    console.log('✅ Final conversations:', transformedConversations);
-    setConversations(transformedConversations);
-  } catch (err) {
-    console.error('💥 Load conversations error:', err);
-    setError(err as Error);
-  } finally {
-    setLoading(false);
-  }
-};
-
-  
-
- const createConversation = async (participantIds: string[]) => {
-  try {
-    const { data: currentUser } = await supabase.auth.getUser();
-
-    // Vérifier si une conversation existe déjà avec ce participant (discussion 1-à-1)
-    if (participantIds.length === 1) {
-      const friendId = participantIds[0];
-      
-      // Récupérer toutes les conversations de l'utilisateur
-      const { data: myParticipations } = await supabase
+      const { data: participantData, error: participantError } = await supabase
         .from('conversation_participants')
         .select('conversation_id')
-        .eq('user_id', currentUser?.user?.id);
+        .eq('user_id', currentUser.user.id);
 
-      if (myParticipations && myParticipations.length > 0) {
-        const myConvIds = myParticipations.map(p => p.conversation_id);
+      if (participantError) throw participantError;
 
-        // Vérifier si le friend participe à l'une de ces conversations
-        const { data: friendParticipations } = await supabase
+      const conversationIds = participantData?.map(p => p.conversation_id) || [];
+
+      if (conversationIds.length === 0) {
+        setConversations([]);
+        setLoading(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('conversations')
+        .select(`
+          *,
+          conversation_participants!inner (
+            user_id,
+            profiles:user_id (
+              id,
+              full_name,
+              avatar_url
+            )
+          )
+        `)
+        .in('id', conversationIds)
+        .order('updated_at', { ascending: false });
+
+      if (error) throw error;
+
+      const transformedConversations = data?.map(conv => {
+        const participants = conv.conversation_participants as ConversationParticipant[];
+        const otherParticipant = participants.find(
+          p => p.user_id !== currentUser.user?.id
+        );
+
+        return {
+          id: conv.id,
+          name: otherParticipant?.profiles?.full_name || 'Inconnu',
+          image: otherParticipant?.profiles?.avatar_url || '',
+          lastMessage: '',
+          lastMessageTime: '',
+          isGroup: participants.length > 2,
+          updated_at: conv.updated_at,
+        };
+      }) || [];
+
+      setConversations(transformedConversations);
+    } catch (err) {
+      console.error('Error loading conversations:', err);
+      setError(err as Error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadConversations();
+
+    const channel = supabase
+      .channel('conversations_updates')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+        },
+        () => {
+          loadConversations();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [loadConversations]);
+
+  const createConversation = async (participantIds: string[]) => {
+    try {
+      const { data: currentUser } = await supabase.auth.getUser();
+
+      if (!currentUser?.user?.id) {
+        throw new Error('User not authenticated');
+      }
+
+      if (participantIds.length === 1) {
+        const friendId = participantIds[0];
+
+        const { data: myParticipations } = await supabase
           .from('conversation_participants')
           .select('conversation_id')
-          .eq('user_id', friendId)
-          .in('conversation_id', myConvIds);
+          .eq('user_id', currentUser.user.id);
 
-        if (friendParticipations && friendParticipations.length > 0) {
-          // Vérifier que c'est bien une conversation à 2 personnes
-          for (const fp of friendParticipations) {
-            const { count } = await supabase
-              .from('conversation_participants')
-              .select('*', { count: 'exact', head: true })
-              .eq('conversation_id', fp.conversation_id);
+        if (myParticipations && myParticipations.length > 0) {
+          const myConvIds = myParticipations.map(p => p.conversation_id);
 
-            if (count === 2) {
-              // Conversation existante trouvée
-              console.log('✅ Conversation existante trouvée:', fp.conversation_id);
-              return fp.conversation_id;
+          const { data: friendParticipations } = await supabase
+            .from('conversation_participants')
+            .select('conversation_id')
+            .eq('user_id', friendId)
+            .in('conversation_id', myConvIds);
+
+          if (friendParticipations && friendParticipations.length > 0) {
+            for (const fp of friendParticipations) {
+              const { count } = await supabase
+                .from('conversation_participants')
+                .select('*', { count: 'exact', head: true })
+                .eq('conversation_id', fp.conversation_id);
+
+              if (count === 2) {
+                return fp.conversation_id;
+              }
             }
           }
         }
       }
+
+      const { data: conversation, error: convError } = await supabase
+        .from('conversations')
+        .insert({})
+        .select()
+        .single();
+
+      if (convError) throw convError;
+
+      const participants = [currentUser.user.id, ...participantIds].map(userId => ({
+        conversation_id: conversation.id,
+        user_id: userId,
+      }));
+
+      const { error: partError } = await supabase
+        .from('conversation_participants')
+        .insert(participants);
+
+      if (partError) throw partError;
+
+      await loadConversations();
+      return conversation.id;
+    } catch (err) {
+      console.error('Error creating conversation:', err);
+      throw err;
     }
-
-    console.log('🆕 Création d\'une nouvelle conversation');
-
-    // Créer nouvelle conversation
-    const { data: conversation, error: convError } = await supabase
-      .from('conversations')
-      .insert({})
-      .select()
-      .single();
-
-    if (convError) throw convError;
-
-    // Ajouter les participants
-    const participants = [
-      currentUser?.user?.id,
-      ...participantIds,
-    ].map(userId => ({
-      conversation_id: conversation.id,
-      user_id: userId,
-    }));
-
-    const { error: partError } = await supabase
-      .from('conversation_participants')
-      .insert(participants);
-
-    if (partError) throw partError;
-
-    await loadConversations();
-    return conversation.id;
-  } catch (err) {
-    console.error('💥 Error in createConversation:', err);
-    throw err;
-  }
-};
+  };
 
   return {
     conversations,
@@ -361,15 +384,17 @@ useEffect(() => {
 }
 
 // ============================================
-// HOOKS POUR LES MESSAGES
+// HOOK POUR LES MESSAGES (OPTIMISÉ AVEC STATUT)
 // ============================================
 
 export function useMessages(conversationId: string) {
-  const [messages, setMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState<TransformedMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  const loadMessages = async () => {
+  const loadMessages = useCallback(async () => {
+    if (!conversationId) return;
+
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -388,130 +413,202 @@ export function useMessages(conversationId: string) {
 
       if (error) throw error;
 
-      const transformedMessages = data?.map(msg => ({
+      const transformedMessages: TransformedMessage[] = data?.map(msg => ({
         id: msg.id,
         senderId: msg.sender_id,
         senderName: msg.profiles?.full_name || 'Inconnu',
         senderAvatar: msg.profiles?.avatar_url,
-        text: msg.content,
-        imageUrl: msg.message_type === 'image' ? msg.media_url : undefined,
-        voiceUrl: msg.message_type === 'voice' ? msg.media_url : undefined,
-        voiceDuration: msg.media_duration,
+        text: msg.content || undefined,
+        imageUrl: msg.message_type === 'image' ? msg.media_url || undefined : undefined,
+        voiceUrl: msg.message_type === 'voice' ? msg.media_url || undefined : undefined,
+        voiceDuration: msg.media_duration || undefined,
         type: msg.message_type,
         timestamp: new Date(msg.created_at).toLocaleTimeString('fr-FR', {
           hour: '2-digit',
           minute: '2-digit',
         }),
+        status: 'delivered', // Messages chargés sont déjà délivrés
       })) || [];
 
       setMessages(transformedMessages);
     } catch (err) {
+      console.error('Error loading messages:', err);
       setError(err as Error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [conversationId]);
 
- useEffect(() => {
-  if (!conversationId) return;
+  useEffect(() => {
+    if (!conversationId) return;
 
-  loadMessages();
+    loadMessages();
 
-  // Configuration du realtime
-  const channel = supabase
-    .channel(`room:${conversationId}`, {
-      config: {
-        broadcast: { self: true },
-      },
-    })
-    .on(
-      'postgres_changes',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'messages',
-        filter: `conversation_id=eq.${conversationId}`,
-      },
-      async (payload: any) => {
-        console.log('🔔 New message received:', payload);
-        
-        // Vérifier si le message existe déjà (éviter les doublons)
-        setMessages((prev) => {
-          const exists = prev.some(msg => msg.id === payload.new.id);
-          if (exists) {
-            console.log('⚠️ Message already exists, skipping');
-            return prev;
-          }
+    const channel = supabase
+      .channel(`room:${conversationId}`, {
+        config: {
+          broadcast: { self: false },
+        },
+      })
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        async (payload: any) => {
+          console.log('🔔 New message from other user:', payload);
 
-          // Récupérer le profil de l'expéditeur de manière asynchrone
-          supabase
-            .from('profiles')
-            .select('full_name, avatar_url')
-            .eq('id', payload.new.sender_id)
-            .single()
-            .then(({ data: profile }) => {
-              const newMessage = {
-                id: payload.new.id,
-                senderId: payload.new.sender_id,
-                senderName: profile?.full_name || 'Inconnu',
-                senderAvatar: profile?.avatar_url,
-                text: payload.new.content,
-                imageUrl: payload.new.message_type === 'image' ? payload.new.media_url : undefined,
-                voiceUrl: payload.new.message_type === 'voice' ? payload.new.media_url : undefined,
-                voiceDuration: payload.new.media_duration,
-                type: payload.new.message_type,
-                timestamp: new Date(payload.new.created_at).toLocaleTimeString('fr-FR', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                }),
-              };
+          setMessages(prev => {
+            const exists = prev.some(msg => msg.id === payload.new.id);
+            if (exists) {
+              console.log('⚠️ Message already exists, skipping');
+              return prev;
+            }
 
-              setMessages((prevMsgs) => {
-                // Double vérification avant d'ajouter
-                if (prevMsgs.some(m => m.id === newMessage.id)) {
-                  return prevMsgs;
-                }
-                return [...prevMsgs, newMessage];
+            supabase
+              .from('profiles')
+              .select('full_name, avatar_url')
+              .eq('id', payload.new.sender_id)
+              .single()
+              .then(({ data: profile }) => {
+                const newMessage: TransformedMessage = {
+                  id: payload.new.id,
+                  senderId: payload.new.sender_id,
+                  senderName: profile?.full_name || 'Inconnu',
+                  senderAvatar: profile?.avatar_url,
+                  text: payload.new.content || undefined,
+                  imageUrl: payload.new.message_type === 'image' 
+                    ? payload.new.media_url || undefined 
+                    : undefined,
+                  voiceUrl: payload.new.message_type === 'voice' 
+                    ? payload.new.media_url || undefined 
+                    : undefined,
+                  voiceDuration: payload.new.media_duration || undefined,
+                  type: payload.new.message_type,
+                  timestamp: new Date(payload.new.created_at).toLocaleTimeString('fr-FR', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  }),
+                  status: 'delivered',
+                };
+
+                setMessages(prevMsgs => {
+                  if (prevMsgs.some(m => m.id === newMessage.id)) {
+                    return prevMsgs;
+                  }
+                  return [...prevMsgs, newMessage];
+                });
               });
-            });
 
-          return prev; // Retourner prev immédiatement pour éviter le re-render
-        });
-      }
-    )
-    .subscribe((status) => {
-      console.log('📡 Subscription status:', status);
-    });
+            return prev;
+          });
+        }
+      )
+      .subscribe(status => {
+        console.log('📡 Realtime subscription status:', status);
+      });
 
-  return () => {
-    console.log('🔌 Cleaning up realtime subscription');
-    supabase.removeChannel(channel);
-  };
-}, [conversationId]);
+    return () => {
+      console.log('🔌 Cleaning up realtime subscription');
+      supabase.removeChannel(channel);
+    };
+  }, [conversationId, loadMessages]);
 
+  // ENVOI DE MESSAGE AVEC SYSTÈME DE STATUT
   const sendMessage = async (
-  content: string,
-  type: 'text' | 'image' | 'voice' = 'text',
-  mediaUrl?: string,
-  mediaDuration?: number
-) => {
-  try {
-    const { data: currentUser } = await supabase.auth.getUser();
+    content: string,
+    type: 'text' | 'image' | 'voice' = 'text',
+    mediaUrl?: string,
+    mediaDuration?: number
+  ) => {
+    try {
+      const { data: currentUser } = await supabase.auth.getUser();
 
-    const { data, error } = await supabase.from('messages').insert({
-      conversation_id: conversationId,
-      sender_id: currentUser?.user?.id,
-      content: type === 'text' ? content : null,
-      message_type: type,
-      media_url: mediaUrl,
-      media_duration: mediaDuration,
-    }).select().single();
+      if (!currentUser?.user?.id) {
+        throw new Error('User not authenticated');
+      }
 
-    if (error) throw error;
-  } catch (err) {
-    throw err;
-  }
-};
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name, avatar_url')
+        .eq('id', currentUser.user.id)
+        .single();
+
+      const tempId = `temp_${Date.now()}_${Math.random()}`;
+
+      const optimisticMessage: TransformedMessage = {
+        id: tempId,
+        senderId: currentUser.user.id,
+        senderName: profile?.full_name || 'Moi',
+        senderAvatar: profile?.avatar_url,
+        text: type === 'text' ? content : undefined,
+        imageUrl: type === 'image' ? mediaUrl : undefined,
+        voiceUrl: type === 'voice' ? mediaUrl : undefined,
+        voiceDuration: mediaDuration,
+        type: type,
+        timestamp: new Date().toLocaleTimeString('fr-FR', {
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+        status: 'sending',
+      };
+
+      setMessages(prev => [...prev, optimisticMessage]);
+
+      const { data, error } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: conversationId,
+          sender_id: currentUser.user.id,
+          content: type === 'text' ? content : null,
+          message_type: type,
+          media_url: mediaUrl || null,
+          media_duration: mediaDuration || null,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id === tempId
+              ? { ...msg, status: 'failed' as const }
+              : msg
+          )
+        );
+        throw error;
+      }
+
+      setMessages(prev =>
+        prev.map(msg =>
+          msg.id === tempId
+            ? {
+                ...msg,
+                id: data.id,
+                status: 'sent' as const,
+              }
+            : msg
+        )
+      );
+
+      setTimeout(() => {
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id === data.id
+              ? { ...msg, status: 'delivered' as const }
+              : msg
+          )
+        );
+      }, 1000);
+
+    } catch (err) {
+      console.error('Error sending message:', err);
+      throw err;
+    }
+  };
 
   return {
     messages,
@@ -523,7 +620,7 @@ export function useMessages(conversationId: string) {
 }
 
 // ============================================
-// HOOK POUR RECHERCHER DES UTILISATEURS
+// HOOK POUR LA RECHERCHE D'UTILISATEURS
 // ============================================
 
 export function useUserSearch(query: string) {
@@ -544,25 +641,30 @@ export function useUserSearch(query: string) {
       setLoading(true);
       const { data: currentUser } = await supabase.auth.getUser();
 
+      if (!currentUser?.user?.id) {
+        setResults([]);
+        setLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('profiles')
         .select('id, full_name, avatar_url, city')
         .ilike('full_name', `%${query}%`)
-        .neq('id', currentUser?.user?.id)
+        .neq('id', currentUser.user.id)
         .limit(10);
 
       if (error) throw error;
 
-      // Vérifier les statuts d'amitié
       const { data: friendships } = await supabase
         .from('friendships')
         .select('friend_id')
-        .eq('user_id', currentUser?.user?.id);
+        .eq('user_id', currentUser.user.id);
 
       const { data: requests } = await supabase
         .from('friend_requests')
         .select('receiver_id')
-        .eq('sender_id', currentUser?.user?.id)
+        .eq('sender_id', currentUser.user.id)
         .eq('status', 'pending');
 
       const friendIds = new Set(friendships?.map(f => f.friend_id) || []);
@@ -576,6 +678,7 @@ export function useUserSearch(query: string) {
         })) || []
       );
     } catch (err) {
+      console.error('Error searching users:', err);
       setError(err as Error);
     } finally {
       setLoading(false);
