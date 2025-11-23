@@ -1,56 +1,75 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
-  ScrollView,
   TextInput,
   TouchableOpacity,
+  StyleSheet,
+  ScrollView,
   Image,
   Alert,
-  ActivityIndicator,   // ✅ Import ajouté
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { router } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
+import { InterestSelector } from '@/components/InterestSelector';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { useAuth } from '@/contexts/AuthContext';
 import { userService } from '@/services/user.service';
 import { storageService } from '@/services/storage.service';
 
 export default function EditProfileScreen() {
-  const router = useRouter();
   const { user, profile, refreshProfile } = useAuth();
-
-  const [name, setName] = useState(profile?.full_name || '');
-  const [bio, setBio] = useState(profile?.bio || '');
-  const [city, setCity] = useState(profile?.city || '');
-  const [phone, setPhone] = useState(profile?.phone || '');
-  const [interests, setInterests] = useState<string[]>(profile?.interests || []);
-  const [newInterest, setNewInterest] = useState('');
-  const [profileImage, setProfileImage] = useState(profile?.avatar_url || '');
   const [loading, setLoading] = useState(false);
 
+  // Form states
+  const [fullName, setFullName] = useState('');
+  const [bio, setBio] = useState('');
+  const [city, setCity] = useState('');
+  const [phone, setPhone] = useState('');
+  const [interests, setInterests] = useState<string[]>([]);
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (profile) {
+      setFullName(profile.full_name || '');
+      setBio(profile.bio || '');
+      setCity(profile.city || '');
+      setPhone(profile.phone || '');
+      setInterests(profile.interests || []);
+      setProfileImage(profile.avatar_url);
+    }
+  }, [profile]);
+
   const handleSave = async () => {
-    if (!user || !profile) return;
+    if (!user || !fullName.trim()) {
+      Alert.alert('Erreur', 'Le nom complet est requis');
+      return;
+    }
 
     setLoading(true);
 
     try {
-      let avatarUrl = profile.avatar_url;
+      let avatarUrl = profileImage;
 
-      // Upload nouvelle image
-      if (profileImage && profileImage !== profile.avatar_url) {
+      // Si nouvelle image sélectionnée (URI locale)
+      if (profileImage && profileImage.startsWith('file://')) {
         const uploadResult = await storageService.uploadAvatar(profileImage, user.id);
-        if (uploadResult.success) avatarUrl = uploadResult.url;
+        if (uploadResult.success) {
+          avatarUrl = uploadResult.url;
+        } else {
+          Alert.alert('Erreur', uploadResult.error || 'Erreur upload image');
+          setLoading(false);
+          return;
+        }
       }
 
-      // Mise à jour du profil
       const result = await userService.updateProfile(user.id, {
-        full_name: name,
-        bio: bio || null,
-        city: city || null,
-        phone: phone || null,
+        full_name: fullName.trim(),
+        bio: bio.trim() || null,
+        city: city.trim() || null,
+        phone: phone.trim() || null,
         interests: interests.length > 0 ? interests : null,
         avatar_url: avatarUrl,
       });
@@ -83,17 +102,6 @@ export default function EditProfileScreen() {
     }
   };
 
-  const handleAddInterest = () => {
-    if (newInterest.trim() && !interests.includes(newInterest.trim())) {
-      setInterests([...interests, newInterest.trim()]);
-      setNewInterest('');
-    }
-  };
-
-  const handleRemoveInterest = (index: number) => {
-    setInterests(interests.filter((_, i) => i !== index));
-  };
-
   return (
     <SafeAreaView style={commonStyles.container} edges={['top']}>
       <View style={styles.header}>
@@ -121,86 +129,75 @@ export default function EditProfileScreen() {
         </View>
 
         <View style={styles.form}>
-          {/* NAME */}
+          {/* FULL NAME */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Name</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Your name"
-              placeholderTextColor={colors.textSecondary}
-              value={name}
-              onChangeText={setName}
-            />
+            <Text style={styles.label}>Nom complet</Text>
+            <View style={styles.inputContainer}>
+              <IconSymbol name="person.fill" size={20} color={colors.textSecondary} />
+              <TextInput
+                style={styles.inputInside}
+                placeholder="John Doe"
+                placeholderTextColor={colors.textSecondary}
+                value={fullName}
+                onChangeText={setFullName}
+              />
+            </View>
           </View>
 
           {/* BIO */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Bio</Text>
             <TextInput
-              style={[styles.input, styles.textArea]}
-              placeholder="Tell us about yourself"
+              style={[styles.inputContainer, styles.textArea]}
+              placeholder="Parlez-nous de vous..."
               placeholderTextColor={colors.textSecondary}
               value={bio}
               onChangeText={setBio}
               multiline
               numberOfLines={4}
+              textAlignVertical="top"
             />
           </View>
 
           {/* CITY */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>City</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Your city"
-              placeholderTextColor={colors.textSecondary}
-              value={city}
-              onChangeText={setCity}
-            />
+            <Text style={styles.label}>Ville</Text>
+            <View style={styles.inputContainer}>
+              <IconSymbol name="location.fill" size={20} color={colors.textSecondary} />
+              <TextInput
+                style={styles.inputInside}
+                placeholder="Paris"
+                placeholderTextColor={colors.textSecondary}
+                value={city}
+                onChangeText={setCity}
+              />
+            </View>
           </View>
 
           {/* PHONE */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Téléphone</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="+33 6 12 34 56 78"
-              placeholderTextColor={colors.textSecondary}
-              value={phone}
-              onChangeText={setPhone}
-              keyboardType="phone-pad"
-            />
+            <View style={styles.inputContainer}>
+              <IconSymbol name="phone.fill" size={20} color={colors.textSecondary} />
+              <TextInput
+                style={styles.input}
+                placeholder="+33 6 12 34 56 78"
+                placeholderTextColor={colors.textSecondary}
+                value={phone}
+                onChangeText={setPhone}
+                keyboardType="phone-pad"
+              />
+            </View>
           </View>
 
           {/* INTERESTS */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Centres d'intérêt</Text>
-
-            <View style={styles.inputContainer}>
-              <TextInput
-                style={styles.inputInside}
-                placeholder="Ajouter un intérêt"
-                placeholderTextColor={colors.textSecondary}
-                value={newInterest}
-                onChangeText={setNewInterest}
-                onSubmitEditing={handleAddInterest}
-              />
-
-              <TouchableOpacity onPress={handleAddInterest}>
-                <IconSymbol name="plus.circle.fill" size={28} color={colors.primary} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.interestsContainer}>
-              {interests.map((interest, index) => (
-                <View key={index} style={styles.interestBadge}>
-                  <Text style={styles.interestText}>{interest}</Text>
-                  <TouchableOpacity onPress={() => handleRemoveInterest(index)}>
-                    <IconSymbol name="xmark" size={14} color={colors.primary} />
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </View>
+            <InterestSelector
+              selectedInterests={interests}
+              onInterestsChange={setInterests}
+              maxSelection={5}
+            />
           </View>
         </View>
 
@@ -223,15 +220,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 16,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.card,
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: 8,
   },
   headerTitle: {
     fontSize: 20,
@@ -250,106 +242,69 @@ const styles = StyleSheet.create({
   },
   avatarSection: {
     alignItems: 'center',
-    paddingVertical: 24,
+    marginVertical: 24,
   },
   avatar: {
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: colors.border,
-    marginBottom: 16,
-    borderWidth: 4,
+    borderWidth: 3,
     borderColor: colors.primary,
   },
   changePhotoButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    marginTop: 12,
+    gap: 6,
   },
   changePhotoText: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 14,
     color: colors.primary,
+    fontWeight: '500',
   },
-
   form: {
     gap: 20,
   },
-
   inputGroup: {
     gap: 8,
   },
-
   label: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '500',
     color: colors.text,
+    marginBottom: 4,
   },
-
-  input: {
-    backgroundColor: colors.card,
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.cardBackground,
     borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: colors.text,
-    borderWidth: 1,
-    borderColor: colors.border,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 12,
   },
-
   inputInside: {
     flex: 1,
     fontSize: 16,
     color: colors.text,
-    paddingVertical: 8,
   },
-
+  input: {
+    flex: 1,
+    fontSize: 16,
+    color: colors.text,
+  },
   textArea: {
-    height: 120,
-    textAlignVertical: 'top',
+    minHeight: 100,
+    paddingVertical: 14,
+    alignItems: 'flex-start',
   },
-
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: 12,
-  },
-
-  interestsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-
-  interestBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.primary + '20',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    gap: 8,
-  },
-
-  interestText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.primary,
-  },
-
   saveButton: {
     backgroundColor: colors.primary,
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
-    marginTop: 32,
+    marginTop: 24,
   },
-
   saveButtonText: {
     fontSize: 16,
     fontWeight: '600',

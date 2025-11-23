@@ -18,6 +18,7 @@ import { colors, commonStyles } from '@/styles/commonStyles';
 import { authService } from '@/services/auth.service';
 import { storageService } from '@/services/storage.service';
 import { userService } from '@/services/user.service';
+import { InterestSelector } from '@/components/InterestSelector';
 
 export default function SignupIndividualScreen() {
   const router = useRouter();
@@ -346,37 +347,15 @@ export default function SignupIndividualScreen() {
             />
             <Text style={styles.helperText}>Optionnel - Décrivez-vous en quelques mots</Text>
           </View>
-
+       
           {/* Centres d'intérêt */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Centres d'intérêt</Text>
-            <View style={styles.inputContainer}>
-              <TextInput
-                style={styles.input}
-                placeholder="Ex: Randonnée, Cuisine, Musique..."
-                placeholderTextColor={colors.textSecondary}
-                value={interest}
-                onChangeText={setInterest}
-                onSubmitEditing={handleAddInterest}
-                returnKeyType="done"
-              />
-              <TouchableOpacity onPress={handleAddInterest}>
-                <IconSymbol name="plus.circle.fill" size={28} color={colors.primary} />
-              </TouchableOpacity>
-            </View>
-            {interests.length > 0 && (
-              <View style={styles.interestsContainer}>
-                {interests.map((item, index) => (
-                  <View key={index} style={styles.interestBadge}>
-                    <Text style={styles.interestText}>{item}</Text>
-                    <TouchableOpacity onPress={() => handleRemoveInterest(index)}>
-                      <IconSymbol name="xmark" size={14} color={colors.primary} />
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </View>
-            )}
-            <Text style={styles.helperText}>Appuyez sur + pour ajouter un intérêt</Text>
+            <InterestSelector
+              selectedInterests={interests}
+              onInterestsChange={setInterests}
+              maxSelection={5}
+            />
           </View>
 
           {/* Mot de passe */}
