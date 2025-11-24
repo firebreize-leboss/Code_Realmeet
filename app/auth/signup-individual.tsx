@@ -347,7 +347,12 @@ export default function SignupIndividualScreen() {
             />
             <Text style={styles.helperText}>Optionnel - Décrivez-vous en quelques mots</Text>
           </View>
+<<<<<<< HEAD
        
+=======
+
+          
+>>>>>>> 1154c76 (tkt)
           {/* Centres d'intérêt */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Centres d'intérêt</Text>
