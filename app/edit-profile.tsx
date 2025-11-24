@@ -18,7 +18,6 @@ import { colors, commonStyles } from '@/styles/commonStyles';
 import { useAuth } from '@/contexts/AuthContext';
 import { userService } from '@/services/user.service';
 import { storageService } from '@/services/storage.service';
-import { InterestSelector } from '@/components/InterestSelector';
 
 export default function EditProfileScreen() {
   const { user, profile, refreshProfile } = useAuth();
