@@ -200,3 +200,48 @@ export const mockCategories: Category[] = [
   { id: '7', name: 'Food', icon: 'fork.knife', color: '#E67E22' },
   { id: '8', name: 'Art', icon: 'paintpalette.fill', color: '#1ABC9C' },
 ];
+// data/mockData.ts
+// Ajoutez cette nouvelle activité dans le tableau mockActivities
+
+export const laserQuestActivity = {
+  id: 'laser-quest-1',
+  title: 'Laser Quest Adventure - LASER GAME KARAOKE',
+  description: 'Vivez une expérience immersive unique avec notre arène de laser game dernière génération ! Équipez-vous, formez votre équipe et affrontez vos adversaires dans un décor futuriste. Session suivie d\'un karaoke pour prolonger la soirée entre amis. Parfait pour les groupes, anniversaires, et événements d\'entreprise. Matériel professionnel fourni, vestiaires sur place.',
+  image: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=800',
+  host: {
+    id: 'laser-quest-paris',
+    name: 'Laser Quest Aventure Paris',
+    avatar: 'https://images.unsplash.com/photo-1614294148960-9aa740632a87?w=400', // Logo entreprise
+  },
+  date: '2024-05-17',
+  time: '05:00 PM - 08:00 PM',
+  location: '7 Allée André Malraux, Le Plessis-Trevise',
+  city: 'Le Plessis-Trevise',
+  capacity: 40,
+  participants: [], // 0 participants pour l'instant
+  category: 'Laser game',
+  distance: '1.2 km away',
+  latitude: 48.8099,
+  longitude: 2.5719,
+  price: '€15 par personne',
+  dates_supplementaires: '20 mai - 23 mai et 5 autres dates disponibles',
+  includes: [
+    'Équipement laser game complet',
+    'Session de 45 minutes',
+    'Accès au karaoke (1h)',
+    'Vestiaires et casiers',
+    'Boissons offertes'
+  ],
+  rules: [
+    'Âge minimum : 8 ans',
+    'Réservation obligatoire',
+    'Chaussures de sport recommandées',
+    'Annulation possible 24h avant'
+  ]
+};
+
+// Dans votre fichier mockData.ts, ajoutez laserQuestActivity au tableau mockActivities :
+// export const mockActivities: Activity[] = [
+//   laserQuestActivity,
+//   ... autres activités
+// ];

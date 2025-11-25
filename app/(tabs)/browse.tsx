@@ -179,14 +179,14 @@ export default function BrowseScreen() {
     // Données d'activités
     const activities = [
       {
-        id: '1',
+        id: 'laser-quest-1',
         nom: 'Laser Quest Adventure',
         categorie: 'Laser game',
         date: '17 mai',
         adresse: '7 Allée André Malraux, Le Plessis-Trevise 94420',
         latitude: 48.8099,
         longitude: 2.5719,
-        participants: 27,
+        participants: 0,
         max_participants: 40,
         image_url: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=400'
       }
@@ -424,7 +424,8 @@ export default function BrowseScreen() {
             style={styles.viewDetailsButton}
             onPress={() => {
               closeActivity();
-              router.push(`/activity-detail?id=${selectedActivity.id}`);
+              // Rediriger vers la page dédiée Laser Quest
+              router.push('/laser-quest-detail');
             }}
           >
             <Text style={styles.viewDetailsButtonText}>Voir les détails</Text>
