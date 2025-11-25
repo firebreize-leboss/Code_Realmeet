@@ -637,8 +637,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 12,
     elevation: 8,
-    maxHeight: '40%',
-    paddingBottom: 10,
+    maxHeight: '50%', // Augmenté pour voir tous les boutons
   },
   bottomSheetHandle: {
     width: 40,
@@ -652,6 +651,7 @@ const styles = StyleSheet.create({
   bottomSheetContent: {
     paddingHorizontal: 20,
     paddingBottom: 20,
+    flex: 1,
   },
   detailHeader: {
     flexDirection: 'row',
