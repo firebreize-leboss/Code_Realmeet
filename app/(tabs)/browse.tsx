@@ -9,13 +9,14 @@ import {
   TouchableOpacity,
   Platform,
   TextInput,
+  PanResponder,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { mockActivities } from '@/data/mockData';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
 import { WebView } from 'react-native-webview';
 
 // Configuration Supabase et Protomaps
@@ -49,6 +50,32 @@ export default function BrowseScreen() {
     activity.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     activity.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Gérer la fermeture de l'activité
+  const closeActivity = () => {
+    setSelectedActivity(null);
+    // Envoyer un message à la WebView pour désélectionner le marqueur
+    if (webViewRef.current) {
+      webViewRef.current.postMessage(JSON.stringify({ type: 'deselectMarker' }));
+    }
+  };
+
+  // PanResponder pour le swipe vers le bas
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        // Activer le pan responder uniquement si on swipe vers le bas
+        return gestureState.dy > 5;
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        // Si on swipe vers le bas de plus de 50px, fermer
+        if (gestureState.dy > 50) {
+          closeActivity();
+        }
+      },
+    })
+  ).current;
 
   // Gérer les messages de la WebView
   const handleWebViewMessage = (event: any) => {
@@ -114,6 +141,40 @@ export default function BrowseScreen() {
   <script>
     let selectedMarkerId = null;
     let markers = {};
+
+    // Écouter les messages de React Native
+    if (window.ReactNativeWebView) {
+      document.addEventListener('message', (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'deselectMarker' && selectedMarkerId) {
+            const marker = document.getElementById('marker-' + selectedMarkerId);
+            if (marker) {
+              marker.classList.remove('selected');
+            }
+            selectedMarkerId = null;
+          }
+        } catch (e) {
+          console.error('Error parsing message:', e);
+        }
+      });
+      
+      // Pour Android
+      window.addEventListener('message', (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'deselectMarker' && selectedMarkerId) {
+            const marker = document.getElementById('marker-' + selectedMarkerId);
+            if (marker) {
+              marker.classList.remove('selected');
+            }
+            selectedMarkerId = null;
+          }
+        } catch (e) {
+          console.error('Error parsing message:', e);
+        }
+      });
+    }
 
     // Données d'activités
     const activities = [
@@ -308,6 +369,8 @@ export default function BrowseScreen() {
       <Animated.View 
         style={styles.bottomSheet}
         entering={FadeInDown.duration(300)}
+        exiting={FadeOutDown.duration(200)}
+        {...panResponder.panHandlers}
       >
         <View style={styles.bottomSheetHandle} />
         
@@ -360,7 +423,7 @@ export default function BrowseScreen() {
           <TouchableOpacity 
             style={styles.viewDetailsButton}
             onPress={() => {
-              setSelectedActivity(null);
+              closeActivity();
               router.push(`/activity-detail?id=${selectedActivity.id}`);
             }}
           >
@@ -370,7 +433,7 @@ export default function BrowseScreen() {
 
           <TouchableOpacity 
             style={styles.closeButton}
-            onPress={() => setSelectedActivity(null)}
+            onPress={closeActivity}
           >
             <Text style={styles.closeButtonText}>Fermer</Text>
           </TouchableOpacity>
@@ -563,7 +626,7 @@ const styles = StyleSheet.create({
   },
   bottomSheet: {
     position: 'absolute',
-    bottom: 0,
+    bottom: Platform.OS === 'ios' ? 90 : 80, // Plus d'espace pour éviter la navbar
     left: 0,
     right: 0,
     backgroundColor: colors.background,
@@ -574,7 +637,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 12,
     elevation: 8,
-    maxHeight: '50%',
+    maxHeight: '40%',
+    paddingBottom: 10,
   },
   bottomSheetHandle: {
     width: 40,
