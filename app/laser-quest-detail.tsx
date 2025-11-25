@@ -1,7 +1,7 @@
 // app/laser-quest-detail.tsx
-// Créez ce nouveau fichier dans votre dossier app/
+// Page 100% dynamique connectée à Supabase
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,57 +10,158 @@ import {
   Image,
   TouchableOpacity,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 
+// Configuration Supabase
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+const SUPABASE_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+
 export default function LaserQuestDetailScreen() {
   const router = useRouter();
   const [isJoined, setIsJoined] = useState(false);
+  const [activity, setActivity] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-  const activity = {
-    id: 'laser-quest-1',
-    title: 'Laser Quest Adventure',
-    subtitle: 'LASER GAME KARAOKE',
-    description: 'Vivez une expérience immersive unique avec notre arène de laser game dernière génération ! Équipez-vous, formez votre équipe et affrontez vos adversaires dans un décor futuriste. Session suivie d\'un karaoke pour prolonger la soirée entre amis.\n\nParfait pour les groupes, anniversaires, et événements d\'entreprise. Matériel professionnel fourni, vestiaires sur place.',
-    image: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=800',
-    host: {
-      id: 'laser-quest-paris',
-      name: 'Laser Quest Aventure Paris',
-      avatar: 'https://images.unsplash.com/photo-1614294148960-9aa740632a87?w=400',
-      type: 'Entreprise',
-      rating: 4.8,
-      reviews: 156,
-    },
-    date: '17 mai 2024',
-    time: '17:00 - 20:00',
-    nextDates: ['20 mai', '23 mai', '27 mai', '30 mai', '3 juin'],
-    location: '7 Allée André Malraux',
-    city: 'Le Plessis-Trevise 94420',
-    capacity: 40,
-    participants: 0,
-    category: 'Laser game',
-    price: '€15',
-    includes: [
-      'Équipement laser game complet',
-      'Session de 45 minutes',
-      'Accès au karaoke (1h)',
-      'Vestiaires et casiers',
-      'Boissons offertes'
-    ],
-    rules: [
-      'Âge minimum : 8 ans',
-      'Réservation obligatoire',
-      'Chaussures de sport recommandées',
-      'Annulation possible 24h avant'
-    ]
+  // Charger l'activité depuis Supabase avec les infos du host
+  useEffect(() => {
+    loadActivity();
+  }, []);
+
+  const loadActivity = async () => {
+    try {
+      // Requête pour récupérer l'activité avec les infos du profil du host
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/activities?nom=eq.Laser Quest Adventure&select=*,profiles:host_id(full_name,avatar_url,city)`,
+        {
+          headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`
+          }
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.length > 0) {
+          const activityData = data[0];
+          const hostProfile = activityData.profiles;
+          
+          // Formater les données pour l'affichage
+          setActivity({
+            id: activityData.id,
+            title: activityData.nom,
+            subtitle: activityData.titre,
+            description: activityData.description,
+            image: activityData.image_url,
+            host: {
+              id: activityData.host_id,
+              name: hostProfile?.full_name || 'Organisateur',
+              avatar: hostProfile?.avatar_url || 'https://images.unsplash.com/photo-1614294148960-9aa740632a87?w=400',
+              type: activityData.host_type,
+              city: hostProfile?.city,
+              rating: 4.8, // TODO: À implémenter avec un système de notation
+              reviews: 156, // TODO: À implémenter avec un système d'avis
+            },
+            date: activityData.date,
+            time: activityData.time_start && activityData.time_end 
+              ? `${activityData.time_start.slice(0, 5)} - ${activityData.time_end.slice(0, 5)}`
+              : '17:00 - 20:00',
+            nextDates: activityData.dates_supplementaires 
+              ? activityData.dates_supplementaires.split(', ')
+              : [],
+            location: activityData.adresse,
+            city: `${activityData.ville} ${activityData.code_postal || ''}`.trim(),
+            capacity: activityData.max_participants,
+            participants: activityData.participants,
+            placesRestantes: activityData.places_restantes,
+            category: activityData.categorie,
+            price: activityData.prix 
+              ? `€${activityData.prix.toFixed(2)}`
+              : 'Gratuit',
+            includes: activityData.inclusions || [],
+            rules: activityData.regles || []
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Erreur chargement activité:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleJoinLeave = () => {
-    setIsJoined(!isJoined);
+  const handleJoinLeave = async () => {
+    if (!activity) return;
+
+    try {
+      const newParticipants = isJoined 
+        ? activity.participants - 1 
+        : activity.participants + 1;
+
+      // Mettre à jour le nombre de participants dans Supabase
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/activities?id=eq.${activity.id}`,
+        {
+          method: 'PATCH',
+          headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+          },
+          body: JSON.stringify({
+            participants: newParticipants
+          })
+        }
+      );
+
+      if (response.ok) {
+        setIsJoined(!isJoined);
+        setActivity({
+          ...activity,
+          participants: newParticipants,
+          placesRestantes: activity.capacity - newParticipants
+        });
+      }
+    } catch (error) {
+      console.error('Erreur mise à jour participants:', error);
+    }
   };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={commonStyles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Chargement...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!activity) {
+    return (
+      <SafeAreaView style={commonStyles.container}>
+        <View style={styles.errorContainer}>
+          <IconSymbol name="exclamationmark.triangle" size={64} color={colors.textSecondary} />
+          <Text style={styles.errorText}>Activité non trouvée</Text>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <Text style={styles.backButtonText}>Retour</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const isFull = activity.placesRestantes === 0;
 
   return (
     <SafeAreaView style={commonStyles.container} edges={['top']}>
@@ -88,7 +189,9 @@ export default function LaserQuestDetailScreen() {
           <View style={styles.titleSection}>
             <View style={styles.titleContainer}>
               <Text style={styles.title}>{activity.title}</Text>
-              <Text style={styles.subtitle}>{activity.subtitle}</Text>
+              {activity.subtitle && (
+                <Text style={styles.subtitle}>{activity.subtitle}</Text>
+              )}
             </View>
             <View style={[styles.categoryBadge, { backgroundColor: '#ef4444' + '20' }]}>
               <Text style={[styles.categoryText, { color: '#ef4444' }]}>
@@ -97,29 +200,30 @@ export default function LaserQuestDetailScreen() {
             </View>
           </View>
 
-          {/* Section Hôte (Entreprise) */}
+          {/* Section Hôte (Organisateur) */}
           <TouchableOpacity style={styles.hostSection}>
             <Image source={{ uri: activity.host.avatar }} style={styles.hostAvatar} />
             <View style={styles.hostInfo}>
               <Text style={styles.hostLabel}>Organisé par</Text>
               <Text style={styles.hostName}>{activity.host.name}</Text>
-              <View style={styles.hostRating}>
-                <IconSymbol name="star.fill" size={14} color="#F39C12" />
-                <Text style={styles.ratingText}>
-                  {activity.host.rating} ({activity.host.reviews} avis)
-                </Text>
+              {activity.host.city && (
+                <Text style={styles.hostCity}>{activity.host.city}</Text>
+              )}
+            </View>
+            {activity.host.type === 'Entreprise' && (
+              <View style={styles.enterpriseBadge}>
+                <Text style={styles.enterpriseBadgeText}>PRO</Text>
               </View>
-            </View>
-            <View style={styles.enterpriseBadge}>
-              <Text style={styles.enterpriseBadgeText}>PRO</Text>
-            </View>
+            )}
           </TouchableOpacity>
 
           {/* Section Prix */}
-          <View style={styles.priceSection}>
-            <Text style={styles.priceLabel}>Tarif par personne</Text>
-            <Text style={styles.priceValue}>{activity.price}</Text>
-          </View>
+          {activity.price !== 'Gratuit' && (
+            <View style={styles.priceSection}>
+              <Text style={styles.priceLabel}>Tarif par personne</Text>
+              <Text style={styles.priceValue}>{activity.price}</Text>
+            </View>
+          )}
 
           {/* Carte Détails */}
           <View style={styles.detailsCard}>
@@ -151,23 +255,25 @@ export default function LaserQuestDetailScreen() {
               <View style={styles.detailInfo}>
                 <Text style={styles.detailLabel}>Places disponibles</Text>
                 <Text style={styles.detailValue}>
-                  {activity.participants}/{activity.capacity} inscrits
+                  {activity.participants}/{activity.capacity} inscrits ({activity.placesRestantes} places restantes)
                 </Text>
               </View>
             </View>
           </View>
 
           {/* Prochaines dates */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Prochaines dates disponibles</Text>
-            <View style={styles.datesContainer}>
-              {activity.nextDates.map((date, index) => (
-                <View key={index} style={styles.dateChip}>
-                  <Text style={styles.dateChipText}>{date}</Text>
-                </View>
-              ))}
+          {activity.nextDates.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Prochaines dates disponibles</Text>
+              <View style={styles.datesContainer}>
+                {activity.nextDates.map((date: string, index: number) => (
+                  <View key={index} style={styles.dateChip}>
+                    <Text style={styles.dateChipText}>{date}</Text>
+                  </View>
+                ))}
+              </View>
             </View>
-          </View>
+          )}
 
           {/* Description */}
           <View style={styles.section}>
@@ -176,28 +282,32 @@ export default function LaserQuestDetailScreen() {
           </View>
 
           {/* Ce qui est inclus */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Ce qui est inclus</Text>
-            {activity.includes.map((item, index) => (
-              <View key={index} style={styles.listItem}>
-                <IconSymbol name="checkmark.circle.fill" size={20} color="#10b981" />
-                <Text style={styles.listItemText}>{item}</Text>
-              </View>
-            ))}
-          </View>
+          {activity.includes.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Ce qui est inclus</Text>
+              {activity.includes.map((item: string, index: number) => (
+                <View key={index} style={styles.listItem}>
+                  <IconSymbol name="checkmark.circle.fill" size={20} color="#10b981" />
+                  <Text style={styles.listItemText}>{item}</Text>
+                </View>
+              ))}
+            </View>
+          )}
 
           {/* Règles */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Informations importantes</Text>
-            {activity.rules.map((rule, index) => (
-              <View key={index} style={styles.listItem}>
-                <IconSymbol name="info.circle.fill" size={20} color={colors.primary} />
-                <Text style={styles.listItemText}>{rule}</Text>
-              </View>
-            ))}
-          </View>
+          {activity.rules.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Informations importantes</Text>
+              {activity.rules.map((rule: string, index: number) => (
+                <View key={index} style={styles.listItem}>
+                  <IconSymbol name="info.circle.fill" size={20} color={colors.primary} />
+                  <Text style={styles.listItemText}>{rule}</Text>
+                </View>
+              ))}
+            </View>
+          )}
 
-          {/* Section Participants (vide pour l'instant) */}
+          {/* Section Participants */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>
               Participants ({activity.participants})
@@ -209,7 +319,14 @@ export default function LaserQuestDetailScreen() {
                   Soyez le premier à rejoindre cette activité !
                 </Text>
               </View>
-            ) : null}
+            ) : (
+              <View style={styles.participantsInfo}>
+                <IconSymbol name="person.2.fill" size={24} color={colors.primary} />
+                <Text style={styles.participantsText}>
+                  {activity.participants} {activity.participants === 1 ? 'personne inscrite' : 'personnes inscrites'}
+                </Text>
+              </View>
+            )}
           </View>
         </View>
       </ScrollView>
@@ -221,11 +338,16 @@ export default function LaserQuestDetailScreen() {
           <Text style={styles.footerPriceLabel}>par personne</Text>
         </View>
         <TouchableOpacity
-          style={[styles.actionButton, isJoined && styles.actionButtonLeave]}
+          style={[
+            styles.actionButton, 
+            isJoined && styles.actionButtonLeave,
+            isFull && !isJoined && styles.actionButtonDisabled
+          ]}
           onPress={handleJoinLeave}
+          disabled={isFull && !isJoined}
         >
           <Text style={styles.actionButtonText}>
-            {isJoined ? 'Se désinscrire' : 'Réserver'}
+            {isFull && !isJoined ? 'Complet' : isJoined ? 'Se désinscrire' : 'Réserver'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -320,14 +442,9 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '600',
     color: colors.text,
-    marginBottom: 4,
+    marginBottom: 2,
   },
-  hostRating: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  ratingText: {
+  hostCity: {
     fontSize: 13,
     color: colors.textSecondary,
   },
@@ -441,6 +558,19 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 12,
   },
+  participantsInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: colors.card,
+    padding: 16,
+    borderRadius: 12,
+  },
+  participantsText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: colors.text,
+  },
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -485,7 +615,45 @@ const styles = StyleSheet.create({
   actionButtonLeave: {
     backgroundColor: colors.textSecondary,
   },
+  actionButtonDisabled: {
+    backgroundColor: colors.border,
+  },
   actionButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: colors.textSecondary,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    gap: 16,
+  },
+  errorText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text,
+    textAlign: 'center',
+  },
+  backButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  backButtonText: {
     fontSize: 16,
     fontWeight: '600',
     color: colors.background,

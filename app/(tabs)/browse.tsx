@@ -45,8 +45,9 @@ export default function BrowseScreen() {
   const [viewMode, setViewMode] = useState<ViewMode>('liste');
   const [selectedActivity, setSelectedActivity] = useState<SelectedActivity | null>(null);
   const webViewRef = useRef<WebView>(null);
+  const [activities, setActivities] = useState<any[]>([]);
 
-  const filteredActivities = mockActivities.filter(activity =>
+  const filteredActivities = activities.filter(activity =>
     activity.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     activity.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -82,6 +83,7 @@ export default function BrowseScreen() {
     try {
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'markerClicked') {
+        console.log('Activité sélectionnée:', data.activity);
         setSelectedActivity(data.activity);
       }
     } catch (error) {
@@ -89,6 +91,108 @@ export default function BrowseScreen() {
     }
   };
 
+  // Charger les activités depuis Supabase pour la carte
+  const loadActivitiesForMap = async () => {
+    try {
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/activities?select=*`,
+        {
+          headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`
+          }
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Activités chargées:', data);
+        
+        // Envoyer les activités à la WebView
+        if (webViewRef.current && data.length > 0) {
+          const activitiesData = JSON.stringify(data.map((activity: any) => ({
+            id: activity.id,
+            nom: activity.nom,
+            categorie: activity.categorie,
+            date: activity.date,
+            adresse: activity.adresse,
+            latitude: activity.latitude,
+            longitude: activity.longitude,
+            participants: activity.participants,
+            max_participants: activity.max_participants,
+            image_url: activity.image_url,
+          })));
+          
+          webViewRef.current.postMessage(JSON.stringify({
+            type: 'loadActivities',
+            activities: activitiesData
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('Erreur chargement activités:', error);
+    }
+  };
+
+  // Charger les activités quand on passe en mode Maps
+  useEffect(() => {
+    if (viewMode === 'maps') {
+      setTimeout(() => {
+        loadActivitiesForMap();
+      }, 1000); // Attendre que la WebView soit chargée
+    }
+  }, [viewMode]);
+
+  // Charger les activités depuis Supabase pour la vue Liste
+  useEffect(() => {
+    const loadActivitiesForList = async () => {
+      try {
+        const response = await fetch(
+          `${SUPABASE_URL}/rest/v1/activities?select=*`,
+          {
+            headers: {
+              apikey: SUPABASE_KEY,
+              Authorization: `Bearer ${SUPABASE_KEY}`,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          console.error('Erreur Supabase:', await response.text());
+          return;
+        }
+
+        const data = await response.json();
+
+        // On mappe les champs Supabase vers le format attendu par la carte de liste
+       const mapped = data.map((activity: any) => ({
+  id: activity.id,
+  title: activity.titre || activity.nom,
+  category: activity.categorie,
+  date: activity.date,
+  time: activity.time_start || '',
+  location: `${activity.ville}, ${activity.adresse}`,
+  image: activity.image_url,
+  host: {
+    name: 'Organisateur',
+    avatar: 'https://placehold.co/64x64',
+  },
+  capacity: activity.max_participants,
+  participants: Array(activity.participants || 0).fill(null),
+}));
+
+
+        setActivities(mapped);
+      } catch (error) {
+        console.error('Erreur chargement activités (liste):', error);
+      }
+    };
+
+    loadActivitiesForList();
+  }, []);
+
+
+  
   // HTML pour la carte avec interaction
   const mapHTML = `
 <!DOCTYPE html>
@@ -141,56 +245,55 @@ export default function BrowseScreen() {
   <script>
     let selectedMarkerId = null;
     let markers = {};
+    let activitiesData = [];
 
     // Écouter les messages de React Native
     if (window.ReactNativeWebView) {
-      document.addEventListener('message', (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.type === 'deselectMarker' && selectedMarkerId) {
-            const marker = document.getElementById('marker-' + selectedMarkerId);
-            if (marker) {
-              marker.classList.remove('selected');
-            }
-            selectedMarkerId = null;
-          }
-        } catch (e) {
-          console.error('Error parsing message:', e);
-        }
-      });
-      
-      // Pour Android
-      window.addEventListener('message', (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.type === 'deselectMarker' && selectedMarkerId) {
-            const marker = document.getElementById('marker-' + selectedMarkerId);
-            if (marker) {
-              marker.classList.remove('selected');
-            }
-            selectedMarkerId = null;
-          }
-        } catch (e) {
-          console.error('Error parsing message:', e);
-        }
-      });
+      document.addEventListener('message', handleMessage);
+      window.addEventListener('message', handleMessage);
     }
 
-    // Données d'activités
-    const activities = [
-      {
-        id: 'laser-quest-1',
-        nom: 'Laser Quest Adventure',
-        categorie: 'Laser game',
-        date: '17 mai',
-        adresse: '7 Allée André Malraux, Le Plessis-Trevise 94420',
-        latitude: 48.8099,
-        longitude: 2.5719,
-        participants: 0,
-        max_participants: 40,
-        image_url: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=400'
+    function handleMessage(event) {
+      try {
+        const data = JSON.parse(event.data);
+        
+        if (data.type === 'deselectMarker' && selectedMarkerId) {
+          const marker = document.getElementById('marker-' + selectedMarkerId);
+          if (marker) {
+            marker.classList.remove('selected');
+          }
+          selectedMarkerId = null;
+        }
+        
+        if (data.type === 'loadActivities') {
+          // Charger les nouvelles activités
+          const newActivities = JSON.parse(data.activities);
+          console.log('Activités reçues:', newActivities);
+          
+          // Supprimer les anciens marqueurs
+          Object.values(markers).forEach(m => m.marker.remove());
+          markers = {};
+          
+          // Ajouter les nouveaux marqueurs
+          newActivities.forEach(activity => {
+            createMarker(activity);
+          });
+          
+          // Centrer sur la première activité
+          if (newActivities.length > 0) {
+            map.flyTo({
+              center: [newActivities[0].longitude, newActivities[0].latitude],
+              zoom: 12
+            });
+          }
+        }
+      } catch (e) {
+        console.error('Error parsing message:', e);
       }
-    ];
+    }
+
+    // Données d'activités (seront remplacées par Supabase)
+    const activities = [];
 
     // Initialiser la carte avec Protomaps
     const map = new maplibregl.Map({
@@ -247,13 +350,11 @@ export default function BrowseScreen() {
     }
 
     map.on('load', () => {
-      // Ajouter les marqueurs
-      activities.forEach(activity => {
-        createMarker(activity);
-      });
+      console.log('Carte chargée, en attente des activités de Supabase...');
+      // Les marqueurs seront ajoutés quand React Native enverra les données
     });
 
-    // Charger les données depuis Supabase (optionnel)
+    // Charger les données depuis Supabase
     async function loadFromSupabase() {
       try {
         const response = await fetch('${SUPABASE_URL}/rest/v1/activities?select=*', {
@@ -268,7 +369,18 @@ export default function BrowseScreen() {
           console.log('Activités Supabase:', data);
           data.forEach(activity => {
             if (activity.longitude && activity.latitude) {
-              createMarker(activity);
+              createMarker({
+                id: activity.id,
+                nom: activity.nom,
+                categorie: activity.categorie,
+                date: activity.date,
+                adresse: activity.adresse,
+                latitude: activity.latitude,
+                longitude: activity.longitude,
+                participants: activity.participants,
+                max_participants: activity.max_participants,
+                image_url: activity.image_url
+              });
             }
           });
         }
@@ -277,8 +389,8 @@ export default function BrowseScreen() {
       }
     }
 
-    // Décommenter pour charger depuis Supabase
-    // loadFromSupabase();
+    // Charger automatiquement depuis Supabase
+    loadFromSupabase();
   </script>
 </body>
 </html>
@@ -424,8 +536,8 @@ export default function BrowseScreen() {
             style={styles.viewDetailsButton}
             onPress={() => {
               closeActivity();
-              // Rediriger vers la page dédiée Laser Quest
-              router.push('/laser-quest-detail');
+              // Rediriger vers la page dédiée avec l'ID de l'activité
+              router.push(`/activity-detail?id=${selectedActivity.id}`);
             }}
           >
             <Text style={styles.viewDetailsButtonText}>Voir les détails</Text>
