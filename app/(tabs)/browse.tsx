@@ -14,7 +14,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
@@ -59,6 +59,7 @@ interface SelectedActivity {
 
 export default function BrowseScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('liste');
   const [selectedActivity, setSelectedActivity] = useState<SelectedActivity | null>(null);
@@ -66,6 +67,32 @@ export default function BrowseScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const webViewRef = useRef<WebView>(null);
+
+  // Gérer les paramètres de navigation
+  useEffect(() => {
+    if (params.viewMode === 'maps') {
+      setViewMode('maps');
+    }
+    if (params.selectedActivityId && activities.length > 0) {
+      const activity = activities.find(a => a.id === params.selectedActivityId);
+      if (activity && !selectedActivity) { // Ajouter cette condition pour éviter la boucle
+        setTimeout(() => {
+          setSelectedActivity({
+            id: activity.id,
+            nom: activity.nom,
+            categorie: activity.categorie,
+            date: activity.date,
+            adresse: activity.adresse,
+            participants: activity.participants,
+            max_participants: activity.max_participants,
+            image_url: activity.image_url,
+            latitude: activity.latitude,
+            longitude: activity.longitude,
+          });
+        }, 1500);
+      }
+    }
+  }, [params.selectedActivityId, activities.length]); // Modifier les dépendances
 
   // Charger les activités depuis Supabase
   const loadActivities = async () => {

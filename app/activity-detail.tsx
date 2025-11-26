@@ -29,90 +29,90 @@ export default function ActivityDetailScreen() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-  if (id) {
-    loadActivity();
-  }
-}, [id]);
+    if (id) {
+      loadActivity();
+    }
+  }, [id]);
 
-const loadActivity = async () => {
-  // ⚠️ id peut être string | string[]
-  const activityId = Array.isArray(id) ? id[0] : id;
+  const loadActivity = async () => {
+    // ⚠️ id peut être string | string[]
+    const activityId = Array.isArray(id) ? id[0] : id;
 
-  if (!activityId) {
-    setLoading(false);
-    return;
-  }
-
-  try {
-    const response = await fetch(
-      `${SUPABASE_URL}/rest/v1/activities?id=eq.${activityId}&select=*`,
-      {
-        headers: {
-          apikey: SUPABASE_KEY,
-          Authorization: `Bearer ${SUPABASE_KEY}`,
-        },
-      }
-    );
-
-    if (!response.ok) {
-      console.error('Erreur Supabase détail:', await response.text());
+    if (!activityId) {
       setLoading(false);
       return;
     }
 
-    const data = await response.json();
+    try {
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/activities?id=eq.${activityId}&select=*`,
+        {
+          headers: {
+            apikey: SUPABASE_KEY,
+            Authorization: `Bearer ${SUPABASE_KEY}`,
+          },
+        }
+      );
 
-    if (data && data.length > 0) {
-      const activityData = data[0];
+      if (!response.ok) {
+        console.error('Erreur Supabase détail:', await response.text());
+        setLoading(false);
+        return;
+      }
 
-      setActivity({
-        id: activityData.id,
-        title: activityData.nom,
-        subtitle: activityData.titre,
-        description: activityData.description,
-        image: activityData.image_url,
-        host: {
-          id: activityData.host_id,
-          // on met des valeurs par défaut (tu pourras refaire une vraie jointure plus tard)
-          name: 'Organisateur',
-          avatar: 'https://via.placeholder.com/400',
-          type: activityData.host_type,
-          city: activityData.ville,
-        },
-        date: activityData.date,
-        time:
-          activityData.time_start && activityData.time_end
-            ? `${activityData.time_start.slice(0, 5)} - ${activityData.time_end.slice(0, 5)}`
-            : 'Horaires à confirmer',
-        location: activityData.adresse,
-        city: `${activityData.ville} ${activityData.code_postal || ''}`.trim(),
-        capacity: activityData.max_participants,
-        participants: activityData.participants,
-        placesRestantes: activityData.places_restantes,
-        category: activityData.categorie,
-        price: activityData.prix > 0 ? `€${activityData.prix.toFixed(2)}` : 'Gratuit',
-        includes: activityData.inclusions || [],
-        rules: activityData.regles || [],
-        nextDates: activityData.dates_supplementaires
-          ? activityData.dates_supplementaires.split(', ')
-          : [],
-      });
-    } else {
-      console.log('Aucune activité trouvée pour id', activityId);
+      const data = await response.json();
+
+      if (data && data.length > 0) {
+        const activityData = data[0];
+
+        setActivity({
+          id: activityData.id,
+          title: activityData.nom,
+          subtitle: activityData.titre,
+          description: activityData.description,
+          image: activityData.image_url,
+          host: {
+            id: activityData.host_id,
+            // on met des valeurs par défaut (tu pourras refaire une vraie jointure plus tard)
+            name: 'Organisateur',
+            avatar: 'https://via.placeholder.com/400',
+            type: activityData.host_type,
+            city: activityData.ville,
+          },
+          date: activityData.date,
+          time:
+            activityData.time_start && activityData.time_end
+              ? `${activityData.time_start.slice(0, 5)} - ${activityData.time_end.slice(0, 5)}`
+              : 'Horaires à confirmer',
+          location: activityData.adresse,
+          city: `${activityData.ville} ${activityData.code_postal || ''}`.trim(),
+          capacity: activityData.max_participants,
+          participants: activityData.participants,
+          placesRestantes: activityData.places_restantes,
+          category: activityData.categorie,
+          price: activityData.prix > 0 ? `€${activityData.prix.toFixed(2)}` : 'Gratuit',
+          includes: activityData.inclusions || [],
+          rules: activityData.regles || [],
+          nextDates: activityData.dates_supplementaires
+            ? activityData.dates_supplementaires.split(', ')
+            : [],
+        });
+      } else {
+        console.log('Aucune activité trouvée pour id', activityId);
+      }
+    } catch (error) {
+      console.error('Erreur chargement activité:', error);
+    } finally {
+      setLoading(false);
     }
-  } catch (error) {
-    console.error('Erreur chargement activité:', error);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const handleJoinLeave = async () => {
     if (!activity) return;
 
     try {
-      const newParticipants = isJoined 
-        ? activity.participants - 1 
+      const newParticipants = isJoined
+        ? activity.participants - 1
         : activity.participants + 1;
 
       const response = await fetch(
@@ -120,14 +120,14 @@ const loadActivity = async () => {
         {
           method: 'PATCH',
           headers: {
-            'apikey': SUPABASE_KEY,
-            'Authorization': `Bearer ${SUPABASE_KEY}`,
+            apikey: SUPABASE_KEY,
+            Authorization: `Bearer ${SUPABASE_KEY}`,
             'Content-Type': 'application/json',
-            'Prefer': 'return=representation'
+            Prefer: 'return=representation',
           },
           body: JSON.stringify({
-            participants: newParticipants
-          })
+            participants: newParticipants,
+          }),
         }
       );
 
@@ -136,7 +136,7 @@ const loadActivity = async () => {
         setActivity({
           ...activity,
           participants: newParticipants,
-          placesRestantes: activity.capacity - newParticipants
+          placesRestantes: activity.capacity - newParticipants,
         });
       }
     } catch (error) {
@@ -255,6 +255,24 @@ const loadActivity = async () => {
                 </Text>
               </View>
             </View>
+
+            {/* Ajoute ce bouton après l'affichage de l'adresse */}
+            <TouchableOpacity
+              style={styles.mapButton}
+              onPress={() =>
+                router.push({
+                  pathname: '/(tabs)/browse',
+                  params: {
+                    viewMode: 'maps',
+                    selectedActivityId: activity.id,
+                  },
+                })
+              }
+            >
+              <IconSymbol name="map.fill" size={18} color={colors.primary} />
+              <Text style={styles.mapButtonText}>Voir sur la carte</Text>
+            </TouchableOpacity>
+
             <View style={styles.detailRow}>
               <IconSymbol name="person.2.fill" size={20} color={colors.primary} />
               <View style={styles.detailInfo}>
@@ -323,7 +341,10 @@ const loadActivity = async () => {
               <View style={styles.participantsInfo}>
                 <IconSymbol name="person.2.fill" size={24} color={colors.primary} />
                 <Text style={styles.participantsText}>
-                  {activity.participants} {activity.participants === 1 ? 'personne inscrite' : 'personnes inscrites'}
+                  {activity.participants}{' '}
+                  {activity.participants === 1
+                    ? 'personne inscrite'
+                    : 'personnes inscrites'}
                 </Text>
               </View>
             )}
@@ -346,7 +367,11 @@ const loadActivity = async () => {
           disabled={isFull && !isJoined}
         >
           <Text style={styles.actionButtonText}>
-            {isFull && !isJoined ? 'Complet' : isJoined ? 'Se désinscrire' : 'Rejoindre'}
+            {isFull && !isJoined
+              ? 'Complet'
+              : isJoined
+              ? 'Se désinscrire'
+              : 'Rejoindre'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -503,6 +528,24 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text,
   },
+
+  // ⭐ Nouveau style pour le bouton "Voir sur la carte"
+  mapButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.primary + '15',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  mapButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+
   section: {
     marginBottom: 24,
   },
