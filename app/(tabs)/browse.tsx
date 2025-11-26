@@ -10,21 +10,39 @@ import {
   Platform,
   TextInput,
   PanResponder,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
-import { mockActivities } from '@/data/mockData';
 import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
 import { WebView } from 'react-native-webview';
+import { activityService } from '@/services/activity.service';
 
-// Configuration Supabase et Protomaps
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
-const SUPABASE_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
-const PROTOMAPS_KEY = process.env.EXPO_PUBLIC_PROTOMAPS_KEY || ''; // Votre clé Protomaps
+// Configuration Protomaps
+const PROTOMAPS_KEY = process.env.EXPO_PUBLIC_PROTOMAPS_KEY || '';
 
 type ViewMode = 'liste' | 'maps';
+
+interface Activity {
+  id: string;
+  nom: string;
+  titre?: string;
+  description: string;
+  categorie: string;
+  image_url?: string;
+  date: string;
+  time_start: string;
+  adresse: string;
+  ville: string;
+  latitude: number;
+  longitude: number;
+  participants: number;
+  max_participants: number;
+  host_id: string;
+}
 
 interface SelectedActivity {
   id: string;
@@ -44,33 +62,102 @@ export default function BrowseScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('liste');
   const [selectedActivity, setSelectedActivity] = useState<SelectedActivity | null>(null);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const webViewRef = useRef<WebView>(null);
-  const [activities, setActivities] = useState<any[]>([]);
 
+  // Charger les activités depuis Supabase
+  const loadActivities = async () => {
+    try {
+      const result = await activityService.getActivities();
+      if (result.success && result.data) {
+        setActivities(result.data);
+        
+        // Si on est en mode carte, envoyer les activités à la WebView
+        if (viewMode === 'maps' && result.data.length > 0) {
+          setTimeout(() => {
+            sendActivitiesToMap(result.data);
+          }, 1000); // Attendre que la carte soit chargée
+        }
+      }
+    } catch (error) {
+      console.error('Erreur chargement activités:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  // Charger au montage
+  useEffect(() => {
+    loadActivities();
+  }, []);
+
+  // Recharger quand on change de mode
+  useEffect(() => {
+    if (viewMode === 'maps' && activities.length > 0) {
+      setTimeout(() => {
+        sendActivitiesToMap(activities);
+      }, 1000);
+    }
+  }, [viewMode]);
+
+  // Rafraîchir
+  const handleRefresh = () => {
+    setRefreshing(true);
+    loadActivities();
+  };
+
+  // Envoyer les activités à la carte
+  const sendActivitiesToMap = (activitiesData: Activity[]) => {
+    if (webViewRef.current) {
+      const activitiesWithCoords = activitiesData.filter(
+        (act) => act.latitude && act.longitude
+      );
+
+      const message = JSON.stringify({
+        type: 'loadActivities',
+        activities: activitiesWithCoords.map((act) => ({
+          id: act.id,
+          nom: act.nom,
+          categorie: act.categorie,
+          date: act.date,
+          adresse: act.adresse,
+          latitude: act.latitude,
+          longitude: act.longitude,
+          participants: act.participants || 0,
+          max_participants: act.max_participants,
+          image_url: act.image_url,
+        })),
+      });
+
+      webViewRef.current.postMessage(message);
+      console.log('📍 Activités envoyées à la carte:', activitiesWithCoords.length);
+    }
+  };
+
+  // Filtrer les activités
   const filteredActivities = activities.filter(activity =>
-    activity.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    activity.category.toLowerCase().includes(searchQuery.toLowerCase())
+    activity.nom.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    activity.categorie.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    activity.ville?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   // Gérer la fermeture de l'activité
   const closeActivity = () => {
     setSelectedActivity(null);
-    // Envoyer un message à la WebView pour désélectionner le marqueur
     if (webViewRef.current) {
       webViewRef.current.postMessage(JSON.stringify({ type: 'deselectMarker' }));
     }
   };
 
-  // PanResponder pour le swipe vers le bas
+  // PanResponder pour le swipe
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        // Activer le pan responder uniquement si on swipe vers le bas
-        return gestureState.dy > 5;
-      },
+      onMoveShouldSetPanResponder: (_, gestureState) => gestureState.dy > 5,
       onPanResponderRelease: (_, gestureState) => {
-        // Si on swipe vers le bas de plus de 50px, fermer
         if (gestureState.dy > 50) {
           closeActivity();
         }
@@ -83,7 +170,6 @@ export default function BrowseScreen() {
     try {
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'markerClicked') {
-        console.log('Activité sélectionnée:', data.activity);
         setSelectedActivity(data.activity);
       }
     } catch (error) {
@@ -91,109 +177,7 @@ export default function BrowseScreen() {
     }
   };
 
-  // Charger les activités depuis Supabase pour la carte
-  const loadActivitiesForMap = async () => {
-    try {
-      const response = await fetch(
-        `${SUPABASE_URL}/rest/v1/activities?select=*`,
-        {
-          headers: {
-            'apikey': SUPABASE_KEY,
-            'Authorization': `Bearer ${SUPABASE_KEY}`
-          }
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Activités chargées:', data);
-        
-        // Envoyer les activités à la WebView
-        if (webViewRef.current && data.length > 0) {
-          const activitiesData = JSON.stringify(data.map((activity: any) => ({
-            id: activity.id,
-            nom: activity.nom,
-            categorie: activity.categorie,
-            date: activity.date,
-            adresse: activity.adresse,
-            latitude: activity.latitude,
-            longitude: activity.longitude,
-            participants: activity.participants,
-            max_participants: activity.max_participants,
-            image_url: activity.image_url,
-          })));
-          
-          webViewRef.current.postMessage(JSON.stringify({
-            type: 'loadActivities',
-            activities: activitiesData
-          }));
-        }
-      }
-    } catch (error) {
-      console.error('Erreur chargement activités:', error);
-    }
-  };
-
-  // Charger les activités quand on passe en mode Maps
-  useEffect(() => {
-    if (viewMode === 'maps') {
-      setTimeout(() => {
-        loadActivitiesForMap();
-      }, 1000); // Attendre que la WebView soit chargée
-    }
-  }, [viewMode]);
-
-  // Charger les activités depuis Supabase pour la vue Liste
-  useEffect(() => {
-    const loadActivitiesForList = async () => {
-      try {
-        const response = await fetch(
-          `${SUPABASE_URL}/rest/v1/activities?select=*`,
-          {
-            headers: {
-              apikey: SUPABASE_KEY,
-              Authorization: `Bearer ${SUPABASE_KEY}`,
-            },
-          }
-        );
-
-        if (!response.ok) {
-          console.error('Erreur Supabase:', await response.text());
-          return;
-        }
-
-        const data = await response.json();
-
-        // On mappe les champs Supabase vers le format attendu par la carte de liste
-       const mapped = data.map((activity: any) => ({
-  id: activity.id,
-  title: activity.titre || activity.nom,
-  category: activity.categorie,
-  date: activity.date,
-  time: activity.time_start || '',
-  location: `${activity.ville}, ${activity.adresse}`,
-  image: activity.image_url,
-  host: {
-    name: 'Organisateur',
-    avatar: 'https://placehold.co/64x64',
-  },
-  capacity: activity.max_participants,
-  participants: Array(activity.participants || 0).fill(null),
-}));
-
-
-        setActivities(mapped);
-      } catch (error) {
-        console.error('Erreur chargement activités (liste):', error);
-      }
-    };
-
-    loadActivitiesForList();
-  }, []);
-
-
-  
-  // HTML pour la carte avec interaction
+  // HTML pour la carte
   const mapHTML = `
 <!DOCTYPE html>
 <html>
@@ -215,9 +199,6 @@ export default function BrowseScreen() {
       cursor: pointer;
       box-shadow: 0 4px 12px rgba(239, 68, 68, 0.5);
       transition: all 0.3s ease;
-      display: flex;
-      align-items: center;
-      justify-content: center;
     }
     .custom-marker:hover {
       transform: scale(1.2);
@@ -227,7 +208,6 @@ export default function BrowseScreen() {
       background: #10b981;
       transform: scale(1.3);
       box-shadow: 0 6px 20px rgba(16, 185, 129, 0.6);
-      border-color: #fff;
       animation: pulse 1.5s infinite;
     }
     @keyframes pulse {
@@ -245,58 +225,10 @@ export default function BrowseScreen() {
   <script>
     let selectedMarkerId = null;
     let markers = {};
-    let activitiesData = [];
+    let map;
 
-    // Écouter les messages de React Native
-    if (window.ReactNativeWebView) {
-      document.addEventListener('message', handleMessage);
-      window.addEventListener('message', handleMessage);
-    }
-
-    function handleMessage(event) {
-      try {
-        const data = JSON.parse(event.data);
-        
-        if (data.type === 'deselectMarker' && selectedMarkerId) {
-          const marker = document.getElementById('marker-' + selectedMarkerId);
-          if (marker) {
-            marker.classList.remove('selected');
-          }
-          selectedMarkerId = null;
-        }
-        
-        if (data.type === 'loadActivities') {
-          // Charger les nouvelles activités
-          const newActivities = JSON.parse(data.activities);
-          console.log('Activités reçues:', newActivities);
-          
-          // Supprimer les anciens marqueurs
-          Object.values(markers).forEach(m => m.marker.remove());
-          markers = {};
-          
-          // Ajouter les nouveaux marqueurs
-          newActivities.forEach(activity => {
-            createMarker(activity);
-          });
-          
-          // Centrer sur la première activité
-          if (newActivities.length > 0) {
-            map.flyTo({
-              center: [newActivities[0].longitude, newActivities[0].latitude],
-              zoom: 12
-            });
-          }
-        }
-      } catch (e) {
-        console.error('Error parsing message:', e);
-      }
-    }
-
-    // Données d'activités (seront remplacées par Supabase)
-    const activities = [];
-
-    // Initialiser la carte avec Protomaps
-    const map = new maplibregl.Map({
+    // Initialiser la carte
+    map = new maplibregl.Map({
       container: 'map',
       style: 'https://api.protomaps.com/styles/v2/light.json?key=${PROTOMAPS_KEY}',
       center: [2.5719, 48.8099],
@@ -305,40 +237,32 @@ export default function BrowseScreen() {
 
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
-    // Fonction pour envoyer un message à React Native
     function sendMessage(type, data) {
       if (window.ReactNativeWebView) {
         window.ReactNativeWebView.postMessage(JSON.stringify({ type, ...data }));
       }
     }
 
-    // Fonction pour créer un marqueur
     function createMarker(activity) {
       const el = document.createElement('div');
       el.className = 'custom-marker';
       el.id = 'marker-' + activity.id;
       
       el.addEventListener('click', () => {
-        // Désélectionner l'ancien marqueur
         if (selectedMarkerId && selectedMarkerId !== activity.id) {
           const oldMarker = document.getElementById('marker-' + selectedMarkerId);
-          if (oldMarker) {
-            oldMarker.classList.remove('selected');
-          }
+          if (oldMarker) oldMarker.classList.remove('selected');
         }
         
-        // Sélectionner le nouveau marqueur
         el.classList.add('selected');
         selectedMarkerId = activity.id;
         
-        // Centrer la carte sur le marqueur
         map.flyTo({
           center: [activity.longitude, activity.latitude],
           zoom: 15,
           duration: 1000
         });
         
-        // Envoyer les données à React Native
         sendMessage('markerClicked', { activity });
       });
 
@@ -349,55 +273,65 @@ export default function BrowseScreen() {
       markers[activity.id] = { element: el, marker };
     }
 
-    map.on('load', () => {
-      console.log('Carte chargée, en attente des activités de Supabase...');
-      // Les marqueurs seront ajoutés quand React Native enverra les données
-    });
+    function loadActivities(activities) {
+      console.log('🗺️ Chargement de', activities.length, 'activités');
+      
+      // Supprimer les anciens marqueurs
+      Object.values(markers).forEach(m => m.marker.remove());
+      markers = {};
 
-    // Charger les données depuis Supabase
-    async function loadFromSupabase() {
-      try {
-        const response = await fetch('${SUPABASE_URL}/rest/v1/activities?select=*', {
-          headers: {
-            'apikey': '${SUPABASE_KEY}',
-            'Authorization': 'Bearer ${SUPABASE_KEY}'
-          }
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          console.log('Activités Supabase:', data);
-          data.forEach(activity => {
-            if (activity.longitude && activity.latitude) {
-              createMarker({
-                id: activity.id,
-                nom: activity.nom,
-                categorie: activity.categorie,
-                date: activity.date,
-                adresse: activity.adresse,
-                latitude: activity.latitude,
-                longitude: activity.longitude,
-                participants: activity.participants,
-                max_participants: activity.max_participants,
-                image_url: activity.image_url
-              });
-            }
-          });
+      // Ajouter les nouveaux
+      activities.forEach(activity => {
+        if (activity.longitude && activity.latitude) {
+          createMarker(activity);
         }
-      } catch (error) {
-        console.error('Erreur Supabase:', error);
+      });
+
+      // Centrer sur la première activité
+      if (activities.length > 0 && activities[0].longitude) {
+        map.setCenter([activities[0].longitude, activities[0].latitude]);
       }
     }
 
-    // Charger automatiquement depuis Supabase
-    loadFromSupabase();
+    // Écouter les messages
+    window.addEventListener('message', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        
+        if (data.type === 'loadActivities') {
+          loadActivities(data.activities);
+        } else if (data.type === 'deselectMarker' && selectedMarkerId) {
+          const marker = document.getElementById('marker-' + selectedMarkerId);
+          if (marker) marker.classList.remove('selected');
+          selectedMarkerId = null;
+        }
+      } catch (e) {
+        console.error('Error:', e);
+      }
+    });
+
+    document.addEventListener('message', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        
+        if (data.type === 'loadActivities') {
+          loadActivities(data.activities);
+        } else if (data.type === 'deselectMarker' && selectedMarkerId) {
+          const marker = document.getElementById('marker-' + selectedMarkerId);
+          if (marker) marker.classList.remove('selected');
+          selectedMarkerId = null;
+        }
+      } catch (e) {
+        console.error('Error:', e);
+      }
+    });
   </script>
 </body>
 </html>
   `;
 
-  const renderActivityCard = (activity: typeof mockActivities[0], index: number) => {
-    const spotsLeft = activity.capacity - activity.participants.length;
+  const renderActivityCard = (activity: Activity, index: number) => {
+    const spotsLeft = activity.max_participants - activity.participants;
     const isFull = spotsLeft === 0;
 
     return (
@@ -411,61 +345,37 @@ export default function BrowseScreen() {
           activeOpacity={0.8}
         >
           <View style={styles.imageContainer}>
-            <Image source={{ uri: activity.image }} style={styles.activityImage} />
-            <View style={styles.hostBadge}>
-              <Image source={{ uri: activity.host.avatar }} style={styles.hostAvatarSmall} />
-              <Text style={styles.hostBadgeText}>{activity.host.name}</Text>
-            </View>
+            <Image 
+              source={{ uri: activity.image_url || 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=800' }} 
+              style={styles.activityImage} 
+            />
           </View>
 
           <View style={styles.cardContent}>
-            <Text style={styles.activityTitle}>{activity.title}</Text>
+            <Text style={styles.activityTitle}>{activity.nom}</Text>
 
             <View style={styles.categoryBadge}>
-              <Text style={styles.categoryText}>{activity.category}</Text>
+              <Text style={styles.categoryText}>{activity.categorie}</Text>
             </View>
 
             <View style={styles.divider} />
 
-            <View style={styles.infoRowCentered}>
-              <View style={styles.infoHeader}>
-                <IconSymbol name="calendar" size={18} color={colors.text} />
-                <Text style={styles.infoLabel}>Prochains événements :</Text>
-              </View>
-              <Text style={styles.infoValue}>
-                {activity.date} - {activity.time}
+            <View style={styles.infoRow}>
+              <IconSymbol name="calendar" size={16} color={colors.textSecondary} />
+              <Text style={styles.infoText}>{activity.date} - {activity.time_start}</Text>
+            </View>
+
+            <View style={styles.infoRow}>
+              <IconSymbol name="location.fill" size={16} color={colors.textSecondary} />
+              <Text style={styles.infoText}>{activity.ville}</Text>
+            </View>
+
+            <View style={styles.infoRow}>
+              <IconSymbol name="person.2.fill" size={16} color={colors.textSecondary} />
+              <Text style={styles.infoText}>
+                {activity.participants}/{activity.max_participants} participants
+                {isFull && ' (Complet)'}
               </Text>
-              <Text style={styles.infoExtra}>et 5 autres...</Text>
-            </View>
-
-            <View style={styles.infoRowCentered}>
-              <View style={styles.infoHeader}>
-                <IconSymbol name="person.2.fill" size={18} color={colors.text} />
-                <Text style={styles.infoLabel}>groupe de {activity.participants.length} participants</Text>
-              </View>
-            </View>
-
-            <View style={styles.infoRowCentered}>
-              <View style={styles.infoHeader}>
-                <IconSymbol name="location.fill" size={18} color={colors.text} />
-                <Text style={styles.infoValue}>{activity.location}</Text>
-              </View>
-            </View>
-
-            <View style={styles.actionButtons}>
-              <TouchableOpacity 
-                style={styles.detailButton}
-                onPress={() => router.push(`/activity-detail?id=${activity.id}`)}
-              >
-                <Text style={styles.detailButtonText}>Détail de l'activité</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.proposeButton}
-                onPress={() => router.push('/create-activity')}
-              >
-                <Text style={styles.proposeButtonText}>Proposer l'activité</Text>
-              </TouchableOpacity>
             </View>
           </View>
         </TouchableOpacity>
@@ -473,101 +383,108 @@ export default function BrowseScreen() {
     );
   };
 
-  // Carte détaillée de l'activité sélectionnée (bottom sheet)
   const renderActivityDetailCard = () => {
     if (!selectedActivity) return null;
+
+    const spotsLeft = selectedActivity.max_participants - selectedActivity.participants;
+    const isFull = spotsLeft === 0;
 
     return (
       <Animated.View 
         style={styles.bottomSheet}
         entering={FadeInDown.duration(300)}
         exiting={FadeOutDown.duration(200)}
-        {...panResponder.panHandlers}
       >
-        <View style={styles.bottomSheetHandle} />
+        <View style={styles.bottomSheetHandle} {...panResponder.panHandlers} />
         
         <ScrollView 
           style={styles.bottomSheetContent}
           showsVerticalScrollIndicator={false}
+          bounces={false}
         >
-          <View style={styles.detailHeader}>
-            {selectedActivity.image_url && (
-              <Image 
-                source={{ uri: selectedActivity.image_url }} 
-                style={styles.detailImage}
-              />
-            )}
+          {selectedActivity.image_url && (
+            <Image 
+              source={{ uri: selectedActivity.image_url }} 
+              style={styles.detailImage}
+            />
+          )}
+          
+          <View style={styles.detailInfo}>
+            <Text style={styles.detailName}>{selectedActivity.nom}</Text>
             
-            <View style={styles.detailInfo}>
-              <Text style={styles.detailName}>{selectedActivity.nom}</Text>
-              <Text style={styles.detailDistance}>
-                {/* Calculer la distance ici si nécessaire */}
-                1.2 km
-              </Text>
+            <View style={styles.detailCategoryBadge}>
+              <Text style={styles.detailCategoryText}>{selectedActivity.categorie}</Text>
             </View>
-          </View>
 
-          <View style={styles.detailSection}>
-            <View style={styles.detailBadge}>
-              <Text style={styles.detailBadgeText}>{selectedActivity.categorie}</Text>
-            </View>
-            
+            <View style={styles.detailDivider} />
+
             <View style={styles.detailRow}>
-              <IconSymbol name="calendar" size={16} color={colors.textSecondary} />
-              <Text style={styles.detailText}>Today {selectedActivity.date}</Text>
+              <IconSymbol name="calendar" size={18} color={colors.textSecondary} />
+              <Text style={styles.detailText}>{selectedActivity.date}</Text>
             </View>
 
             <View style={styles.detailRow}>
-              <IconSymbol name="location.fill" size={16} color={colors.textSecondary} />
-              <Text style={styles.detailText} numberOfLines={2}>
-                {selectedActivity.adresse}
-              </Text>
+              <IconSymbol name="location.fill" size={18} color={colors.textSecondary} />
+              <Text style={styles.detailText}>{selectedActivity.adresse}</Text>
             </View>
 
             <View style={styles.detailRow}>
-              <IconSymbol name="person.2.fill" size={16} color={colors.textSecondary} />
+              <IconSymbol name="person.2.fill" size={18} color={colors.textSecondary} />
               <Text style={styles.detailText}>
                 {selectedActivity.participants}/{selectedActivity.max_participants} participants
+                {isFull && ' (Complet)'}
               </Text>
             </View>
+
+            <View style={styles.detailDivider} />
+            
+            <TouchableOpacity
+              style={styles.viewDetailButton}
+              onPress={() => {
+                closeActivity();
+                router.push(`/activity-detail?id=${selectedActivity.id}`);
+              }}
+            >
+              <Text style={styles.viewDetailButtonText}>Voir les détails complets</Text>
+              <IconSymbol name="arrow.right" size={20} color={colors.background} />
+            </TouchableOpacity>
           </View>
-
-          <TouchableOpacity 
-            style={styles.viewDetailsButton}
-            onPress={() => {
-              closeActivity();
-              // Rediriger vers la page dédiée avec l'ID de l'activité
-              router.push(`/activity-detail?id=${selectedActivity.id}`);
-            }}
-          >
-            <Text style={styles.viewDetailsButtonText}>Voir les détails</Text>
-            <IconSymbol name="chevron.right" size={20} color={colors.background} />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.closeButton}
-            onPress={closeActivity}
-          >
-            <Text style={styles.closeButtonText}>Fermer</Text>
-          </TouchableOpacity>
         </ScrollView>
+
+        <TouchableOpacity 
+          style={styles.closeButton}
+          onPress={closeActivity}
+        >
+          <IconSymbol name="xmark" size={20} color={colors.text} />
+        </TouchableOpacity>
       </Animated.View>
     );
   };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={commonStyles.container} edges={['top']}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Chargement des activités...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={commonStyles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Découvrir</Text>
+        
         <View style={styles.headerActions}>
-          {/* Toggle Liste/Maps */}
           <View style={styles.toggleContainer}>
             <TouchableOpacity
               style={[styles.toggleButton, viewMode === 'liste' && styles.toggleButtonActive]}
               onPress={() => setViewMode('liste')}
             >
               <IconSymbol 
-                name="square.grid.2x2.fill" 
+                name="list.bullet" 
                 size={20} 
                 color={viewMode === 'liste' ? colors.background : colors.textSecondary} 
               />
@@ -620,8 +537,25 @@ export default function BrowseScreen() {
               Platform.OS !== 'ios' && styles.contentContainerWithTabBar,
             ]}
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                tintColor={colors.primary}
+              />
+            }
           >
-            {filteredActivities.map((activity, index) => renderActivityCard(activity, index))}
+            {filteredActivities.length > 0 ? (
+              filteredActivities.map((activity, index) => renderActivityCard(activity, index))
+            ) : (
+              <View style={styles.emptyState}>
+                <IconSymbol name="calendar" size={64} color={colors.textSecondary} />
+                <Text style={styles.emptyText}>Aucune activité trouvée</Text>
+                <Text style={styles.emptySubtext}>
+                  {searchQuery ? 'Essayez une autre recherche' : 'Créez la première activité !'}
+                </Text>
+              </View>
+            )}
           </ScrollView>
         </>
       ) : (
@@ -643,7 +577,6 @@ export default function BrowseScreen() {
             />
           )}
           
-          {/* Bottom sheet avec détails de l'activité */}
           {renderActivityDetailCard()}
         </View>
       )}
@@ -652,6 +585,16 @@ export default function BrowseScreen() {
 }
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: colors.textSecondary,
+  },
   header: {
     paddingHorizontal: 20,
     paddingVertical: 16,
@@ -730,157 +673,20 @@ const styles = StyleSheet.create({
   contentContainerWithTabBar: {
     paddingBottom: 100,
   },
-  mapContainer: {
-    flex: 1,
-    position: 'relative',
-  },
-  webview: {
-    flex: 1,
-  },
-  bottomSheet: {
-    position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 90 : 80, // Plus d'espace pour éviter la navbar
-    left: 0,
-    right: 0,
-    backgroundColor: colors.background,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-    maxHeight: '50%', // Augmenté pour voir tous les boutons
-  },
-  bottomSheetHandle: {
-    width: 40,
-    height: 4,
-    backgroundColor: colors.border,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginTop: 12,
-    marginBottom: 8,
-  },
-  bottomSheetContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    flex: 1,
-  },
-  detailHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    marginBottom: 16,
-  },
-  detailImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 12,
-    backgroundColor: colors.border,
-  },
-  detailInfo: {
-    flex: 1,
-  },
-  detailName: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  detailDistance: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  detailSection: {
-    gap: 12,
-    marginBottom: 16,
-  },
-  detailBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.primary + '20',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  detailBadgeText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.primary,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  detailText: {
-    flex: 1,
-    fontSize: 14,
-    color: colors.text,
-  },
-  viewDetailsButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primary,
-    paddingVertical: 14,
-    borderRadius: 12,
-    gap: 8,
-    marginBottom: 12,
-  },
-  viewDetailsButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.background,
-  },
-  closeButton: {
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  closeButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
   activityCard: {
     backgroundColor: colors.card,
     borderRadius: 16,
     marginBottom: 16,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
   },
   imageContainer: {
-    position: 'relative',
+    width: '100%',
+    height: 200,
   },
   activityImage: {
     width: '100%',
-    height: 180,
-    backgroundColor: colors.border,
-  },
-  hostBadge: {
-    position: 'absolute',
-    bottom: 12,
-    left: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    gap: 8,
-  },
-  hostAvatarSmall: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-  },
-  hostBadgeText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text,
+    height: '100%',
+    resizeMode: 'cover',
   },
   cardContent: {
     padding: 16,
@@ -889,7 +695,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: colors.text,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   categoryBadge: {
     alignSelf: 'flex-start',
@@ -900,7 +706,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   categoryText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
     color: colors.primary,
   },
@@ -909,60 +715,146 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border,
     marginVertical: 12,
   },
-  infoRowCentered: {
-    marginBottom: 10,
-  },
-  infoHeader: {
+  infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 4,
+    marginBottom: 8,
   },
-  infoLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  infoValue: {
+  infoText: {
     fontSize: 14,
     color: colors.textSecondary,
-    marginLeft: 26,
   },
-  infoExtra: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginLeft: 26,
-    fontStyle: 'italic',
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 16,
-  },
-  detailButton: {
+  mapContainer: {
     flex: 1,
-    backgroundColor: colors.primary,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
+    position: 'relative',
   },
-  detailButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.background,
-  },
-  proposeButton: {
+  webview: {
     flex: 1,
+  },
+  bottomSheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     backgroundColor: colors.card,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.primary,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '70%', // Augmenté de 50% à 70%
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: -3,
+    },
+    shadowOpacity: 0.27,
+    shadowRadius: 4.65,
+    elevation: 6,
   },
-  proposeButtonText: {
+  bottomSheetHandle: {
+    width: 40,
+    height: 5,
+    backgroundColor: colors.border,
+    borderRadius: 3,
+    alignSelf: 'center',
+    marginVertical: 12,
+  },
+  bottomSheetContent: {
+    flex: 1,
+    marginBottom: Platform.OS === 'ios' ? 80 : 60, // Espace pour la navbar
+  },
+  detailImage: {
+    width: '100%',
+    height: 180,
+    resizeMode: 'cover',
+  },
+  detailInfo: {
+    padding: 20,
+    paddingBottom: 24,
+  },
+  detailName: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 12,
+    lineHeight: 30,
+  },
+  detailCategoryBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.primary + '20',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  detailCategoryText: {
     fontSize: 14,
     fontWeight: '600',
     color: colors.primary,
+  },
+  detailDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: 16,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  detailText: {
+    fontSize: 15,
+    color: colors.textSecondary,
+    flex: 1,
+    lineHeight: 22,
+  },
+  viewDetailButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  viewDetailButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.background,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: colors.text,
+    marginTop: 16,
+  },
+  emptySubtext: {
+    fontSize: 16,
+    color: colors.textSecondary,
+    marginTop: 8,
   },
 });
