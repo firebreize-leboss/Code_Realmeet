@@ -148,7 +148,7 @@ export default function EditProfileScreen() {
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Bio</Text>
             <TextInput
-              style={[styles.inputContainer, styles.textArea]}
+              style={[styles.inputContainer, styles.textArea, styles.textInput]}
               placeholder="Parlez-nous de vous..."
               placeholderTextColor={colors.textSecondary}
               value={bio}
@@ -297,6 +297,10 @@ const styles = StyleSheet.create({
     minHeight: 100,
     paddingVertical: 14,
     alignItems: 'flex-start',
+  },
+  textInput: {
+    fontSize: 16,
+    color: colors.text, // ✅ COULEUR BLANCHE POUR LE TEXTE
   },
   saveButton: {
     backgroundColor: colors.primary,

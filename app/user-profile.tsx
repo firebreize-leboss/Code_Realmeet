@@ -43,10 +43,11 @@ export default function UserProfileScreen() {
       try {
         setLoading(true);
         const targetId = id as string;
+        
         // Récupérer le profil de l'utilisateur cible
         const { data: profileData, error: profileError } = await supabase
           .from('profiles')
-          .select('full_name, avatar_url, bio, city, interests, activities_joined, activities_hosted')
+          .select('full_name, avatar_url, bio, city, interests')
           .eq('id', targetId)
           .single();
         if (profileError) throw profileError;
@@ -56,6 +57,21 @@ export default function UserProfileScreen() {
         const { data: currentUserData } = await supabase.auth.getUser();
         const currentUser = currentUserData?.user;
         if (!currentUser) throw new Error("Utilisateur non connecté");
+
+        // Vérifier si c'est le propre profil de l'utilisateur
+        const isOwnProfile = currentUser.id === targetId;
+
+        // Compter les activités RÉELLEMENT rejointes (depuis la table activity_participants)
+        const { count: joinedCount } = await supabase
+          .from('activity_participants')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', targetId);
+
+        // Compter les activités RÉELLEMENT organisées (depuis la table activities)
+        const { count: hostedCount } = await supabase
+          .from('activities')
+          .select('*', { count: 'exact', head: true })
+          .eq('host_id', targetId);
 
         // Vérifier si déjà amis (relation dans les deux sens créée lors de l'acceptation)
         const { data: friendRows } = await supabase
@@ -74,7 +90,7 @@ export default function UserProfileScreen() {
           .eq('status', 'pending');
         const alreadyRequested = (requestRows && requestRows.length > 0);
 
-        // Construire l'objet profil complet
+        // Construire l'objet profil complet avec les VRAIS compteurs
         const userProfile: UserProfile = {
           id: targetId,
           full_name: profileData.full_name,
@@ -84,8 +100,8 @@ export default function UserProfileScreen() {
           interests: profileData.interests || [],
           is_friend: isFriend,
           request_sent: alreadyRequested,
-          activities_joined: profileData.activities_joined ?? 0,
-          activities_hosted: profileData.activities_hosted ?? 0,
+          activities_joined: joinedCount ?? 0,
+          activities_hosted: hostedCount ?? 0,
         };
         setProfile(userProfile);
       } catch (error) {
@@ -145,74 +161,74 @@ export default function UserProfileScreen() {
   };
 
   const handleStartConversation = async () => {
-  if (!profile) return;
-  setLoading(true);
-  try {
-    const { data: currentUserData } = await supabase.auth.getUser();
-    const currentUser = currentUserData?.user;
-    if (!currentUser) throw new Error("Utilisateur non connecté");
+    if (!profile) return;
+    setLoading(true);
+    try {
+      const { data: currentUserData } = await supabase.auth.getUser();
+      const currentUser = currentUserData?.user;
+      if (!currentUser) throw new Error("Utilisateur non connecté");
 
-    // Vérifier si une conversation existe déjà
-    const { data: myParticipations } = await supabase
-      .from('conversation_participants')
-      .select('conversation_id')
-      .eq('user_id', currentUser.id);
-
-    if (myParticipations && myParticipations.length > 0) {
-      const myConvIds = myParticipations.map(p => p.conversation_id);
-
-      // Vérifier si le profil participe à l'une de ces conversations
-      const { data: friendParticipations } = await supabase
+      // Vérifier si une conversation existe déjà
+      const { data: myParticipations } = await supabase
         .from('conversation_participants')
         .select('conversation_id')
-        .eq('user_id', profile.id)
-        .in('conversation_id', myConvIds);
+        .eq('user_id', currentUser.id);
 
-      if (friendParticipations && friendParticipations.length > 0) {
-        // Vérifier que c'est bien une conversation à 2 personnes
-        for (const fp of friendParticipations) {
-          const { count } = await supabase
-            .from('conversation_participants')
-            .select('*', { count: 'exact', head: true })
-            .eq('conversation_id', fp.conversation_id);
+      if (myParticipations && myParticipations.length > 0) {
+        const myConvIds = myParticipations.map(p => p.conversation_id);
 
-          if (count === 2) {
-            // Conversation existante trouvée, rediriger vers celle-ci
-            router.push(`/chat-detail?id=${fp.conversation_id}`);
-            setLoading(false);
-            return;
+        // Vérifier si le profil participe à l'une de ces conversations
+        const { data: friendParticipations } = await supabase
+          .from('conversation_participants')
+          .select('conversation_id')
+          .eq('user_id', profile.id)
+          .in('conversation_id', myConvIds);
+
+        if (friendParticipations && friendParticipations.length > 0) {
+          // Vérifier que c'est bien une conversation à 2 personnes
+          for (const fp of friendParticipations) {
+            const { count } = await supabase
+              .from('conversation_participants')
+              .select('*', { count: 'exact', head: true })
+              .eq('conversation_id', fp.conversation_id);
+
+            if (count === 2) {
+              // Conversation existante trouvée, rediriger vers celle-ci
+              router.push(`/chat-detail?id=${fp.conversation_id}`);
+              setLoading(false);
+              return;
+            }
           }
         }
       }
+
+      // Aucune conversation existante, en créer une nouvelle
+      const { data: newConv, error: convError } = await supabase
+        .from('conversations')
+        .insert({})
+        .select()
+        .single();
+      
+      if (convError) throw convError;
+
+      const participants = [
+        { conversation_id: newConv.id, user_id: currentUser.id },
+        { conversation_id: newConv.id, user_id: profile.id },
+      ];
+      
+      const { error: partError } = await supabase
+        .from('conversation_participants')
+        .insert(participants);
+      
+      if (partError) throw partError;
+
+      router.push(`/chat-detail?id=${newConv.id}`);
+    } catch (error) {
+      console.error('Error starting conversation:', error);
+    } finally {
+      setLoading(false);
     }
-
-    // Aucune conversation existante, en créer une nouvelle
-    const { data: newConv, error: convError } = await supabase
-      .from('conversations')
-      .insert({})
-      .select()
-      .single();
-    
-    if (convError) throw convError;
-
-    const participants = [
-      { conversation_id: newConv.id, user_id: currentUser.id },
-      { conversation_id: newConv.id, user_id: profile.id },
-    ];
-    
-    const { error: partError } = await supabase
-      .from('conversation_participants')
-      .insert(participants);
-    
-    if (partError) throw partError;
-
-    router.push(`/chat-detail?id=${newConv.id}`);
-  } catch (error) {
-    console.error('Error starting conversation:', error);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -328,7 +344,7 @@ export default function UserProfileScreen() {
                   <ActivityIndicator size="small" color={colors.background} />
                 ) : (
                   <>
-                    <IconSymbol name="plus" size={20} color={colors.background} />
+                    <IconSymbol name="person.badge.plus.fill" size={20} color={colors.background} />
                     <Text style={styles.addButtonText}>Ajouter</Text>
                   </>
                 )}
@@ -348,18 +364,15 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
     paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.card,
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: 8,
   },
   placeholder: {
     width: 40,
@@ -373,39 +386,38 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
+    paddingBottom: 100,
   },
   profileHeader: {
     alignItems: 'center',
     paddingVertical: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   avatar: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: colors.border,
-    marginBottom: 16,
-    borderWidth: 4,
-    borderColor: colors.primary,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    marginBottom: 12,
   },
   name: {
     fontSize: 24,
-    fontWeight: '700',
+    fontWeight: 'bold',
     color: colors.text,
-    marginBottom: 8,
+    marginBottom: 4,
   },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
   },
   city: {
-    fontSize: 16,
+    fontSize: 14,
     color: colors.textSecondary,
   },
   section: {
-    marginBottom: 24,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
   },
   sectionTitle: {
     fontSize: 18,
@@ -419,9 +431,9 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   bio: {
-    fontSize: 16,
-    color: colors.textSecondary,
-    lineHeight: 24,
+    fontSize: 14,
+    color: colors.text,
+    lineHeight: 20,
   },
   interestsContainer: {
     flexDirection: 'row',
@@ -430,14 +442,14 @@ const styles = StyleSheet.create({
   },
   interestBadge: {
     backgroundColor: colors.primary + '20',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
   },
   interestText: {
     fontSize: 14,
-    fontWeight: '600',
     color: colors.primary,
+    fontWeight: '500',
   },
   statsContainer: {
     flexDirection: 'row',
@@ -447,56 +459,33 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.card,
     borderRadius: 12,
-    padding: 20,
+    padding: 16,
     alignItems: 'center',
   },
   statValue: {
-    fontSize: 32,
-    fontWeight: '700',
+    fontSize: 28,
+    fontWeight: 'bold',
     color: colors.primary,
     marginBottom: 4,
   },
   statLabel: {
-    fontSize: 14,
+    fontSize: 12,
     color: colors.textSecondary,
-    textAlign: 'center',
   },
   actionButtons: {
     flexDirection: 'row',
     gap: 12,
-    marginTop: 8,
-  },
-  addButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primary,
-    paddingVertical: 16,
-    borderRadius: 12,
-    gap: 8,
-  },
-  addButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.background,
-  },
-  pendingButton: {
-    backgroundColor: colors.textSecondary + '20',
-  },
-  pendingButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.textSecondary,
+    paddingHorizontal: 16,
+    paddingTop: 16,
   },
   messageButton: {
     flex: 1,
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.primary,
-    paddingVertical: 16,
-    borderRadius: 12,
     gap: 8,
   },
   messageButtonText: {
@@ -505,10 +494,36 @@ const styles = StyleSheet.create({
     color: colors.background,
   },
   moreButton: {
-    width: 54,
+    width: 48,
+    height: 48,
     backgroundColor: colors.card,
     borderRadius: 12,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addButton: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  addButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.background,
+  },
+  pendingButton: {
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  pendingButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textSecondary,
   },
 });

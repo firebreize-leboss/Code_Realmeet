@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -15,10 +15,14 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { useAuth } from '@/contexts/AuthContext';
 import { Keyboard } from 'react-native';
+import { supabase } from '@/lib/supabase';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, profile, loading } = useAuth();
+  const [activitiesJoined, setActivitiesJoined] = useState(0);
+  const [activitiesHosted, setActivitiesHosted] = useState(0);
+  const [loadingStats, setLoadingStats] = useState(true);
 
   // Fermer le clavier à chaque fois que l'écran est focus
   useFocusEffect(
@@ -26,6 +30,40 @@ export default function ProfileScreen() {
       Keyboard.dismiss();
     }, [])
   );
+
+  // Charger les vraies statistiques d'activités
+  useEffect(() => {
+    if (user?.id) {
+      loadActivityStats();
+    }
+  }, [user?.id]);
+
+  const loadActivityStats = async () => {
+    if (!user?.id) return;
+    
+    try {
+      setLoadingStats(true);
+
+      // Compter les activités RÉELLEMENT rejointes
+      const { count: joinedCount } = await supabase
+        .from('activity_participants')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id);
+
+      // Compter les activités RÉELLEMENT organisées
+      const { count: hostedCount } = await supabase
+        .from('activities')
+        .select('*', { count: 'exact', head: true })
+        .eq('host_id', user.id);
+
+      setActivitiesJoined(joinedCount ?? 0);
+      setActivitiesHosted(hostedCount ?? 0);
+    } catch (error) {
+      console.error('Error loading activity stats:', error);
+    } finally {
+      setLoadingStats(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -111,16 +149,22 @@ export default function ProfileScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Stats</Text>
-          <View style={styles.statsContainer}>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>12</Text>
-              <Text style={styles.statLabel}>Activities Joined</Text>
+          {loadingStats ? (
+            <View style={styles.statsLoading}>
+              <ActivityIndicator size="small" color={colors.primary} />
             </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>8</Text>
-              <Text style={styles.statLabel}>Activities Hosted</Text>
+          ) : (
+            <View style={styles.statsContainer}>
+              <View style={styles.statCard}>
+                <Text style={styles.statValue}>{activitiesJoined}</Text>
+                <Text style={styles.statLabel}>Activities Joined</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={styles.statValue}>{activitiesHosted}</Text>
+                <Text style={styles.statLabel}>Activities Hosted</Text>
+              </View>
             </View>
-          </View>
+          )}
         </View>
 
         <TouchableOpacity
@@ -262,6 +306,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: colors.primary,
+  },
+  statsLoading: {
+    paddingVertical: 40,
+    alignItems: 'center',
   },
   statsContainer: {
     flexDirection: 'row',
