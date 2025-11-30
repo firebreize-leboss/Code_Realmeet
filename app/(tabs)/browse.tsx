@@ -68,6 +68,30 @@ export default function BrowseScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const webViewRef = useRef<WebView>(null);
 
+useEffect(() => {
+  if (params.viewMode === 'maps') {
+    setViewMode('maps');
+  }
+  if (params.selectedActivityId) {
+    const activity = activities.find(a => a.id === params.selectedActivityId);
+    if (activity && activity.latitude && activity.longitude) {
+      setTimeout(() => {
+        if (webViewRef.current) {
+          webViewRef.current.postMessage(JSON.stringify({
+            type: 'centerOnActivity',
+            activityId: activity.id,
+            latitude: activity.latitude,
+            longitude: activity.longitude
+          }));
+        }
+        setSelectedActivity(activity);
+      }, 1000);
+    }
+  }
+}, [params, activities]);
+
+
+
   // Gérer les paramètres de navigation
   useEffect(() => {
     if (params.viewMode === 'maps') {
@@ -348,6 +372,40 @@ export default function BrowseScreen() {
           if (marker) marker.classList.remove('selected');
           selectedMarkerId = null;
         }
+              if (data.type === 'centerOnActivity') {
+      console.log('📍 Centrage sur activité:', data.activityId);
+      
+      // Centrer la carte
+      map.flyTo({
+        center: [data.longitude, data.latitude],
+        zoom: 15,
+        duration: 1500
+      });
+      
+      // Sélectionner le marqueur
+      if (selectedMarkerId && selectedMarkerId !== data.activityId) {
+        const oldMarker = document.getElementById('marker-' + selectedMarkerId);
+        if (oldMarker) {
+          oldMarker.classList.remove('selected');
+        }
+      }
+      
+      const newMarker = document.getElementById('marker-' + data.activityId);
+      if (newMarker) {
+        newMarker.classList.add('selected');
+        selectedMarkerId = data.activityId;
+      }
+    }
+    
+    // Charger les activités
+    if (data.type === 'loadActivities') {
+      console.log('📍 Chargement activités:', data.activities.length);
+      data.activities.forEach(activity => {
+        if (activity.longitude && activity.latitude && !markers[activity.id]) {
+          createMarker(activity);
+        }
+      });
+    }
       } catch (e) {
         console.error('Error:', e);
       }
