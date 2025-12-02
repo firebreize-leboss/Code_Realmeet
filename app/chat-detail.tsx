@@ -44,51 +44,81 @@ export default function ChatDetailScreen() {
   const [recordingTime, setRecordingTime] = useState(0);
   const [localMessages, setLocalMessages] = useState<Message[]>([]);
   const [otherUserId, setOtherUserId] = useState<string | null>(null);
+  const [activityId, setActivityId] = useState<string | null>(null);
 
   const { messages, loading: messagesLoading, sendMessage } = useMessages(conversationId as string);
 
   const combinedMessages: Message[] = [...(messages || []), ...localMessages];
 
-  useEffect(() => {
-    const loadConversationInfo = async () => {
-      try {
-        const { data: userData } = await supabase.auth.getUser();
-        const currentUser = userData?.user;
-        if (currentUser) {
-          setCurrentUserId(currentUser.id);
-          const { data: profileData } = await supabase
-            .from('profiles')
-            .select('full_name, avatar_url')
-            .eq('id', currentUser.id)
-            .single();
-          if (profileData) {
-            setCurrentUserName(profileData.full_name || 'Moi');
-            setCurrentUserAvatar(profileData.avatar_url || '');
-          }
+  // Dans chat-detail.tsx, remplacer le useEffect loadConversationInfo par celui-ci :
+
+useEffect(() => {
+  const loadConversationInfo = async () => {
+    try {
+      // Récupérer l'utilisateur actuel
+      const { data: userData } = await supabase.auth.getUser();
+      const currentUser = userData?.user;
+      if (currentUser) {
+        setCurrentUserId(currentUser.id);
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('full_name, avatar_url')
+          .eq('id', currentUser.id)
+          .single();
+        if (profileData) {
+          setCurrentUserName(profileData.full_name || 'Moi');
+          setCurrentUserAvatar(profileData.avatar_url || '');
         }
-        if (conversationId) {
-          const { data: participants } = await supabase
-            .from('conversation_participants')
-            .select('user_id, profiles: user_id (full_name, avatar_url)')
-            .eq('conversation_id', conversationId);
-          if (participants) {
+      }
+
+      if (conversationId) {
+        // Récupérer les infos de la conversation (incluant les nouvelles colonnes)
+        const { data: convData } = await supabase
+          .from('conversations')
+          .select('name, image_url, is_group, activity_id')
+          .eq('id', conversationId)
+          .single();
+
+        // Récupérer les participants
+        const { data: participants } = await supabase
+          .from('conversation_participants')
+          .select('user_id, profiles: user_id (full_name, avatar_url)')
+          .eq('conversation_id', conversationId);
+
+        if (participants && currentUser) {
+          const isActivityGroup = convData?.is_group === true && convData?.activity_id !== null;
+          
+          if (isActivityGroup) {
+            // === GROUPE D'ACTIVITÉ ===
+            // Utiliser le nom et l'image stockés dans la conversation
+            setIsGroup(true);
+            setConvName(convData.name || 'Groupe');
+            setConvImage(convData.image_url || '');
+          } else if (convData?.is_group === true) {
+            // === GROUPE RÉGULIER (sans activité) ===
+            setIsGroup(true);
+            setConvName(convData.name || 'Groupe');
+            setConvImage(convData.image_url || '');
+          } else {
+            // === CONVERSATION PRIVÉE ===
             setIsGroup(participants.length > 2);
-            if (currentUser) {
-              const other = participants.find(p => p.user_id !== currentUser.id);
-              if (other) {
-                setConvName(other.profiles?.full_name || 'Conversation');
-                setConvImage(other.profiles?.avatar_url || '');
-                setOtherUserId(other.user_id);
-              }
+            const other = participants.find(p => p.user_id !== currentUser.id);
+            if (other) {
+              setConvName(other.profiles?.full_name || 'Conversation');
+              setConvImage(other.profiles?.avatar_url || '');
+              setOtherUserId(other.user_id);
             }
           }
         }
-      } catch (error) {
-        console.error('Error loading conversation info:', error);
       }
-    };
-    loadConversationInfo();
-  }, [conversationId]);
+    } catch (error) {
+      console.error('Error loading conversation info:', error);
+    }
+  };
+
+  loadConversationInfo();
+}, [conversationId]);
+
 
   useEffect(() => {
     Keyboard.dismiss();
@@ -236,115 +266,127 @@ export default function ChatDetailScreen() {
   };
 
   const renderMessage = (msg: Message) => {
-    const isOwnMessage = msg.senderId === currentUserId;
-    const isFailed = msg.status === 'failed';
+  const isOwnMessage = msg.senderId === currentUserId;
+  const isFailed = msg.status === 'failed';
 
+  // === MESSAGE SYSTÈME (rejoindre/quitter le groupe) ===
+  if (msg.type === 'system') {
     return (
-      <TouchableOpacity
-        key={msg.id}
+      <View key={msg.id} style={styles.systemMessageWrapper}>
+        <View style={styles.systemMessageBubble}>
+          <Text style={styles.systemMessageText}>{msg.text}</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // === MESSAGES NORMAUX ===
+  return (
+    <TouchableOpacity
+      key={msg.id}
+      style={[
+        styles.messageWrapper,
+        isOwnMessage && styles.messageWrapperOwn,
+      ]}
+      onPress={isFailed && isOwnMessage ? () => handleRetryMessage(msg) : undefined}
+      activeOpacity={isFailed && isOwnMessage ? 0.7 : 1}
+      disabled={!isFailed || !isOwnMessage}
+    >
+      {!isOwnMessage && (
+        <Image source={{ uri: msg.senderAvatar }} style={styles.messageAvatar} />
+      )}
+      <View
         style={[
-          styles.messageWrapper,
-          isOwnMessage && styles.messageWrapperOwn,
+          styles.messageBubble,
+          isOwnMessage && styles.messageBubbleOwn,
+          msg.type === 'image' && styles.imageBubble,
+          isFailed && isOwnMessage && styles.messageBubbleFailed,
         ]}
-        onPress={isFailed && isOwnMessage ? () => handleRetryMessage(msg) : undefined}
-        activeOpacity={isFailed && isOwnMessage ? 0.7 : 1}
-        disabled={!isFailed || !isOwnMessage}
       >
-        {!isOwnMessage && (
-          <Image source={{ uri: msg.senderAvatar }} style={styles.messageAvatar} />
+        {msg.type === 'text' && (
+          <>
+            {!isOwnMessage && isGroup && (
+              <Text style={styles.senderName}>{msg.senderName}</Text>
+            )}
+            <Text
+              style={[
+                styles.messageText,
+                isOwnMessage && styles.messageTextOwn,
+              ]}
+            >
+              {msg.text}
+            </Text>
+            {isFailed && isOwnMessage && (
+              <Text style={styles.retryHint}>
+                Appuyer pour réessayer
+              </Text>
+            )}
+          </>
         )}
-        <View
-          style={[
-            styles.messageBubble,
-            isOwnMessage && styles.messageBubbleOwn,
-            msg.type === 'image' && styles.imageBubble,
-            isFailed && isOwnMessage && styles.messageBubbleFailed,
-          ]}
-        >
-          {msg.type === 'text' && (
-            <>
-              {!isOwnMessage && isGroup && (
-                <Text style={styles.senderName}>{msg.senderName}</Text>
-              )}
-              <Text
-                style={[
-                  styles.messageText,
-                  isOwnMessage && styles.messageTextOwn,
-                ]}
-              >
-                {msg.text}
-              </Text>
-              {isFailed && isOwnMessage && (
-                <Text style={styles.retryHint}>
-                  Appuyer pour réessayer
-                </Text>
-              )}
-            </>
-          )}
 
-          {msg.type === 'image' && (
-            <>
-              <Image source={{ uri: msg.imageUrl }} style={styles.messageImage} resizeMode="cover" />
-              <View style={[styles.imageTimestamp, isOwnMessage && styles.imageTimestampOwn]}>
-                <Text style={styles.imageTimeText}>{msg.timestamp}</Text>
-                {isOwnMessage && renderMessageStatus(msg.status)}
-              </View>
-            </>
-          )}
-
-          {msg.type === 'voice' && (
-            <View style={styles.voiceMessage}>
-              <TouchableOpacity style={styles.playButton}>
-                <IconSymbol
-                  name="play.fill"
-                  size={20}
-                  color={isOwnMessage ? colors.background : colors.primary}
-                />
-              </TouchableOpacity>
-              <View style={styles.waveformContainer}>
-                {[...Array(20)].map((_, i) => (
-                  <View
-                    key={i}
-                    style={[
-                      styles.waveformBar,
-                      {
-                        height: Math.random() * 24 + 8,
-                        backgroundColor: isOwnMessage
-                          ? colors.background + '80'
-                          : colors.primary + '80',
-                      },
-                    ]}
-                  />
-                ))}
-              </View>
-              <Text
-                style={[
-                  styles.voiceDuration,
-                  isOwnMessage && styles.voiceDurationOwn,
-                ]}
-              >
-                {formatDuration(msg.voiceDuration || 0)}
-              </Text>
-            </View>
-          )}
-
-          {msg.type !== 'image' && (
-            <View style={styles.messageFooter}>
-              <Text
-                style={[
-                  styles.messageTime,
-                  isOwnMessage && styles.messageTimeOwn,
-                ]}
-              >
-                {msg.timestamp}
-              </Text>
+        {msg.type === 'image' && (
+          <>
+            <Image source={{ uri: msg.imageUrl }} style={styles.messageImage} resizeMode="cover" />
+            <View style={[styles.imageTimestamp, isOwnMessage && styles.imageTimestampOwn]}>
+              <Text style={styles.imageTimeText}>{msg.timestamp}</Text>
               {isOwnMessage && renderMessageStatus(msg.status)}
             </View>
-          )}
-        </View>
-      </TouchableOpacity>
-    );
-  };
+          </>
+        )}
+
+        {msg.type === 'voice' && (
+          <View style={styles.voiceMessage}>
+            <TouchableOpacity style={styles.playButton}>
+              <IconSymbol
+                name="play.fill"
+                size={20}
+                color={isOwnMessage ? colors.background : colors.primary}
+              />
+            </TouchableOpacity>
+            <View style={styles.waveformContainer}>
+              {[...Array(20)].map((_, i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.waveformBar,
+                    {
+                      height: Math.random() * 24 + 8,
+                      backgroundColor: isOwnMessage
+                        ? colors.background + '80'
+                        : colors.primary + '80',
+                    },
+                  ]}
+                />
+              ))}
+            </View>
+            <Text
+              style={[
+                styles.voiceDuration,
+                isOwnMessage && styles.voiceDurationOwn,
+              ]}
+            >
+              {formatDuration(msg.voiceDuration || 0)}
+            </Text>
+          </View>
+        )}
+
+        {msg.type !== 'image' && (
+          <View style={styles.messageFooter}>
+            <Text
+              style={[
+                styles.messageTime,
+                isOwnMessage && styles.messageTimeOwn,
+              ]}
+            >
+              {msg.timestamp}
+            </Text>
+            {isOwnMessage && renderMessageStatus(msg.status)}
+          </View>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+};
 
   return (
     <SafeAreaView style={commonStyles.container} edges={['top', 'bottom']}>
@@ -356,7 +398,9 @@ export default function ChatDetailScreen() {
         <TouchableOpacity
           style={styles.headerInfo}
           onPress={() => {
-            if (otherUserId && !isGroup) {
+            if (isGroup) {
+              router.push(`/group-info?id=${conversationId}`);
+            } else if (otherUserId) {
               router.push(`/user-profile?id=${otherUserId}`);
             }
           }}
@@ -365,7 +409,9 @@ export default function ChatDetailScreen() {
           <Image source={{ uri: convImage }} style={styles.headerAvatar} />
           <View>
             <Text style={styles.headerTitle}>{convName}</Text>
-            {isGroup && <Text style={styles.headerSubtitle}>Groupe</Text>}
+            {isGroup && (
+              <Text style={styles.headerSubtitle}>Appuyez pour voir les membres</Text>
+            )}
           </View>
         </TouchableOpacity>
 
@@ -663,6 +709,22 @@ const styles = StyleSheet.create({
   attachButton: {
     padding: 4,
   },
+  systemMessageWrapper: {
+  alignItems: 'center',
+  marginVertical: 12,
+},
+systemMessageBubble: {
+  backgroundColor: colors.border,
+  paddingHorizontal: 16,
+  paddingVertical: 8,
+  borderRadius: 16,
+},
+systemMessageText: {
+  fontSize: 13,
+  color: colors.textSecondary,
+  fontStyle: 'italic',
+  textAlign: 'center',
+},
   input: {
     flex: 1,
     minHeight: 36,

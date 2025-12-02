@@ -209,6 +209,10 @@ export function useFriendRequests() {
 // HOOK POUR LES CONVERSATIONS
 // ============================================
 
+// ============================================
+// HOOK POUR LES CONVERSATIONS (MIS À JOUR POUR LES GROUPES D'ACTIVITÉ)
+// ============================================
+
 export function useConversations() {
   const [conversations, setConversations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -225,6 +229,7 @@ export function useConversations() {
         return;
       }
 
+      // Récupérer les conversations où l'utilisateur participe
       const { data: participantData, error: participantError } = await supabase
         .from('conversation_participants')
         .select('conversation_id')
@@ -240,6 +245,7 @@ export function useConversations() {
         return;
       }
 
+      // Récupérer les conversations AVEC les nouvelles colonnes (name, image_url, is_group, activity_id)
       const { data, error } = await supabase
         .from('conversations')
         .select(`
@@ -258,19 +264,98 @@ export function useConversations() {
 
       if (error) throw error;
 
+      // Récupérer les derniers messages pour chaque conversation
+      const { data: lastMessages } = await supabase
+        .from('messages')
+        .select('conversation_id, content, message_type, created_at')
+        .in('conversation_id', conversationIds)
+        .order('created_at', { ascending: false });
+
+      // Grouper les derniers messages par conversation
+      const lastMessageByConv: Record<string, any> = {};
+      lastMessages?.forEach(msg => {
+        if (!lastMessageByConv[msg.conversation_id]) {
+          lastMessageByConv[msg.conversation_id] = msg;
+        }
+      });
+
       const transformedConversations = data?.map(conv => {
-        const participants = conv.conversation_participants as ConversationParticipant[];
+        const participants = conv.conversation_participants as any[];
         const otherParticipant = participants.find(
           p => p.user_id !== currentUser.user?.id
         );
 
+        const lastMsg = lastMessageByConv[conv.id];
+        
+        // Formater le dernier message
+        let lastMessageText = '';
+        if (lastMsg) {
+          if (lastMsg.message_type === 'image') {
+            lastMessageText = '📷 Photo';
+          } else if (lastMsg.message_type === 'voice') {
+            lastMessageText = '🎤 Message vocal';
+          } else {
+            lastMessageText = lastMsg.content || '';
+          }
+        }
+
+        // Formater l'heure du dernier message
+        let lastMessageTime = '';
+        if (lastMsg?.created_at) {
+          const msgDate = new Date(lastMsg.created_at);
+          const now = new Date();
+          const diffDays = Math.floor((now.getTime() - msgDate.getTime()) / (1000 * 60 * 60 * 24));
+          
+          if (diffDays === 0) {
+            lastMessageTime = msgDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+          } else if (diffDays === 1) {
+            lastMessageTime = 'Hier';
+          } else if (diffDays < 7) {
+            lastMessageTime = msgDate.toLocaleDateString('fr-FR', { weekday: 'short' });
+          } else {
+            lastMessageTime = msgDate.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+          }
+        }
+
+        // === LOGIQUE IMPORTANTE ===
+        // Si c'est un groupe d'activité (is_group = true ET activity_id existe),
+        // utiliser le nom et l'image de la conversation (= nom et image de l'activité)
+        // Sinon, utiliser le nom et l'avatar de l'autre participant
+        
+        const isActivityGroup = conv.is_group === true && conv.activity_id !== null;
+        const isRegularGroup = conv.is_group === true && conv.activity_id === null;
+        const isPrivateChat = !conv.is_group || participants.length === 2;
+
+        let displayName: string;
+        let displayImage: string;
+        let isGroup: boolean;
+
+        if (isActivityGroup) {
+          // Groupe d'activité : utiliser nom et image de l'activité
+          displayName = conv.name || 'Groupe';
+          displayImage = conv.image_url || '';
+          isGroup = true;
+        } else if (isRegularGroup) {
+          // Groupe régulier (pas d'activité)
+          displayName = conv.name || 'Groupe';
+          displayImage = conv.image_url || '';
+          isGroup = true;
+        } else {
+          // Conversation privée : utiliser l'autre participant
+          displayName = otherParticipant?.profiles?.full_name || 'Inconnu';
+          displayImage = otherParticipant?.profiles?.avatar_url || '';
+          isGroup = false;
+        }
+
         return {
           id: conv.id,
-          name: otherParticipant?.profiles?.full_name || 'Inconnu',
-          image: otherParticipant?.profiles?.avatar_url || '',
-          lastMessage: '',
-          lastMessageTime: '',
-          isGroup: participants.length > 2,
+          name: displayName,
+          image: displayImage,
+          lastMessage: lastMessageText,
+          lastMessageTime: lastMessageTime,
+          isGroup: isGroup,
+          activityId: conv.activity_id || null,
+          participantCount: participants.length,
           updated_at: conv.updated_at,
         };
       }) || [];
@@ -287,6 +372,7 @@ export function useConversations() {
   useEffect(() => {
     loadConversations();
 
+    // S'abonner aux nouveaux messages pour rafraîchir la liste
     const channel = supabase
       .channel('conversations_updates')
       .on(
@@ -295,6 +381,17 @@ export function useConversations() {
           event: 'INSERT',
           schema: 'public',
           table: 'messages',
+        },
+        () => {
+          loadConversations();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'conversations',
         },
         () => {
           loadConversations();
@@ -315,9 +412,11 @@ export function useConversations() {
         throw new Error('User not authenticated');
       }
 
+      // Pour une conversation privée (1 seul autre participant)
       if (participantIds.length === 1) {
         const friendId = participantIds[0];
 
+        // Vérifier si une conversation privée existe déjà
         const { data: myParticipations } = await supabase
           .from('conversation_participants')
           .select('conversation_id')
@@ -334,6 +433,16 @@ export function useConversations() {
 
           if (friendParticipations && friendParticipations.length > 0) {
             for (const fp of friendParticipations) {
+              // Vérifier que c'est bien une conversation à 2 (pas un groupe)
+              const { data: convData } = await supabase
+                .from('conversations')
+                .select('is_group')
+                .eq('id', fp.conversation_id)
+                .single();
+
+              // Si c'est un groupe, continuer à chercher
+              if (convData?.is_group) continue;
+
               const { count } = await supabase
                 .from('conversation_participants')
                 .select('*', { count: 'exact', head: true })
@@ -347,9 +456,12 @@ export function useConversations() {
         }
       }
 
+      // Créer une nouvelle conversation privée
       const { data: conversation, error: convError } = await supabase
         .from('conversations')
-        .insert({})
+        .insert({
+          is_group: false, // Conversation privée
+        })
         .select()
         .single();
 
