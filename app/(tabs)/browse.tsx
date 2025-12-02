@@ -67,28 +67,103 @@ export default function BrowseScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const webViewRef = useRef<WebView>(null);
+  const hasHandledParams = useRef(false);
 
+// ✅ Gérer les paramètres de navigation (SANS BOUCLE)
+
+// ✅ DEBUG : Afficher les activités chargées
 useEffect(() => {
+  console.log('📦 Activités chargées:', activities.length);
+  console.log('📦 Params:', params);
+  activities.forEach(a => {
+    console.log(`  - ${a.nom}: lat=${a.latitude}, lng=${a.longitude}`);
+  });
+}, [activities]);
+
+// ✅ Gérer les paramètres de navigation (SANS BOUCLE)
+useEffect(() => {
+  console.log('🔄 useEffect déclenché - hasHandled:', hasHandledParams.current, 'activities:', activities.length);
+  
+  // Si on a déjà traité les paramètres OU si les activités ne sont pas encore chargées, ne rien faire
+  if (hasHandledParams.current) {
+    console.log('⏭️ Déjà traité, on skip');
+    return;
+  }
+  
+  if (activities.length === 0) {
+    console.log('⏳ En attente du chargement des activités...');
+    return;
+  }
+  
   if (params.viewMode === 'maps') {
+    console.log('🗺️ Passage en mode carte');
     setViewMode('maps');
   }
+  
   if (params.selectedActivityId) {
+    console.log('🔍 Recherche de l\'activité:', params.selectedActivityId);
     const activity = activities.find(a => a.id === params.selectedActivityId);
-    if (activity && activity.latitude && activity.longitude) {
-      setTimeout(() => {
-        if (webViewRef.current) {
-          webViewRef.current.postMessage(JSON.stringify({
-            type: 'centerOnActivity',
-            activityId: activity.id,
-            latitude: activity.latitude,
-            longitude: activity.longitude
-          }));
-        }
-        setSelectedActivity(activity);
-      }, 1000);
+    console.log('🔍 Activité trouvée:', activity?.nom);
+    
+    if (activity) {
+      console.log('📍 Coordonnées:', activity.latitude, activity.longitude);
+      
+      if (activity.latitude && activity.longitude) {
+        console.log('✅ Centrage en cours...');
+        
+        hasHandledParams.current = true; // Marquer comme traité
+        
+        setTimeout(() => {
+          if (webViewRef.current) {
+            const message = {
+              type: 'centerOnActivity',
+              activityId: activity.id,
+              latitude: activity.latitude,
+              longitude: activity.longitude,
+              // ✅ AJOUT : Envoyer toutes les données de l'activité
+              nom: activity.nom,
+              categorie: activity.categorie,
+              adresse: activity.adresse,
+              date: activity.date,
+              participants: activity.participants || 0,
+              max_participants: activity.max_participants,
+              image_url: activity.image_url
+            };
+            console.log('📨 Message envoyé à la carte:', message);
+            webViewRef.current.postMessage(JSON.stringify(message));
+          }
+          setSelectedActivity(activity);
+        }, 1500);
+      } else {
+        console.log('❌ Pas de coordonnées pour cette activité');
+      }
+    } else {
+      console.log('❌ Activité non trouvée dans la liste');
     }
   }
-}, [params, activities]);
+}, [params.viewMode, params.selectedActivityId, activities]);
+
+// ✅ AJOUT : Quand on quitte la page, réinitialiser le flag
+useEffect(() => {
+  return () => {
+    console.log('🔄 Nettoyage - reset du flag');
+    hasHandledParams.current = false;
+  };
+}, []);
+
+// ✅ AJOUT : Quand on quitte la page, réinitialiser le flag
+useEffect(() => {
+  return () => {
+    hasHandledParams.current = false;
+  };
+}, []);
+
+// ✅ AJOUT : Quand on quitte la page, réinitialiser le flag
+useEffect(() => {
+  return () => {
+    hasHandledParams.current = false;
+  };
+}, []);
 
 
 
@@ -229,7 +304,7 @@ useEffect(() => {
   };
 
   // HTML pour la carte
-  const mapHTML = `
+const mapHTML = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -327,93 +402,92 @@ useEffect(() => {
     function loadActivities(activities) {
       console.log('🗺️ Chargement de', activities.length, 'activités');
       
-      // Supprimer les anciens marqueurs
       Object.values(markers).forEach(m => m.marker.remove());
       markers = {};
 
-      // Ajouter les nouveaux
       activities.forEach(activity => {
         if (activity.longitude && activity.latitude) {
           createMarker(activity);
         }
       });
 
-      // Centrer sur la première activité
       if (activities.length > 0 && activities[0].longitude) {
         map.setCenter([activities[0].longitude, activities[0].latitude]);
       }
     }
 
-    // Écouter les messages
-    window.addEventListener('message', (event) => {
+    // Fonction pour gérer tous les messages
+    function handleMessage(event) {
       try {
         const data = JSON.parse(event.data);
+        console.log('🗺️ Message reçu:', data.type);
         
         if (data.type === 'loadActivities') {
           loadActivities(data.activities);
-        } else if (data.type === 'deselectMarker' && selectedMarkerId) {
+        } 
+        else if (data.type === 'deselectMarker' && selectedMarkerId) {
           const marker = document.getElementById('marker-' + selectedMarkerId);
           if (marker) marker.classList.remove('selected');
           selectedMarkerId = null;
         }
+        else if (data.type === 'centerOnActivity') {
+  console.log('📍 Centrage sur:', data.activityId, data.latitude, data.longitude);
+  
+  // Créer l'objet activité complet
+  const activity = {
+    id: data.activityId,
+    latitude: data.latitude,
+    longitude: data.longitude,
+    nom: data.nom,
+    categorie: data.categorie,
+    adresse: data.adresse,
+    date: data.date,
+    participants: data.participants,
+    max_participants: data.max_participants,
+    image_url: data.image_url
+  };
+  
+  // Créer le marqueur s'il n'existe pas
+  if (!markers[data.activityId]) {
+    console.log('🆕 Création du marqueur pour', data.activityId);
+    createMarker(activity);
+  }
+  
+  // Centrer la carte
+  map.flyTo({
+    center: [data.longitude, data.latitude],
+    zoom: 15,
+    duration: 1500
+  });
+  
+  // Désélectionner l'ancien marqueur
+  if (selectedMarkerId && selectedMarkerId !== data.activityId) {
+    const oldMarker = document.getElementById('marker-' + selectedMarkerId);
+    if (oldMarker) oldMarker.classList.remove('selected');
+  }
+  
+  // Sélectionner le nouveau marqueur
+  const newMarker = document.getElementById('marker-' + data.activityId);
+  if (newMarker) {
+    newMarker.classList.add('selected');
+    selectedMarkerId = data.activityId;
+  }
+  
+  // ✅ AJOUT : Envoyer les données à React Native pour afficher le bottom sheet
+  sendMessage('markerClicked', { activity: activity });
+}
       } catch (e) {
-        console.error('Error:', e);
+        console.error('Erreur parsing message:', e);
       }
-    });
+    }
 
-    document.addEventListener('message', (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        
-        if (data.type === 'loadActivities') {
-          loadActivities(data.activities);
-        } else if (data.type === 'deselectMarker' && selectedMarkerId) {
-          const marker = document.getElementById('marker-' + selectedMarkerId);
-          if (marker) marker.classList.remove('selected');
-          selectedMarkerId = null;
-        }
-              if (data.type === 'centerOnActivity') {
-      console.log('📍 Centrage sur activité:', data.activityId);
-      
-      // Centrer la carte
-      map.flyTo({
-        center: [data.longitude, data.latitude],
-        zoom: 15,
-        duration: 1500
-      });
-      
-      // Sélectionner le marqueur
-      if (selectedMarkerId && selectedMarkerId !== data.activityId) {
-        const oldMarker = document.getElementById('marker-' + selectedMarkerId);
-        if (oldMarker) {
-          oldMarker.classList.remove('selected');
-        }
-      }
-      
-      const newMarker = document.getElementById('marker-' + data.activityId);
-      if (newMarker) {
-        newMarker.classList.add('selected');
-        selectedMarkerId = data.activityId;
-      }
-    }
-    
-    // Charger les activités
-    if (data.type === 'loadActivities') {
-      console.log('📍 Chargement activités:', data.activities.length);
-      data.activities.forEach(activity => {
-        if (activity.longitude && activity.latitude && !markers[activity.id]) {
-          createMarker(activity);
-        }
-      });
-    }
-      } catch (e) {
-        console.error('Error:', e);
-      }
-    });
+    // Écouter sur les deux événements (iOS et Android)
+    window.addEventListener('message', handleMessage);
+    document.addEventListener('message', handleMessage);
   </script>
 </body>
 </html>
-  `;
+`;
 
   const renderActivityCard = (activity: Activity, index: number) => {
     const spotsLeft = activity.max_participants - activity.participants;
@@ -894,14 +968,17 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   viewDetailButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-  },
+  backgroundColor: colors.primary,
+  borderRadius: 12,
+  paddingVertical: 14,
+  paddingHorizontal: 20,
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 8,
+  marginTop: 16,
+  marginBottom: Platform.OS === 'android' ? 55 : 16, // ✅ Ajout d'un espace en bas pour Android
+},
   viewDetailButtonText: {
     fontSize: 16,
     fontWeight: '600',
