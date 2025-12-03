@@ -23,6 +23,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 import { useMessages, MessageStatus, TransformedMessage } from '@/hooks/useMessaging';
 import { Keyboard } from 'react-native';
+import { messageStorageService } from '@/services/message-storage.service';
 
 type MessageType = 'text' | 'image' | 'voice' | 'system';
 
@@ -178,35 +179,62 @@ useEffect(() => {
     }
   };
 
-  const handlePickImage = async () => {
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
-      });
-      if (!result.canceled && result.assets[0]) {
-        const newMsg: Message = {
-          id: Date.now().toString(),
-          senderId: currentUserId || '',
-          senderName: currentUserName || 'Moi',
-          senderAvatar: currentUserAvatar || '',
-          imageUrl: result.assets[0].uri,
-          type: 'image',
-          timestamp: new Date().toLocaleTimeString('fr-FR', {
-            hour: '2-digit',
-            minute: '2-digit',
-          }),
-          status: 'sending',
-        };
-        setLocalMessages(prev => [...prev, newMsg]);
-      }
-    } catch (error) {
-      console.error('Error picking image:', error);
-      Alert.alert('Erreur', "Impossible d'accéder à la galerie");
+ const handlePickImage = async () => {
+  try {
+    // Demander la permission
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    
+    if (status !== 'granted') {
+      Alert.alert('Permission requise', 'Nous avons besoin de votre permission pour accéder à la galerie.');
+      return;
     }
-  };
+
+    // Ouvrir la galerie
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.8,
+    });
+
+    if (result.canceled || !result.assets || result.assets.length === 0) {
+      return;
+    }
+
+    const imageUri = result.assets[0].uri;
+    console.log('📷 Image sélectionnée:', imageUri);
+
+    if (!currentUserId || !conversationId) {
+      Alert.alert('Erreur', 'Impossible d\'envoyer l\'image.');
+      return;
+    }
+
+    // Afficher un indicateur de chargement (optionnel: ajouter un state isUploading)
+    Alert.alert('Envoi en cours', 'Votre image est en cours d\'envoi...');
+
+    // Upload l'image vers Supabase Storage
+    const uploadResult = await messageStorageService.uploadMessageImage(
+      imageUri,
+      conversationId as string,
+      currentUserId
+    );
+
+    if (!uploadResult.success || !uploadResult.url) {
+      Alert.alert('Erreur', uploadResult.error || 'Impossible d\'uploader l\'image.');
+      return;
+    }
+
+    console.log('✅ Image uploadée:', uploadResult.url);
+
+    // Envoyer le message avec l'URL de l'image
+    await sendMessage('', 'image', uploadResult.url);
+
+    console.log('✅ Message image envoyé');
+
+  } catch (error) {
+    console.error('Erreur envoi image:', error);
+    Alert.alert('Erreur', 'Impossible d\'envoyer l\'image.');
+  }
+};
 
   const handleStartRecording = async () => {
     setRecording(true);

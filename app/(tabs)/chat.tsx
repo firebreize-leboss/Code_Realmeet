@@ -1,5 +1,5 @@
 // app/(tabs)/chat.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect , useCallback} from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { useFriends, useFriendRequests, useConversations } from '@/hooks/useMessaging';
+import { useFocusEffect } from 'expo-router';
 
 interface Friend {
   id: string;
@@ -42,7 +43,7 @@ export default function ChatScreen() {
   // Obtenir les données via les hooks de messagerie
   const { pendingCount: pendingRequestsCount } = useFriendRequests();
   const { friends: friendData, loading: friendsLoading } = useFriends();
-  const { conversations, createConversation, loading: convLoading } = useConversations();
+  const { conversations, createConversation, refresh: refreshConversations, loading: convLoading } = useConversations();
 
   // État local pour stocker la liste d'amis formatée
   const [friends, setFriends] = useState<Friend[]>([]);
@@ -77,7 +78,12 @@ useEffect(() => {
   };
 
  // Dans app/(tabs)/chat.tsx, remplace la fonction renderChatItem par celle-ci :
-
+useFocusEffect(
+  useCallback(() => {
+    // Rafraîchir les conversations à chaque fois qu'on revient sur cette page
+    refreshConversations();
+  }, [refreshConversations])
+);
 const renderChatItem = (chat: Conversation) => (
   <TouchableOpacity
     key={chat.id}
