@@ -1,42 +1,41 @@
-// services/message-storage.service.ts
-// Service pour uploader les images de messages
-
 import { supabase } from '@/lib/supabase';
-import * as FileSystem from 'expo-file-system';
 import { decode } from 'base64-arraybuffer';
+import * as ImagePicker from 'expo-image-picker';
 
 class MessageStorageService {
   private bucketName = 'chat-images';
 
   /**
-   * Upload d'une image de message
+   * Upload d'une image de message - VERSION SIMPLIFIÉE
    */
-  async uploadMessageImage(uri: string, conversationId: string, userId: string): Promise<{
+  async uploadMessageImage(
+    asset: ImagePicker.ImagePickerAsset, // ✅ Recevoir l'asset complet
+    conversationId: string,
+    userId: string
+  ): Promise<{
     success: boolean;
     url?: string;
     error?: string;
   }> {
     try {
-      console.log('🔵 Upload image message - URI:', uri);
+      console.log('🔵 Upload image message');
 
-      // 1. Lire le fichier en base64
-      const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
+      // Vérifier que base64 existe
+      if (!asset.base64) {
+        throw new Error('Données base64 manquantes');
+      }
 
-      console.log('✅ Image convertie en base64, taille:', base64.length);
-
-      // 2. Générer un nom de fichier unique
-      const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
+      // Générer un nom de fichier unique
+      const fileExt = asset.uri.split('.').pop()?.toLowerCase() || 'jpg';
       const fileName = `${conversationId}/${userId}-${Date.now()}.${fileExt}`;
 
       console.log('🔵 Chemin fichier:', fileName);
 
-      // 3. Upload vers Supabase Storage
+      // Upload vers Supabase Storage
       const { data, error } = await supabase.storage
         .from(this.bucketName)
-        .upload(fileName, decode(base64), {
-          contentType: `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`,
+        .upload(fileName, decode(asset.base64), {
+          contentType: asset.mimeType || `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`,
           upsert: false,
         });
 
@@ -47,7 +46,7 @@ class MessageStorageService {
 
       console.log('✅ Upload réussi:', data);
 
-      // 4. Récupérer l'URL publique
+      // Récupérer l'URL publique
       const { data: urlData } = supabase.storage
         .from(this.bucketName)
         .getPublicUrl(data.path);

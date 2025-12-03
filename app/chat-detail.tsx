@@ -181,7 +181,6 @@ useEffect(() => {
 
  const handlePickImage = async () => {
   try {
-    // Demander la permission
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
     if (status !== 'granted') {
@@ -189,31 +188,34 @@ useEffect(() => {
       return;
     }
 
-    // Ouvrir la galerie
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       quality: 0.8,
+      base64: true, // ✅ IMPORTANT
     });
 
     if (result.canceled || !result.assets || result.assets.length === 0) {
       return;
     }
 
-    const imageUri = result.assets[0].uri;
-    console.log('📷 Image sélectionnée:', imageUri);
+    const asset = result.assets[0];
+
+    if (!asset.base64) {
+      Alert.alert('Erreur', 'Impossible de lire l\'image.');
+      return;
+    }
 
     if (!currentUserId || !conversationId) {
       Alert.alert('Erreur', 'Impossible d\'envoyer l\'image.');
       return;
     }
 
-    // Afficher un indicateur de chargement (optionnel: ajouter un state isUploading)
     Alert.alert('Envoi en cours', 'Votre image est en cours d\'envoi...');
 
-    // Upload l'image vers Supabase Storage
+    // ✅ Passer l'asset complet
     const uploadResult = await messageStorageService.uploadMessageImage(
-      imageUri,
+      asset,
       conversationId as string,
       currentUserId
     );
@@ -223,12 +225,7 @@ useEffect(() => {
       return;
     }
 
-    console.log('✅ Image uploadée:', uploadResult.url);
-
-    // Envoyer le message avec l'URL de l'image
     await sendMessage('', 'image', uploadResult.url);
-
-    console.log('✅ Message image envoyé');
 
   } catch (error) {
     console.error('Erreur envoi image:', error);
