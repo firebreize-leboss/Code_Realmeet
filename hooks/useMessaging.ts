@@ -213,6 +213,10 @@ export function useFriendRequests() {
 // HOOK POUR LES CONVERSATIONS (MIS À JOUR POUR LES GROUPES D'ACTIVITÉ)
 // ============================================
 
+// ============================================
+// HOOK POUR LES CONVERSATIONS (MIS À JOUR POUR LES GROUPES D'ACTIVITÉ + UNREAD COUNT)
+// ============================================
+
 export function useConversations() {
   const [conversations, setConversations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -229,11 +233,13 @@ export function useConversations() {
         return;
       }
 
-      // Récupérer les conversations où l'utilisateur participe
+      const userId = currentUser.user.id;
+
+      // Récupérer les conversations où l'utilisateur participe AVEC last_read_at
       const { data: participantData, error: participantError } = await supabase
         .from('conversation_participants')
-        .select('conversation_id')
-        .eq('user_id', currentUser.user.id);
+        .select('conversation_id, last_read_at')
+        .eq('user_id', userId);
 
       if (participantError) throw participantError;
 
@@ -245,7 +251,13 @@ export function useConversations() {
         return;
       }
 
-      // Récupérer les conversations AVEC les nouvelles colonnes (name, image_url, is_group, activity_id)
+      // Créer un map de last_read_at par conversation
+      const lastReadMap: Record<string, string | null> = {};
+      participantData?.forEach(p => {
+        lastReadMap[p.conversation_id] = p.last_read_at;
+      });
+
+      // Récupérer les conversations
       const { data, error } = await supabase
         .from('conversations')
         .select(`
@@ -267,7 +279,7 @@ export function useConversations() {
       // Récupérer les derniers messages pour chaque conversation
       const { data: lastMessages } = await supabase
         .from('messages')
-        .select('conversation_id, content, message_type, created_at')
+        .select('conversation_id, content, message_type, created_at, sender_id')
         .in('conversation_id', conversationIds)
         .order('created_at', { ascending: false });
 
@@ -279,10 +291,30 @@ export function useConversations() {
         }
       });
 
+      // Compter les messages non lus pour chaque conversation
+      const unreadCounts: Record<string, number> = {};
+      for (const convId of conversationIds) {
+        const lastReadAt = lastReadMap[convId];
+        
+        let query = supabase
+          .from('messages')
+          .select('id', { count: 'exact', head: true })
+          .eq('conversation_id', convId)
+          .neq('sender_id', userId) // Ne pas compter ses propres messages
+          .neq('message_type', 'system'); // Ne pas compter les messages système
+        
+        if (lastReadAt) {
+          query = query.gt('created_at', lastReadAt);
+        }
+        
+        const { count } = await query;
+        unreadCounts[convId] = count || 0;
+      }
+
       const transformedConversations = data?.map(conv => {
         const participants = conv.conversation_participants as any[];
         const otherParticipant = participants.find(
-          p => p.user_id !== currentUser.user?.id
+          p => p.user_id !== userId
         );
 
         const lastMsg = lastMessageByConv[conv.id];
@@ -294,6 +326,8 @@ export function useConversations() {
             lastMessageText = '📷 Photo';
           } else if (lastMsg.message_type === 'voice') {
             lastMessageText = '🎤 Message vocal';
+          } else if (lastMsg.message_type === 'system') {
+            lastMessageText = lastMsg.content || '';
           } else {
             lastMessageText = lastMsg.content || '';
           }
@@ -317,31 +351,19 @@ export function useConversations() {
           }
         }
 
-        // === LOGIQUE IMPORTANTE ===
-        // Si c'est un groupe d'activité (is_group = true ET activity_id existe),
-        // utiliser le nom et l'image de la conversation (= nom et image de l'activité)
-        // Sinon, utiliser le nom et l'avatar de l'autre participant
-        
-        const isActivityGroup = conv.is_group === true && conv.activity_id !== null;
-        const isRegularGroup = conv.is_group === true && conv.activity_id === null;
-        const isPrivateChat = !conv.is_group || participants.length === 2;
+        // Déterminer le type de conversation
+        const isActivityGroup = conv.is_group === true && (conv.activity_id !== null || conv.slot_id !== null);
+        const isRegularGroup = conv.is_group === true && conv.activity_id === null && conv.slot_id === null;
 
         let displayName: string;
         let displayImage: string;
         let isGroup: boolean;
 
-        if (isActivityGroup) {
-          // Groupe d'activité : utiliser nom et image de l'activité
-          displayName = conv.name || 'Groupe';
-          displayImage = conv.image_url || '';
-          isGroup = true;
-        } else if (isRegularGroup) {
-          // Groupe régulier (pas d'activité)
+        if (isActivityGroup || isRegularGroup) {
           displayName = conv.name || 'Groupe';
           displayImage = conv.image_url || '';
           isGroup = true;
         } else {
-          // Conversation privée : utiliser l'autre participant
           displayName = otherParticipant?.profiles?.full_name || 'Inconnu';
           displayImage = otherParticipant?.profiles?.avatar_url || '';
           isGroup = false;
@@ -355,8 +377,10 @@ export function useConversations() {
           lastMessageTime: lastMessageTime,
           isGroup: isGroup,
           activityId: conv.activity_id || null,
+          slotId: conv.slot_id || null,
           participantCount: participants.length,
           updated_at: conv.updated_at,
+          unreadCount: unreadCounts[conv.id] || 0,
         };
       }) || [];
 
@@ -366,6 +390,31 @@ export function useConversations() {
       setError(err as Error);
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  // Marquer une conversation comme lue
+  const markAsRead = useCallback(async (conversationId: string) => {
+    try {
+      const { data: currentUser } = await supabase.auth.getUser();
+      if (!currentUser?.user?.id) return;
+
+      await supabase
+        .from('conversation_participants')
+        .update({ last_read_at: new Date().toISOString() })
+        .eq('conversation_id', conversationId)
+        .eq('user_id', currentUser.user.id);
+
+      // Mettre à jour l'état local
+      setConversations(prev => 
+        prev.map(conv => 
+          conv.id === conversationId 
+            ? { ...conv, unreadCount: 0 } 
+            : conv
+        )
+      );
+    } catch (error) {
+      console.error('Error marking as read:', error);
     }
   }, []);
 
@@ -460,16 +509,16 @@ export function useConversations() {
       const { data: conversation, error: convError } = await supabase
         .from('conversations')
         .insert({
-          is_group: false, // Conversation privée
+          is_group: false,
         })
         .select()
         .single();
 
       if (convError) throw convError;
 
-      const participants = [currentUser.user.id, ...participantIds].map(userId => ({
+      const participants = [currentUser.user.id, ...participantIds].map(odUserId => ({
         conversation_id: conversation.id,
-        user_id: userId,
+        user_id: odUserId,
       }));
 
       const { error: partError } = await supabase
@@ -491,6 +540,7 @@ export function useConversations() {
     loading,
     error,
     createConversation,
+    markAsRead,
     refresh: loadConversations,
   };
 }

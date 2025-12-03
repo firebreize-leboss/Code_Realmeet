@@ -76,41 +76,48 @@ useEffect(() => {
     }
   };
 
-  const renderChatItem = (chat: Conversation) => (
-    <TouchableOpacity
-      key={chat.id}
-      style={styles.chatItem}
-      onPress={() => router.push(`/chat-detail?id=${chat.id}`)}
-      activeOpacity={0.8}
-    >
-      <View style={styles.chatImageContainer}>
-        <Image source={{ uri: chat.image }} style={styles.chatImage} />
-        {chat.isGroup && (
-          <View style={styles.groupBadge}>
-            <IconSymbol name="person.2.fill" size={12} color={colors.background} />
+ // Dans app/(tabs)/chat.tsx, remplace la fonction renderChatItem par celle-ci :
+
+const renderChatItem = (chat: Conversation) => (
+  <TouchableOpacity
+    key={chat.id}
+    style={styles.chatItem}
+    onPress={() => router.push(`/chat-detail?id=${chat.id}`)}
+    activeOpacity={0.8}
+  >
+    <View style={styles.chatImageContainer}>
+      <Image 
+        source={{ uri: chat.image || 'https://via.placeholder.com/56' }} 
+        style={styles.chatImage} 
+      />
+      {chat.isGroup && (
+        <View style={styles.groupBadge}>
+          <IconSymbol name="person.2.fill" size={12} color={colors.background} />
+        </View>
+      )}
+    </View>
+    <View style={styles.chatInfo}>
+      <View style={styles.chatHeader}>
+        <Text style={styles.chatName} numberOfLines={1}>
+          {chat.name}
+        </Text>
+        <Text style={styles.chatTime}>{chat.lastMessageTime}</Text>
+      </View>
+      <View style={styles.lastMessageRow}>
+        <Text style={styles.lastMessage} numberOfLines={1}>
+          {chat.lastMessage || 'Commencez une conversation...'}
+        </Text>
+        {chat.unreadCount !== undefined && chat.unreadCount > 0 && (
+          <View style={styles.unreadBadge}>
+            <Text style={styles.unreadText}>
+              {chat.unreadCount > 99 ? '99+' : chat.unreadCount}
+            </Text>
           </View>
         )}
       </View>
-      <View style={styles.chatInfo}>
-        <View style={styles.chatHeader}>
-          <Text style={styles.chatName} numberOfLines={1}>
-            {chat.name}
-          </Text>
-          <Text style={styles.chatTime}>{chat.lastMessageTime}</Text>
-        </View>
-        <View style={styles.lastMessageRow}>
-          <Text style={styles.lastMessage} numberOfLines={2}>
-            {chat.lastMessage || 'Commencez une conversation...'}
-          </Text>
-          {chat.unreadCount && chat.unreadCount > 0 && (
-            <View style={styles.unreadBadge}>
-              <Text style={styles.unreadText}>{chat.unreadCount}</Text>
-            </View>
-          )}
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
+    </View>
+  </TouchableOpacity>
+);
 
   const renderFriendItem = ({ item }: { item: Friend }) => (
     <TouchableOpacity

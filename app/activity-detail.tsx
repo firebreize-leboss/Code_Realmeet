@@ -15,6 +15,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
+import ActivityCalendar from '@/components/ActivityCalendar';
 
 interface ActivityDetail {
   id: string;
@@ -49,6 +50,7 @@ export default function ActivityDetailScreen() {
   const [isJoined, setIsJoined] = useState(false);
   const [joiningInProgress, setJoiningInProgress] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<{id: string; date: string; time: string} | null>(null);
 
   useEffect(() => {
     loadActivity();
@@ -158,8 +160,8 @@ export default function ActivityDetailScreen() {
     }
   };
 
-  // Fonction pour créer ou rejoindre le groupe de conversation de l'activité
-  const handleActivityGroup = async (activityId: string, activityTitle: string, activityImage: string) => {
+  // Fonction pour créer ou rejoindre le groupe de conversation du CRÉNEAU
+  const handleSlotGroup = async (slotId: string, activityTitle: string, activityImage: string, slotDate: string, slotTime: string) => {
     if (!currentUserId) return;
 
     try {
@@ -171,11 +173,21 @@ export default function ActivityDetailScreen() {
         .single();
       const userName = userProfile?.full_name || 'Un utilisateur';
 
-      // Vérifier s'il existe déjà une conversation de groupe pour cette activité
-      const { data: existingConv, error: fetchError } = await supabase
+      // Formater la date pour le nom du groupe
+      const dateObj = new Date(slotDate);
+      const formattedDate = dateObj.toLocaleDateString('fr-FR', { 
+        weekday: 'short', 
+        day: 'numeric', 
+        month: 'short' 
+      });
+      const formattedTime = slotTime.replace(':', 'h');
+      const groupName = `${activityTitle} - ${formattedDate} ${formattedTime}`;
+
+      // Vérifier s'il existe déjà une conversation pour CE CRÉNEAU
+      const { data: existingConv } = await supabase
         .from('conversations')
         .select('id')
-        .eq('activity_id', activityId)
+        .eq('slot_id', slotId)
         .maybeSingle();
 
       if (existingConv) {
@@ -196,28 +208,24 @@ export default function ActivityDetailScreen() {
               user_id: currentUserId,
             });
           
-          // Envoyer un message système pour annoncer l'arrivée
+          // Envoyer un message système
           await sendSystemMessage(existingConv.id, `${userName} a rejoint le groupe`);
-          
-          console.log('✅ Utilisateur ajouté au groupe existant:', activityTitle);
+          console.log('✅ Utilisateur ajouté au groupe du créneau');
         }
       } else {
-        // Pas de conversation existante - Compter les participants actuels
+        // Compter les participants pour ce créneau
         const { count } = await supabase
-          .from('activity_participants')
+          .from('slot_participants')
           .select('*', { count: 'exact', head: true })
-          .eq('activity_id', activityId);
-
-        console.log('📊 Nombre de participants:', count);
+          .eq('slot_id', slotId);
 
         // Créer le groupe seulement si >= 2 participants
         if (count && count >= 2) {
-          // Créer une nouvelle conversation de GROUPE pour l'activité
           const { data: newConv, error: convError } = await supabase
             .from('conversations')
             .insert({
-              activity_id: activityId,
-              name: activityTitle,
+              slot_id: slotId,
+              name: groupName,
               image_url: activityImage,
               is_group: true,
             })
@@ -229,47 +237,38 @@ export default function ActivityDetailScreen() {
             throw convError;
           }
 
-          console.log('✅ Conversation de groupe créée:', newConv.id);
-
-          // Récupérer tous les participants de l'activité
+          // Récupérer tous les participants du créneau
           const { data: allParticipants } = await supabase
-            .from('activity_participants')
+            .from('slot_participants')
             .select('user_id')
-            .eq('activity_id', activityId);
+            .eq('slot_id', slotId);
 
           if (allParticipants && newConv) {
-            // Ajouter TOUS les participants à la conversation de groupe
             const participantsToInsert = allParticipants.map(p => ({
               conversation_id: newConv.id,
               user_id: p.user_id,
             }));
 
-            const { error: partError } = await supabase
+            await supabase
               .from('conversation_participants')
               .insert(participantsToInsert);
 
-            if (partError) {
-              console.error('❌ Erreur ajout participants:', partError);
-            } else {
-              console.log('✅ Groupe "' + activityTitle + '" créé avec', allParticipants.length, 'participants');
-              
-              // Envoyer un message système de bienvenue
-              await sendSystemMessage(newConv.id, `Groupe créé pour l'activité "${activityTitle}"`);
-            }
+            // Message système de bienvenue
+            await sendSystemMessage(newConv.id, `Groupe créé pour "${groupName}"`);
+            console.log('✅ Groupe créé pour le créneau:', groupName);
           }
         }
       }
     } catch (error) {
-      console.error('Erreur gestion groupe activité:', error);
+      console.error('Erreur gestion groupe créneau:', error);
     }
   };
 
-  // Fonction pour retirer l'utilisateur du groupe
-  const handleLeaveActivityGroup = async (activityId: string) => {
+  // Fonction pour retirer l'utilisateur du groupe du créneau
+  const handleLeaveSlotGroup = async (slotId: string) => {
     if (!currentUserId) return;
 
     try {
-      // Récupérer le nom de l'utilisateur actuel
       const { data: userProfile } = await supabase
         .from('profiles')
         .select('full_name')
@@ -277,48 +276,47 @@ export default function ActivityDetailScreen() {
         .single();
       const userName = userProfile?.full_name || 'Un utilisateur';
 
-      // Trouver la conversation de groupe de cette activité
+      // Trouver la conversation du créneau
       const { data: conv } = await supabase
         .from('conversations')
         .select('id')
-        .eq('activity_id', activityId)
+        .eq('slot_id', slotId)
         .maybeSingle();
 
       if (conv) {
-        // Envoyer un message système AVANT de quitter
         await sendSystemMessage(conv.id, `${userName} a quitté le groupe`);
 
-        // Retirer l'utilisateur du groupe
         await supabase
           .from('conversation_participants')
           .delete()
           .eq('conversation_id', conv.id)
           .eq('user_id', currentUserId);
 
-        console.log('✅ Utilisateur retiré du groupe');
-
-        // Vérifier combien de participants restent
         const { count } = await supabase
           .from('conversation_participants')
           .select('*', { count: 'exact', head: true })
           .eq('conversation_id', conv.id);
 
-        // Si moins de 2 participants, supprimer la conversation
         if (count !== null && count < 2) {
           await supabase
             .from('conversations')
             .delete()
             .eq('id', conv.id);
-          console.log('🗑️ Groupe supprimé (moins de 2 participants)');
         }
       }
     } catch (error) {
-      console.error('Erreur retrait du groupe:', error);
+      console.error('Erreur retrait du groupe créneau:', error);
     }
   };
 
   const handleJoinLeave = async () => {
     if (!activity || !currentUserId || joiningInProgress) return;
+
+    // Si on rejoint, vérifier qu'un créneau est sélectionné
+    if (!isJoined && !selectedSlot) {
+      Alert.alert('Sélectionnez un créneau', 'Veuillez choisir une date et un horaire avant de rejoindre.');
+      return;
+    }
 
     setJoiningInProgress(true);
 
@@ -326,27 +324,35 @@ export default function ActivityDetailScreen() {
       if (isJoined) {
         // === SE DÉSINSCRIRE ===
         
-        // 1. Supprimer de activity_participants
-        const { error: deleteError } = await supabase
-          .from('activity_participants')
-          .delete()
+        // Récupérer le slot_id de l'inscription actuelle
+        const { data: currentParticipation } = await supabase
+          .from('slot_participants')
+          .select('slot_id')
           .eq('activity_id', activity.id)
-          .eq('user_id', currentUserId);
+          .eq('user_id', currentUserId)
+          .maybeSingle();
 
-        if (deleteError) throw deleteError;
+        if (currentParticipation?.slot_id) {
+          // Supprimer de slot_participants
+          await supabase
+            .from('slot_participants')
+            .delete()
+            .eq('activity_id', activity.id)
+            .eq('user_id', currentUserId);
 
-        // 2. Mettre à jour le compteur dans activities
+          // Retirer du groupe du créneau
+          await handleLeaveSlotGroup(currentParticipation.slot_id);
+        }
+
+        // Mettre à jour le compteur dans activities
         const newCount = Math.max(0, activity.participants - 1);
         await supabase
           .from('activities')
           .update({ participants: newCount })
           .eq('id', activity.id);
 
-        // 3. Retirer du groupe de conversation
-        await handleLeaveActivityGroup(activity.id);
-
-        // 4. Mettre à jour l'UI
         setIsJoined(false);
+        setSelectedSlot(null);
         setActivity({
           ...activity,
           participants: newCount,
@@ -358,22 +364,23 @@ export default function ActivityDetailScreen() {
       } else {
         // === REJOINDRE ===
         
-        // Vérifier les places disponibles
+        if (!selectedSlot) return;
+
         if (activity.placesRestantes <= 0) {
           Alert.alert('Complet', 'Cette activité est complète.');
           return;
         }
 
-        // 1. Ajouter dans activity_participants
+        // Ajouter dans slot_participants (table liée au créneau)
         const { error: insertError } = await supabase
-          .from('activity_participants')
+          .from('slot_participants')
           .insert({
+            slot_id: selectedSlot.id,
             activity_id: activity.id,
             user_id: currentUserId,
           });
 
         if (insertError) {
-          // Vérifier si c'est une erreur de doublon
           if (insertError.code === '23505') {
             Alert.alert('Info', 'Vous êtes déjà inscrit à cette activité.');
             setIsJoined(true);
@@ -382,17 +389,22 @@ export default function ActivityDetailScreen() {
           throw insertError;
         }
 
-        // 2. Mettre à jour le compteur dans activities
+        // Mettre à jour le compteur dans activities
         const newCount = activity.participants + 1;
         await supabase
           .from('activities')
           .update({ participants: newCount })
           .eq('id', activity.id);
 
-        // 3. Gérer le groupe de conversation (créer si >= 2 participants)
-        await handleActivityGroup(activity.id, activity.title, activity.image);
+        // Gérer le groupe de conversation du CRÉNEAU
+        await handleSlotGroup(
+          selectedSlot.id, 
+          activity.title, 
+          activity.image, 
+          selectedSlot.date, 
+          selectedSlot.time
+        );
 
-        // 4. Mettre à jour l'UI
         setIsJoined(true);
         setActivity({
           ...activity,
@@ -538,18 +550,13 @@ export default function ActivityDetailScreen() {
             </TouchableOpacity>
           </View>
 
-          {activity.nextDates.length > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Prochaines dates</Text>
-              <View style={styles.datesContainer}>
-                {activity.nextDates.map((date: string, index: number) => (
-                  <View key={index} style={styles.dateChip}>
-                    <Text style={styles.dateChipText}>{date}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
+          {/* Calendrier des créneaux */}
+          <View style={styles.section}>
+            <ActivityCalendar 
+              activityId={activity.id} 
+              onSlotSelect={(slot) => setSelectedSlot(slot)}
+            />
+          </View>
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>À propos</Text>
@@ -615,19 +622,25 @@ export default function ActivityDetailScreen() {
             style={[
               styles.actionButton,
               isJoined && styles.actionButtonLeave,
+              !isJoined && !selectedSlot && styles.actionButtonDisabled,
               isFull && !isJoined && styles.actionButtonDisabled,
             ]}
             onPress={handleJoinLeave}
-            disabled={(isFull && !isJoined) || joiningInProgress}
+            disabled={(!isJoined && !selectedSlot) || (isFull && !isJoined) || joiningInProgress}
           >
             {joiningInProgress ? (
               <ActivityIndicator size="small" color={colors.background} />
             ) : (
-              <Text style={styles.actionButtonText}>
+              <Text style={[
+                styles.actionButtonText,
+                !isJoined && !selectedSlot && styles.actionButtonTextDisabled,
+              ]}>
                 {isFull && !isJoined
                   ? 'Complet'
                   : isJoined
                   ? 'Se désinscrire'
+                  : !selectedSlot
+                  ? 'Sélectionnez un horaire'
                   : 'Rejoindre'}
               </Text>
             )}
@@ -879,6 +892,9 @@ const styles = StyleSheet.create({
     color: colors.background,
     fontSize: 16,
     fontWeight: '700',
+  },
+  actionButtonTextDisabled: {
+    color: colors.background + '99',
   },
   loadingContainer: {
     flex: 1,

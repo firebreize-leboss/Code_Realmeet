@@ -45,6 +45,7 @@ export default function ChatDetailScreen() {
   const [localMessages, setLocalMessages] = useState<Message[]>([]);
   const [otherUserId, setOtherUserId] = useState<string | null>(null);
   const [activityId, setActivityId] = useState<string | null>(null);
+  
 
   const { messages, loading: messagesLoading, sendMessage } = useMessages(conversationId as string);
 
@@ -72,12 +73,24 @@ useEffect(() => {
       }
 
       if (conversationId) {
+        // ✅ MARQUER LA CONVERSATION COMME LUE
+        if (currentUser) {
+          await supabase
+            .from('conversation_participants')
+            .update({ last_read_at: new Date().toISOString() })
+            .eq('conversation_id', conversationId)
+            .eq('user_id', currentUser.id);
+        }
+
         // Récupérer les infos de la conversation (incluant les nouvelles colonnes)
         const { data: convData } = await supabase
           .from('conversations')
-          .select('name, image_url, is_group, activity_id')
+          .select('name, image_url, is_group, activity_id, slot_id')
           .eq('id', conversationId)
           .single();
+
+        // Stocker l'activityId pour la navigation
+        setActivityId(convData?.activity_id || null);
 
         // Récupérer les participants
         const { data: participants } = await supabase
@@ -86,7 +99,7 @@ useEffect(() => {
           .eq('conversation_id', conversationId);
 
         if (participants && currentUser) {
-          const isActivityGroup = convData?.is_group === true && convData?.activity_id !== null;
+          const isActivityGroup = convData?.is_group === true && (convData?.activity_id !== null || convData?.slot_id !== null);
           
           if (isActivityGroup) {
             // === GROUPE D'ACTIVITÉ ===
@@ -265,7 +278,7 @@ useEffect(() => {
     }
   };
 
-  const renderMessage = (msg: Message) => {
+const renderMessage = (msg: Message) => {
   const isOwnMessage = msg.senderId === currentUserId;
   const isFailed = msg.status === 'failed';
 
