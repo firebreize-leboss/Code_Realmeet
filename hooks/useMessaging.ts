@@ -1,7 +1,7 @@
 // hooks/useMessaging.ts
 // Hooks personnalisés pour le système de messagerie avec système de statut
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 
 // ============================================
@@ -221,6 +221,8 @@ export function useConversations() {
   const [conversations, setConversations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [userConversationIds, setUserConversationIds] = useState<string[]>([]);
+  const channelRef = useRef<any>(null);
 
   const loadConversations = useCallback(async () => {
     try {
@@ -229,6 +231,7 @@ export function useConversations() {
 
       if (!currentUser?.user?.id) {
         setConversations([]);
+        setUserConversationIds([]);
         setLoading(false);
         return;
       }
@@ -244,6 +247,9 @@ export function useConversations() {
       if (participantError) throw participantError;
 
       const conversationIds = participantData?.map(p => p.conversation_id) || [];
+      
+      // ✅ STOCKER LES IDs pour le filtre realtime
+      setUserConversationIds(conversationIds);
 
       if (conversationIds.length === 0) {
         setConversations([]);
@@ -300,8 +306,8 @@ export function useConversations() {
           .from('messages')
           .select('id', { count: 'exact', head: true })
           .eq('conversation_id', convId)
-          .neq('sender_id', userId) // Ne pas compter ses propres messages
-          .neq('message_type', 'system'); // Ne pas compter les messages système
+          .neq('sender_id', userId)
+          .neq('message_type', 'system');
         
         if (lastReadAt) {
           query = query.gt('created_at', lastReadAt);
@@ -418,12 +424,90 @@ export function useConversations() {
     }
   }, []);
 
+  // ✅ MISE À JOUR OPTIMISTE LOCALE quand un nouveau message arrive
+  const handleNewMessage = useCallback(async (payload: any) => {
+    const newMsg = payload.new;
+    const convId = newMsg.conversation_id;
+    
+    console.log('🔔 Nouveau message reçu pour conversation:', convId);
+
+    // Récupérer l'utilisateur actuel
+    const { data: currentUser } = await supabase.auth.getUser();
+    const userId = currentUser?.user?.id;
+
+    // Formater le texte du message
+    let lastMessageText = '';
+    if (newMsg.message_type === 'image') {
+      lastMessageText = '📷 Photo';
+    } else if (newMsg.message_type === 'voice') {
+      lastMessageText = '🎤 Message vocal';
+    } else if (newMsg.message_type === 'system') {
+      lastMessageText = newMsg.content || '';
+    } else {
+      lastMessageText = newMsg.content || '';
+    }
+
+    // Formater l'heure
+    const msgDate = new Date(newMsg.created_at);
+    const lastMessageTime = msgDate.toLocaleTimeString('fr-FR', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+
+    // ✅ MISE À JOUR OPTIMISTE de l'état local
+    setConversations(prev => {
+      const existingIndex = prev.findIndex(c => c.id === convId);
+      
+      if (existingIndex === -1) {
+        // Nouvelle conversation, recharger complètement
+        loadConversations();
+        return prev;
+      }
+
+      const updatedConv = {
+        ...prev[existingIndex],
+        lastMessage: lastMessageText,
+        lastMessageTime: lastMessageTime,
+        updated_at: newMsg.created_at,
+        // Incrémenter unreadCount si ce n'est pas notre message
+        unreadCount: newMsg.sender_id !== userId 
+          ? (prev[existingIndex].unreadCount || 0) + 1 
+          : prev[existingIndex].unreadCount,
+      };
+
+      // Retirer la conversation de sa position actuelle
+      const newList = prev.filter(c => c.id !== convId);
+      
+      // La remettre en premier (plus récente)
+      return [updatedConv, ...newList];
+    });
+  }, [loadConversations]);
+
   useEffect(() => {
     loadConversations();
+  }, [loadConversations]);
 
-    // S'abonner aux nouveaux messages pour rafraîchir la liste
+  // ✅ SUBSCRIPTION REALTIME SÉPARÉE avec mise à jour quand userConversationIds change
+  useEffect(() => {
+    // Nettoyer l'ancien channel si existant
+    if (channelRef.current) {
+      console.log('🔌 Nettoyage ancien channel conversations');
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+
+    // Si pas de conversations, pas besoin de subscription
+    if (userConversationIds.length === 0) {
+      console.log('📭 Aucune conversation, pas de subscription');
+      return;
+    }
+
+    console.log('📡 Configuration subscription pour', userConversationIds.length, 'conversations');
+
+    // Créer un nouveau channel avec un nom unique
+    const channelName = `user_conversations_${Date.now()}`;
     const channel = supabase
-      .channel('conversations_updates')
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
@@ -431,8 +515,14 @@ export function useConversations() {
           schema: 'public',
           table: 'messages',
         },
-        () => {
-          loadConversations();
+        (payload: any) => {
+          // ✅ FILTRER côté client pour ne traiter que nos conversations
+          if (userConversationIds.includes(payload.new.conversation_id)) {
+            console.log('✅ Message dans une de nos conversations');
+            handleNewMessage(payload);
+          } else {
+            console.log('⏭️ Message ignoré (pas notre conversation)');
+          }
         }
       )
       .on(
@@ -442,16 +532,28 @@ export function useConversations() {
           schema: 'public',
           table: 'conversations',
         },
-        () => {
-          loadConversations();
+        (payload: any) => {
+          // Vérifier si c'est une de nos conversations
+          if (payload.new && userConversationIds.includes(payload.new.id)) {
+            console.log('🔄 Mise à jour conversation détectée');
+            loadConversations();
+          }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('📡 Subscription conversations status:', status);
+      });
+
+    channelRef.current = channel;
 
     return () => {
-      supabase.removeChannel(channel);
+      if (channelRef.current) {
+        console.log('🔌 Cleanup subscription conversations');
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
     };
-  }, [loadConversations]);
+  }, [userConversationIds, handleNewMessage, loadConversations]);
 
   const createConversation = async (participantIds: string[]) => {
     try {
