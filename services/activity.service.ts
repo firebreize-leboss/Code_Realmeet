@@ -4,7 +4,8 @@ export interface CreateActivityData {
   nom: string;
   titre?: string;
   description: string;
-  categorie: string;
+  categorie: string;        // Catégorie principale
+  categorie2?: string;       // Catégorie secondaire (optionnelle)
   date: string;
   time_start: string;
   time_end?: string;
@@ -41,6 +42,7 @@ class ActivityService {
           titre: activityData.titre,
           description: activityData.description,
           categorie: activityData.categorie,
+          categorie2: activityData.categorie2,
           date: activityData.date,
           time_start: activityData.time_start,
           time_end: activityData.time_end,
@@ -177,6 +179,30 @@ class ActivityService {
     }
   }
 
+    async getActivitiesByCategory(categoryId: string) {
+    try {
+      const { data, error } = await supabase
+        .from('activities')
+        .select('*')
+        .eq('status', 'active')
+        .or(`categorie.eq.${categoryId},categorie2.eq.${categoryId}`)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      return {
+        success: true,
+        data: data || [],
+      };
+    } catch (error: any) {
+      console.error('Erreur récupération activités par catégorie:', error);
+      return {
+        success: false,
+        error: error.message,
+        data: [],
+      };
+    }
+  }
   /**
    * Quitter une activité
    */
@@ -217,5 +243,5 @@ class ActivityService {
     }
   }
 }
-
+  
 export const activityService = new ActivityService();

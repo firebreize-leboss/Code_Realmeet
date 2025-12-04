@@ -190,18 +190,7 @@ export const mockChats: Chat[] = [
   },
 ];
 
-export const mockCategories: Category[] = [
-  { id: '1', name: 'Hiking', icon: 'figure.hiking', color: '#27AE60' },
-  { id: '2', name: 'Brunch', icon: 'cup.and.saucer.fill', color: '#F39C12' },
-  { id: '3', name: 'Music', icon: 'music.note', color: '#9B59B6' },
-  { id: '4', name: 'Cinema', icon: 'film.fill', color: '#E74C3C' },
-  { id: '5', name: 'Games', icon: 'gamecontroller.fill', color: '#3498DB' },
-  { id: '6', name: 'Fitness', icon: 'figure.run', color: '#2ECC71' },
-  { id: '7', name: 'Food', icon: 'fork.knife', color: '#E67E22' },
-  { id: '8', name: 'Art', icon: 'paintpalette.fill', color: '#1ABC9C' },
-];
-// data/mockData.ts
-// Ajoutez cette nouvelle activité dans le tableau mockActivities
+
 
 export const laserQuestActivity = {
   id: 'laser-quest-1',

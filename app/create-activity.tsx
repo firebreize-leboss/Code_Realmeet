@@ -1,32 +1,35 @@
-import React, { useState, useEffect } from 'react';
+// app/create-activity.tsx
+import React, { useState } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
-  ScrollView,
   TextInput,
   TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  Image,
   Alert,
   ActivityIndicator,
-  Image,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { activityService } from '@/services/activity.service';
-import { geocodingService } from '@/services/geocoding.service';
-import { activityStorageService } from '@/services/activity-storage.service';
-import { supabase } from '@/lib/supabase';
+import { storageService } from '@/services/storage.service';
+import { PREDEFINED_CATEGORIES } from '@/constants/categories';
 
 export default function CreateActivityScreen() {
   const router = useRouter();
-  
+
   // États du formulaire
   const [nom, setNom] = useState('');
   const [titre, setTitre] = useState('');
   const [description, setDescription] = useState('');
   const [categorie, setCategorie] = useState('');
+  const [categorie2, setCategorie2] = useState('');
   const [date, setDate] = useState('');
   const [timeStart, setTimeStart] = useState('');
   const [timeEnd, setTimeEnd] = useState('');
@@ -34,238 +37,130 @@ export default function CreateActivityScreen() {
   const [ville, setVille] = useState('');
   const [codePostal, setCodePostal] = useState('');
   const [maxParticipants, setMaxParticipants] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
-  const [imageUri, setImageUri] = useState(''); // URI locale de l'image
+  const [prix, setPrix] = useState('');
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
-  const [prix, setPrix] = useState('');
+  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [imageUrl, setImageUrl] = useState('');
+
+  // États pour le système de catégories
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [selectingCategory, setSelectingCategory] = useState<1 | 2>(1);
+
   const [loading, setLoading] = useState(false);
-  const [geocoding, setGeocoding] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [geocoding, setGeocoding] = useState(false);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
 
-  // Géocodage automatique quand adresse et ville sont remplis
-  useEffect(() => {
-    // Attendre que l'utilisateur ait fini de taper (debounce)
-    const timer = setTimeout(() => {
-      if (adresse.trim() && ville.trim() && !latitude && !longitude && !geocoding) {
-        handleGeocodeAddress();
-      }
-    }, 1500); // Attendre 1.5s après la dernière frappe
-
-    return () => clearTimeout(timer);
-  }, [adresse, ville]);
-
-  // Sélectionner une image depuis la galerie
-  const handlePickImage = async () => {
-    const result = await activityStorageService.pickImage();
-    if (result.success && result.uri) {
-      setImageUri(result.uri);
-    } else if (result.error && result.error !== 'Sélection annulée') {
-      Alert.alert('Erreur', result.error);
-    }
+  // Fonction pour obtenir la couleur d'une catégorie
+  const getCategoryColor = (categoryName: string): string => {
+    const category = PREDEFINED_CATEGORIES.find(cat => cat.name === categoryName);
+    return category?.color || colors.primary;
   };
 
-  // Prendre une photo avec la caméra
-  const handleTakePhoto = async () => {
-    const result = await activityStorageService.takePhoto();
-    if (result.success && result.uri) {
-      setImageUri(result.uri);
-    } else if (result.error && result.error !== 'Capture annulée') {
-      Alert.alert('Erreur', result.error);
-    }
-  };
-
-  // Afficher le menu de sélection d'image
-  const handleImageSelection = () => {
-    Alert.alert(
-      'Ajouter une photo',
-      'Choisissez une option',
-      [
-        {
-          text: 'Galerie',
-          onPress: handlePickImage,
-        },
-        {
-          text: 'Appareil photo',
-          onPress: handleTakePhoto,
-        },
-        {
-          text: 'Annuler',
-          style: 'cancel',
-        },
-      ],
-      { cancelable: true }
-    );
-  };
-
-  // Validation des champs
-  const validateFields = (): boolean => {
-    if (!nom.trim()) {
-      Alert.alert('Erreur', 'Le nom est requis');
-      return false;
-    }
-    if (!description.trim()) {
-      Alert.alert('Erreur', 'La description est requise');
-      return false;
-    }
-    if (!categorie.trim()) {
-      Alert.alert('Erreur', 'La catégorie est requise');
-      return false;
-    }
-    if (!date.trim()) {
-      Alert.alert('Erreur', 'La date est requise (format: YYYY-MM-DD)');
-      return false;
-    }
-    // Validation du format de date
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!dateRegex.test(date)) {
-      Alert.alert('Erreur', 'Format de date invalide. Utilisez: YYYY-MM-DD');
-      return false;
-    }
-    if (!timeStart.trim()) {
-      Alert.alert('Erreur', 'L\'heure de début est requise (format: HH:MM)');
-      return false;
-    }
-    // Validation du format d'heure
-    const timeRegex = /^\d{2}:\d{2}$/;
-    if (!timeRegex.test(timeStart)) {
-      Alert.alert('Erreur', 'Format d\'heure invalide. Utilisez: HH:MM (ex: 14:30)');
-      return false;
-    }
-    if (timeEnd && !timeRegex.test(timeEnd)) {
-      Alert.alert('Erreur', 'Format d\'heure de fin invalide. Utilisez: HH:MM');
-      return false;
-    }
-    if (!adresse.trim()) {
-      Alert.alert('Erreur', 'L\'adresse est requise');
-      return false;
-    }
-    if (!ville.trim()) {
-      Alert.alert('Erreur', 'La ville est requise');
-      return false;
-    }
-    if (!maxParticipants.trim()) {
-      Alert.alert('Erreur', 'Le nombre maximum de participants est requis');
-      return false;
-    }
-    const maxNum = parseInt(maxParticipants);
-    if (isNaN(maxNum) || maxNum < 1) {
-      Alert.alert('Erreur', 'Le nombre maximum de participants doit être supérieur à 0');
-      return false;
-    }
-
-    return true;
-  };
-
-  // Géocoder automatiquement l'adresse
-  const handleGeocodeAddress = async () => {
-    if (!adresse.trim() || !ville.trim()) {
-      return; // Silencieux si pas d'adresse
-    }
-
-    setGeocoding(true);
+  // Sélection d'image
+  const handleImageSelection = async () => {
     try {
-      const fullAddress = codePostal.trim() 
-        ? `${adresse.trim()}, ${codePostal.trim()} ${ville.trim()}`
-        : `${adresse.trim()}, ${ville.trim()}`;
-        
-      const result = await geocodingService.geocodeAddress(
-        fullAddress,
-        ville.trim()
-      );
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission requise', 'Accès à la galerie nécessaire');
+        return;
+      }
 
-      if (result) {
-        setLatitude(result.latitude.toString());
-        setLongitude(result.longitude.toString());
-        console.log('✅ Coordonnées GPS trouvées automatiquement');
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [16, 9],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setImageUri(result.assets[0].uri);
+        setImageUrl(''); // Reset URL si upload
       }
     } catch (error) {
-      console.error('Erreur géocodage:', error);
-    } finally {
-      setGeocoding(false);
+      console.error('Erreur sélection image:', error);
+      Alert.alert('Erreur', 'Impossible de sélectionner l\'image');
     }
   };
 
-  // Géocoder manuellement (bouton)
-  const handleManualGeocode = async () => {
+  // Géocodage automatique
+  const handleGeocode = async () => {
     if (!adresse.trim() || !ville.trim()) {
-      Alert.alert('Erreur', 'Veuillez remplir l\'adresse et la ville d\'abord');
+      Alert.alert('Erreur', 'Adresse et ville requises pour le géocodage');
       return;
     }
 
     setGeocoding(true);
     try {
-      const fullAddress = codePostal.trim() 
-        ? `${adresse.trim()}, ${codePostal.trim()} ${ville.trim()}`
-        : `${adresse.trim()}, ${ville.trim()}`;
-        
-      const result = await geocodingService.geocodeAddress(
-        fullAddress,
-        ville.trim()
-      );
+      const fullAddress = `${adresse}, ${ville}${codePostal ? ', ' + codePostal : ''}, France`;
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullAddress)}`;
 
-      if (result) {
-        setLatitude(result.latitude.toString());
-        setLongitude(result.longitude.toString());
-        Alert.alert(
-          'Succès',
-          'Coordonnées GPS trouvées !\n' + result.displayName
-        );
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (data && data.length > 0) {
+        const { lat, lon } = data[0];
+        setLatitude(lat);
+        setLongitude(lon);
+        Alert.alert('Succès', 'Coordonnées trouvées automatiquement !');
       } else {
         Alert.alert(
-          'Erreur',
-          'Impossible de trouver les coordonnées pour cette adresse. Vous pouvez les saisir manuellement.'
+          'Aucun résultat',
+          'Impossible de trouver les coordonnées. Vérifiez l\'adresse ou entrez-les manuellement.'
         );
       }
     } catch (error) {
       console.error('Erreur géocodage:', error);
-      Alert.alert('Erreur', 'Une erreur est survenue lors du géocodage');
+      Alert.alert('Erreur', 'Erreur lors de la recherche des coordonnées');
     } finally {
       setGeocoding(false);
     }
   };
 
+  // Création de l'activité
   const handleCreate = async () => {
-    // Valider tous les champs obligatoires
-    if (!validateFields()) {
+    // Validation des champs obligatoires
+    if (!nom.trim() || !description.trim() || !categorie.trim()) {
+      Alert.alert('Erreur', 'Nom, description et catégorie principale sont requis');
       return;
     }
 
-    // Vérifier les coordonnées GPS
-    if (!latitude.trim() || !longitude.trim()) {
-      Alert.alert(
-        'Coordonnées GPS manquantes',
-        'Les coordonnées GPS sont requises pour afficher l\'activité sur la carte. Voulez-vous les rechercher automatiquement ?',
-        [
-          { text: 'Annuler', style: 'cancel' },
-          { text: 'Rechercher', onPress: handleManualGeocode },
-        ]
-      );
+    if (!date.trim() || !timeStart.trim()) {
+      Alert.alert('Erreur', 'Date et heure de début sont requises');
+      return;
+    }
+
+    if (!adresse.trim() || !ville.trim()) {
+      Alert.alert('Erreur', 'Adresse et ville sont requises');
+      return;
+    }
+
+    if (!maxParticipants || parseInt(maxParticipants) <= 0) {
+      Alert.alert('Erreur', 'Nombre de participants invalide');
+      return;
+    }
+
+    if (!latitude || !longitude) {
+      Alert.alert('Erreur', 'Coordonnées géographiques requises. Utilisez le bouton de géocodage.');
       return;
     }
 
     setLoading(true);
 
     try {
-      // 1. Upload de l'image si une image a été sélectionnée
-      let uploadedImageUrl = imageUrl.trim();
-      
+      // 1. Upload de l'image si sélectionnée
       if (imageUri) {
         setUploadingImage(true);
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error('Utilisateur non connecté');
-
-        const uploadResult = await activityStorageService.uploadActivityImage(
-          imageUri,
-          user.id
-        );
+        const uploadResult = await storageService.uploadActivityImage(imageUri);
+        setUploadingImage(false);
 
         if (uploadResult.success && uploadResult.url) {
-          uploadedImageUrl = uploadResult.url;
+          setUploadedImageUrl(uploadResult.url);
         } else {
           Alert.alert(
             'Avertissement',
-            'L\'image n\'a pas pu être uploadée. L\'activité sera créée avec une image par défaut.',
+            'Erreur upload image. L\'activité sera créée avec une image par défaut.',
             [{ text: 'Continuer' }]
           );
         }
@@ -278,6 +173,7 @@ export default function CreateActivityScreen() {
         titre: titre.trim() || undefined,
         description: description.trim(),
         categorie: categorie.trim(),
+        categorie2: categorie2.trim() || undefined,
         date: date.trim(),
         time_start: timeStart.trim(),
         time_end: timeEnd.trim() || undefined,
@@ -285,7 +181,7 @@ export default function CreateActivityScreen() {
         ville: ville.trim(),
         code_postal: codePostal.trim() || undefined,
         max_participants: parseInt(maxParticipants),
-        image_url: uploadedImageUrl || undefined,
+        image_url: uploadedImageUrl || imageUrl.trim() || undefined,
         latitude: parseFloat(latitude),
         longitude: parseFloat(longitude),
         prix: prix.trim() ? parseFloat(prix) : undefined,
@@ -340,29 +236,23 @@ export default function CreateActivityScreen() {
           activeOpacity={0.7}
         >
           {imageUri ? (
-            <View style={styles.imagePreviewContainer}>
-              <Image source={{ uri: imageUri }} style={styles.imagePreview} />
-              <View style={styles.imageOverlay}>
-                <IconSymbol name="camera.fill" size={24} color="white" />
-                <Text style={styles.imageOverlayText}>Changer la photo</Text>
-              </View>
-            </View>
+            <Image source={{ uri: imageUri }} style={styles.uploadedImage} />
           ) : (
-            <View style={styles.imageUploadPlaceholder}>
-              <IconSymbol name="photo.fill" size={48} color={colors.textSecondary} />
-              <Text style={styles.imageUploadText}>Ajouter une photo de l'activité</Text>
-              <Text style={styles.imageUploadSubtext}>Touchez pour sélectionner</Text>
+            <View style={styles.uploadPlaceholder}>
+              <IconSymbol name="photo" size={48} color={colors.textSecondary} />
+              <Text style={styles.uploadText}>Ajouter une photo</Text>
+              <Text style={styles.uploadSubtext}>Appuyez pour sélectionner</Text>
             </View>
           )}
         </TouchableOpacity>
 
         <View style={styles.form}>
-          {/* Nom */}
+          {/* Nom de l'activité */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Nom de l'activité *</Text>
             <TextInput
               style={styles.input}
-              placeholder="ex: Randonnée en forêt, Brunch entre amis"
+              placeholder="ex: Laser Quest Aventure"
               placeholderTextColor={colors.textSecondary}
               value={nom}
               onChangeText={setNom}
@@ -371,10 +261,10 @@ export default function CreateActivityScreen() {
 
           {/* Titre (optionnel) */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Titre secondaire (optionnel)</Text>
+            <Text style={styles.label}>Titre accrocheur (optionnel)</Text>
             <TextInput
               style={styles.input}
-              placeholder="ex: Découverte de la nature"
+              placeholder="ex: Soirée laser game + Karaoke"
               placeholderTextColor={colors.textSecondary}
               value={titre}
               onChangeText={setTitre}
@@ -386,7 +276,7 @@ export default function CreateActivityScreen() {
             <Text style={styles.label}>Description *</Text>
             <TextInput
               style={[styles.input, styles.textArea]}
-              placeholder="Décrivez votre activité en détail"
+              placeholder="Décrivez votre activité en détail..."
               placeholderTextColor={colors.textSecondary}
               value={description}
               onChangeText={setDescription}
@@ -395,16 +285,71 @@ export default function CreateActivityScreen() {
             />
           </View>
 
-          {/* Catégorie */}
+          {/* Catégories (maximum 2) */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Catégorie *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="ex: Hiking, Brunch, Music, Gaming"
-              placeholderTextColor={colors.textSecondary}
-              value={categorie}
-              onChangeText={setCategorie}
-            />
+            <Text style={styles.label}>Catégories * (maximum 2)</Text>
+            
+            {/* Catégorie 1 */}
+            <TouchableOpacity
+              style={[styles.input, styles.categoryButton]}
+              onPress={() => {
+                setSelectingCategory(1);
+                setShowCategoryPicker(true);
+              }}
+            >
+              <Text style={categorie ? styles.categoryText : styles.placeholderText}>
+                {categorie || 'Sélectionner la catégorie principale'}
+              </Text>
+              <IconSymbol name="chevron.down" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+
+            {/* Catégorie 2 (optionnelle) */}
+            {categorie && (
+              <TouchableOpacity
+                style={[styles.input, styles.categoryButton, { marginTop: 10 }]}
+                onPress={() => {
+                  setSelectingCategory(2);
+                  setShowCategoryPicker(true);
+                }}
+              >
+                <Text style={categorie2 ? styles.categoryText : styles.placeholderText}>
+                  {categorie2 || 'Ajouter une catégorie secondaire (optionnel)'}
+                </Text>
+                {categorie2 ? (
+                  <TouchableOpacity
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      setCategorie2('');
+                    }}
+                    style={styles.clearButton}
+                  >
+                    <IconSymbol name="xmark.circle.fill" size={20} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                ) : (
+                  <IconSymbol name="chevron.down" size={20} color={colors.textSecondary} />
+                )}
+              </TouchableOpacity>
+            )}
+
+            {/* Affichage des catégories sélectionnées */}
+            {(categorie || categorie2) && (
+              <View style={styles.selectedCategoriesContainer}>
+                {categorie && (
+                  <View style={[styles.categoryChip, { backgroundColor: getCategoryColor(categorie) + '20' }]}>
+                    <Text style={[styles.categoryChipText, { color: getCategoryColor(categorie) }]}>
+                      {categorie}
+                    </Text>
+                  </View>
+                )}
+                {categorie2 && (
+                  <View style={[styles.categoryChip, { backgroundColor: getCategoryColor(categorie2) + '20' }]}>
+                    <Text style={[styles.categoryChipText, { color: getCategoryColor(categorie2) }]}>
+                      {categorie2}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
           </View>
 
           {/* Date et Heures */}
@@ -508,79 +453,64 @@ export default function CreateActivityScreen() {
             </View>
           </View>
 
-          {/* Section optionnelle */}
+          {/* Séparateur */}
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>Coordonnées GPS</Text>
+            <Text style={styles.dividerText}>Localisation GPS</Text>
             <View style={styles.dividerLine} />
           </View>
+
+          {/* Bouton de géocodage */}
+          <TouchableOpacity
+            style={[
+              styles.geocodeButton,
+              (!adresse.trim() || !ville.trim() || geocoding) && styles.geocodeButtonDisabled,
+            ]}
+            onPress={handleGeocode}
+            disabled={!adresse.trim() || !ville.trim() || geocoding}
+          >
+            {geocoding ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <IconSymbol name="location.fill" size={24} color={colors.primary} />
+            )}
+            <Text style={styles.geocodeButtonText}>
+              {geocoding ? 'Recherche en cours...' : 'Trouver les coordonnées automatiquement'}
+            </Text>
+          </TouchableOpacity>
 
           {/* Coordonnées GPS */}
           <View style={styles.row}>
             <View style={[styles.inputGroup, styles.halfWidth]}>
-              <Text style={styles.label}>Latitude {geocoding && '⏳'}</Text>
+              <Text style={styles.label}>Latitude *</Text>
               <TextInput
-                style={[styles.input, geocoding && styles.inputDisabled]}
+                style={[styles.input, latitude && styles.inputDisabled]}
                 placeholder="48.8566"
                 placeholderTextColor={colors.textSecondary}
                 value={latitude}
                 onChangeText={setLatitude}
                 keyboardType="decimal-pad"
-                editable={!geocoding}
+                editable={!latitude}
               />
             </View>
 
             <View style={[styles.inputGroup, styles.halfWidth]}>
-              <Text style={styles.label}>Longitude {geocoding && '⏳'}</Text>
+              <Text style={styles.label}>Longitude *</Text>
               <TextInput
-                style={[styles.input, geocoding && styles.inputDisabled]}
+                style={[styles.input, longitude && styles.inputDisabled]}
                 placeholder="2.3522"
                 placeholderTextColor={colors.textSecondary}
                 value={longitude}
                 onChangeText={setLongitude}
                 keyboardType="decimal-pad"
-                editable={!geocoding}
+                editable={!longitude}
               />
             </View>
           </View>
 
-          {geocoding && (
-            <View style={styles.geocodingIndicator}>
-              <ActivityIndicator size="small" color={colors.primary} />
-              <Text style={styles.geocodingText}>
-                Recherche automatique des coordonnées GPS...
-              </Text>
-            </View>
-          )}
-
-          {latitude && longitude && !geocoding && (
-            <View style={styles.successIndicator}>
-              <IconSymbol name="checkmark.circle.fill" size={20} color="#10b981" />
-              <Text style={styles.successText}>
-                Coordonnées GPS trouvées ! L'activité sera visible sur la carte.
-              </Text>
-            </View>
-          )}
-
-          {/* Bouton de géocodage manuel (au cas où) */}
-          {!geocoding && adresse.trim() && ville.trim() && (
-            <TouchableOpacity
-              style={styles.geocodeButton}
-              onPress={handleManualGeocode}
-            >
-              <IconSymbol 
-                name="location.fill" 
-                size={20} 
-                color={colors.primary} 
-              />
-              <Text style={styles.geocodeButtonText}>
-                Rechercher à nouveau les coordonnées GPS
-              </Text>
-            </TouchableOpacity>
-          )}
-
           <Text style={styles.helperText}>
-            💡 Les coordonnées GPS sont trouvées automatiquement dès que vous remplissez l'adresse et la ville. Vous pouvez aussi les modifier manuellement si besoin.
+            💡 Utilisez le bouton ci-dessus pour obtenir automatiquement les coordonnées.
+            Vous pouvez aussi les modifier manuellement si besoin.
           </Text>
 
           {/* URL image manuelle (optionnel si pas d'upload) */}
@@ -623,6 +553,58 @@ export default function CreateActivityScreen() {
           * Les champs marqués d'un astérisque sont obligatoires
         </Text>
       </ScrollView>
+
+      {/* Modal de sélection de catégorie */}
+      <Modal
+        visible={showCategoryPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCategoryPicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {selectingCategory === 1 ? 'Catégorie principale' : 'Catégorie secondaire'}
+              </Text>
+              <TouchableOpacity onPress={() => setShowCategoryPicker(false)}>
+                <IconSymbol name="xmark" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.categoryList}>
+              {PREDEFINED_CATEGORIES
+                .filter(cat => {
+                  // Ne pas afficher la catégorie déjà sélectionnée
+                  if (selectingCategory === 1) {
+                    return cat.name !== categorie2;
+                  } else {
+                    return cat.name !== categorie;
+                  }
+                })
+                .map((category) => (
+                  <TouchableOpacity
+                    key={category.id}
+                    style={styles.categoryOption}
+                    onPress={() => {
+                      if (selectingCategory === 1) {
+                        setCategorie(category.name);
+                      } else {
+                        setCategorie2(category.name);
+                      }
+                      setShowCategoryPicker(false);
+                    }}
+                  >
+                    <View style={[styles.categoryIcon, { backgroundColor: category.color + '20' }]}>
+                      <IconSymbol name={category.icon} size={24} color={category.color} />
+                    </View>
+                    <Text style={styles.categoryOptionText}>{category.name}</Text>
+                  </TouchableOpacity>
+                ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -634,6 +616,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   backButton: {
     width: 40,
@@ -658,6 +642,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 40,
   },
+  imageUploadZone: {
+    width: '100%',
+    height: 200,
+    borderRadius: 16,
+    backgroundColor: colors.card,
+    marginTop: 20,
+    marginBottom: 24,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: colors.border,
+  },
+  uploadedImage: {
+    width: '100%',
+    height: '100%',
+  },
+  uploadPlaceholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  uploadText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    marginTop: 12,
+  },
+  uploadSubtext: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginTop: 4,
+  },
   form: {
     gap: 20,
   },
@@ -681,6 +697,40 @@ const styles = StyleSheet.create({
   textArea: {
     height: 120,
     textAlignVertical: 'top',
+  },
+  categoryButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingRight: 15,
+  },
+  categoryText: {
+    color: colors.text,
+    fontSize: 16,
+  },
+  placeholderText: {
+    color: colors.textSecondary,
+    fontSize: 16,
+  },
+  selectedCategoriesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
+  },
+  categoryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  categoryChipText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  clearButton: {
+    padding: 4,
   },
   row: {
     flexDirection: 'row',
@@ -716,28 +766,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 4,
   },
-  createButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 32,
-  },
-  createButtonDisabled: {
-    opacity: 0.6,
-  },
-  createButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.background,
-  },
-  footerNote: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginTop: 16,
-    fontStyle: 'italic',
-  },
   geocodeButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -764,86 +792,80 @@ const styles = StyleSheet.create({
     opacity: 0.6,
     backgroundColor: colors.border + '20',
   },
-  geocodingIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 12,
-    backgroundColor: colors.primary + '10',
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  geocodingText: {
-    fontSize: 14,
-    color: colors.primary,
-    flex: 1,
-  },
-  successIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 12,
-    backgroundColor: '#10b98120',
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  successText: {
-    fontSize: 14,
-    color: '#10b981',
-    flex: 1,
-    fontWeight: '500',
-  },
-  imageUploadZone: {
-    width: '100%',
-    height: 200,
+  createButton: {
+    backgroundColor: colors.primary,
     borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: 24,
-    backgroundColor: colors.card,
-    borderWidth: 2,
-    borderColor: colors.border,
-    borderStyle: 'dashed',
-  },
-  imageUploadPlaceholder: {
-    flex: 1,
-    justifyContent: 'center',
+    paddingVertical: 16,
     alignItems: 'center',
-    gap: 8,
+    marginTop: 32,
   },
-  imageUploadText: {
+  createButtonDisabled: {
+    opacity: 0.6,
+  },
+  createButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text,
-    marginTop: 8,
-  },
-  imageUploadSubtext: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  imagePreviewContainer: {
-    flex: 1,
-    position: 'relative',
-  },
-  imagePreview: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
-  imageOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-  },
-  imageOverlayText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
+    color: colors.background,
   },
   loadingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  footerNote: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 16,
+    fontStyle: 'italic',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 20,
+    maxHeight: '70%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  categoryList: {
+    padding: 20,
+  },
+  categoryOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  categoryIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 15,
+  },
+  categoryOptionText: {
+    fontSize: 16,
+    color: colors.text,
+    fontWeight: '500',
   },
 });

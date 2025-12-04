@@ -176,6 +176,63 @@ class StorageService {
       };
     }
   }
-}
+  async uploadActivityImage(uri: string) {
+    try {
+      console.log('🔵 Upload image activité - URI:', uri);
 
+      // Récupérer l'utilisateur actuel
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Utilisateur non connecté');
+
+      // Lire le fichier en base64
+      const base64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: 'base64',
+      });
+
+      console.log('✅ Image convertie en base64');
+
+      // Générer un nom de fichier unique
+      const fileExt = uri.split('.').pop()?.toLowerCase() || 'jpg';
+      const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+      const filePath = `activities/${user.id}/${fileName}`;
+
+      console.log('🔵 Chemin fichier:', filePath);
+
+      // Upload vers Supabase Storage (bucket 'activity-images')
+      const { data, error } = await supabase.storage
+        .from('activity-images')
+        .upload(filePath, decode(base64), {
+          contentType: `image/${fileExt}`,
+          upsert: false,
+        });
+
+      if (error) {
+        console.error('❌ Erreur upload Supabase:', error);
+        throw error;
+      }
+
+      console.log('✅ Upload réussi:', data);
+
+      // Récupérer l'URL publique
+      const { data: urlData } = supabase.storage
+        .from('activity-images')
+        .getPublicUrl(data.path);
+
+      console.log('✅ URL publique:', urlData.publicUrl);
+
+      return {
+        success: true,
+        path: data.path,
+        url: urlData.publicUrl,
+        message: 'Image uploadée avec succès !',
+      };
+    } catch (error: any) {
+      console.error('❌ Erreur upload image activité:', error);
+      return {
+        success: false,
+        error: error.message || "Erreur lors de l'upload",
+      };
+    }
+  }
+}
 export const storageService = new StorageService();

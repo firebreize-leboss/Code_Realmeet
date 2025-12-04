@@ -1,4 +1,4 @@
-
+// app/(tabs)/category.tsx
 import React, { useState } from 'react';
 import {
   View,
@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
-import { mockCategories } from '@/data/mockData';
+import { PREDEFINED_CATEGORIES } from '@/constants/categories';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 export default function CategoryScreen() {
@@ -21,13 +21,17 @@ export default function CategoryScreen() {
 
   const handleCategoryPress = (categoryId: string) => {
     setSelectedCategory(categoryId);
-    router.push(`/category-activities?category=${categoryId}`);
+    // Passer le nom de la catégorie au lieu de l'ID
+    const category = PREDEFINED_CATEGORIES.find(cat => cat.id === categoryId);
+    if (category) {
+      router.push(`/category-activities?category=${encodeURIComponent(category.name)}`);
+    }
   };
 
   return (
     <SafeAreaView style={commonStyles.container} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Categories</Text>
+        <Text style={styles.headerTitle}>Catégories</Text>
       </View>
 
       <ScrollView
@@ -39,7 +43,7 @@ export default function CategoryScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.grid}>
-          {mockCategories.map((category, index) => (
+          {PREDEFINED_CATEGORIES.map((category, index) => (
             <Animated.View
               key={category.id}
               entering={FadeInDown.delay(index * 50).springify()}
@@ -70,7 +74,7 @@ export default function CategoryScreen() {
         <View style={styles.infoCard}>
           <IconSymbol name="info.circle.fill" size={24} color={colors.primary} />
           <Text style={styles.infoText}>
-            Select a category to discover activities that match your interests
+            Sélectionnez une catégorie pour découvrir les activités correspondantes
           </Text>
         </View>
       </ScrollView>
@@ -81,7 +85,9 @@ export default function CategoryScreen() {
 const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   headerTitle: {
     fontSize: 28,
@@ -92,53 +98,54 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
+    padding: 20,
+    paddingBottom: 100,
   },
   contentContainerWithTabBar: {
-    paddingBottom: 100,
+    paddingBottom: 120,
   },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 24,
+    gap: 15,
+    justifyContent: 'space-between',
   },
   categoryWrapper: {
     width: '48%',
   },
   categoryCard: {
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
-    gap: 12,
-    boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.3)',
-    elevation: 4,
+    borderWidth: 2,
+    borderColor: 'transparent',
   },
   categoryCardSelected: {
-    borderWidth: 2,
     borderColor: colors.primary,
+    backgroundColor: colors.primary + '10',
   },
   iconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 12,
   },
   categoryName: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: colors.text,
     textAlign: 'center',
   },
   infoCard: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: colors.surface,
+    padding: 15,
+    borderRadius: 12,
+    marginTop: 20,
     gap: 12,
   },
   infoText: {
