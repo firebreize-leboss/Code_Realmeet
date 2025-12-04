@@ -42,9 +42,10 @@ interface SelectedSlot {
 interface ActivityCalendarProps {
   activityId: string;
   onSlotSelect?: (slot: SelectedSlot | null) => void;
+  externalSelectedSlot?: SelectedSlot | null;
 }
 
-export default function ActivityCalendar({ activityId, onSlotSelect }: ActivityCalendarProps) {
+export default function ActivityCalendar({ activityId, onSlotSelect,externalSelectedSlot }: ActivityCalendarProps) {
   const [weekOffset, setWeekOffset] = useState(0);
   const [weekDays, setWeekDays] = useState<DaySlots[]>([]);
   const [loading, setLoading] = useState(true);
@@ -271,6 +272,19 @@ export default function ActivityCalendar({ activityId, onSlotSelect }: ActivityC
       return `${start.getDate()} ${monthNames[start.getMonth()]} - ${end.getDate()} ${monthNames[end.getMonth()]} ${end.getFullYear()}`;
     }
   };
+
+
+  useEffect(() => {
+  // Si le parent passe null ou undefined, on désélectionne
+  if (externalSelectedSlot === null) {
+    setSelectedSlot(null);
+  } 
+  // Si le parent passe un slot valide et différent du current, on le sélectionne
+  else if (externalSelectedSlot && externalSelectedSlot.id !== selectedSlot?.id) {
+    setSelectedSlot(externalSelectedSlot);
+  }
+}, [externalSelectedSlot]);
+
 
   const maxSlots = Math.max(...weekDays.map(d => d.slots.length), 0);
 

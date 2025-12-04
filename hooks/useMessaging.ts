@@ -217,12 +217,21 @@ export function useFriendRequests() {
 // HOOK POUR LES CONVERSATIONS (MIS À JOUR POUR LES GROUPES D'ACTIVITÉ + UNREAD COUNT)
 // ============================================
 
+// ============================================
+// REMPLACE UNIQUEMENT la fonction useConversations() dans hooks/useMessaging.ts
+// Assure-toi que useRef est importé en haut du fichier:
+// import { useState, useEffect, useCallback, useRef } from 'react';
+// ============================================
+
 export function useConversations() {
   const [conversations, setConversations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-  const [userConversationIds, setUserConversationIds] = useState<string[]>([]);
+  
+  // ✅ Utiliser useRef pour stocker les IDs (évite les problèmes de closure)
+  const userConversationIdsRef = useRef<string[]>([]);
   const channelRef = useRef<any>(null);
+  const userIdRef = useRef<string | null>(null);
 
   const loadConversations = useCallback(async () => {
     try {
@@ -231,12 +240,14 @@ export function useConversations() {
 
       if (!currentUser?.user?.id) {
         setConversations([]);
-        setUserConversationIds([]);
+        userConversationIdsRef.current = [];
+        userIdRef.current = null;
         setLoading(false);
         return;
       }
 
       const userId = currentUser.user.id;
+      userIdRef.current = userId;
 
       // Récupérer les conversations où l'utilisateur participe AVEC last_read_at
       const { data: participantData, error: participantError } = await supabase
@@ -248,8 +259,8 @@ export function useConversations() {
 
       const conversationIds = participantData?.map(p => p.conversation_id) || [];
       
-      // ✅ STOCKER LES IDs pour le filtre realtime
-      setUserConversationIds(conversationIds);
+      // ✅ STOCKER dans le ref pour accès dans les callbacks
+      userConversationIdsRef.current = conversationIds;
 
       if (conversationIds.length === 0) {
         setConversations([]);
@@ -424,90 +435,23 @@ export function useConversations() {
     }
   }, []);
 
-  // ✅ MISE À JOUR OPTIMISTE LOCALE quand un nouveau message arrive
-  const handleNewMessage = useCallback(async (payload: any) => {
-    const newMsg = payload.new;
-    const convId = newMsg.conversation_id;
-    
-    console.log('🔔 Nouveau message reçu pour conversation:', convId);
-
-    // Récupérer l'utilisateur actuel
-    const { data: currentUser } = await supabase.auth.getUser();
-    const userId = currentUser?.user?.id;
-
-    // Formater le texte du message
-    let lastMessageText = '';
-    if (newMsg.message_type === 'image') {
-      lastMessageText = '📷 Photo';
-    } else if (newMsg.message_type === 'voice') {
-      lastMessageText = '🎤 Message vocal';
-    } else if (newMsg.message_type === 'system') {
-      lastMessageText = newMsg.content || '';
-    } else {
-      lastMessageText = newMsg.content || '';
-    }
-
-    // Formater l'heure
-    const msgDate = new Date(newMsg.created_at);
-    const lastMessageTime = msgDate.toLocaleTimeString('fr-FR', { 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    });
-
-    // ✅ MISE À JOUR OPTIMISTE de l'état local
-    setConversations(prev => {
-      const existingIndex = prev.findIndex(c => c.id === convId);
-      
-      if (existingIndex === -1) {
-        // Nouvelle conversation, recharger complètement
-        loadConversations();
-        return prev;
-      }
-
-      const updatedConv = {
-        ...prev[existingIndex],
-        lastMessage: lastMessageText,
-        lastMessageTime: lastMessageTime,
-        updated_at: newMsg.created_at,
-        // Incrémenter unreadCount si ce n'est pas notre message
-        unreadCount: newMsg.sender_id !== userId 
-          ? (prev[existingIndex].unreadCount || 0) + 1 
-          : prev[existingIndex].unreadCount,
-      };
-
-      // Retirer la conversation de sa position actuelle
-      const newList = prev.filter(c => c.id !== convId);
-      
-      // La remettre en premier (plus récente)
-      return [updatedConv, ...newList];
-    });
-  }, [loadConversations]);
-
+  // Charger les conversations au montage
   useEffect(() => {
     loadConversations();
   }, [loadConversations]);
 
-  // ✅ SUBSCRIPTION REALTIME SÉPARÉE avec mise à jour quand userConversationIds change
+  // ✅ SUBSCRIPTION REALTIME - séparée et optimisée
   useEffect(() => {
     // Nettoyer l'ancien channel si existant
     if (channelRef.current) {
-      console.log('🔌 Nettoyage ancien channel conversations');
       supabase.removeChannel(channelRef.current);
       channelRef.current = null;
     }
 
-    // Si pas de conversations, pas besoin de subscription
-    if (userConversationIds.length === 0) {
-      console.log('📭 Aucune conversation, pas de subscription');
-      return;
-    }
+    console.log('📡 Configuration subscription realtime conversations');
 
-    console.log('📡 Configuration subscription pour', userConversationIds.length, 'conversations');
-
-    // Créer un nouveau channel avec un nom unique
-    const channelName = `user_conversations_${Date.now()}`;
     const channel = supabase
-      .channel(channelName)
+      .channel(`conversations_realtime_${Date.now()}`)
       .on(
         'postgres_changes',
         {
@@ -516,32 +460,74 @@ export function useConversations() {
           table: 'messages',
         },
         (payload: any) => {
-          // ✅ FILTRER côté client pour ne traiter que nos conversations
-          if (userConversationIds.includes(payload.new.conversation_id)) {
-            console.log('✅ Message dans une de nos conversations');
-            handleNewMessage(payload);
+          const newMsg = payload.new;
+          const convId = newMsg.conversation_id;
+          
+          // ✅ Utiliser le ref pour vérifier (toujours à jour)
+          const userConvIds = userConversationIdsRef.current;
+          const currentUserId = userIdRef.current;
+          
+          console.log('🔔 Message reçu:', convId, 'Mes convs:', userConvIds.length);
+          
+          if (!userConvIds.includes(convId)) {
+            console.log('⏭️ Message ignoré (pas ma conversation)');
+            return;
+          }
+
+          console.log('✅ Message dans une de mes conversations, mise à jour UI');
+
+          // Formater le texte du message
+          let lastMessageText = '';
+          if (newMsg.message_type === 'image') {
+            lastMessageText = '📷 Photo';
+          } else if (newMsg.message_type === 'voice') {
+            lastMessageText = '🎤 Message vocal';
+          } else if (newMsg.message_type === 'system') {
+            lastMessageText = newMsg.content || '';
           } else {
-            console.log('⏭️ Message ignoré (pas notre conversation)');
+            lastMessageText = newMsg.content || '';
           }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'conversations',
-        },
-        (payload: any) => {
-          // Vérifier si c'est une de nos conversations
-          if (payload.new && userConversationIds.includes(payload.new.id)) {
-            console.log('🔄 Mise à jour conversation détectée');
-            loadConversations();
-          }
+
+          // Formater l'heure
+          const msgDate = new Date(newMsg.created_at);
+          const lastMessageTime = msgDate.toLocaleTimeString('fr-FR', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          });
+
+          // ✅ MISE À JOUR OPTIMISTE de l'état local
+          setConversations(prev => {
+            const existingIndex = prev.findIndex(c => c.id === convId);
+            
+            if (existingIndex === -1) {
+              // Nouvelle conversation qu'on ne connaît pas, recharger
+              console.log('🆕 Nouvelle conversation détectée, rechargement...');
+              loadConversations();
+              return prev;
+            }
+
+            const updatedConv = {
+              ...prev[existingIndex],
+              lastMessage: lastMessageText,
+              lastMessageTime: lastMessageTime,
+              updated_at: newMsg.created_at,
+              // Incrémenter unreadCount si ce n'est pas notre message
+              unreadCount: newMsg.sender_id !== currentUserId 
+                ? (prev[existingIndex].unreadCount || 0) + 1 
+                : prev[existingIndex].unreadCount,
+            };
+
+            // Retirer la conversation de sa position actuelle et la remettre en premier
+            const newList = prev.filter(c => c.id !== convId);
+            
+            console.log('📝 UI mise à jour:', updatedConv.name, 'unread:', updatedConv.unreadCount);
+            
+            return [updatedConv, ...newList];
+          });
         }
       )
       .subscribe((status) => {
-        console.log('📡 Subscription conversations status:', status);
+        console.log('📡 Subscription status:', status);
       });
 
     channelRef.current = channel;
@@ -553,7 +539,7 @@ export function useConversations() {
         channelRef.current = null;
       }
     };
-  }, [userConversationIds, handleNewMessage, loadConversations]);
+  }, [loadConversations]);
 
   const createConversation = async (participantIds: string[]) => {
     try {
@@ -584,14 +570,12 @@ export function useConversations() {
 
           if (friendParticipations && friendParticipations.length > 0) {
             for (const fp of friendParticipations) {
-              // Vérifier que c'est bien une conversation à 2 (pas un groupe)
               const { data: convData } = await supabase
                 .from('conversations')
                 .select('is_group')
                 .eq('id', fp.conversation_id)
                 .single();
 
-              // Si c'est un groupe, continuer à chercher
               if (convData?.is_group) continue;
 
               const { count } = await supabase

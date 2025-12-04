@@ -14,6 +14,8 @@ import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
+import { useFocusEffect } from 'expo-router';
+import { useCallback } from 'react';
 
 type TabType = 'ongoing' | 'past';
 
@@ -33,62 +35,117 @@ export default function ActivityScreen() {
   const [pastActivities, setPastActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  useFocusEffect(
+  useCallback(() => {
     loadUserActivities();
-  }, []);
+  }, [])
+);
 
-  const loadUserActivities = async () => {
-    try {
-      setLoading(true);
-      const { data: currentUserData } = await supabase.auth.getUser();
-      const currentUser = currentUserData?.user;
-      
-      if (!currentUser) {
-        setLoading(false);
-        return;
-      }
-
-      const now = new Date().toISOString();
-
-      // Récupérer les activités où l'utilisateur participe
-      const { data: participations } = await supabase
-        .from('activity_participants')
-        .select('activity_id')
-        .eq('user_id', currentUser.id);
-
-      const activityIds = participations?.map(p => p.activity_id) || [];
-
-      if (activityIds.length === 0) {
-        setOngoingActivities([]);
-        setPastActivities([]);
-        setLoading(false);
-        return;
-      }
-
-      // Récupérer les activités en cours (futures)
-      const { data: ongoing } = await supabase
-        .from('activities')
-        .select('id, nom, image_url, date_heure, adresse, ville')
-        .in('id', activityIds)
-        .gte('date_heure', now)
-        .order('date_heure', { ascending: true });
-
-      // Récupérer les activités passées
-      const { data: past } = await supabase
-        .from('activities')
-        .select('id, nom, image_url, date_heure, adresse, ville')
-        .in('id', activityIds)
-        .lt('date_heure', now)
-        .order('date_heure', { ascending: false });
-
-      setOngoingActivities(ongoing || []);
-      setPastActivities(past || []);
-    } catch (error) {
-      console.error('Error loading activities:', error);
-    } finally {
+ const loadUserActivities = async () => {
+  try {
+    setLoading(true);
+    const { data: currentUserData } = await supabase.auth.getUser();
+    const currentUser = currentUserData?.user;
+    
+    if (!currentUser) {
       setLoading(false);
+      return;
     }
-  };
+
+    const now = new Date().toISOString();
+
+    // ✅ CORRECTION: Récupérer depuis slot_participants au lieu de activity_participants
+    const { data: participations, error: partError } = await supabase
+      .from('slot_participants')
+      .select('activity_id, slot_id')
+      .eq('user_id', currentUser.id);
+
+    if (partError) {
+      console.error('Erreur chargement participations:', partError);
+    }
+
+    // Extraire les IDs d'activités uniques
+    const activityIds = [...new Set(participations?.map(p => p.activity_id) || [])];
+
+    if (activityIds.length === 0) {
+      setOngoingActivities([]);
+      setPastActivities([]);
+      setLoading(false);
+      return;
+    }
+
+    // Récupérer les activités avec les infos des créneaux
+    const { data: activities, error: actError } = await supabase
+      .from('activities')
+      .select('id, nom, image_url, adresse, ville, date, time_start')
+      .in('id', activityIds);
+
+    if (actError) {
+      console.error('Erreur chargement activités:', actError);
+    }
+
+    // Pour chaque activité, récupérer la date du créneau auquel l'utilisateur est inscrit
+    const activitiesWithSlotDates = await Promise.all(
+      (activities || []).map(async (activity) => {
+        // Trouver le slot_id pour cette activité
+        const participation = participations?.find(p => p.activity_id === activity.id);
+        
+        if (participation?.slot_id) {
+          // Récupérer les infos du créneau
+          const { data: slotData } = await supabase
+            .from('activity_slots')
+            .select('date, time')
+            .eq('id', participation.slot_id)
+            .single();
+          
+          if (slotData) {
+            // Combiner date et heure du créneau
+            const slotDateTime = `${slotData.date}T${slotData.time || '00:00'}`;
+            return {
+              ...activity,
+              date_heure: slotDateTime,
+            };
+          }
+        }
+        
+        // Fallback sur la date de l'activité si pas de créneau
+        const activityDateTime = activity.date 
+          ? `${activity.date}T${activity.time_start || '00:00'}`
+          : now;
+        
+        return {
+          ...activity,
+          date_heure: activityDateTime,
+        };
+      })
+    );
+
+    // Séparer les activités en cours et passées
+    const ongoing: Activity[] = [];
+    const past: Activity[] = [];
+
+    activitiesWithSlotDates.forEach(activity => {
+      const activityDate = new Date(activity.date_heure);
+      
+      if (activityDate >= new Date()) {
+        ongoing.push(activity);
+      } else {
+        past.push(activity);
+      }
+    });
+
+    // Trier par date
+    ongoing.sort((a, b) => new Date(a.date_heure).getTime() - new Date(b.date_heure).getTime());
+    past.sort((a, b) => new Date(b.date_heure).getTime() - new Date(a.date_heure).getTime());
+
+    setOngoingActivities(ongoing);
+    setPastActivities(past);
+  } catch (error) {
+    console.error('Erreur chargement activités utilisateur:', error);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
