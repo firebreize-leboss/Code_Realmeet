@@ -1,4 +1,6 @@
 // app/create-activity.tsx
+// Version mise à jour avec autocomplétion d'adresse et sélection par calendrier
+
 import React, { useState } from 'react';
 import {
   View,
@@ -20,6 +22,8 @@ import { colors, commonStyles } from '@/styles/commonStyles';
 import { activityService } from '@/services/activity.service';
 import { storageService } from '@/services/storage.service';
 import { PREDEFINED_CATEGORIES } from '@/constants/categories';
+import { AddressAutocomplete } from '@/components/AddressAutocomplete';
+import { DateTimeRangePicker } from '@/components/DateTimePicker';
 
 export default function CreateActivityScreen() {
   const router = useRouter();
@@ -30,18 +34,23 @@ export default function CreateActivityScreen() {
   const [description, setDescription] = useState('');
   const [categorie, setCategorie] = useState('');
   const [categorie2, setCategorie2] = useState('');
-  const [date, setDate] = useState('');
-  const [timeStart, setTimeStart] = useState('');
-  const [timeEnd, setTimeEnd] = useState('');
+  const [maxParticipants, setMaxParticipants] = useState('');
+  const [prix, setPrix] = useState('');
+  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [imageUrl, setImageUrl] = useState('');
+
+  // États pour l'adresse (autocomplétion)
   const [adresse, setAdresse] = useState('');
   const [ville, setVille] = useState('');
   const [codePostal, setCodePostal] = useState('');
-  const [maxParticipants, setMaxParticipants] = useState('');
-  const [prix, setPrix] = useState('');
-  const [latitude, setLatitude] = useState('');
-  const [longitude, setLongitude] = useState('');
-  const [imageUri, setImageUri] = useState<string | null>(null);
-  const [imageUrl, setImageUrl] = useState('');
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
+  const [addressSelected, setAddressSelected] = useState(false);
+
+  // États pour la date/heure (calendrier)
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [timeStart, setTimeStart] = useState<Date | null>(null);
+  const [timeEnd, setTimeEnd] = useState<Date | null>(null);
 
   // États pour le système de catégories
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
@@ -49,7 +58,6 @@ export default function CreateActivityScreen() {
 
   const [loading, setLoading] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
-  const [geocoding, setGeocoding] = useState(false);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
 
   // Fonction pour obtenir la couleur d'une catégorie
@@ -76,7 +84,7 @@ export default function CreateActivityScreen() {
 
       if (!result.canceled && result.assets[0]) {
         setImageUri(result.assets[0].uri);
-        setImageUrl(''); // Reset URL si upload
+        setImageUrl('');
       }
     } catch (error) {
       console.error('Erreur sélection image:', error);
@@ -84,38 +92,30 @@ export default function CreateActivityScreen() {
     }
   };
 
-  // Géocodage automatique
-  const handleGeocode = async () => {
-    if (!adresse.trim() || !ville.trim()) {
-      Alert.alert('Erreur', 'Adresse et ville requises pour le géocodage');
-      return;
-    }
+  // Gestion de l'adresse sélectionnée
+  const handleAddressSelect = (result: {
+    address: string;
+    city: string;
+    postcode: string;
+    latitude: number;
+    longitude: number;
+  }) => {
+    setAdresse(result.address);
+    setVille(result.city);
+    setCodePostal(result.postcode);
+    setLatitude(result.latitude);
+    setLongitude(result.longitude);
+    setAddressSelected(true);
+  };
 
-    setGeocoding(true);
-    try {
-      const fullAddress = `${adresse}, ${ville}${codePostal ? ', ' + codePostal : ''}, France`;
-      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullAddress)}`;
+  // Formatage de la date pour l'API
+  const formatDateForAPI = (date: Date): string => {
+    return date.toISOString().split('T')[0]; // Format YYYY-MM-DD
+  };
 
-      const response = await fetch(url);
-      const data = await response.json();
-
-      if (data && data.length > 0) {
-        const { lat, lon } = data[0];
-        setLatitude(lat);
-        setLongitude(lon);
-        Alert.alert('Succès', 'Coordonnées trouvées automatiquement !');
-      } else {
-        Alert.alert(
-          'Aucun résultat',
-          'Impossible de trouver les coordonnées. Vérifiez l\'adresse ou entrez-les manuellement.'
-        );
-      }
-    } catch (error) {
-      console.error('Erreur géocodage:', error);
-      Alert.alert('Erreur', 'Erreur lors de la recherche des coordonnées');
-    } finally {
-      setGeocoding(false);
-    }
+  // Formatage de l'heure pour l'API
+  const formatTimeForAPI = (time: Date): string => {
+    return time.toTimeString().slice(0, 5); // Format HH:MM
   };
 
   // Création de l'activité
@@ -126,23 +126,18 @@ export default function CreateActivityScreen() {
       return;
     }
 
-    if (!date.trim() || !timeStart.trim()) {
+    if (!selectedDate || !timeStart) {
       Alert.alert('Erreur', 'Date et heure de début sont requises');
       return;
     }
 
-    if (!adresse.trim() || !ville.trim()) {
-      Alert.alert('Erreur', 'Adresse et ville sont requises');
+    if (!addressSelected || !latitude || !longitude) {
+      Alert.alert('Erreur', 'Veuillez sélectionner une adresse dans la liste');
       return;
     }
 
     if (!maxParticipants || parseInt(maxParticipants) <= 0) {
       Alert.alert('Erreur', 'Nombre de participants invalide');
-      return;
-    }
-
-    if (!latitude || !longitude) {
-      Alert.alert('Erreur', 'Coordonnées géographiques requises. Utilisez le bouton de géocodage.');
       return;
     }
 
@@ -164,7 +159,6 @@ export default function CreateActivityScreen() {
             [{ text: 'Continuer' }]
           );
         }
-        setUploadingImage(false);
       }
 
       // 2. Créer l'activité
@@ -174,32 +168,23 @@ export default function CreateActivityScreen() {
         description: description.trim(),
         categorie: categorie.trim(),
         categorie2: categorie2.trim() || undefined,
-        date: date.trim(),
-        time_start: timeStart.trim(),
-        time_end: timeEnd.trim() || undefined,
+        date: formatDateForAPI(selectedDate),
+        time_start: formatTimeForAPI(timeStart),
+        time_end: timeEnd ? formatTimeForAPI(timeEnd) : undefined,
         adresse: adresse.trim(),
         ville: ville.trim(),
         code_postal: codePostal.trim() || undefined,
         max_participants: parseInt(maxParticipants),
         image_url: uploadedImageUrl || imageUrl.trim() || undefined,
-        latitude: parseFloat(latitude),
-        longitude: parseFloat(longitude),
+        latitude: latitude,
+        longitude: longitude,
         prix: prix.trim() ? parseFloat(prix) : undefined,
       });
 
       if (result.success) {
-        Alert.alert(
-          'Succès',
-          'Activité créée avec succès !',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                router.back();
-              },
-            },
-          ]
-        );
+        Alert.alert('Succès', 'Activité créée avec succès !', [
+          { text: 'OK', onPress: () => router.back() },
+        ]);
       } else {
         Alert.alert('Erreur', result.error || 'Erreur lors de la création');
       }
@@ -211,13 +196,23 @@ export default function CreateActivityScreen() {
     }
   };
 
+  // Sélection de catégorie
+  const handleCategorySelect = (categoryName: string) => {
+    if (selectingCategory === 1) {
+      setCategorie(categoryName);
+      if (categorie2 === categoryName) setCategorie2('');
+    } else {
+      if (categoryName !== categorie) {
+        setCategorie2(categoryName);
+      }
+    }
+    setShowCategoryPicker(false);
+  };
+
   return (
     <SafeAreaView style={commonStyles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <IconSymbol name="xmark" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Créer une activité</Text>
@@ -228,10 +223,11 @@ export default function CreateActivityScreen() {
         style={styles.scrollView}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         {/* Zone d'upload d'image */}
-        <TouchableOpacity 
-          style={styles.imageUploadZone} 
+        <TouchableOpacity
+          style={styles.imageUploadZone}
           onPress={handleImageSelection}
           activeOpacity={0.7}
         >
@@ -285,11 +281,10 @@ export default function CreateActivityScreen() {
             />
           </View>
 
-          {/* Catégories (maximum 2) */}
+          {/* Catégories */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Catégories * (maximum 2)</Text>
             
-            {/* Catégorie 1 */}
             <TouchableOpacity
               style={[styles.input, styles.categoryButton]}
               onPress={() => {
@@ -303,7 +298,6 @@ export default function CreateActivityScreen() {
               <IconSymbol name="chevron.down" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
 
-            {/* Catégorie 2 (optionnelle) */}
             {categorie && (
               <TouchableOpacity
                 style={[styles.input, styles.categoryButton, { marginTop: 10 }]}
@@ -313,118 +307,57 @@ export default function CreateActivityScreen() {
                 }}
               >
                 <Text style={categorie2 ? styles.categoryText : styles.placeholderText}>
-                  {categorie2 || 'Ajouter une catégorie secondaire (optionnel)'}
+                  {categorie2 || 'Ajouter une 2ème catégorie (optionnel)'}
                 </Text>
-                {categorie2 ? (
-                  <TouchableOpacity
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      setCategorie2('');
-                    }}
-                    style={styles.clearButton}
-                  >
-                    <IconSymbol name="xmark.circle.fill" size={20} color={colors.textSecondary} />
-                  </TouchableOpacity>
-                ) : (
-                  <IconSymbol name="chevron.down" size={20} color={colors.textSecondary} />
-                )}
+                <IconSymbol name="chevron.down" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
             )}
+          </View>
 
-            {/* Affichage des catégories sélectionnées */}
-            {(categorie || categorie2) && (
-              <View style={styles.selectedCategoriesContainer}>
-                {categorie && (
-                  <View style={[styles.categoryChip, { backgroundColor: getCategoryColor(categorie) + '20' }]}>
-                    <Text style={[styles.categoryChipText, { color: getCategoryColor(categorie) }]}>
-                      {categorie}
-                    </Text>
-                  </View>
-                )}
-                {categorie2 && (
-                  <View style={[styles.categoryChip, { backgroundColor: getCategoryColor(categorie2) + '20' }]}>
-                    <Text style={[styles.categoryChipText, { color: getCategoryColor(categorie2) }]}>
-                      {categorie2}
-                    </Text>
-                  </View>
-                )}
+          {/* Séparateur Date/Heure */}
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>Date et horaire</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Sélection Date et Heure par calendrier */}
+          <DateTimeRangePicker
+            date={selectedDate}
+            timeStart={timeStart}
+            timeEnd={timeEnd}
+            onDateChange={setSelectedDate}
+            onTimeStartChange={setTimeStart}
+            onTimeEndChange={setTimeEnd}
+            showTimeEnd={true}
+          />
+
+          {/* Séparateur Adresse */}
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>Localisation</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Autocomplétion d'adresse */}
+          <AddressAutocomplete
+            value={adresse}
+            onAddressSelect={handleAddressSelect}
+            placeholder="Rechercher une adresse..."
+            label="Adresse *"
+          />
+
+          {/* Affichage ville et code postal (lecture seule après sélection) */}
+          {addressSelected && (
+            <View style={styles.addressDetails}>
+              <View style={styles.addressDetailRow}>
+                <IconSymbol name="location.fill" size={16} color={colors.primary} />
+                <Text style={styles.addressDetailText}>
+                  {ville}{codePostal ? `, ${codePostal}` : ''}
+                </Text>
               </View>
-            )}
-          </View>
-
-          {/* Date et Heures */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Date *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="YYYY-MM-DD (ex: 2024-12-25)"
-              placeholderTextColor={colors.textSecondary}
-              value={date}
-              onChangeText={setDate}
-            />
-          </View>
-
-          <View style={styles.row}>
-            <View style={[styles.inputGroup, styles.halfWidth]}>
-              <Text style={styles.label}>Heure début *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="HH:MM (ex: 14:30)"
-                placeholderTextColor={colors.textSecondary}
-                value={timeStart}
-                onChangeText={setTimeStart}
-              />
             </View>
-
-            <View style={[styles.inputGroup, styles.halfWidth]}>
-              <Text style={styles.label}>Heure fin (optionnel)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="HH:MM (ex: 18:00)"
-                placeholderTextColor={colors.textSecondary}
-                value={timeEnd}
-                onChangeText={setTimeEnd}
-              />
-            </View>
-          </View>
-
-          {/* Adresse */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Adresse *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="ex: 5 Avenue des Champs-Élysées"
-              placeholderTextColor={colors.textSecondary}
-              value={adresse}
-              onChangeText={setAdresse}
-            />
-          </View>
-
-          {/* Ville et Code postal */}
-          <View style={styles.row}>
-            <View style={[styles.inputGroup, styles.flex2]}>
-              <Text style={styles.label}>Ville *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="ex: Paris"
-                placeholderTextColor={colors.textSecondary}
-                value={ville}
-                onChangeText={setVille}
-              />
-            </View>
-
-            <View style={[styles.inputGroup, styles.flex1]}>
-              <Text style={styles.label}>Code postal</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="75008"
-                placeholderTextColor={colors.textSecondary}
-                value={codePostal}
-                onChangeText={setCodePostal}
-                keyboardType="number-pad"
-              />
-            </View>
-          </View>
+          )}
 
           {/* Participants et Prix */}
           <View style={styles.row}>
@@ -453,66 +386,6 @@ export default function CreateActivityScreen() {
             </View>
           </View>
 
-          {/* Séparateur */}
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>Localisation GPS</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          {/* Bouton de géocodage */}
-          <TouchableOpacity
-            style={[
-              styles.geocodeButton,
-              (!adresse.trim() || !ville.trim() || geocoding) && styles.geocodeButtonDisabled,
-            ]}
-            onPress={handleGeocode}
-            disabled={!adresse.trim() || !ville.trim() || geocoding}
-          >
-            {geocoding ? (
-              <ActivityIndicator size="small" color={colors.primary} />
-            ) : (
-              <IconSymbol name="location.fill" size={24} color={colors.primary} />
-            )}
-            <Text style={styles.geocodeButtonText}>
-              {geocoding ? 'Recherche en cours...' : 'Trouver les coordonnées automatiquement'}
-            </Text>
-          </TouchableOpacity>
-
-          {/* Coordonnées GPS */}
-          <View style={styles.row}>
-            <View style={[styles.inputGroup, styles.halfWidth]}>
-              <Text style={styles.label}>Latitude *</Text>
-              <TextInput
-                style={[styles.input, latitude && styles.inputDisabled]}
-                placeholder="48.8566"
-                placeholderTextColor={colors.textSecondary}
-                value={latitude}
-                onChangeText={setLatitude}
-                keyboardType="decimal-pad"
-                editable={!latitude}
-              />
-            </View>
-
-            <View style={[styles.inputGroup, styles.halfWidth]}>
-              <Text style={styles.label}>Longitude *</Text>
-              <TextInput
-                style={[styles.input, longitude && styles.inputDisabled]}
-                placeholder="2.3522"
-                placeholderTextColor={colors.textSecondary}
-                value={longitude}
-                onChangeText={setLongitude}
-                keyboardType="decimal-pad"
-                editable={!longitude}
-              />
-            </View>
-          </View>
-
-          <Text style={styles.helperText}>
-            💡 Utilisez le bouton ci-dessus pour obtenir automatiquement les coordonnées.
-            Vous pouvez aussi les modifier manuellement si besoin.
-          </Text>
-
           {/* URL image manuelle (optionnel si pas d'upload) */}
           {!imageUri && (
             <View style={styles.inputGroup}>
@@ -524,9 +397,6 @@ export default function CreateActivityScreen() {
                 value={imageUrl}
                 onChangeText={setImageUrl}
               />
-              <Text style={styles.helperText}>
-                Vous pouvez soit uploader une image ci-dessus, soit entrer une URL ici
-              </Text>
             </View>
           )}
         </View>
@@ -541,17 +411,13 @@ export default function CreateActivityScreen() {
             <View style={styles.loadingContainer}>
               <ActivityIndicator color={colors.background} />
               <Text style={styles.createButtonText}>
-                {uploadingImage ? 'Upload de l\'image...' : 'Création...'}
+                {uploadingImage ? 'Upload image...' : 'Création...'}
               </Text>
             </View>
           ) : (
             <Text style={styles.createButtonText}>Créer l'activité</Text>
           )}
         </TouchableOpacity>
-
-        <Text style={styles.footerNote}>
-          * Les champs marqués d'un astérisque sont obligatoires
-        </Text>
       </ScrollView>
 
       {/* Modal de sélection de catégorie */}
@@ -572,35 +438,39 @@ export default function CreateActivityScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.categoryList}>
-              {PREDEFINED_CATEGORIES
-                .filter(cat => {
-                  // Ne pas afficher la catégorie déjà sélectionnée
-                  if (selectingCategory === 1) {
-                    return cat.name !== categorie2;
-                  } else {
-                    return cat.name !== categorie;
-                  }
-                })
-                .map((category) => (
+            <ScrollView style={styles.categoriesList}>
+              {PREDEFINED_CATEGORIES.map((cat) => {
+                const isDisabled = selectingCategory === 2 && cat.name === categorie;
+                const isSelected = selectingCategory === 1 
+                  ? cat.name === categorie 
+                  : cat.name === categorie2;
+
+                return (
                   <TouchableOpacity
-                    key={category.id}
-                    style={styles.categoryOption}
-                    onPress={() => {
-                      if (selectingCategory === 1) {
-                        setCategorie(category.name);
-                      } else {
-                        setCategorie2(category.name);
-                      }
-                      setShowCategoryPicker(false);
-                    }}
+                    key={cat.id}
+                    style={[
+                      styles.categoryItem,
+                      isSelected && { backgroundColor: cat.color + '20' },
+                      isDisabled && styles.categoryItemDisabled,
+                    ]}
+                    onPress={() => !isDisabled && handleCategorySelect(cat.name)}
+                    disabled={isDisabled}
                   >
-                    <View style={[styles.categoryIcon, { backgroundColor: category.color + '20' }]}>
-                      <IconSymbol name={category.icon} size={24} color={category.color} />
+                    <View style={[styles.categoryIcon, { backgroundColor: cat.color + '20' }]}>
+                      <IconSymbol name={cat.icon as any} size={24} color={cat.color} />
                     </View>
-                    <Text style={styles.categoryOptionText}>{category.name}</Text>
+                    <Text style={[
+                      styles.categoryItemText,
+                      isDisabled && styles.categoryItemTextDisabled,
+                    ]}>
+                      {cat.name}
+                    </Text>
+                    {isSelected && (
+                      <IconSymbol name="checkmark.circle.fill" size={24} color={cat.color} />
+                    )}
                   </TouchableOpacity>
-                ))}
+                );
+              })}
             </ScrollView>
           </View>
         </View>
@@ -702,35 +572,48 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingRight: 15,
   },
   categoryText: {
-    color: colors.text,
     fontSize: 16,
+    color: colors.text,
   },
   placeholderText: {
-    color: colors.textSecondary,
     fontSize: 16,
+    color: colors.textSecondary,
   },
-  selectedCategoriesContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 10,
-  },
-  categoryChip: {
+  divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    marginVertical: 10,
+    gap: 12,
   },
-  categoryChipText: {
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  dividerText: {
     fontSize: 14,
     fontWeight: '600',
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  clearButton: {
-    padding: 4,
+  addressDetails: {
+    backgroundColor: colors.primary + '10',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 8,
+  },
+  addressDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  addressDetailText: {
+    fontSize: 14,
+    color: colors.primary,
+    fontWeight: '500',
   },
   row: {
     flexDirection: 'row',
@@ -739,96 +622,35 @@ const styles = StyleSheet.create({
   halfWidth: {
     flex: 1,
   },
-  flex1: {
-    flex: 1,
-  },
-  flex2: {
-    flex: 2,
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 16,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: colors.border,
-  },
-  dividerText: {
-    paddingHorizontal: 12,
-    fontSize: 14,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  helperText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 4,
-  },
-  geocodeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    gap: 8,
-    borderWidth: 2,
-    borderColor: colors.primary,
-    borderStyle: 'dashed',
-  },
-  geocodeButtonDisabled: {
-    opacity: 0.5,
-  },
-  geocodeButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.primary,
-    flex: 1,
-  },
-  inputDisabled: {
-    opacity: 0.6,
-    backgroundColor: colors.border + '20',
-  },
   createButton: {
     backgroundColor: colors.primary,
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
-    marginTop: 32,
+    marginTop: 24,
   },
   createButtonDisabled: {
-    opacity: 0.6,
+    opacity: 0.7,
   },
   createButtonText: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
     color: colors.background,
   },
   loadingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-  },
-  footerNote: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginTop: 16,
-    fontStyle: 'italic',
+    gap: 10,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingTop: 20,
+    backgroundColor: colors.card,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     maxHeight: '70%',
   },
   modalHeader: {
@@ -836,36 +658,44 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingBottom: 15,
+    paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '600',
     color: colors.text,
   },
-  categoryList: {
-    padding: 20,
+  categoriesList: {
+    padding: 16,
   },
-  categoryOption: {
+  categoryItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginBottom: 8,
+    gap: 14,
+  },
+  categoryItemDisabled: {
+    opacity: 0.4,
   },
   categoryIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 15,
   },
-  categoryOptionText: {
+  categoryItemText: {
+    flex: 1,
     fontSize: 16,
-    color: colors.text,
     fontWeight: '500',
+    color: colors.text,
+  },
+  categoryItemTextDisabled: {
+    color: colors.textSecondary,
   },
 });

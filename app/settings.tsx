@@ -125,6 +125,12 @@ export default function SettingsScreen() {
               subtitle="Manage your privacy settings"
               onPress={() => console.log('Privacy')}
             />
+            <SettingItem
+              icon="nosign"
+              title="Utilisateurs bloqués"
+              subtitle="Gérer les personnes bloquées"
+              onPress={() => router.push('/blocked-users')}
+            />
           </View>
         </View>
 
@@ -288,6 +294,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 16,
   },
+  
   logoutText: {
     fontSize: 16,
     fontWeight: '600',

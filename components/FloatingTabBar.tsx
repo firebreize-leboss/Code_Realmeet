@@ -19,7 +19,8 @@ import Animated, {
   interpolate,
 } from 'react-native-reanimated';
 
-const { width: screenWidth } = Dimensions.get('window');
+
+
 
 export interface TabBarItem {
   name: string;
@@ -36,7 +37,7 @@ interface FloatingTabBarProps {
 }
 
 export default function FloatingTabBar({
-  tabs,
+  tabs = [],
   containerWidth = 240,
   borderRadius = 25,
   bottomMargin
@@ -45,10 +46,12 @@ export default function FloatingTabBar({
   const pathname = usePathname();
   const theme = useTheme();
   const animatedValue = useSharedValue(0);
+  const { width: screenWidth } = Dimensions.get('window');
 
   // Improved active tab detection with better path matching
   const activeTabIndex = React.useMemo(() => {
     // Find the best matching tab based on the current pathname
+    if (!tabs || tabs.length === 0) return 0;
     let bestMatch = -1;
     let bestMatchScore = 0;
 
