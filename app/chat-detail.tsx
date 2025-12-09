@@ -1,5 +1,5 @@
 // app/chat-detail.tsx
-// Version mise à jour avec: messages vocaux, blocage, conversations fermées
+// Version corrigée avec chargement proper des infos de conversation
 
 import React, { useState, useRef, useEffect } from 'react';
 import {
@@ -78,15 +78,21 @@ export default function ChatDetailScreen() {
   useEffect(() => {
     const loadConversationInfo = async () => {
       try {
+        console.log('🔄 Début chargement conversation:', conversationId);
+        
         const { data: userData } = await supabase.auth.getUser();
         const currentUser = userData?.user;
+        
         if (currentUser) {
           setCurrentUserId(currentUser.id);
+          console.log('👤 Utilisateur actuel:', currentUser.id);
+          
           const { data: profileData } = await supabase
             .from('profiles')
             .select('full_name, avatar_url')
             .eq('id', currentUser.id)
             .single();
+          
           if (profileData) {
             setCurrentUserName(profileData.full_name || 'Moi');
             setCurrentUserAvatar(profileData.avatar_url || '');
@@ -104,11 +110,14 @@ export default function ChatDetailScreen() {
           }
 
           // Récupérer les infos de la conversation
-          const { data: convData } = await supabase
+          const { data: convData, error: convDataError } = await supabase
             .from('conversations')
-            .select('name, image, is_group, activity_id, is_closed, closed_at, closed_reason')
+            .select('name, image_url, is_group, activity_id, is_closed, closed_at, closed_reason')
             .eq('id', conversationId)
             .single();
+
+          console.log('📊 Données de conversation:', convData);
+          console.log('❌ Erreur conversation:', convDataError);
 
           if (convData) {
             setIsGroup(convData.is_group || false);
@@ -119,24 +128,42 @@ export default function ChatDetailScreen() {
             });
 
             if (convData.name) {
+              console.log('✅ Nom de groupe trouvé:', convData.name);
               setConvName(convData.name);
-              setConvImage(convData.image || '');
+              setConvImage(convData.image_url || '');
             } else {
               // Conversation 1-to-1
-              const { data: participants } = await supabase
+              console.log('🔍 Recherche des participants pour conversation 1-to-1...');
+              const { data: participants, error: partError } = await supabase
                 .from('conversation_participants')
-                .select('user_id, profiles:user_id(full_name, avatar_url)')
+                .select(`
+                  user_id,
+                  profiles (
+                    full_name,
+                    avatar_url
+                  )
+                `)
                 .eq('conversation_id', conversationId);
+
+              console.log('👥 Participants trouvés:', JSON.stringify(participants, null, 2));
+              console.log('❌ Erreur participants:', partError);
 
               const otherParticipant = participants?.find(
                 (p: any) => p.user_id !== currentUser?.id
               );
 
+              console.log('👤 Autre participant:', JSON.stringify(otherParticipant, null, 2));
+
               if (otherParticipant) {
                 setOtherUserId(otherParticipant.user_id);
                 const profile = (otherParticipant as any).profiles;
+                
+                console.log('📝 Profile de l\'autre participant:', profile);
+                
                 setConvName(profile?.full_name || 'Utilisateur');
                 setConvImage(profile?.avatar_url || '');
+
+                console.log('✅ Nom final défini:', profile?.full_name || 'Utilisateur');
 
                 // Vérifier les blocages
                 const blocked = await blockService.isUserBlocked(otherParticipant.user_id);
@@ -144,12 +171,16 @@ export default function ChatDetailScreen() {
                 
                 const blockedByOther = await blockService.amIBlockedBy(otherParticipant.user_id);
                 setHasBlockedMe(blockedByOther);
+              } else {
+                console.log('⚠️ Aucun autre participant trouvé');
               }
             }
+          } else {
+            console.log('⚠️ Aucune donnée de conversation trouvée');
           }
         }
       } catch (error) {
-        console.error('Error loading conversation info:', error);
+        console.error('❌ Erreur loading conversation info:', error);
       }
     };
 
@@ -198,41 +229,108 @@ export default function ChatDetailScreen() {
     return null;
   };
 
-  // Envoyer un message texte
-  const handleSendText = async () => {
-    if (!canSendMessages()) return;
-    
-    const messageToSend = message.trim();
-    if (messageToSend) {
-      setMessage('');
-      if (Platform.OS === 'ios') {
-        Keyboard.dismiss();
-      }
+  const handleSend = async () => {
+    if (!message.trim() || !canSendMessages()) return;
+
+    const userMessage = message.trim();
+    setMessage('');
+    Keyboard.dismiss();
+
+    // Message optimiste
+    const optimisticId = `temp-${Date.now()}`;
+    const optimisticMessage: Message = {
+      id: optimisticId,
+      senderId: currentUserId!,
+      senderName: currentUserName,
+      senderAvatar: currentUserAvatar,
+      text: userMessage,
+      timestamp: new Date().toLocaleTimeString('fr-FR', {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+      status: 'sending' as MessageStatus,
+    };
+
+    setLocalMessages(prev => [...prev, optimisticMessage]);
+
+    try {
+      await sendMessage(conversationId as string, userMessage, 'text');
+      setLocalMessages(prev => prev.filter(msg => msg.id !== optimisticId));
+    } catch (error) {
+      setLocalMessages(prev =>
+        prev.map(msg =>
+          msg.id === optimisticId ? { ...msg, status: 'failed' as MessageStatus } : msg
+        )
+      );
+      Alert.alert('Erreur', "Impossible d'envoyer le message");
+    }
+  };
+
+  const handleImagePick = async () => {
+    if (!canSendMessages()) {
+      Alert.alert('Action impossible', getInputWarning() || '');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.7,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      const uri = result.assets[0].uri;
+
+      const optimisticId = `temp-${Date.now()}`;
+      const optimisticMessage: Message = {
+        id: optimisticId,
+        senderId: currentUserId!,
+        senderName: currentUserName,
+        senderAvatar: currentUserAvatar,
+        imageUrl: uri,
+        timestamp: new Date().toLocaleTimeString('fr-FR', {
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+        status: 'sending' as MessageStatus,
+      };
+
+      setLocalMessages(prev => [...prev, optimisticMessage]);
+
       try {
-        await sendMessage(messageToSend, 'text');
+        const uploadedUrl = await messageStorageService.uploadImage(uri);
+        await sendMessage(conversationId as string, '', 'image', uploadedUrl);
+        setLocalMessages(prev => prev.filter(msg => msg.id !== optimisticId));
       } catch (error) {
-        console.error('Error sending message:', error);
-        setMessage(messageToSend);
-        Alert.alert('Erreur', "Le message n'a pas pu être envoyé");
+        console.error('Error sending image:', error);
+        setLocalMessages(prev =>
+          prev.map(msg =>
+            msg.id === optimisticId ? { ...msg, status: 'failed' as MessageStatus } : msg
+          )
+        );
+        Alert.alert('Erreur', "Impossible d'envoyer l'image");
       }
     }
   };
 
-  // === MESSAGES VOCAUX ===
+  // Gestion des messages vocaux
   const handleStartRecording = async () => {
-    if (!canSendMessages()) return;
+    if (!canSendMessages()) {
+      Alert.alert('Action impossible', getInputWarning() || '');
+      return;
+    }
 
-    const result = await voiceMessageService.startRecording();
-    if (result.success) {
+    try {
+      await voiceMessageService.startRecording();
       setIsRecording(true);
       setRecordingTime(0);
-      
-      // Timer pour afficher la durée
+
       recordingIntervalRef.current = setInterval(() => {
-        setRecordingTime(voiceMessageService.getCurrentRecordingDuration());
-      }, 100);
-    } else {
-      Alert.alert('Erreur', result.error || 'Impossible de démarrer l\'enregistrement');
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      Alert.alert('Erreur', "Impossible de démarrer l'enregistrement");
     }
   };
 
@@ -242,62 +340,84 @@ export default function ChatDetailScreen() {
       recordingIntervalRef.current = null;
     }
 
-    const result = await voiceMessageService.stopRecording();
-    setIsRecording(false);
+    try {
+      const result = await voiceMessageService.stopRecording();
+      setIsRecording(false);
+      setRecordingTime(0);
 
-    if (result.success && result.uri && currentUserId) {
-      // Durée minimale de 1 seconde
-      if ((result.duration || 0) < 1) {
-        Alert.alert('Message trop court', 'L\'enregistrement doit durer au moins 1 seconde.');
-        return;
+      if (result) {
+        const optimisticId = `temp-${Date.now()}`;
+        const optimisticMessage: Message = {
+          id: optimisticId,
+          senderId: currentUserId!,
+          senderName: currentUserName,
+          senderAvatar: currentUserAvatar,
+          voiceUrl: result.uri,
+          voiceDuration: result.duration,
+          timestamp: new Date().toLocaleTimeString('fr-FR', {
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+          status: 'sending' as MessageStatus,
+        };
+
+        setLocalMessages(prev => [...prev, optimisticMessage]);
+
+        try {
+          const uploadedUrl = await messageStorageService.uploadVoiceMessage(result.uri);
+          await sendMessage('', 'voice', uploadedUrl, result.duration);
+          setLocalMessages(prev => prev.filter(msg => msg.id !== optimisticId));
+        } catch (error) {
+          console.error('Error sending voice message:', error);
+          setLocalMessages(prev =>
+            prev.map(msg =>
+              msg.id === optimisticId ? { ...msg, status: 'failed' as MessageStatus } : msg
+            )
+          );
+          Alert.alert('Erreur', "Impossible d'envoyer le message vocal");
+        }
       }
-
-      // Upload et envoi
-      const uploadResult = await voiceMessageService.uploadVoiceMessage(
-        result.uri,
-        conversationId as string,
-        currentUserId
-      );
-
-      if (uploadResult.success && uploadResult.url) {
-        await sendMessage('', 'voice', uploadResult.url, result.duration);
-      } else {
-        Alert.alert('Erreur', 'Impossible d\'envoyer le message vocal');
-      }
+    } catch (error) {
+      console.error('Error stopping recording:', error);
+      setIsRecording(false);
+      setRecordingTime(0);
     }
-    
-    setRecordingTime(0);
   };
 
-  const handleCancelRecording = async () => {
-    if (recordingIntervalRef.current) {
-      clearInterval(recordingIntervalRef.current);
-      recordingIntervalRef.current = null;
-    }
-    await voiceMessageService.cancelRecording();
-    setIsRecording(false);
-    setRecordingTime(0);
-  };
-
-  const handlePlayVoice = async (voiceUrl: string, messageId: string) => {
+  const handlePlayVoice = async (messageId: string, voiceUrl: string) => {
     if (playingVoiceId === messageId) {
       await voiceMessageService.stopPlayback();
       setPlayingVoiceId(null);
     } else {
-      await voiceMessageService.stopPlayback();
-      const result = await voiceMessageService.playVoiceMessage(voiceUrl);
-      if (result.success) {
-        setPlayingVoiceId(messageId);
+      if (playingVoiceId) {
+        await voiceMessageService.stopPlayback();
       }
+      await voiceMessageService.playVoiceMessage(voiceUrl);
+      setPlayingVoiceId(messageId);
+
+      setTimeout(() => {
+        setPlayingVoiceId(null);
+      }, 5000);
     }
   };
 
-  // === BLOCAGE ===
+  const formatRecordingTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const formatDuration = (duration: number) => {
+    const mins = Math.floor(duration / 60);
+    const secs = Math.floor(duration % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   const handleBlockUser = async () => {
     if (!otherUserId) return;
 
     Alert.alert(
-      'Bloquer cet utilisateur ?',
+      'Bloquer cet utilisateur',
       'Vous ne pourrez plus recevoir de messages de cette personne.',
       [
         { text: 'Annuler', style: 'cancel' },
@@ -305,11 +425,13 @@ export default function ChatDetailScreen() {
           text: 'Bloquer',
           style: 'destructive',
           onPress: async () => {
-            const result = await blockService.blockUser(otherUserId);
-            if (result.success) {
+            try {
+              await blockService.blockUser(otherUserId);
               setIsBlocked(true);
               setShowOptionsModal(false);
-              Alert.alert('Utilisateur bloqué', 'Vous avez bloqué cet utilisateur.');
+              Alert.alert('Succès', 'Utilisateur bloqué');
+            } catch (error) {
+              Alert.alert('Erreur', 'Impossible de bloquer cet utilisateur');
             }
           },
         },
@@ -320,114 +442,68 @@ export default function ChatDetailScreen() {
   const handleUnblockUser = async () => {
     if (!otherUserId) return;
 
-    const result = await blockService.unblockUser(otherUserId);
-    if (result.success) {
+    try {
+      await blockService.unblockUser(otherUserId);
       setIsBlocked(false);
       setShowOptionsModal(false);
-      Alert.alert('Utilisateur débloqué', 'Vous pouvez à nouveau échanger des messages.');
-    }
-  };
-
-  // Sélection d'image
-  const handlePickImage = async () => {
-    if (!canSendMessages()) return;
-
-    try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission requise', 'Accès à la galerie nécessaire.');
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 0.8,
-        base64: true,
-      });
-
-      if (result.canceled || !result.assets?.[0]) return;
-
-      const asset = result.assets[0];
-      if (!asset.base64 || !currentUserId) {
-        Alert.alert('Erreur', 'Impossible de lire l\'image.');
-        return;
-      }
-
-      const uploadResult = await messageStorageService.uploadMessageImage(
-        asset,
-        conversationId as string,
-        currentUserId
-      );
-
-      if (uploadResult.success && uploadResult.url) {
-        await sendMessage('', 'image', uploadResult.url);
-      } else {
-        Alert.alert('Erreur', uploadResult.error || 'Impossible d\'uploader l\'image.');
-      }
+      Alert.alert('Succès', 'Utilisateur débloqué');
     } catch (error) {
-      console.error('Erreur envoi image:', error);
-      Alert.alert('Erreur', 'Impossible d\'envoyer l\'image.');
+      Alert.alert('Erreur', 'Impossible de débloquer cet utilisateur');
     }
   };
 
-  const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  const handleViewProfile = () => {
+    setShowOptionsModal(false);
+    if (otherUserId) {
+      router.push(`/user-profile?id=${otherUserId}`);
+    }
   };
 
-  // Rendu des messages
   const renderMessage = (msg: Message) => {
     const isOwnMessage = msg.senderId === currentUserId;
-    const isFailed = msg.status === 'failed';
+    const isSystemMessage = msg.messageType === 'system';
 
-    // Message système
-    if (msg.type === 'system') {
+    if (isSystemMessage) {
       return (
-        <View key={msg.id} style={styles.systemMessageWrapper}>
-          <View style={styles.systemMessageBubble}>
-            <Text style={styles.systemMessageText}>{msg.text}</Text>
-          </View>
+        <View key={msg.id} style={styles.systemMessageContainer}>
+          <Text style={styles.systemMessageText}>{msg.text}</Text>
         </View>
       );
     }
 
     return (
-      <View
-        key={msg.id}
-        style={[styles.messageWrapper, isOwnMessage && styles.messageWrapperOwn]}
-      >
-        {!isOwnMessage && isGroup && (
-          <Image source={{ uri: msg.senderAvatar || 'https://via.placeholder.com/32' }} style={styles.messageAvatar} />
+      <View key={msg.id} style={[styles.messageRow, isOwnMessage && styles.ownMessageRow]}>
+        {!isOwnMessage && (
+          <Image
+            source={{ uri: msg.senderAvatar || 'https://via.placeholder.com/40' }}
+            style={styles.messageAvatar}
+          />
         )}
 
-        <View style={[
-          styles.messageBubble,
-          isOwnMessage && styles.messageBubbleOwn,
-          isFailed && styles.messageBubbleFailed,
-          msg.type === 'image' && styles.imageBubble,
-        ]}>
-          {!isOwnMessage && isGroup && (
-            <Text style={styles.senderName}>{msg.senderName}</Text>
-          )}
+        <View style={[styles.messageBubble, isOwnMessage && styles.ownMessageBubble]}>
+          {!isOwnMessage && <Text style={styles.senderName}>{msg.senderName}</Text>}
 
-          {msg.type === 'text' && (
-            <Text style={[styles.messageText, isOwnMessage && styles.messageTextOwn]}>
+          {msg.text && (
+            <Text style={[styles.messageText, isOwnMessage && styles.ownMessageText]}>
               {msg.text}
             </Text>
           )}
 
-          {msg.type === 'image' && msg.imageUrl && (
+          {msg.imageUrl && (
             <Image source={{ uri: msg.imageUrl }} style={styles.messageImage} />
           )}
 
-          {msg.type === 'voice' && msg.voiceUrl && (
+          {msg.voiceUrl && (
             <TouchableOpacity
               style={styles.voiceMessage}
-              onPress={() => handlePlayVoice(msg.voiceUrl!, msg.id)}
+              onPress={() => handlePlayVoice(msg.id, msg.voiceUrl!)}
             >
-              <View style={[styles.playButton, isOwnMessage && styles.playButtonOwn]}>
+              <View
+                style={[
+                  styles.voicePlayButton,
+                  isOwnMessage && styles.voicePlayButtonOwn,
+                ]}
+              >
                 <IconSymbol
                   name={playingVoiceId === msg.id ? 'pause.fill' : 'play.fill'}
                   size={16}
@@ -456,6 +532,25 @@ export default function ChatDetailScreen() {
             <Text style={[styles.messageTime, isOwnMessage && styles.messageTimeOwn]}>
               {msg.timestamp}
             </Text>
+            {isOwnMessage && msg.status && (
+              <View style={styles.statusContainer}>
+                {msg.status === 'sending' && (
+                  <ActivityIndicator size="small" color={colors.textSecondary} />
+                )}
+                {msg.status === 'sent' && (
+                  <IconSymbol name="checkmark" size={14} color={colors.textSecondary} />
+                )}
+                {msg.status === 'delivered' && (
+                  <View style={styles.doubleCheck}>
+                    <IconSymbol name="checkmark" size={14} color={colors.textSecondary} />
+                    <IconSymbol name="checkmark" size={14} color={colors.textSecondary} />
+                  </View>
+                )}
+                {msg.status === 'failed' && (
+                  <IconSymbol name="exclamationmark.circle" size={14} color={colors.error} />
+                )}
+              </View>
+            )}
           </View>
         </View>
       </View>
@@ -512,72 +607,89 @@ export default function ChatDetailScreen() {
           )}
 
           {messagesLoading ? (
-            <ActivityIndicator size="large" color={colors.primary} />
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={colors.primary} />
+            </View>
           ) : (
             combinedMessages.map(renderMessage)
           )}
         </ScrollView>
 
-        {/* Zone de saisie ou avertissement */}
-        {inputWarning ? (
-          <View style={styles.warningContainer}>
-            <IconSymbol name="exclamationmark.triangle.fill" size={18} color={colors.textSecondary} />
-            <Text style={styles.warningText}>{inputWarning}</Text>
-            {isBlocked && (
-              <TouchableOpacity onPress={handleUnblockUser} style={styles.unblockButton}>
-                <Text style={styles.unblockButtonText}>Débloquer</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        ) : isRecording ? (
-          <View style={styles.recordingBar}>
-            <TouchableOpacity onPress={handleCancelRecording} style={styles.cancelRecordButton}>
-              <IconSymbol name="xmark" size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
-            <View style={styles.recordingIndicator}>
-              <View style={styles.recordingDot} />
-              <Text style={styles.recordingText}>{formatDuration(recordingTime)}</Text>
+        {/* Zone de saisie */}
+        <View style={styles.inputContainer}>
+          {inputWarning && (
+            <View style={styles.warningBanner}>
+              <IconSymbol name="exclamationmark.triangle.fill" size={16} color={colors.warning} />
+              <Text style={styles.warningText}>{inputWarning}</Text>
             </View>
-            <TouchableOpacity style={styles.stopRecordingButton} onPress={handleStopRecording}>
-              <IconSymbol name="arrow.up" size={20} color={colors.background} />
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={styles.inputContainer}>
-            <TouchableOpacity style={styles.attachButton} onPress={handlePickImage}>
-              <IconSymbol name="plus.circle.fill" size={28} color={colors.primary} />
-            </TouchableOpacity>
+          )}
 
-            <TextInput
-              style={styles.input}
-              placeholder="Message..."
-              placeholderTextColor={colors.textSecondary}
-              value={message}
-              onChangeText={setMessage}
-              multiline
-            />
-
-            {message.trim() ? (
-              <TouchableOpacity style={styles.sendButton} onPress={handleSendText}>
-                <IconSymbol name="arrow.up.circle.fill" size={32} color={colors.primary} />
+          {isRecording ? (
+            <View style={styles.recordingContainer}>
+              <View style={styles.recordingIndicator}>
+                <View style={styles.recordingDot} />
+                <Text style={styles.recordingTime}>{formatRecordingTime(recordingTime)}</Text>
+              </View>
+              <TouchableOpacity style={styles.stopRecordingButton} onPress={handleStopRecording}>
+                <IconSymbol name="stop.fill" size={24} color={colors.error} />
               </TouchableOpacity>
-            ) : (
+            </View>
+          ) : (
+            <View style={styles.inputRow}>
               <TouchableOpacity
-                style={styles.voiceButton}
-                onPress={handleStartRecording}
+                style={styles.iconButton}
+                onPress={handleImagePick}
+                disabled={!canSendMessages()}
               >
-                <IconSymbol name="mic.fill" size={24} color={colors.primary} />
+                <IconSymbol
+                  name="photo"
+                  size={24}
+                  color={canSendMessages() ? colors.primary : colors.textSecondary}
+                />
               </TouchableOpacity>
-            )}
-          </View>
-        )}
+
+              <TextInput
+                style={styles.input}
+                placeholder="Message..."
+                placeholderTextColor={colors.textSecondary}
+                value={message}
+                onChangeText={setMessage}
+                multiline
+                maxLength={500}
+                editable={canSendMessages()}
+              />
+
+              {message.trim() ? (
+                <TouchableOpacity
+                  style={styles.sendButton}
+                  onPress={handleSend}
+                  disabled={!canSendMessages()}
+                >
+                  <IconSymbol name="arrow.up.circle.fill" size={32} color={colors.primary} />
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={styles.iconButton}
+                  onPress={handleStartRecording}
+                  disabled={!canSendMessages()}
+                >
+                  <IconSymbol
+                    name="mic.fill"
+                    size={24}
+                    color={canSendMessages() ? colors.primary : colors.textSecondary}
+                  />
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+        </View>
       </KeyboardAvoidingView>
 
       {/* Modal Options */}
       <Modal
         visible={showOptionsModal}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setShowOptionsModal(false)}
       >
         <TouchableOpacity
@@ -586,44 +698,35 @@ export default function ChatDetailScreen() {
           onPress={() => setShowOptionsModal(false)}
         >
           <View style={styles.modalContent}>
-            <View style={styles.modalHandle} />
-
-            {!isGroup && otherUserId && (
+            <Text style={styles.modalTitle}>Options</Text>
+            
+            {!isGroup && (
               <>
-                <TouchableOpacity
-                  style={styles.modalOption}
-                  onPress={() => {
-                    setShowOptionsModal(false);
-                    router.push(`/user-profile?id=${otherUserId}`);
-                  }}
-                >
-                  <IconSymbol name="person.fill" size={22} color={colors.text} />
+                <TouchableOpacity style={styles.modalOption} onPress={handleViewProfile}>
+                  <IconSymbol name="person.fill" size={20} color={colors.text} />
                   <Text style={styles.modalOptionText}>Voir le profil</Text>
                 </TouchableOpacity>
 
                 {isBlocked ? (
                   <TouchableOpacity style={styles.modalOption} onPress={handleUnblockUser}>
-                    <IconSymbol name="checkmark.circle" size={22} color={colors.primary} />
-                    <Text style={[styles.modalOptionText, { color: colors.primary }]}>
-                      Débloquer l'utilisateur
-                    </Text>
+                    <IconSymbol name="checkmark.circle" size={20} color={colors.success} />
+                    <Text style={styles.modalOptionText}>Débloquer</Text>
                   </TouchableOpacity>
                 ) : (
                   <TouchableOpacity style={styles.modalOption} onPress={handleBlockUser}>
-                    <IconSymbol name="nosign" size={22} color="#FF3B30" />
-                    <Text style={[styles.modalOptionText, { color: '#FF3B30' }]}>
-                      Bloquer l'utilisateur
-                    </Text>
+                    <IconSymbol name="hand.raised.fill" size={20} color={colors.error} />
+                    <Text style={styles.modalOptionText}>Bloquer</Text>
                   </TouchableOpacity>
                 )}
               </>
             )}
 
             <TouchableOpacity
-              style={[styles.modalOption, styles.modalOptionCancel]}
+              style={styles.modalOption}
               onPress={() => setShowOptionsModal(false)}
             >
-              <Text style={styles.modalCancelText}>Annuler</Text>
+              <IconSymbol name="xmark" size={20} color={colors.textSecondary} />
+              <Text style={styles.modalOptionText}>Annuler</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -636,28 +739,36 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-    gap: 12,
+    backgroundColor: colors.card,
   },
   backButton: {
-    padding: 4,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerInfo: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    marginLeft: 12,
     gap: 12,
   },
   headerAvatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
+    backgroundColor: colors.border,
   },
   headerName: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '600',
     color: colors.text,
   },
@@ -667,82 +778,134 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   moreButton: {
-    padding: 4,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   messagesContainer: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   messagesContent: {
     padding: 16,
-    gap: 8,
+    paddingBottom: 32,
   },
   closedBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.border,
-    borderRadius: 12,
-    padding: 14,
+    backgroundColor: colors.card,
+    padding: 12,
+    borderRadius: 8,
     marginBottom: 16,
-    gap: 10,
+    gap: 8,
   },
   closedBannerText: {
     flex: 1,
     fontSize: 14,
     color: colors.textSecondary,
-    lineHeight: 20,
   },
-  messageWrapper: {
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  systemMessageContainer: {
+    alignItems: 'center',
+    marginVertical: 16,
+  },
+  systemMessageText: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    backgroundColor: colors.card,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  messageRow: {
     flexDirection: 'row',
+    marginBottom: 16,
     alignItems: 'flex-end',
-    marginBottom: 4,
     gap: 8,
   },
-  messageWrapperOwn: {
+  ownMessageRow: {
     flexDirection: 'row-reverse',
   },
   messageAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.border,
   },
   messageBubble: {
     maxWidth: '75%',
     backgroundColor: colors.card,
-    borderRadius: 18,
+    borderRadius: 16,
     padding: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
-  messageBubbleOwn: {
+  ownMessageBubble: {
     backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  messageBubbleFailed: {
-    borderColor: '#FF3B30',
-    opacity: 0.7,
-  },
-  imageBubble: {
-    padding: 4,
-    borderRadius: 12,
   },
   senderName: {
     fontSize: 12,
     fontWeight: '600',
-    color: colors.primary,
+    color: colors.text,
     marginBottom: 4,
   },
   messageText: {
-    fontSize: 16,
+    fontSize: 15,
     color: colors.text,
     lineHeight: 20,
   },
-  messageTextOwn: {
+  ownMessageText: {
     color: colors.background,
   },
   messageImage: {
     width: 200,
     height: 200,
-    borderRadius: 8,
+    borderRadius: 12,
+    marginTop: 4,
+  },
+  voiceMessage: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  voicePlayButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  voicePlayButtonOwn: {
+    backgroundColor: colors.background,
+  },
+  waveformContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    flex: 1,
+  },
+  waveformBar: {
+    width: 3,
+    backgroundColor: colors.textSecondary,
+    borderRadius: 2,
+  },
+  waveformBarOwn: {
+    backgroundColor: colors.background,
+  },
+  voiceDuration: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  voiceDurationOwn: {
+    color: colors.background,
   },
   messageFooter: {
     flexDirection: 'row',
@@ -755,201 +918,119 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   messageTimeOwn: {
-    color: colors.background + 'CC',
+    color: colors.background,
+    opacity: 0.7,
   },
-  voiceMessage: {
+  statusContainer: {
+    marginLeft: 4,
+  },
+  doubleCheck: {
+    flexDirection: 'row',
+    marginLeft: -8,
+  },
+  inputContainer: {
+    backgroundColor: colors.card,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 12,
+  },
+  warningBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    minWidth: 160,
-  },
-  playButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  playButtonOwn: {
     backgroundColor: colors.background,
-  },
-  waveformContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    height: 32,
-  },
-  waveformBar: {
-    width: 3,
-    backgroundColor: colors.textSecondary,
-    borderRadius: 2,
-  },
-  waveformBarOwn: {
-    backgroundColor: colors.background + '80',
-  },
-  voiceDuration: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    minWidth: 35,
-  },
-  voiceDurationOwn: {
-    color: colors.background + 'CC',
-  },
-  systemMessageWrapper: {
-    alignItems: 'center',
-    marginVertical: 12,
-  },
-  systemMessageBubble: {
-    backgroundColor: colors.border,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 16,
-  },
-  systemMessageText: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    fontStyle: 'italic',
-    textAlign: 'center',
-  },
-  warningContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.border,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 10,
+    padding: 8,
+    borderRadius: 8,
+    marginBottom: 8,
+    gap: 8,
   },
   warningText: {
     flex: 1,
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  unblockButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: colors.primary,
-  },
-  unblockButtonText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: colors.background,
+    color: colors.warning,
   },
-  recordingBar: {
+  inputRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FF3B30' + '15',
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    alignItems: 'flex-end',
+    gap: 8,
   },
-  cancelRecordButton: {
+  iconButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  input: {
+    flex: 1,
+    backgroundColor: colors.background,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: colors.text,
+    maxHeight: 100,
+  },
+  sendButton: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  recordingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   recordingIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
   },
   recordingDot: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#FF3B30',
+    backgroundColor: colors.error,
   },
-  recordingText: {
-    fontSize: 18,
+  recordingTime: {
+    fontSize: 16,
     fontWeight: '600',
     color: colors.text,
   },
   stopRecordingButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.primary,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: colors.background,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    gap: 8,
-  },
-  attachButton: {
-    padding: 4,
-  },
-  input: {
-    flex: 1,
-    minHeight: 36,
-    maxHeight: 100,
-    backgroundColor: colors.card,
-    borderRadius: 18,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    fontSize: 16,
-    color: colors.text,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  sendButton: {
-    padding: 2,
-  },
-  voiceButton: {
-    padding: 6,
   },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalContent: {
+    width: '80%',
     backgroundColor: colors.card,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingBottom: 34,
+    borderRadius: 16,
+    padding: 20,
   },
-  modalHandle: {
-    width: 40,
-    height: 4,
-    backgroundColor: colors.border,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginVertical: 12,
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 16,
   },
   modalOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    gap: 14,
+    paddingVertical: 12,
+    gap: 12,
   },
   modalOptionText: {
-    fontSize: 17,
+    fontSize: 16,
     color: colors.text,
-  },
-  modalOptionCancel: {
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    marginTop: 8,
-    justifyContent: 'center',
-  },
-  modalCancelText: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: colors.textSecondary,
   },
 });
