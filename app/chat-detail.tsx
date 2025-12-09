@@ -1,5 +1,5 @@
 // app/chat-detail.tsx
-// Version corrigée avec chargement proper des infos de conversation
+// Version avec navigation vers profil et option sourdine
 
 import React, { useState, useRef, useEffect } from 'react';
 import {
@@ -67,7 +67,10 @@ export default function ChatDetailScreen() {
   // États pour le blocage
   const [isBlocked, setIsBlocked] = useState(false);
   const [hasBlockedMe, setHasBlockedMe] = useState(false);
+  
+  // États pour le modal et la sourdine
   const [showOptionsModal, setShowOptionsModal] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
 
   const [localMessages, setLocalMessages] = useState<Message[]>([]);
 
@@ -78,49 +81,34 @@ export default function ChatDetailScreen() {
   useEffect(() => {
     const loadConversationInfo = async () => {
       try {
-        console.log('🔄 Début chargement conversation:', conversationId);
-        
         const { data: userData } = await supabase.auth.getUser();
         const currentUser = userData?.user;
-        
-        if (currentUser) {
-          setCurrentUserId(currentUser.id);
-          console.log('👤 Utilisateur actuel:', currentUser.id);
-          
-          const { data: profileData } = await supabase
-            .from('profiles')
-            .select('full_name, avatar_url')
-            .eq('id', currentUser.id)
-            .single();
-          
-          if (profileData) {
-            setCurrentUserName(profileData.full_name || 'Moi');
-            setCurrentUserAvatar(profileData.avatar_url || '');
-          }
+        if (!currentUser) return;
+
+        setCurrentUserId(currentUser.id);
+
+        // Charger le profil de l'utilisateur actuel
+        const { data: myProfile } = await supabase
+          .from('profiles')
+          .select('full_name, avatar_url')
+          .eq('id', currentUser.id)
+          .single();
+
+        if (myProfile) {
+          setCurrentUserName(myProfile.full_name || 'Moi');
+          setCurrentUserAvatar(myProfile.avatar_url || '');
         }
 
+        // Charger les infos de la conversation
         if (conversationId) {
-          // Marquer comme lu
-          if (currentUser) {
-            await supabase
-              .from('conversation_participants')
-              .update({ last_read_at: new Date().toISOString() })
-              .eq('conversation_id', conversationId)
-              .eq('user_id', currentUser.id);
-          }
-
-          // Récupérer les infos de la conversation
-          const { data: convData, error: convDataError } = await supabase
+          const { data: convData } = await supabase
             .from('conversations')
-            .select('name, image_url, is_group, activity_id, is_closed, closed_at, closed_reason')
+            .select('*, name, image_url, is_closed, closed_reason, closed_at, activity_id')
             .eq('id', conversationId)
             .single();
 
-          console.log('📊 Données de conversation:', convData);
-          console.log('❌ Erreur conversation:', convDataError);
-
           if (convData) {
-            setIsGroup(convData.is_group || false);
+            setIsGroup(!!convData.name);
             setConversationStatus({
               isClosed: convData.is_closed || false,
               closedReason: convData.closed_reason,
@@ -128,59 +116,43 @@ export default function ChatDetailScreen() {
             });
 
             if (convData.name) {
-              console.log('✅ Nom de groupe trouvé:', convData.name);
               setConvName(convData.name);
               setConvImage(convData.image_url || '');
             } else {
               // Conversation 1-to-1
-              console.log('🔍 Recherche des participants pour conversation 1-to-1...');
-              const { data: participants, error: partError } = await supabase
+              const { data: participants } = await supabase
                 .from('conversation_participants')
-                .select(`
-                  user_id,
-                  profiles (
-                    full_name,
-                    avatar_url
-                  )
-                `)
+                .select(`user_id, is_muted, profiles (full_name, avatar_url)`)
                 .eq('conversation_id', conversationId);
 
-              console.log('👥 Participants trouvés:', JSON.stringify(participants, null, 2));
-              console.log('❌ Erreur participants:', partError);
+              // Vérifier l'état de sourdine pour l'utilisateur actuel
+              const myParticipant = participants?.find((p: any) => p.user_id === currentUser.id);
+              if (myParticipant) {
+                setIsMuted(myParticipant.is_muted || false);
+              }
 
               const otherParticipant = participants?.find(
-                (p: any) => p.user_id !== currentUser?.id
+                (p: any) => p.user_id !== currentUser.id
               );
-
-              console.log('👤 Autre participant:', JSON.stringify(otherParticipant, null, 2));
 
               if (otherParticipant) {
                 setOtherUserId(otherParticipant.user_id);
                 const profile = (otherParticipant as any).profiles;
-                
-                console.log('📝 Profile de l\'autre participant:', profile);
-                
                 setConvName(profile?.full_name || 'Utilisateur');
                 setConvImage(profile?.avatar_url || '');
-
-                console.log('✅ Nom final défini:', profile?.full_name || 'Utilisateur');
 
                 // Vérifier les blocages
                 const blocked = await blockService.isUserBlocked(otherParticipant.user_id);
                 setIsBlocked(blocked);
-                
+
                 const blockedByOther = await blockService.amIBlockedBy(otherParticipant.user_id);
                 setHasBlockedMe(blockedByOther);
-              } else {
-                console.log('⚠️ Aucun autre participant trouvé');
               }
             }
-          } else {
-            console.log('⚠️ Aucune donnée de conversation trouvée');
           }
         }
       } catch (error) {
-        console.error('❌ Erreur loading conversation info:', error);
+        console.error('Erreur loading conversation info:', error);
       }
     };
 
@@ -195,7 +167,6 @@ export default function ChatDetailScreen() {
     scrollViewRef.current?.scrollToEnd({ animated: true });
   }, [combinedMessages]);
 
-  // Nettoyage à la fermeture
   useEffect(() => {
     return () => {
       if (recordingIntervalRef.current) {
@@ -205,14 +176,12 @@ export default function ChatDetailScreen() {
     };
   }, []);
 
-  // Vérifier si on peut envoyer des messages
   const canSendMessages = (): boolean => {
     if (conversationStatus.isClosed) return false;
     if (isBlocked || hasBlockedMe) return false;
     return true;
   };
 
-  // Obtenir le message d'avertissement pour la zone de saisie
   const getInputWarning = (): string | null => {
     if (conversationStatus.isClosed) {
       if (conversationStatus.closedReason === 'activity_ended') {
@@ -220,13 +189,46 @@ export default function ChatDetailScreen() {
       }
       return 'Cette conversation est fermée.';
     }
-    if (isBlocked) {
-      return 'Vous avez bloqué cet utilisateur.';
-    }
-    if (hasBlockedMe) {
-      return 'Vous ne pouvez pas envoyer de messages à cet utilisateur.';
-    }
+    if (isBlocked) return 'Vous avez bloqué cet utilisateur.';
+    if (hasBlockedMe) return 'Vous ne pouvez pas envoyer de messages à cet utilisateur.';
     return null;
+  };
+
+  // Navigation vers le profil
+  const handleHeaderPress = () => {
+    if (!isGroup && otherUserId) {
+      router.push(`/user-profile?id=${otherUserId}`);
+    }
+  };
+
+  // Toggle sourdine
+  const handleToggleMute = async () => {
+    if (!conversationId) return;
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const newMutedState = !isMuted;
+
+      const { error } = await supabase
+        .from('conversation_participants')
+        .update({ is_muted: newMutedState })
+        .eq('conversation_id', conversationId)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      setIsMuted(newMutedState);
+      setShowOptionsModal(false);
+      Alert.alert(
+        'Succès',
+        newMutedState ? 'Conversation mise en sourdine' : 'Notifications réactivées'
+      );
+    } catch (error) {
+      console.error('Erreur toggle mute:', error);
+      Alert.alert('Erreur', 'Impossible de modifier les notifications');
+    }
   };
 
   const handleSend = async () => {
@@ -236,7 +238,6 @@ export default function ChatDetailScreen() {
     setMessage('');
     Keyboard.dismiss();
 
-    // Message optimiste
     const optimisticId = `temp-${Date.now()}`;
     const optimisticMessage: Message = {
       id: optimisticId,
@@ -244,11 +245,9 @@ export default function ChatDetailScreen() {
       senderName: currentUserName,
       senderAvatar: currentUserAvatar,
       text: userMessage,
-      timestamp: new Date().toLocaleTimeString('fr-FR', {
-        hour: '2-digit',
-        minute: '2-digit',
-      }),
+      timestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
       status: 'sending' as MessageStatus,
+      type: 'text',
     };
 
     setLocalMessages(prev => [...prev, optimisticMessage]);
@@ -258,11 +257,8 @@ export default function ChatDetailScreen() {
       setLocalMessages(prev => prev.filter(msg => msg.id !== optimisticId));
     } catch (error) {
       setLocalMessages(prev =>
-        prev.map(msg =>
-          msg.id === optimisticId ? { ...msg, status: 'failed' as MessageStatus } : msg
-        )
+        prev.map(msg => (msg.id === optimisticId ? { ...msg, status: 'failed' as MessageStatus } : msg))
       );
-      Alert.alert('Erreur', "Impossible d'envoyer le message");
     }
   };
 
@@ -272,48 +268,50 @@ export default function ChatDetailScreen() {
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 0.7,
-    });
-
-    if (!result.canceled && result.assets[0]) {
-      const uri = result.assets[0].uri;
-
-      const optimisticId = `temp-${Date.now()}`;
-      const optimisticMessage: Message = {
-        id: optimisticId,
-        senderId: currentUserId!,
-        senderName: currentUserName,
-        senderAvatar: currentUserAvatar,
-        imageUrl: uri,
-        timestamp: new Date().toLocaleTimeString('fr-FR', {
-          hour: '2-digit',
-          minute: '2-digit',
-        }),
-        status: 'sending' as MessageStatus,
-      };
-
-      setLocalMessages(prev => [...prev, optimisticMessage]);
-
-      try {
-        const uploadedUrl = await messageStorageService.uploadImage(uri);
-        await sendMessage(conversationId as string, '', 'image', uploadedUrl);
-        setLocalMessages(prev => prev.filter(msg => msg.id !== optimisticId));
-      } catch (error) {
-        console.error('Error sending image:', error);
-        setLocalMessages(prev =>
-          prev.map(msg =>
-            msg.id === optimisticId ? { ...msg, status: 'failed' as MessageStatus } : msg
-          )
-        );
-        Alert.alert('Erreur', "Impossible d'envoyer l'image");
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission requise', "L'accès à la galerie est nécessaire");
+        return;
       }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const optimisticId = `temp-${Date.now()}`;
+        const optimisticMessage: Message = {
+          id: optimisticId,
+          senderId: currentUserId!,
+          senderName: currentUserName,
+          senderAvatar: currentUserAvatar,
+          imageUrl: result.assets[0].uri,
+          timestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+          status: 'sending' as MessageStatus,
+          type: 'image',
+        };
+
+        setLocalMessages(prev => [...prev, optimisticMessage]);
+
+        try {
+          const uploadedUrl = await messageStorageService.uploadImage(result.assets[0].uri);
+          await sendMessage('', 'image', uploadedUrl);
+          setLocalMessages(prev => prev.filter(msg => msg.id !== optimisticId));
+        } catch (error) {
+          setLocalMessages(prev =>
+            prev.map(msg => (msg.id === optimisticId ? { ...msg, status: 'failed' as MessageStatus } : msg))
+          );
+          Alert.alert('Erreur', "Impossible d'envoyer l'image");
+        }
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
     }
   };
 
-  // Gestion des messages vocaux
   const handleStartRecording = async () => {
     if (!canSendMessages()) {
       Alert.alert('Action impossible', getInputWarning() || '');
@@ -324,12 +322,10 @@ export default function ChatDetailScreen() {
       await voiceMessageService.startRecording();
       setIsRecording(true);
       setRecordingTime(0);
-
       recordingIntervalRef.current = setInterval(() => {
         setRecordingTime(prev => prev + 1);
       }, 1000);
     } catch (error) {
-      console.error('Error starting recording:', error);
       Alert.alert('Erreur', "Impossible de démarrer l'enregistrement");
     }
   };
@@ -354,11 +350,9 @@ export default function ChatDetailScreen() {
           senderAvatar: currentUserAvatar,
           voiceUrl: result.uri,
           voiceDuration: result.duration,
-          timestamp: new Date().toLocaleTimeString('fr-FR', {
-            hour: '2-digit',
-            minute: '2-digit',
-          }),
+          timestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
           status: 'sending' as MessageStatus,
+          type: 'voice',
         };
 
         setLocalMessages(prev => [...prev, optimisticMessage]);
@@ -368,17 +362,13 @@ export default function ChatDetailScreen() {
           await sendMessage('', 'voice', uploadedUrl, result.duration);
           setLocalMessages(prev => prev.filter(msg => msg.id !== optimisticId));
         } catch (error) {
-          console.error('Error sending voice message:', error);
           setLocalMessages(prev =>
-            prev.map(msg =>
-              msg.id === optimisticId ? { ...msg, status: 'failed' as MessageStatus } : msg
-            )
+            prev.map(msg => (msg.id === optimisticId ? { ...msg, status: 'failed' as MessageStatus } : msg))
           );
           Alert.alert('Erreur', "Impossible d'envoyer le message vocal");
         }
       }
     } catch (error) {
-      console.error('Error stopping recording:', error);
       setIsRecording(false);
       setRecordingTime(0);
     }
@@ -389,15 +379,10 @@ export default function ChatDetailScreen() {
       await voiceMessageService.stopPlayback();
       setPlayingVoiceId(null);
     } else {
-      if (playingVoiceId) {
-        await voiceMessageService.stopPlayback();
-      }
+      if (playingVoiceId) await voiceMessageService.stopPlayback();
       await voiceMessageService.playVoiceMessage(voiceUrl);
       setPlayingVoiceId(messageId);
-
-      setTimeout(() => {
-        setPlayingVoiceId(null);
-      }, 5000);
+      setTimeout(() => setPlayingVoiceId(null), 5000);
     }
   };
 
@@ -413,55 +398,9 @@ export default function ChatDetailScreen() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const handleBlockUser = async () => {
-    if (!otherUserId) return;
-
-    Alert.alert(
-      'Bloquer cet utilisateur',
-      'Vous ne pourrez plus recevoir de messages de cette personne.',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Bloquer',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await blockService.blockUser(otherUserId);
-              setIsBlocked(true);
-              setShowOptionsModal(false);
-              Alert.alert('Succès', 'Utilisateur bloqué');
-            } catch (error) {
-              Alert.alert('Erreur', 'Impossible de bloquer cet utilisateur');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleUnblockUser = async () => {
-    if (!otherUserId) return;
-
-    try {
-      await blockService.unblockUser(otherUserId);
-      setIsBlocked(false);
-      setShowOptionsModal(false);
-      Alert.alert('Succès', 'Utilisateur débloqué');
-    } catch (error) {
-      Alert.alert('Erreur', 'Impossible de débloquer cet utilisateur');
-    }
-  };
-
-  const handleViewProfile = () => {
-    setShowOptionsModal(false);
-    if (otherUserId) {
-      router.push(`/user-profile?id=${otherUserId}`);
-    }
-  };
-
   const renderMessage = (msg: Message) => {
     const isOwnMessage = msg.senderId === currentUserId;
-    const isSystemMessage = msg.messageType === 'system';
+    const isSystemMessage = msg.type === 'system';
 
     if (isSystemMessage) {
       return (
@@ -474,36 +413,19 @@ export default function ChatDetailScreen() {
     return (
       <View key={msg.id} style={[styles.messageRow, isOwnMessage && styles.ownMessageRow]}>
         {!isOwnMessage && (
-          <Image
-            source={{ uri: msg.senderAvatar || 'https://via.placeholder.com/40' }}
-            style={styles.messageAvatar}
-          />
+          <Image source={{ uri: msg.senderAvatar || 'https://via.placeholder.com/40' }} style={styles.messageAvatar} />
         )}
 
         <View style={[styles.messageBubble, isOwnMessage && styles.ownMessageBubble]}>
           {!isOwnMessage && <Text style={styles.senderName}>{msg.senderName}</Text>}
 
-          {msg.text && (
-            <Text style={[styles.messageText, isOwnMessage && styles.ownMessageText]}>
-              {msg.text}
-            </Text>
-          )}
+          {msg.text && <Text style={[styles.messageText, isOwnMessage && styles.ownMessageText]}>{msg.text}</Text>}
 
-          {msg.imageUrl && (
-            <Image source={{ uri: msg.imageUrl }} style={styles.messageImage} />
-          )}
+          {msg.imageUrl && <Image source={{ uri: msg.imageUrl }} style={styles.messageImage} />}
 
           {msg.voiceUrl && (
-            <TouchableOpacity
-              style={styles.voiceMessage}
-              onPress={() => handlePlayVoice(msg.id, msg.voiceUrl!)}
-            >
-              <View
-                style={[
-                  styles.voicePlayButton,
-                  isOwnMessage && styles.voicePlayButtonOwn,
-                ]}
-              >
+            <TouchableOpacity style={styles.voiceMessage} onPress={() => handlePlayVoice(msg.id, msg.voiceUrl!)}>
+              <View style={[styles.voicePlayButton, isOwnMessage && styles.voicePlayButtonOwn]}>
                 <IconSymbol
                   name={playingVoiceId === msg.id ? 'pause.fill' : 'play.fill'}
                   size={16}
@@ -514,11 +436,7 @@ export default function ChatDetailScreen() {
                 {[...Array(12)].map((_, i) => (
                   <View
                     key={i}
-                    style={[
-                      styles.waveformBar,
-                      { height: 8 + Math.random() * 16 },
-                      isOwnMessage && styles.waveformBarOwn,
-                    ]}
+                    style={[styles.waveformBar, { height: 8 + Math.random() * 16 }, isOwnMessage && styles.waveformBarOwn]}
                   />
                 ))}
               </View>
@@ -529,26 +447,18 @@ export default function ChatDetailScreen() {
           )}
 
           <View style={styles.messageFooter}>
-            <Text style={[styles.messageTime, isOwnMessage && styles.messageTimeOwn]}>
-              {msg.timestamp}
-            </Text>
+            <Text style={[styles.messageTime, isOwnMessage && styles.messageTimeOwn]}>{msg.timestamp}</Text>
             {isOwnMessage && msg.status && (
               <View style={styles.statusContainer}>
-                {msg.status === 'sending' && (
-                  <ActivityIndicator size="small" color={colors.textSecondary} />
-                )}
-                {msg.status === 'sent' && (
-                  <IconSymbol name="checkmark" size={14} color={colors.textSecondary} />
-                )}
+                {msg.status === 'sending' && <ActivityIndicator size="small" color={colors.textSecondary} />}
+                {msg.status === 'sent' && <IconSymbol name="checkmark" size={14} color={colors.textSecondary} />}
                 {msg.status === 'delivered' && (
                   <View style={styles.doubleCheck}>
                     <IconSymbol name="checkmark" size={14} color={colors.textSecondary} />
                     <IconSymbol name="checkmark" size={14} color={colors.textSecondary} />
                   </View>
                 )}
-                {msg.status === 'failed' && (
-                  <IconSymbol name="exclamationmark.circle" size={14} color={colors.error} />
-                )}
+                {msg.status === 'failed' && <IconSymbol name="exclamationmark.circle" size={14} color={colors.error} />}
               </View>
             )}
           </View>
@@ -567,13 +477,11 @@ export default function ChatDetailScreen() {
           <IconSymbol name="chevron.left" size={24} color={colors.text} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.headerInfo} onPress={() => setShowOptionsModal(true)}>
+        <TouchableOpacity style={styles.headerInfo} onPress={handleHeaderPress} disabled={isGroup}>
           <Image source={{ uri: convImage || 'https://via.placeholder.com/40' }} style={styles.headerAvatar} />
           <View>
             <Text style={styles.headerName}>{convName}</Text>
-            {conversationStatus.isClosed && (
-              <Text style={styles.closedBadge}>Conversation fermée</Text>
-            )}
+            {conversationStatus.isClosed && <Text style={styles.closedBadge}>Conversation fermée</Text>}
           </View>
         </TouchableOpacity>
 
@@ -583,18 +491,8 @@ export default function ChatDetailScreen() {
       </View>
 
       {/* Messages */}
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-      >
-        <ScrollView
-          ref={scrollViewRef}
-          style={styles.messagesContainer}
-          contentContainerStyle={styles.messagesContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Bannière de fin si conversation fermée */}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
+        <ScrollView ref={scrollViewRef} style={styles.messagesContainer} contentContainerStyle={styles.messagesContent} showsVerticalScrollIndicator={false}>
           {conversationStatus.isClosed && (
             <View style={styles.closedBanner}>
               <IconSymbol name="info.circle.fill" size={20} color={colors.textSecondary} />
@@ -636,16 +534,8 @@ export default function ChatDetailScreen() {
             </View>
           ) : (
             <View style={styles.inputRow}>
-              <TouchableOpacity
-                style={styles.iconButton}
-                onPress={handleImagePick}
-                disabled={!canSendMessages()}
-              >
-                <IconSymbol
-                  name="photo"
-                  size={24}
-                  color={canSendMessages() ? colors.primary : colors.textSecondary}
-                />
+              <TouchableOpacity style={styles.iconButton} onPress={handleImagePick} disabled={!canSendMessages()}>
+                <IconSymbol name="photo" size={24} color={canSendMessages() ? colors.primary : colors.textSecondary} />
               </TouchableOpacity>
 
               <TextInput
@@ -660,24 +550,12 @@ export default function ChatDetailScreen() {
               />
 
               {message.trim() ? (
-                <TouchableOpacity
-                  style={styles.sendButton}
-                  onPress={handleSend}
-                  disabled={!canSendMessages()}
-                >
+                <TouchableOpacity style={styles.sendButton} onPress={handleSend} disabled={!canSendMessages()}>
                   <IconSymbol name="arrow.up.circle.fill" size={32} color={colors.primary} />
                 </TouchableOpacity>
               ) : (
-                <TouchableOpacity
-                  style={styles.iconButton}
-                  onPress={handleStartRecording}
-                  disabled={!canSendMessages()}
-                >
-                  <IconSymbol
-                    name="mic.fill"
-                    size={24}
-                    color={canSendMessages() ? colors.primary : colors.textSecondary}
-                  />
+                <TouchableOpacity style={styles.iconButton} onPress={handleStartRecording} disabled={!canSendMessages()}>
+                  <IconSymbol name="mic.fill" size={24} color={canSendMessages() ? colors.primary : colors.textSecondary} />
                 </TouchableOpacity>
               )}
             </View>
@@ -685,46 +563,18 @@ export default function ChatDetailScreen() {
         </View>
       </KeyboardAvoidingView>
 
-      {/* Modal Options */}
-      <Modal
-        visible={showOptionsModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowOptionsModal(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowOptionsModal(false)}
-        >
+      {/* Modal Options - Sourdine uniquement */}
+      <Modal visible={showOptionsModal} transparent animationType="fade" onRequestClose={() => setShowOptionsModal(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowOptionsModal(false)}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Options</Text>
-            
-            {!isGroup && (
-              <>
-                <TouchableOpacity style={styles.modalOption} onPress={handleViewProfile}>
-                  <IconSymbol name="person.fill" size={20} color={colors.text} />
-                  <Text style={styles.modalOptionText}>Voir le profil</Text>
-                </TouchableOpacity>
 
-                {isBlocked ? (
-                  <TouchableOpacity style={styles.modalOption} onPress={handleUnblockUser}>
-                    <IconSymbol name="checkmark.circle" size={20} color={colors.success} />
-                    <Text style={styles.modalOptionText}>Débloquer</Text>
-                  </TouchableOpacity>
-                ) : (
-                  <TouchableOpacity style={styles.modalOption} onPress={handleBlockUser}>
-                    <IconSymbol name="hand.raised.fill" size={20} color={colors.error} />
-                    <Text style={styles.modalOptionText}>Bloquer</Text>
-                  </TouchableOpacity>
-                )}
-              </>
-            )}
+            <TouchableOpacity style={styles.modalOption} onPress={handleToggleMute}>
+              <IconSymbol name={isMuted ? 'bell.fill' : 'bell.slash.fill'} size={20} color={isMuted ? colors.primary : colors.textSecondary} />
+              <Text style={styles.modalOptionText}>{isMuted ? 'Réactiver les notifications' : 'Mettre en sourdine'}</Text>
+            </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.modalOption}
-              onPress={() => setShowOptionsModal(false)}
-            >
+            <TouchableOpacity style={styles.modalOption} onPress={() => setShowOptionsModal(false)}>
               <IconSymbol name="xmark" size={20} color={colors.textSecondary} />
               <Text style={styles.modalOptionText}>Annuler</Text>
             </TouchableOpacity>
@@ -765,7 +615,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.border,
   },
   headerName: {
     fontSize: 16,
@@ -775,37 +624,19 @@ const styles = StyleSheet.create({
   closedBadge: {
     fontSize: 12,
     color: colors.textSecondary,
-    marginTop: 2,
   },
   moreButton: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
   },
   messagesContainer: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   messagesContent: {
     padding: 16,
-    paddingBottom: 32,
-  },
-  closedBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    gap: 8,
-  },
-  closedBannerText: {
-    flex: 1,
-    fontSize: 14,
-    color: colors.textSecondary,
+    paddingBottom: 20,
   },
   loadingContainer: {
     flex: 1,
@@ -813,41 +644,54 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 40,
   },
+  closedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 16,
+    gap: 10,
+  },
+  closedBannerText: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
   systemMessageContainer: {
     alignItems: 'center',
-    marginVertical: 16,
+    marginVertical: 12,
   },
   systemMessageText: {
     fontSize: 13,
     color: colors.textSecondary,
-    backgroundColor: colors.card,
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 12,
+    fontStyle: 'italic',
   },
   messageRow: {
     flexDirection: 'row',
-    marginBottom: 16,
+    marginBottom: 12,
     alignItems: 'flex-end',
-    gap: 8,
   },
   ownMessageRow: {
-    flexDirection: 'row-reverse',
+    justifyContent: 'flex-end',
   },
   messageAvatar: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: colors.border,
+    marginRight: 8,
   },
   messageBubble: {
     maxWidth: '75%',
     backgroundColor: colors.card,
     borderRadius: 16,
+    borderBottomLeftRadius: 4,
     padding: 12,
   },
   ownMessageBubble: {
     backgroundColor: colors.primary,
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 4,
   },
   senderName: {
     fontSize: 12,
@@ -1007,27 +851,30 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'flex-end',
   },
   modalContent: {
-    width: '80%',
     backgroundColor: colors.card,
-    borderRadius: 16,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     padding: 20,
+    paddingBottom: 40,
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '700',
     color: colors.text,
-    marginBottom: 16,
+    textAlign: 'center',
+    marginBottom: 20,
   },
   modalOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 16,
     gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   modalOptionText: {
     fontSize: 16,

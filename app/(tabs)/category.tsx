@@ -105,14 +105,15 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
   grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 15,
-    justifyContent: 'space-between',
-  },
-  categoryWrapper: {
-    width: '48%',
-  },
+  flexDirection: 'row',
+  flexWrap: 'wrap',
+  marginHorizontal: -7.5,
+},
+categoryWrapper: {
+  width: '50%',
+  paddingHorizontal: 7.5,
+  marginBottom: 15,
+},
   categoryCard: {
     backgroundColor: colors.surface,
     borderRadius: 16,

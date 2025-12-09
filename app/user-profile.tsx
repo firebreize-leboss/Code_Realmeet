@@ -1,5 +1,5 @@
 // app/user-profile.tsx
-// Page de profil d'un autre utilisateur
+// Page de profil d'un autre utilisateur avec options ami/bloquer
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -10,12 +10,15 @@ import {
   Image,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
+import { blockService } from '@/services/block.service';
 
 interface UserProfile {
   id: string;
@@ -36,61 +39,64 @@ export default function UserProfileScreen() {
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showOptionsModal, setShowOptionsModal] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
 
-  // Charger les données du profil ciblé et déterminer l'état d'amitié
+  // Charger les données du profil
   useEffect(() => {
     const loadProfile = async () => {
       try {
         setLoading(true);
         const targetId = id as string;
-        
+
         // Récupérer le profil de l'utilisateur cible
         const { data: profileData, error: profileError } = await supabase
           .from('profiles')
           .select('full_name, avatar_url, bio, city, interests')
           .eq('id', targetId)
           .single();
-        if (profileError) throw profileError;
-        if (!profileData) throw new Error("Profil introuvable");
 
-        // Récupérer l'utilisateur actuel pour vérifier amitié ou demande
+        if (profileError) throw profileError;
+        if (!profileData) throw new Error('Profil introuvable');
+
+        // Récupérer l'utilisateur actuel
         const { data: currentUserData } = await supabase.auth.getUser();
         const currentUser = currentUserData?.user;
-        if (!currentUser) throw new Error("Utilisateur non connecté");
+        if (!currentUser) throw new Error('Utilisateur non connecté');
 
-        // Vérifier si c'est le propre profil de l'utilisateur
-        const isOwnProfile = currentUser.id === targetId;
-
-        // Compter les activités RÉELLEMENT rejointes (depuis la table activity_participants)
+        // Compter les activités rejointes
         const { count: joinedCount } = await supabase
           .from('activity_participants')
           .select('*', { count: 'exact', head: true })
           .eq('user_id', targetId);
 
-        // Compter les activités RÉELLEMENT organisées (depuis la table activities)
+        // Compter les activités organisées
         const { count: hostedCount } = await supabase
           .from('activities')
           .select('*', { count: 'exact', head: true })
           .eq('host_id', targetId);
 
-        // Vérifier si déjà amis (relation dans les deux sens créée lors de l'acceptation)
+        // Vérifier si déjà amis
         const { data: friendRows } = await supabase
           .from('friendships')
           .select('id')
           .eq('user_id', currentUser.id)
           .eq('friend_id', targetId);
-        const isFriend = (friendRows && friendRows.length > 0);
+        const isFriend = friendRows && friendRows.length > 0;
 
-        // Vérifier si une demande d'ami a déjà été envoyée par l'utilisateur actuel
+        // Vérifier si une demande d'ami a été envoyée
         const { data: requestRows } = await supabase
           .from('friend_requests')
           .select('id')
           .eq('sender_id', currentUser.id)
           .eq('receiver_id', targetId)
           .eq('status', 'pending');
-        const alreadyRequested = (requestRows && requestRows.length > 0);
+        const alreadyRequested = requestRows && requestRows.length > 0;
 
-        // Construire l'objet profil complet avec les VRAIS compteurs
+        // Vérifier si bloqué
+        const blocked = await blockService.isUserBlocked(targetId);
+        setIsBlocked(blocked);
+
         const userProfile: UserProfile = {
           id: targetId,
           full_name: profileData.full_name,
@@ -103,6 +109,7 @@ export default function UserProfileScreen() {
           activities_joined: joinedCount ?? 0,
           activities_hosted: hostedCount ?? 0,
         };
+
         setProfile(userProfile);
       } catch (error) {
         console.error('Error loading profile:', error);
@@ -110,49 +117,58 @@ export default function UserProfileScreen() {
         setLoading(false);
       }
     };
+
     if (id) loadProfile();
   }, [id]);
 
+  // Envoyer une demande d'ami
   const handleSendFriendRequest = async () => {
     if (!profile) return;
     setLoading(true);
     try {
       const { data: currentUserData } = await supabase.auth.getUser();
       const currentUser = currentUserData?.user;
-      if (!currentUser) throw new Error("Utilisateur non connecté");
+      if (!currentUser) throw new Error('Utilisateur non connecté');
+
       const { error } = await supabase.from('friend_requests').insert({
         sender_id: currentUser.id,
         receiver_id: profile.id,
         status: 'pending',
       });
+
       if (error && !error.message.toLowerCase().includes('duplicate')) {
         throw error;
       }
-      // Marquer la demande comme envoyée dans l'état local
-      setProfile(prev => prev ? { ...prev, request_sent: true } : prev);
+
+      setProfile(prev => (prev ? { ...prev, request_sent: true } : prev));
+      Alert.alert('Succès', 'Demande d\'ami envoyée !');
     } catch (error) {
       console.error('Error sending friend request:', error);
+      Alert.alert('Erreur', 'Impossible d\'envoyer la demande');
     } finally {
       setLoading(false);
     }
   };
 
+  // Annuler une demande d'ami
   const handleCancelRequest = async () => {
     if (!profile) return;
     setLoading(true);
     try {
       const { data: currentUserData } = await supabase.auth.getUser();
       const currentUser = currentUserData?.user;
-      if (!currentUser) throw new Error("Utilisateur non connecté");
+      if (!currentUser) throw new Error('Utilisateur non connecté');
+
       const { error } = await supabase
         .from('friend_requests')
         .delete()
         .eq('sender_id', currentUser.id)
         .eq('receiver_id', profile.id)
         .eq('status', 'pending');
+
       if (error) throw error;
-      // Marquer la demande comme annulée dans l'état local
-      setProfile(prev => prev ? { ...prev, request_sent: false } : prev);
+
+      setProfile(prev => (prev ? { ...prev, request_sent: false } : prev));
     } catch (error) {
       console.error('Error cancelling friend request:', error);
     } finally {
@@ -160,13 +176,118 @@ export default function UserProfileScreen() {
     }
   };
 
+  // Supprimer un ami
+  const handleRemoveFriend = async () => {
+    if (!profile) return;
+
+    Alert.alert(
+      'Supprimer cet ami',
+      `Voulez-vous vraiment retirer ${profile.full_name} de vos amis ?`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: async () => {
+            setLoading(true);
+            try {
+              const { data: currentUserData } = await supabase.auth.getUser();
+              const currentUser = currentUserData?.user;
+              if (!currentUser) throw new Error('Utilisateur non connecté');
+
+              // Supprimer dans les deux sens
+              await supabase
+                .from('friendships')
+                .delete()
+                .eq('user_id', currentUser.id)
+                .eq('friend_id', profile.id);
+
+              await supabase
+                .from('friendships')
+                .delete()
+                .eq('user_id', profile.id)
+                .eq('friend_id', currentUser.id);
+
+              setProfile(prev => (prev ? { ...prev, is_friend: false } : prev));
+              setShowOptionsModal(false);
+              Alert.alert('Succès', 'Ami supprimé');
+            } catch (error) {
+              console.error('Error removing friend:', error);
+              Alert.alert('Erreur', 'Impossible de supprimer cet ami');
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Bloquer un utilisateur
+  const handleBlockUser = async () => {
+    if (!profile) return;
+
+    Alert.alert(
+      'Bloquer cet utilisateur',
+      `${profile.full_name} ne pourra plus vous contacter ni voir votre profil.`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Bloquer',
+          style: 'destructive',
+          onPress: async () => {
+            setLoading(true);
+            try {
+              const result = await blockService.blockUser(profile.id);
+              if (result.success) {
+                setIsBlocked(true);
+                setShowOptionsModal(false);
+                Alert.alert('Succès', 'Utilisateur bloqué');
+              } else {
+                throw new Error(result.error);
+              }
+            } catch (error) {
+              console.error('Error blocking user:', error);
+              Alert.alert('Erreur', 'Impossible de bloquer cet utilisateur');
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Débloquer un utilisateur
+  const handleUnblockUser = async () => {
+    if (!profile) return;
+
+    setLoading(true);
+    try {
+      const result = await blockService.unblockUser(profile.id);
+      if (result.success) {
+        setIsBlocked(false);
+        setShowOptionsModal(false);
+        Alert.alert('Succès', 'Utilisateur débloqué');
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Error unblocking user:', error);
+      Alert.alert('Erreur', 'Impossible de débloquer cet utilisateur');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Démarrer une conversation
   const handleStartConversation = async () => {
     if (!profile) return;
     setLoading(true);
     try {
       const { data: currentUserData } = await supabase.auth.getUser();
       const currentUser = currentUserData?.user;
-      if (!currentUser) throw new Error("Utilisateur non connecté");
+      if (!currentUser) throw new Error('Utilisateur non connecté');
 
       // Vérifier si une conversation existe déjà
       const { data: myParticipations } = await supabase
@@ -177,7 +298,6 @@ export default function UserProfileScreen() {
       if (myParticipations && myParticipations.length > 0) {
         const myConvIds = myParticipations.map(p => p.conversation_id);
 
-        // Vérifier si le profil participe à l'une de ces conversations
         const { data: friendParticipations } = await supabase
           .from('conversation_participants')
           .select('conversation_id')
@@ -185,7 +305,6 @@ export default function UserProfileScreen() {
           .in('conversation_id', myConvIds);
 
         if (friendParticipations && friendParticipations.length > 0) {
-          // Vérifier que c'est bien une conversation à 2 personnes
           for (const fp of friendParticipations) {
             const { count } = await supabase
               .from('conversation_participants')
@@ -193,7 +312,6 @@ export default function UserProfileScreen() {
               .eq('conversation_id', fp.conversation_id);
 
             if (count === 2) {
-              // Conversation existante trouvée, rediriger vers celle-ci
               router.push(`/chat-detail?id=${fp.conversation_id}`);
               setLoading(false);
               return;
@@ -202,29 +320,30 @@ export default function UserProfileScreen() {
         }
       }
 
-      // Aucune conversation existante, en créer une nouvelle
+      // Créer une nouvelle conversation
       const { data: newConv, error: convError } = await supabase
         .from('conversations')
         .insert({})
         .select()
         .single();
-      
+
       if (convError) throw convError;
 
       const participants = [
         { conversation_id: newConv.id, user_id: currentUser.id },
         { conversation_id: newConv.id, user_id: profile.id },
       ];
-      
+
       const { error: partError } = await supabase
         .from('conversation_participants')
         .insert(participants);
-      
+
       if (partError) throw partError;
 
       router.push(`/chat-detail?id=${newConv.id}`);
     } catch (error) {
       console.error('Error starting conversation:', error);
+      Alert.alert('Erreur', 'Impossible de démarrer la conversation');
     } finally {
       setLoading(false);
     }
@@ -242,14 +361,21 @@ export default function UserProfileScreen() {
 
       {/* Contenu du profil */}
       {profile === null ? (
-        // État chargement : spinner centré
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header du profil */}
           <View style={styles.profileHeader}>
-            <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
+            <Image
+              source={{ uri: profile.avatar_url || 'https://via.placeholder.com/100' }}
+              style={styles.avatar}
+            />
             <Text style={styles.name}>{profile.full_name}</Text>
             {profile.city && (
               <View style={styles.locationRow}>
@@ -257,8 +383,17 @@ export default function UserProfileScreen() {
                 <Text style={styles.city}>{profile.city}</Text>
               </View>
             )}
+
+            {/* Badge ami */}
+            {profile.is_friend && (
+              <View style={styles.friendBadge}>
+                <IconSymbol name="checkmark.circle.fill" size={16} color={colors.primary} />
+                <Text style={styles.friendBadgeText}>Ami</Text>
+              </View>
+            )}
           </View>
 
+          {/* Bio */}
           {profile.bio && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>À propos</Text>
@@ -268,6 +403,7 @@ export default function UserProfileScreen() {
             </View>
           )}
 
+          {/* Centres d'intérêt */}
           {profile.interests.length > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Centres d'intérêt</Text>
@@ -281,6 +417,7 @@ export default function UserProfileScreen() {
             </View>
           )}
 
+          {/* Statistiques */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Activités</Text>
             <View style={styles.statsContainer}>
@@ -295,10 +432,27 @@ export default function UserProfileScreen() {
             </View>
           </View>
 
+          {/* Boutons d'action */}
           <View style={styles.actionButtons}>
-            {profile.is_friend ? (
+            {isBlocked ? (
+              // Utilisateur bloqué
+              <TouchableOpacity
+                style={[styles.actionButton, styles.blockedButton]}
+                onPress={handleUnblockUser}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color={colors.error} />
+                ) : (
+                  <>
+                    <IconSymbol name="hand.raised.slash.fill" size={20} color={colors.error} />
+                    <Text style={styles.blockedButtonText}>Débloquer</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            ) : profile.is_friend ? (
+              // Déjà ami
               <>
-                {/* Bouton message (conversation) */}
                 <TouchableOpacity
                   style={styles.messageButton}
                   onPress={handleStartConversation}
@@ -313,14 +467,18 @@ export default function UserProfileScreen() {
                     </>
                   )}
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.moreButton}>
+
+                <TouchableOpacity
+                  style={styles.moreButton}
+                  onPress={() => setShowOptionsModal(true)}
+                >
                   <IconSymbol name="ellipsis" size={20} color={colors.text} />
                 </TouchableOpacity>
               </>
             ) : profile.request_sent ? (
-              /* Bouton annuler la demande */
+              // Demande envoyée
               <TouchableOpacity
-                style={[styles.addButton, styles.pendingButton]}
+                style={[styles.actionButton, styles.pendingButton]}
                 onPress={handleCancelRequest}
                 disabled={loading}
               >
@@ -334,9 +492,9 @@ export default function UserProfileScreen() {
                 )}
               </TouchableOpacity>
             ) : (
-              /* Bouton envoyer une demande d'ami */
+              // Pas encore ami
               <TouchableOpacity
-                style={styles.addButton}
+                style={styles.actionButton}
                 onPress={handleSendFriendRequest}
                 disabled={loading}
               >
@@ -345,7 +503,7 @@ export default function UserProfileScreen() {
                 ) : (
                   <>
                     <IconSymbol name="person.badge.plus.fill" size={20} color={colors.background} />
-                    <Text style={styles.addButtonText}>Ajouter</Text>
+                    <Text style={styles.addButtonText}>Ajouter en ami</Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -353,6 +511,45 @@ export default function UserProfileScreen() {
           </View>
         </ScrollView>
       )}
+
+      {/* Modal Options pour les amis */}
+      <Modal
+        visible={showOptionsModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowOptionsModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowOptionsModal(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Options</Text>
+
+            {/* Supprimer ami */}
+            <TouchableOpacity style={styles.modalOption} onPress={handleRemoveFriend}>
+              <IconSymbol name="person.badge.minus.fill" size={20} color={colors.warning} />
+              <Text style={styles.modalOptionText}>Supprimer des amis</Text>
+            </TouchableOpacity>
+
+            {/* Bloquer */}
+            <TouchableOpacity style={styles.modalOption} onPress={handleBlockUser}>
+              <IconSymbol name="hand.raised.fill" size={20} color={colors.error} />
+              <Text style={[styles.modalOptionText, { color: colors.error }]}>Bloquer</Text>
+            </TouchableOpacity>
+
+            {/* Annuler */}
+            <TouchableOpacity
+              style={styles.modalOption}
+              onPress={() => setShowOptionsModal(false)}
+            >
+              <IconSymbol name="xmark" size={20} color={colors.textSecondary} />
+              <Text style={styles.modalOptionText}>Annuler</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -399,6 +596,8 @@ const styles = StyleSheet.create({
     height: 100,
     borderRadius: 50,
     marginBottom: 12,
+    borderWidth: 3,
+    borderColor: colors.primary,
   },
   name: {
     fontSize: 24,
@@ -414,6 +613,21 @@ const styles = StyleSheet.create({
   city: {
     fontSize: 14,
     color: colors.textSecondary,
+  },
+  friendBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary + '20',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginTop: 12,
+    gap: 6,
+  },
+  friendBadgeText: {
+    fontSize: 14,
+    color: colors.primary,
+    fontWeight: '600',
   },
   section: {
     paddingHorizontal: 16,
@@ -469,23 +683,38 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: 14,
     color: colors.textSecondary,
   },
   actionButtons: {
     flexDirection: 'row',
-    gap: 12,
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingVertical: 16,
+    gap: 12,
   },
-  messageButton: {
+  actionButton: {
     flex: 1,
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.primary,
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 8,
+  },
+  addButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.background,
+  },
+  messageButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    paddingVertical: 14,
+    borderRadius: 12,
     gap: 8,
   },
   messageButtonText: {
@@ -494,27 +723,12 @@ const styles = StyleSheet.create({
     color: colors.background,
   },
   moreButton: {
-    width: 48,
-    height: 48,
+    width: 50,
+    height: 50,
     backgroundColor: colors.card,
     borderRadius: 12,
-    alignItems: 'center',
     justifyContent: 'center',
-  },
-  addButton: {
-    flex: 1,
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: 14,
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  addButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.background,
   },
   pendingButton: {
     backgroundColor: colors.card,
@@ -525,5 +739,46 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: colors.textSecondary,
+  },
+  blockedButton: {
+    backgroundColor: colors.error + '20',
+    borderWidth: 1,
+    borderColor: colors.error,
+  },
+  blockedButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.error,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: 40,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  modalOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  modalOptionText: {
+    fontSize: 16,
+    color: colors.text,
   },
 });
