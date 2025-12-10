@@ -1,5 +1,5 @@
 // app/chat-detail.tsx
-// Version avec navigation vers profil et option sourdine
+// Version avec navigation vers profil/groupe, option sourdine ET markAsRead
 
 import React, { useState, useRef, useEffect } from 'react';
 import {
@@ -22,7 +22,8 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
-import { useMessages, MessageStatus, TransformedMessage } from '@/hooks/useMessaging';
+// ✅ MODIFICATION : Ajouter useConversations pour markAsRead
+import { useMessages, useConversations, MessageStatus, TransformedMessage } from '@/hooks/useMessaging';
 import { Keyboard } from 'react-native';
 import { messageStorageService } from '@/services/message-storage.service';
 import { voiceMessageService } from '@/services/voice-message.service';
@@ -75,7 +76,29 @@ export default function ChatDetailScreen() {
   const [localMessages, setLocalMessages] = useState<Message[]>([]);
 
   const { messages, loading: messagesLoading, sendMessage } = useMessages(conversationId as string);
+  
+  // ✅ MODIFICATION : Récupérer markAsRead depuis useConversations
+  const { markAsRead } = useConversations();
+  
   const combinedMessages: Message[] = [...(messages || []), ...localMessages];
+
+  // ✅ NOUVEAU : Marquer la conversation comme lue quand on l'ouvre
+  useEffect(() => {
+    if (conversationId) {
+      // Marquer comme lue immédiatement
+      markAsRead(conversationId as string);
+      
+      // Et aussi marquer comme lue quand on reçoit de nouveaux messages
+      // (au cas où on reste sur la conversation)
+    }
+  }, [conversationId, markAsRead]);
+
+  // ✅ NOUVEAU : Marquer comme lue quand de nouveaux messages arrivent (on est sur la conversation)
+  useEffect(() => {
+    if (conversationId && messages && messages.length > 0) {
+      markAsRead(conversationId as string);
+    }
+  }, [messages, conversationId, markAsRead]);
 
   // Charger les infos de conversation
   useEffect(() => {
@@ -87,7 +110,6 @@ export default function ChatDetailScreen() {
 
         setCurrentUserId(currentUser.id);
 
-        // Charger le profil de l'utilisateur actuel
         const { data: myProfile } = await supabase
           .from('profiles')
           .select('full_name, avatar_url')
@@ -99,16 +121,17 @@ export default function ChatDetailScreen() {
           setCurrentUserAvatar(myProfile.avatar_url || '');
         }
 
-        // Charger les infos de la conversation
         if (conversationId) {
           const { data: convData } = await supabase
             .from('conversations')
-            .select('*, name, image_url, is_closed, closed_reason, closed_at, activity_id')
+            .select('*, name, image_url, is_closed, closed_reason, closed_at, activity_id, slot_id')
             .eq('id', conversationId)
             .single();
 
           if (convData) {
-            setIsGroup(!!convData.name);
+            const isGroupConv = convData.is_group === true || !!convData.name;
+            setIsGroup(isGroupConv);
+            
             setConversationStatus({
               isClosed: convData.is_closed || false,
               closedReason: convData.closed_reason,
@@ -119,13 +142,11 @@ export default function ChatDetailScreen() {
               setConvName(convData.name);
               setConvImage(convData.image_url || '');
             } else {
-              // Conversation 1-to-1
               const { data: participants } = await supabase
                 .from('conversation_participants')
                 .select(`user_id, is_muted, profiles (full_name, avatar_url)`)
                 .eq('conversation_id', conversationId);
 
-              // Vérifier l'état de sourdine pour l'utilisateur actuel
               const myParticipant = participants?.find((p: any) => p.user_id === currentUser.id);
               if (myParticipant) {
                 setIsMuted(myParticipant.is_muted || false);
@@ -141,7 +162,6 @@ export default function ChatDetailScreen() {
                 setConvName(profile?.full_name || 'Utilisateur');
                 setConvImage(profile?.avatar_url || '');
 
-                // Vérifier les blocages
                 const blocked = await blockService.isUserBlocked(otherParticipant.user_id);
                 setIsBlocked(blocked);
 
@@ -194,14 +214,15 @@ export default function ChatDetailScreen() {
     return null;
   };
 
-  // Navigation vers le profil
+  // Navigation vers profil OU groupe
   const handleHeaderPress = () => {
-    if (!isGroup && otherUserId) {
+    if (isGroup) {
+      router.push(`/group-info?id=${conversationId}`);
+    } else if (otherUserId) {
       router.push(`/user-profile?id=${otherUserId}`);
     }
   };
 
-  // Toggle sourdine
   const handleToggleMute = async () => {
     if (!conversationId) return;
 
@@ -238,13 +259,27 @@ export default function ChatDetailScreen() {
     setMessage('');
     Keyboard.dismiss();
 
+    const optimisticId = `temp-${Date.now()}`;
+    const optimisticMessage: Message = {
+      id: optimisticId,
+      senderId: currentUserId!,
+      senderName: currentUserName,
+      senderAvatar: currentUserAvatar,
+      text: userMessage,
+      timestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      status: 'sending' as MessageStatus,
+      type: 'text',
+    };
+
+    setLocalMessages(prev => [...prev, optimisticMessage]);
+
     try {
-      // sendMessage du hook prend (content, type, mediaUrl, mediaDuration)
-      // conversationId est déjà dans le hook
-      await sendMessage(userMessage, 'text');
+      await sendMessage(conversationId as string, userMessage, 'text');
+      setLocalMessages(prev => prev.filter(msg => msg.id !== optimisticId));
     } catch (error) {
-      console.error('Error sending message:', error);
-      Alert.alert('Erreur', "Impossible d'envoyer le message");
+      setLocalMessages(prev =>
+        prev.map(msg => (msg.id === optimisticId ? { ...msg, status: 'failed' as MessageStatus } : msg))
+      );
     }
   };
 
@@ -268,17 +303,33 @@ export default function ChatDetailScreen() {
       });
 
       if (!result.canceled && result.assets[0]) {
+        const optimisticId = `temp-${Date.now()}`;
+        const optimisticMessage: Message = {
+          id: optimisticId,
+          senderId: currentUserId!,
+          senderName: currentUserName,
+          senderAvatar: currentUserAvatar,
+          imageUrl: result.assets[0].uri,
+          timestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+          status: 'sending' as MessageStatus,
+          type: 'image',
+        };
+
+        setLocalMessages(prev => [...prev, optimisticMessage]);
+
         try {
           const uploadedUrl = await messageStorageService.uploadImage(result.assets[0].uri);
-          // sendMessage du hook prend (content, type, mediaUrl, mediaDuration)
           await sendMessage('', 'image', uploadedUrl);
+          setLocalMessages(prev => prev.filter(msg => msg.id !== optimisticId));
         } catch (error) {
-          console.error('Error uploading image:', error);
+          setLocalMessages(prev =>
+            prev.map(msg => (msg.id === optimisticId ? { ...msg, status: 'failed' as MessageStatus } : msg))
+          );
           Alert.alert('Erreur', "Impossible d'envoyer l'image");
         }
       }
     } catch (error) {
-      console.error('Error picking image:', error);
+      console.error('Erreur ImagePicker:', error);
     }
   };
 
@@ -289,12 +340,14 @@ export default function ChatDetailScreen() {
     }
 
     try {
-      await voiceMessageService.startRecording();
-      setIsRecording(true);
-      setRecordingTime(0);
-      recordingIntervalRef.current = setInterval(() => {
-        setRecordingTime(prev => prev + 1);
-      }, 1000);
+      const started = await voiceMessageService.startRecording();
+      if (started) {
+        setIsRecording(true);
+        setRecordingTime(0);
+        recordingIntervalRef.current = setInterval(() => {
+          setRecordingTime(prev => prev + 1);
+        }, 1000);
+      }
     } catch (error) {
       Alert.alert('Erreur', "Impossible de démarrer l'enregistrement");
     }
@@ -307,22 +360,43 @@ export default function ChatDetailScreen() {
     }
 
     try {
-      const result = await voiceMessageService.stopRecording();
+      const uri = await voiceMessageService.stopRecording();
       setIsRecording(false);
+      const duration = recordingTime;
       setRecordingTime(0);
 
-      if (result && result.uri) {
+      if (uri && duration >= 1) {
+        const optimisticId = `temp-${Date.now()}`;
+        const optimisticMessage: Message = {
+          id: optimisticId,
+          senderId: currentUserId!,
+          senderName: currentUserName,
+          senderAvatar: currentUserAvatar,
+          voiceUrl: uri,
+          voiceDuration: duration,
+          timestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+          status: 'sending' as MessageStatus,
+          type: 'voice',
+        };
+
+        setLocalMessages(prev => [...prev, optimisticMessage]);
+
         try {
-          const uploadedUrl = await messageStorageService.uploadVoiceMessage(result.uri);
-          // sendMessage du hook prend (content, type, mediaUrl, mediaDuration)
-          await sendMessage('', 'voice', uploadedUrl, result.duration);
+          const uploadedUrl = await messageStorageService.uploadVoiceMessage(uri);
+          if (uploadedUrl) {
+            await sendMessage('', 'voice', uploadedUrl, duration);
+            setLocalMessages(prev => prev.filter(msg => msg.id !== optimisticId));
+          } else {
+            throw new Error('Upload failed');
+          }
         } catch (error) {
-          console.error('Error uploading voice message:', error);
+          setLocalMessages(prev =>
+            prev.map(msg => (msg.id === optimisticId ? { ...msg, status: 'failed' as MessageStatus } : msg))
+          );
           Alert.alert('Erreur', "Impossible d'envoyer le message vocal");
         }
       }
     } catch (error) {
-      console.error('Error stopping recording:', error);
       setIsRecording(false);
       setRecordingTime(0);
     }
@@ -424,18 +498,21 @@ export default function ChatDetailScreen() {
   const inputWarning = getInputWarning();
 
   return (
-    <SafeAreaView style={commonStyles.container} edges={['top', 'bottom']}>
+    <SafeAreaView style={commonStyles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <IconSymbol name="chevron.left" size={24} color={colors.text} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.headerInfo} onPress={handleHeaderPress} disabled={isGroup}>
+        <TouchableOpacity style={styles.headerInfo} onPress={handleHeaderPress}>
           <Image source={{ uri: convImage || 'https://via.placeholder.com/40' }} style={styles.headerAvatar} />
           <View>
             <Text style={styles.headerName}>{convName}</Text>
             {conversationStatus.isClosed && <Text style={styles.closedBadge}>Conversation fermée</Text>}
+            {isGroup && !conversationStatus.isClosed && (
+              <Text style={styles.groupSubtitle}>Appuyez pour voir les membres</Text>
+            )}
           </View>
         </TouchableOpacity>
 
@@ -517,7 +594,7 @@ export default function ChatDetailScreen() {
         </View>
       </KeyboardAvoidingView>
 
-      {/* Modal Options - Sourdine uniquement */}
+      {/* Modal Options */}
       <Modal visible={showOptionsModal} transparent animationType="fade" onRequestClose={() => setShowOptionsModal(false)}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowOptionsModal(false)}>
           <View style={styles.modalContent}>
@@ -578,6 +655,11 @@ const styles = StyleSheet.create({
   closedBadge: {
     fontSize: 12,
     color: colors.textSecondary,
+  },
+  groupSubtitle: {
+    fontSize: 12,
+    color: colors.primary,
+    marginTop: 2,
   },
   moreButton: {
     width: 40,
@@ -732,15 +814,15 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    paddingBottom: 12,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 12,
   },
   warningBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.background,
-    padding: 8,
+    backgroundColor: colors.warning + '20',
+    padding: 10,
     borderRadius: 8,
-    marginBottom: 8,
+    marginBottom: 10,
     gap: 8,
   },
   warningText: {
@@ -750,13 +832,12 @@ const styles = StyleSheet.create({
   },
   inputRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     gap: 8,
   },
   iconButton: {
     width: 40,
     height: 40,
-    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -771,6 +852,8 @@ const styles = StyleSheet.create({
     maxHeight: 100,
   },
   sendButton: {
+    width: 40,
+    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -782,7 +865,7 @@ const styles = StyleSheet.create({
   recordingIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
   },
   recordingDot: {
     width: 12,
@@ -799,19 +882,19 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: colors.background,
+    backgroundColor: colors.error + '20',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: colors.card,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     padding: 20,
     paddingBottom: 40,
   },
@@ -825,8 +908,8 @@ const styles = StyleSheet.create({
   modalOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 16,
     gap: 12,
+    paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },

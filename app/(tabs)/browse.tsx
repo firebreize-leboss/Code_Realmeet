@@ -21,9 +21,9 @@ import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
 import { WebView } from 'react-native-webview';
 import { activityService } from '@/services/activity.service';
 import * as Location from 'expo-location';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const PROTOMAPS_KEY = process.env.EXPO_PUBLIC_PROTOMAPS_KEY || '';
-
 
 type ViewMode = 'liste' | 'maps';
 
@@ -76,8 +76,7 @@ export default function BrowseScreen() {
   const webViewRef = useRef<WebView>(null);
   const hasHandledParams = useRef(false);
   const hasCenteredOnActivity = useRef(false);
-  
-  // Obtenir la position utilisateur
+
   useEffect(() => {
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -93,7 +92,6 @@ export default function BrowseScreen() {
     })();
   }, []);
 
-  // Gérer les paramètres de navigation
   useEffect(() => {
     if (hasHandledParams.current) return;
     if (activities.length === 0) return;
@@ -134,12 +132,12 @@ export default function BrowseScreen() {
   }, [params.viewMode, params.selectedActivityId, activities]);
 
   useEffect(() => {
-    return () => { hasHandledParams.current = false; 
-                    hasCenteredOnActivity.current = false; // ← Ajouter
+    return () => {
+      hasHandledParams.current = false;
+      hasCenteredOnActivity.current = false;
     };
   }, []);
 
-  // Charger les activités
   const loadActivities = async () => {
     try {
       const result = await activityService.getActivities();
@@ -159,37 +157,33 @@ export default function BrowseScreen() {
 
   useEffect(() => { loadActivities(); }, []);
 
-  
   useEffect(() => {
     if (viewMode === 'maps' && activities.length > 0 && !params.selectedActivityId) {
-      // Si on n’a pas encore centré sur une activité spécifique,
-      // on laisse shouldCenter décider si on recadre ou pas
       sendActivitiesToMap(activities, !hasCenteredOnActivity.current);
     }
   }, [viewMode, activities, params.selectedActivityId]);
-
 
   const handleRefresh = () => {
     setRefreshing(true);
     loadActivities();
   };
 
- const sendActivitiesToMap = (activitiesData: Activity[], shouldCenter: boolean = true) => {
-  if (webViewRef.current) {
-    const activitiesWithCoords = activitiesData.filter(a => a.latitude && a.longitude);
-    webViewRef.current.postMessage(JSON.stringify({
-      type: 'loadActivities',
-      activities: activitiesWithCoords.map(a => ({
-        id: a.id, nom: a.nom, categorie: a.categorie, date: a.date,
-        adresse: a.adresse, latitude: a.latitude, longitude: a.longitude,
-        participants: a.participants || 0, max_participants: a.max_participants,
-        image_url: a.image_url,
-      })),
-      userLocation, // ← Toujours envoyer userLocation (pour afficher le point bleu)
-      shouldCenter, // ← Ce flag contrôle seulement si on doit centrer
-    }));
-  }
-};
+  const sendActivitiesToMap = (activitiesData: Activity[], shouldCenter: boolean = true) => {
+    if (webViewRef.current) {
+      const activitiesWithCoords = activitiesData.filter(a => a.latitude && a.longitude);
+      webViewRef.current.postMessage(JSON.stringify({
+        type: 'loadActivities',
+        activities: activitiesWithCoords.map(a => ({
+          id: a.id, nom: a.nom, categorie: a.categorie, date: a.date,
+          adresse: a.adresse, latitude: a.latitude, longitude: a.longitude,
+          participants: a.participants || 0, max_participants: a.max_participants,
+          image_url: a.image_url,
+        })),
+        userLocation,
+        shouldCenter,
+      }));
+    }
+  };
 
   const centerOnUser = () => {
     if (userLocation && webViewRef.current) {
@@ -235,7 +229,7 @@ export default function BrowseScreen() {
     ? [userLocation.longitude, userLocation.latitude]
     : [2.3522, 48.8566];
 
-const mapHTML = useMemo(() => `
+  const mapHTML = useMemo(() => `
 <!DOCTYPE html>
 <html>
 <head>
@@ -274,7 +268,7 @@ const mapHTML = useMemo(() => `
     map = new maplibregl.Map({
       container: 'map',
       style: 'https://api.protomaps.com/styles/v2/light.json?key=${PROTOMAPS_KEY}',
-      center: [2.3522, 48.8566], // centre fixe au départ
+      center: [2.3522, 48.8566],
       zoom: 13
     });
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
@@ -285,45 +279,44 @@ const mapHTML = useMemo(() => `
       }
     }
 
-    function createMarker(activity) {
-      const el = document.createElement('div');
-      el.className = 'custom-marker';
-      el.id = 'marker-' + activity.id;
-      el.addEventListener('click', () => {
-        if (selectedMarkerId && selectedMarkerId !== activity.id) {
-          const old = document.getElementById('marker-' + selectedMarkerId);
-          if (old) old.classList.remove('selected');
-        }
-        el.classList.add('selected');
-        selectedMarkerId = activity.id;
-        map.flyTo({ center: [activity.longitude, activity.latitude], zoom: 15, duration: 1000 });
-        sendMessage('markerClicked', { activity });
-      });
-      const marker = new maplibregl.Marker({ element: el })
-        .setLngLat([activity.longitude, activity.latitude]).addTo(map);
-      markers[activity.id] = { element: el, marker };
-    }
-
-    function createUserMarker(lat, lng) {
-      if (userMarker) userMarker.remove();
-      const el = document.createElement('div');
-      el.className = 'user-marker';
-      userMarker = new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map);
-    }
-
     function handleMessage(event) {
       try {
         const data = JSON.parse(event.data);
         if (data.type === 'loadActivities') {
           const activities = data.activities || [];
-          Object.values(markers).forEach(m => m.marker.remove());
+          Object.values(markers).forEach(m => m.remove());
           markers = {};
-          activities.forEach(a => { if (a.longitude && a.latitude) createMarker(a); });
-          if (data.userLocation) createUserMarker(data.userLocation.latitude, data.userLocation.longitude);
-          
-          if (data.shouldCenter && !selectedMarkerId) {
+
+          activities.forEach(a => {
+            const el = document.createElement('div');
+            el.className = 'custom-marker';
+            el.id = 'marker-' + a.id;
+            el.onclick = () => {
+              if (selectedMarkerId) {
+                const prev = document.getElementById('marker-' + selectedMarkerId);
+                if (prev) prev.classList.remove('selected');
+              }
+              el.classList.add('selected');
+              selectedMarkerId = a.id;
+              sendMessage('markerClicked', { activity: a });
+            };
+            markers[a.id] = new maplibregl.Marker({ element: el })
+              .setLngLat([a.longitude, a.latitude])
+              .addTo(map);
+          });
+
+          if (data.userLocation) {
+            if (userMarker) userMarker.remove();
+            const userEl = document.createElement('div');
+            userEl.className = 'user-marker';
+            userMarker = new maplibregl.Marker({ element: userEl })
+              .setLngLat([data.userLocation.longitude, data.userLocation.latitude])
+              .addTo(map);
+          }
+
+          if (data.shouldCenter !== false) {
             if (data.userLocation) {
-              map.flyTo({ center: [data.userLocation.longitude, data.userLocation.latitude], zoom: 13, duration: 1000 });
+              map.setCenter([data.userLocation.longitude, data.userLocation.latitude]);
             } else if (activities.length > 0) {
               map.setCenter([activities[0].longitude, activities[0].latitude]);
             }
@@ -345,44 +338,95 @@ const mapHTML = useMemo(() => `
 </body>
 </html>`, []);
 
+  // =====================================================
+  // NOUVELLE VERSION DE renderActivityCard
+  // =====================================================
+  const renderActivityCard = (activity: Activity, index: number) => {
+    const isFull = activity.participants >= activity.max_participants;
+    const fillPercent = Math.min((activity.participants / activity.max_participants) * 100, 100);
+    
+    const formattedDate = (() => {
+      try {
+        return new Date(activity.date).toLocaleDateString('fr-FR', { 
+          day: 'numeric', 
+          month: 'short' 
+        });
+      } catch {
+        return activity.date;
+      }
+    })();
 
-  const renderActivityCard = (activity: Activity, index: number) => (
-    <TouchableOpacity
-      key={activity.id}
-      style={styles.activityCard}
-      onPress={() => router.push(`/activity-detail?id=${activity.id}`)}
-      activeOpacity={0.8}
-    >
-      <Image
-        source={{ uri: activity.image_url || 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=400' }}
-        style={styles.activityImage}
-      />
-      <View style={styles.activityOverlay}>
-        <View style={styles.categoryBadge}>
-          <Text style={styles.categoryText}>{activity.categorie}</Text>
-        </View>
-        <View style={styles.activityInfo}>
-          <Text style={styles.activityTitle} numberOfLines={2}>{activity.nom}</Text>
-          <View style={styles.activityMeta}>
-            <View style={styles.metaRow}>
-              <IconSymbol name="calendar" size={14} color={colors.background} />
-              <Text style={styles.metaText}>{activity.date}</Text>
+    return (
+      <TouchableOpacity
+        key={activity.id}
+        style={styles.activityCard}
+        onPress={() => router.push(`/activity-detail?id=${activity.id}`)}
+        activeOpacity={0.9}
+      >
+        <Image
+          source={{ uri: activity.image_url || 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=640' }}
+          style={styles.activityImage}
+        />
+        
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.85)']}
+          style={styles.activityGradient}
+          start={{ x: 0, y: 0.3 }}
+          end={{ x: 0, y: 1 }}
+        />
+        
+        <View style={styles.activityOverlay}>
+          <View style={styles.topRow}>
+            <View style={styles.categoryBadge}>
+              <Text style={styles.categoryText}>{activity.categorie}</Text>
             </View>
-            <View style={styles.metaRow}>
-              <IconSymbol name="location.fill" size={14} color={colors.background} />
-              <Text style={styles.metaText}>{activity.ville}</Text>
+            {isFull && (
+              <View style={styles.fullBadge}>
+                <Text style={styles.fullBadgeText}>COMPLET</Text>
+              </View>
+            )}
+          </View>
+          
+          <View style={styles.activityInfo}>
+            <Text style={styles.activityTitle} numberOfLines={2}>{activity.nom}</Text>
+            
+            <View style={styles.activityMeta}>
+              <View style={styles.metaRow}>
+                <IconSymbol name="calendar" size={14} color="#FFFFFF" />
+                <Text style={styles.metaText}>{formattedDate}</Text>
+              </View>
+              
+              <View style={styles.metaRow}>
+                <IconSymbol name="location.fill" size={14} color="#FFFFFF" />
+                <Text style={styles.metaText} numberOfLines={1}>{activity.ville}</Text>
+              </View>
+              
+              <View style={styles.metaRow}>
+                <IconSymbol name="person.2.fill" size={14} color="#FFFFFF" />
+                <Text style={styles.metaText}>
+                  {activity.participants || 0}/{activity.max_participants}
+                </Text>
+              </View>
+            </View>
+            
+            <View style={styles.progressContainer}>
+              <View style={styles.progressBar}>
+                <View 
+                  style={[
+                    styles.progressFill, 
+                    { 
+                      width: `${fillPercent}%`,
+                      backgroundColor: isFull ? '#E74C3C' : colors.primary
+                    }
+                  ]} 
+                />
+              </View>
             </View>
           </View>
-          <View style={styles.participantsRow}>
-            <IconSymbol name="person.2.fill" size={14} color={colors.background} />
-            <Text style={styles.participantsText}>
-              {activity.participants || 0}/{activity.max_participants}
-            </Text>
-          </View>
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   const renderSelectedActivity = () => {
     if (!selectedActivity) return null;
@@ -395,7 +439,7 @@ const mapHTML = useMemo(() => `
           <View style={styles.detailContent}>
             <View style={styles.detailHeader}>
               <Text style={styles.detailTitle}>{selectedActivity.nom}</Text>
-              <View style={[styles.detailBadge, isFull && styles.fullBadge]}>
+              <View style={[styles.detailBadge, isFull && styles.detailFullBadge]}>
                 <Text style={styles.detailBadgeText}>{selectedActivity.categorie}</Text>
               </View>
             </View>
@@ -417,7 +461,7 @@ const mapHTML = useMemo(() => `
             <View style={styles.detailDivider} />
             <TouchableOpacity style={styles.viewDetailButton} onPress={() => { closeActivity(); router.push(`/activity-detail?id=${selectedActivity.id}`); }}>
               <Text style={styles.viewDetailButtonText}>Voir les détails complets</Text>
-              <IconSymbol name="arrow.right" size={20} color={colors.background} />
+              <IconSymbol name="arrow.right" size={20} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -464,9 +508,20 @@ const mapHTML = useMemo(() => `
         <>
           <View style={styles.searchContainer}>
             <IconSymbol name="magnifyingglass" size={20} color={colors.textSecondary} />
-            <TextInput style={styles.searchInput} placeholder="Rechercher des activités..." placeholderTextColor={colors.textSecondary} value={searchQuery} onChangeText={setSearchQuery} />
+            <TextInput 
+              style={styles.searchInput} 
+              placeholder="Rechercher des activités..." 
+              placeholderTextColor={colors.textSecondary} 
+              value={searchQuery} 
+              onChangeText={setSearchQuery} 
+            />
           </View>
-          <ScrollView style={styles.scrollView} contentContainerStyle={[styles.contentContainer, Platform.OS !== 'ios' && styles.contentContainerWithTabBar]} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}>
+          <ScrollView 
+            style={styles.scrollView} 
+            contentContainerStyle={[styles.contentContainer, Platform.OS !== 'ios' && styles.contentContainerWithTabBar]} 
+            showsVerticalScrollIndicator={false} 
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
+          >
             {filteredActivities.length > 0 ? filteredActivities.map((a, i) => renderActivityCard(a, i)) : (
               <View style={styles.emptyState}>
                 <IconSymbol name="calendar" size={64} color={colors.textSecondary} />
@@ -479,21 +534,21 @@ const mapHTML = useMemo(() => `
       ) : (
         <View style={styles.mapContainer}>
           <WebView
-  ref={webViewRef}
-  source={{ html: mapHTML }}
-  style={styles.map}
-  onMessage={handleWebViewMessage}
-  onLoadEnd={() => {
-    // La carte vient de (re)charger → on renvoie les activités
-    if (activities.length > 0) {
-      sendActivitiesToMap(activities, !hasCenteredOnActivity.current);
-    }
-  }}
-  javaScriptEnabled
-  domStorageEnabled
-  scrollEnabled={false}
-  bounces={false}
-/>{userLocation && (
+            ref={webViewRef}
+            source={{ html: mapHTML }}
+            style={styles.map}
+            onMessage={handleWebViewMessage}
+            onLoadEnd={() => {
+              if (activities.length > 0) {
+                sendActivitiesToMap(activities, !hasCenteredOnActivity.current);
+              }
+            }}
+            javaScriptEnabled
+            domStorageEnabled
+            scrollEnabled={false}
+            bounces={false}
+          />
+          {userLocation && (
             <TouchableOpacity style={styles.locationButton} onPress={centerOnUser}>
               <IconSymbol name="location.fill" size={22} color={colors.primary} />
             </TouchableOpacity>
@@ -506,53 +561,336 @@ const mapHTML = useMemo(() => `
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16 },
-  headerTitle: { fontSize: 28, fontWeight: '700', color: colors.text },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  toggleContainer: { flexDirection: 'row', backgroundColor: colors.card, borderRadius: 12, padding: 4 },
-  toggleButton: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, gap: 6 },
-  toggleButtonActive: { backgroundColor: colors.primary },
-  toggleText: { fontSize: 14, fontWeight: '600', color: colors.textSecondary },
-  toggleTextActive: { color: colors.background },
-  createButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
-  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, borderRadius: 12, marginHorizontal: 20, marginBottom: 16, paddingHorizontal: 16, gap: 12 },
-  searchInput: { flex: 1, paddingVertical: 14, fontSize: 16, color: colors.text },
-  scrollView: { flex: 1 },
-  contentContainer: { paddingHorizontal: 20, paddingBottom: 20 },
-  contentContainerWithTabBar: { paddingBottom: 100 },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
-  loadingText: { fontSize: 16, color: colors.textSecondary },
-  emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
-  emptyText: { fontSize: 20, fontWeight: '600', color: colors.text, marginTop: 16 },
-  emptySubtext: { fontSize: 16, color: colors.textSecondary, textAlign: 'center' },
-  activityCard: { height: 200, borderRadius: 16, overflow: 'hidden', marginBottom: 16 },
-  activityImage: { width: '100%', height: '100%' },
-  activityOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.3)', padding: 16, justifyContent: 'space-between' },
-  categoryBadge: { alignSelf: 'flex-start', backgroundColor: colors.primary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
-  categoryText: { color: colors.background, fontSize: 12, fontWeight: '600' },
-  activityInfo: { gap: 8 },
-  activityTitle: { fontSize: 20, fontWeight: '700', color: colors.background },
-  activityMeta: { flexDirection: 'row', gap: 16 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  metaText: { fontSize: 13, color: colors.background },
-  participantsRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  participantsText: { fontSize: 13, color: colors.background, fontWeight: '600' },
-  mapContainer: { flex: 1 },
-  map: { flex: 1 },
-  locationButton: { position: 'absolute', top: 16, right: 16, width: 44, height: 44, borderRadius: 22, backgroundColor: colors.card, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
-  activityDetail: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '60%', shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 8 },
-  dragHandle: { width: 40, height: 4, backgroundColor: colors.border, borderRadius: 2, alignSelf: 'center', marginTop: 12 },
-  detailImage: { width: '100%', height: 150 },
-  detailContent: { padding: 20, gap: 12 },
-  detailHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  detailTitle: { fontSize: 20, fontWeight: '700', color: colors.text, flex: 1 },
-  detailBadge: { backgroundColor: colors.primary + '20', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  fullBadge: { backgroundColor: '#FF6B6B20' },
-  detailBadgeText: { fontSize: 12, fontWeight: '600', color: colors.primary },
-  detailRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  detailText: { fontSize: 15, color: colors.textSecondary, flex: 1 },
-  detailDivider: { height: 1, backgroundColor: colors.border, marginVertical: 8 },
-  viewDetailButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary, paddingVertical: 14, borderRadius: 12, gap: 8 },
-  viewDetailButtonText: { fontSize: 16, fontWeight: '600', color: colors.background },
-  closeButton: { position: 'absolute', top: 20, right: 20, width: 32, height: 32, borderRadius: 16, backgroundColor: colors.border, justifyContent: 'center', alignItems: 'center' },
+  header: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    paddingHorizontal: 20, 
+    paddingVertical: 16 
+  },
+  headerTitle: { 
+    fontSize: 28, 
+    fontWeight: '700', 
+    color: colors.text 
+  },
+  headerActions: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 12 
+  },
+  toggleContainer: { 
+    flexDirection: 'row', 
+    backgroundColor: colors.card, 
+    borderRadius: 12, 
+    padding: 4 
+  },
+  toggleButton: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: 12, 
+    paddingVertical: 8, 
+    borderRadius: 8, 
+    gap: 6 
+  },
+  toggleButtonActive: { 
+    backgroundColor: colors.primary 
+  },
+  toggleText: { 
+    fontSize: 14, 
+    fontWeight: '600', 
+    color: colors.textSecondary 
+  },
+  toggleTextActive: { 
+    color: colors.background 
+  },
+  createButton: { 
+    width: 44, 
+    height: 44, 
+    borderRadius: 22, 
+    backgroundColor: colors.primary, 
+    justifyContent: 'center', 
+    alignItems: 'center' 
+  },
+  searchContainer: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: colors.card, 
+    borderRadius: 12, 
+    marginHorizontal: 20, 
+    marginBottom: 16, 
+    paddingHorizontal: 16, 
+    gap: 12 
+  },
+  searchInput: { 
+    flex: 1, 
+    paddingVertical: 14, 
+    fontSize: 16, 
+    color: colors.text 
+  },
+  scrollView: { 
+    flex: 1 
+  },
+  contentContainer: { 
+    paddingHorizontal: 20, 
+    paddingBottom: 20 
+  },
+  contentContainerWithTabBar: { 
+    paddingBottom: 100 
+  },
+  loadingContainer: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    gap: 12 
+  },
+  loadingText: { 
+    fontSize: 16, 
+    color: colors.textSecondary 
+  },
+  emptyState: { 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    paddingVertical: 60 
+  },
+  emptyText: { 
+    fontSize: 20, 
+    fontWeight: '600', 
+    color: colors.text, 
+    marginTop: 16 
+  },
+  emptySubtext: { 
+    fontSize: 16, 
+    color: colors.textSecondary, 
+    textAlign: 'center' 
+  },
+
+  // =====================================================
+  // STYLES AMÉLIORÉS POUR LES CARTES D'ACTIVITÉS
+  // =====================================================
+  activityCard: { 
+    height: 220, 
+    borderRadius: 20, 
+    overflow: 'hidden', 
+    marginBottom: 16,
+    backgroundColor: colors.card,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  activityImage: { 
+    width: '100%', 
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  activityGradient: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  activityOverlay: { 
+    ...StyleSheet.absoluteFillObject, 
+    padding: 16, 
+    justifyContent: 'space-between',
+  },
+  topRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  categoryBadge: { 
+    backgroundColor: colors.primary, 
+    paddingHorizontal: 14, 
+    paddingVertical: 7, 
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  categoryText: { 
+    color: '#FFFFFF', 
+    fontSize: 12, 
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  fullBadge: {
+    backgroundColor: '#E74C3C',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  fullBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  activityInfo: { 
+    gap: 10,
+  },
+  activityTitle: { 
+    fontSize: 20, 
+    fontWeight: '800', 
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+    lineHeight: 26,
+  },
+  activityMeta: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  metaRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 5,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  metaText: { 
+    fontSize: 12, 
+    color: '#FFFFFF', 
+    fontWeight: '600',
+  },
+  progressContainer: {
+    marginTop: 4,
+  },
+  progressBar: {
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+
+  // =====================================================
+  // STYLES POUR LA VUE MAP
+  // =====================================================
+  mapContainer: { 
+    flex: 1 
+  },
+  map: { 
+    flex: 1 
+  },
+  locationButton: { 
+    position: 'absolute', 
+    top: 16, 
+    right: 16, 
+    width: 44, 
+    height: 44, 
+    borderRadius: 22, 
+    backgroundColor: colors.card, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 2 }, 
+    shadowOpacity: 0.1, 
+    shadowRadius: 4, 
+    elevation: 3 
+  },
+  activityDetail: { 
+    position: 'absolute', 
+    bottom: 0, 
+    left: 0, 
+    right: 0, 
+    backgroundColor: colors.card, 
+    borderTopLeftRadius: 24, 
+    borderTopRightRadius: 24, 
+    maxHeight: '60%', 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: -4 }, 
+    shadowOpacity: 0.1, 
+    shadowRadius: 12, 
+    elevation: 8 
+  },
+  dragHandle: { 
+    width: 40, 
+    height: 4, 
+    backgroundColor: colors.border, 
+    borderRadius: 2, 
+    alignSelf: 'center', 
+    marginTop: 12 
+  },
+  detailImage: { 
+    width: '100%', 
+    height: 150 
+  },
+  detailContent: { 
+    padding: 20, 
+    gap: 12 
+  },
+  detailHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'flex-start' 
+  },
+  detailTitle: { 
+    fontSize: 20, 
+    fontWeight: '700', 
+    color: colors.text, 
+    flex: 1 
+  },
+  detailBadge: { 
+    backgroundColor: colors.primary + '20', 
+    paddingHorizontal: 10, 
+    paddingVertical: 4, 
+    borderRadius: 8 
+  },
+  detailFullBadge: { 
+    backgroundColor: '#FF6B6B20' 
+  },
+  detailBadgeText: { 
+    fontSize: 12, 
+    fontWeight: '600', 
+    color: colors.primary 
+  },
+  detailRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 10 
+  },
+  detailText: { 
+    fontSize: 15, 
+    color: colors.textSecondary, 
+    flex: 1 
+  },
+  detailDivider: { 
+    height: 1, 
+    backgroundColor: colors.border, 
+    marginVertical: 8 
+  },
+  viewDetailButton: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    backgroundColor: colors.primary, 
+    paddingVertical: 14, 
+    borderRadius: 12, 
+    gap: 8 
+  },
+  viewDetailButtonText: { 
+    fontSize: 16, 
+    fontWeight: '600', 
+    color: '#FFFFFF' 
+  },
+  closeButton: { 
+    position: 'absolute', 
+    top: 20, 
+    right: 20, 
+    width: 32, 
+    height: 32, 
+    borderRadius: 16, 
+    backgroundColor: colors.border, 
+    justifyContent: 'center', 
+    alignItems: 'center' 
+  },
 });

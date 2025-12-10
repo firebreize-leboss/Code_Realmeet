@@ -1,4 +1,4 @@
-// app/category-activities.tsx
+// app/(tabs)/category-activities.tsx
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -8,6 +8,8 @@ import {
   TouchableOpacity,
   Image,
   ActivityIndicator,
+  TextInput,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -38,6 +40,7 @@ export default function CategoryActivitiesScreen() {
   const { category } = useLocalSearchParams();
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const categoryName = decodeURIComponent(category as string);
   const categoryInfo = PREDEFINED_CATEGORIES.find(cat => cat.name === categoryName);
@@ -70,6 +73,19 @@ export default function CategoryActivitiesScreen() {
   const handleActivityPress = (activityId: string) => {
     router.push(`/activity-detail?id=${activityId}`);
   };
+
+  // Filtrage des activités selon la recherche
+  const filteredActivities = activities.filter((activity: Activity) => {
+    if (searchQuery === '') return true;
+    
+    const query = searchQuery.toLowerCase();
+    return (
+      activity.nom.toLowerCase().includes(query) ||
+      activity.description.toLowerCase().includes(query) ||
+      activity.ville.toLowerCase().includes(query) ||
+      activity.adresse.toLowerCase().includes(query)
+    );
+  });
 
   const renderActivityCard = (activity: Activity, index: number) => {
     const placesRestantes = activity.max_participants - activity.participants;
@@ -174,6 +190,7 @@ export default function CategoryActivitiesScreen() {
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Chargement des activités...</Text>
         </View>
       </SafeAreaView>
     );
@@ -199,25 +216,58 @@ export default function CategoryActivitiesScreen() {
         <View style={styles.placeholder} />
       </View>
 
+      {/* Barre de recherche */}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchInputWrapper}>
+          <IconSymbol name="magnifyingglass" size={20} color={colors.textSecondary} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Rechercher une activité..."
+            placeholderTextColor={colors.textSecondary}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            returnKeyType="search"
+          />
+          {searchQuery !== '' && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <IconSymbol name="xmark.circle.fill" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.contentContainer}
+        contentContainerStyle={[
+          styles.contentContainer,
+          Platform.OS !== 'ios' && styles.contentContainerWithTabBar,
+        ]}
         showsVerticalScrollIndicator={false}
       >
-        {activities.length === 0 ? (
+        {filteredActivities.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <IconSymbol name="tray" size={64} color={colors.textSecondary} />
-            <Text style={styles.emptyTitle}>Aucune activité</Text>
+            <IconSymbol 
+              name={searchQuery ? "magnifyingglass" : "tray"} 
+              size={64} 
+              color={colors.textSecondary} 
+            />
+            <Text style={styles.emptyTitle}>
+              {searchQuery ? 'Aucun résultat' : 'Aucune activité'}
+            </Text>
             <Text style={styles.emptyText}>
-              Il n'y a pas encore d'activités dans cette catégorie.
+              {searchQuery 
+                ? 'Aucune activité ne correspond à votre recherche' 
+                : "Il n'y a pas encore d'activités dans cette catégorie."
+              }
             </Text>
           </View>
         ) : (
           <>
             <Text style={styles.countText}>
-              {activities.length} activité{activities.length > 1 ? 's' : ''}
+              {filteredActivities.length} activité{filteredActivities.length > 1 ? 's' : ''}
+              {searchQuery && ` trouvée${filteredActivities.length > 1 ? 's' : ''}`}
             </Text>
-            {activities.map((activity, index) => renderActivityCard(activity, index))}
+            {filteredActivities.map((activity, index) => renderActivityCard(activity, index))}
           </>
         )}
       </ScrollView>
@@ -263,6 +313,28 @@ const styles = StyleSheet.create({
   placeholder: {
     width: 40,
   },
+  searchContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  searchInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: colors.text,
+    paddingVertical: 0,
+  },
   scrollView: {
     flex: 1,
   },
@@ -270,10 +342,18 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 40,
   },
+  contentContainerWithTabBar: {
+    paddingBottom: 100,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: colors.textSecondary,
   },
   countText: {
     fontSize: 16,
@@ -360,18 +440,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 60,
+    gap: 16,
   },
   emptyTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: colors.text,
-    marginTop: 20,
-    marginBottom: 10,
   },
   emptyText: {
     fontSize: 16,
     color: colors.textSecondary,
     textAlign: 'center',
+    paddingHorizontal: 32,
     lineHeight: 22,
   },
 });
