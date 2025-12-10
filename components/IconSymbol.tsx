@@ -1,3 +1,4 @@
+// components/IconSymbol.tsx
 // This file is a fallback for using MaterialIcons on Android and web.
 
 import React from "react";
@@ -17,7 +18,7 @@ const MAPPING = {
 
   // Navigation & Home
   "house.fill": "home",
-  "house": "home-outlined",
+  "house": "home",
   "arrow.left": "arrow-back",
   "arrow.right": "arrow-forward",
   "arrow.up": "arrow-upward",
@@ -32,15 +33,17 @@ const MAPPING = {
 
   // Communication & Social
   "paperplane.fill": "send",
-  "paperplane": "send-outlined",
+  "paperplane": "send",
   "envelope.fill": "mail",
   "envelope": "mail-outline",
   "phone.fill": "phone",
-  "phone": "phone-outlined",
+  "phone": "phone",
   "message.fill": "chat",
   "message": "chat-bubble-outline",
   "bell.fill": "notifications",
   "bell": "notifications-none",
+  "bell.slash.fill": "notifications-off",
+  "bell.slash": "notifications-off",
   "heart.fill": "favorite",
   "heart": "favorite-border",
 
@@ -71,11 +74,11 @@ const MAPPING = {
 
   // Media & Content
   "photo.fill": "image",
-  "photo": "image-outlined",
+  "photo": "image",
   "camera.fill": "camera-alt",
   "camera": "camera-alt",
   "video.fill": "videocam",
-  "video": "videocam-off",
+  "video": "videocam",
   "music.note": "music-note",
   "speaker.wave.2.fill": "volume-up",
   "speaker.slash.fill": "volume-off",
@@ -83,20 +86,28 @@ const MAPPING = {
   "pause.fill": "pause",
   "stop.fill": "stop",
 
+  // 🎤 Audio & Voice
+  "mic.fill": "mic",
+  "mic": "mic-none",
+  "mic.slash.fill": "mic-off",
+  "mic.slash": "mic-off",
+
   // System & Settings
   "gear": "settings",
   "gearshape.fill": "settings",
   "slider.horizontal.3": "tune",
   "info.circle.fill": "info",
-  "info.circle": "info-outlined",
+  "info.circle": "info",
   "exclamationmark.triangle.fill": "warning",
-  "exclamationmark.triangle": "warning-amber",
+  "exclamationmark.triangle": "warning",
+  "exclamationmark.circle.fill": "error",
+  "exclamationmark.circle": "error-outline",
   "questionmark.circle.fill": "help",
   "questionmark.circle": "help-outline",
   "shield.fill": "shield",
 
   // Shapes & Symbols
-  "square": "square",
+  "square": "crop-square",
   "square.grid.2x2.fill": "grid-view",
   "square.grid.3x3": "apps",
   "square.stack.3d.up.fill": "layers",
@@ -106,6 +117,11 @@ const MAPPING = {
   "star": "star-border",
   "bookmark.fill": "bookmark",
   "bookmark": "bookmark-border",
+
+  // ⋯ More options
+  "ellipsis": "more-horiz",
+  "ellipsis.circle": "more-horiz",
+  "ellipsis.circle.fill": "more-horiz",
 
   // Technology & Code
   "chevron.left.forwardslash.chevron.right": "code",
@@ -119,7 +135,7 @@ const MAPPING = {
 
   // Shopping & Commerce
   "cart.fill": "shopping-cart",
-  "cart": "shopping-cart-outlined",
+  "cart": "shopping-cart",
   "creditcard.fill": "credit-card",
   "creditcard": "credit-card",
   "dollarsign.circle.fill": "monetization-on",
@@ -148,6 +164,16 @@ const MAPPING = {
   "person.circle": "account-circle",
   "person.crop.circle.fill": "account-circle",
   "person.crop.circle": "account-circle",
+  "person.badge.plus.fill": "person-add",
+  "person.badge.plus": "person-add",
+  "person.badge.minus.fill": "person-remove",
+  "person.badge.minus": "person-remove",
+
+  // ✋ Blocking & Safety
+  "hand.raised.fill": "block",
+  "hand.raised": "block",
+  "hand.raised.slash.fill": "do-not-disturb-off",
+  "hand.raised.slash": "do-not-disturb-off",
 
   // Sharing & Export
   "square.and.arrow.up": "share",
@@ -170,18 +196,18 @@ const MAPPING = {
   // Business & Buildings
   "building.2.fill": "business",
   "building.2": "business",
-  
+
   // Charts & Analytics
   "chart.bar.fill": "bar-chart",
-  
+
   // Support
   "headphones": "headset",
 
   // Logos (Social)
   "logo.apple": "apple",
-  "logo.google": "google",
+  "logo.google": "g-mobiledata",
 
-  // ⭐ CATÉGORIES - ICÔNES AJOUTÉES
+  // ⭐ CATÉGORIES
   "figure.hiking": "hiking",
   "cup.and.saucer.fill": "local-cafe",
   "film.fill": "movie",
@@ -189,6 +215,23 @@ const MAPPING = {
   "figure.run": "directions-run",
   "fork.knife": "restaurant",
   "paintpalette.fill": "palette",
+
+  // ✨ Effects & Misc
+  "sparkles": "auto-awesome",
+  "figure.play": "sports",
+  "figure.walk": "directions-walk",
+
+  // 📥 Storage & Inbox
+  "tray": "inbox",
+  "tray.fill": "inbox",
+
+  // 📋 Clipboard
+  "doc.on.clipboard": "content-paste",
+  "doc.on.clipboard.fill": "content-paste",
+
+  // Success
+  "checkmark.seal.fill": "verified",
+  "checkmark.seal": "verified",
 } as Partial<
   Record<
     import("expo-symbols").SymbolViewProps["name"],
@@ -199,9 +242,7 @@ const MAPPING = {
 export type IconSymbolName = keyof typeof MAPPING;
 
 /**
- * An icon component that uses native SFSymbols on iOS, and MaterialIcons on Android and web. This ensures a consistent look across platforms, and optimal resource usage.
- *
- * Icon `name`s are based on SFSymbols and require manual mapping to MaterialIcons.
+ * An icon component that uses native SFSymbols on iOS, and MaterialIcons on Android and web.
  */
 export function IconSymbol({
   name,
@@ -215,11 +256,26 @@ export function IconSymbol({
   style?: StyleProp<ViewStyle>;
   weight?: SymbolWeight;
 }) {
+  const iconName = MAPPING[name];
+  
+  // Fallback si l'icône n'est pas mappée
+  if (!iconName) {
+    console.warn(`IconSymbol: No mapping found for "${name}", using fallback`);
+    return (
+      <MaterialIcons
+        color={color}
+        size={size}
+        name="help-outline"
+        style={style as StyleProp<TextStyle>}
+      />
+    );
+  }
+
   return (
     <MaterialIcons
       color={color}
       size={size}
-      name={MAPPING[name]}
+      name={iconName}
       style={style as StyleProp<TextStyle>}
     />
   );

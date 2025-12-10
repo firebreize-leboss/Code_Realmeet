@@ -238,27 +238,13 @@ export default function ChatDetailScreen() {
     setMessage('');
     Keyboard.dismiss();
 
-    const optimisticId = `temp-${Date.now()}`;
-    const optimisticMessage: Message = {
-      id: optimisticId,
-      senderId: currentUserId!,
-      senderName: currentUserName,
-      senderAvatar: currentUserAvatar,
-      text: userMessage,
-      timestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-      status: 'sending' as MessageStatus,
-      type: 'text',
-    };
-
-    setLocalMessages(prev => [...prev, optimisticMessage]);
-
     try {
-      await sendMessage(conversationId as string, userMessage, 'text');
-      setLocalMessages(prev => prev.filter(msg => msg.id !== optimisticId));
+      // sendMessage du hook prend (content, type, mediaUrl, mediaDuration)
+      // conversationId est déjà dans le hook
+      await sendMessage(userMessage, 'text');
     } catch (error) {
-      setLocalMessages(prev =>
-        prev.map(msg => (msg.id === optimisticId ? { ...msg, status: 'failed' as MessageStatus } : msg))
-      );
+      console.error('Error sending message:', error);
+      Alert.alert('Erreur', "Impossible d'envoyer le message");
     }
   };
 
@@ -282,28 +268,12 @@ export default function ChatDetailScreen() {
       });
 
       if (!result.canceled && result.assets[0]) {
-        const optimisticId = `temp-${Date.now()}`;
-        const optimisticMessage: Message = {
-          id: optimisticId,
-          senderId: currentUserId!,
-          senderName: currentUserName,
-          senderAvatar: currentUserAvatar,
-          imageUrl: result.assets[0].uri,
-          timestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-          status: 'sending' as MessageStatus,
-          type: 'image',
-        };
-
-        setLocalMessages(prev => [...prev, optimisticMessage]);
-
         try {
           const uploadedUrl = await messageStorageService.uploadImage(result.assets[0].uri);
+          // sendMessage du hook prend (content, type, mediaUrl, mediaDuration)
           await sendMessage('', 'image', uploadedUrl);
-          setLocalMessages(prev => prev.filter(msg => msg.id !== optimisticId));
         } catch (error) {
-          setLocalMessages(prev =>
-            prev.map(msg => (msg.id === optimisticId ? { ...msg, status: 'failed' as MessageStatus } : msg))
-          );
+          console.error('Error uploading image:', error);
           Alert.alert('Erreur', "Impossible d'envoyer l'image");
         }
       }
@@ -341,34 +311,18 @@ export default function ChatDetailScreen() {
       setIsRecording(false);
       setRecordingTime(0);
 
-      if (result) {
-        const optimisticId = `temp-${Date.now()}`;
-        const optimisticMessage: Message = {
-          id: optimisticId,
-          senderId: currentUserId!,
-          senderName: currentUserName,
-          senderAvatar: currentUserAvatar,
-          voiceUrl: result.uri,
-          voiceDuration: result.duration,
-          timestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-          status: 'sending' as MessageStatus,
-          type: 'voice',
-        };
-
-        setLocalMessages(prev => [...prev, optimisticMessage]);
-
+      if (result && result.uri) {
         try {
           const uploadedUrl = await messageStorageService.uploadVoiceMessage(result.uri);
+          // sendMessage du hook prend (content, type, mediaUrl, mediaDuration)
           await sendMessage('', 'voice', uploadedUrl, result.duration);
-          setLocalMessages(prev => prev.filter(msg => msg.id !== optimisticId));
         } catch (error) {
-          setLocalMessages(prev =>
-            prev.map(msg => (msg.id === optimisticId ? { ...msg, status: 'failed' as MessageStatus } : msg))
-          );
+          console.error('Error uploading voice message:', error);
           Alert.alert('Erreur', "Impossible d'envoyer le message vocal");
         }
       }
     } catch (error) {
+      console.error('Error stopping recording:', error);
       setIsRecording(false);
       setRecordingTime(0);
     }
@@ -470,7 +424,7 @@ export default function ChatDetailScreen() {
   const inputWarning = getInputWarning();
 
   return (
-    <SafeAreaView style={commonStyles.container} edges={['top']}>
+    <SafeAreaView style={commonStyles.container} edges={['top', 'bottom']}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
@@ -778,7 +732,7 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    paddingBottom: Platform.OS === 'ios' ? 24 : 12,
+    paddingBottom: 12,
   },
   warningBanner: {
     flexDirection: 'row',
