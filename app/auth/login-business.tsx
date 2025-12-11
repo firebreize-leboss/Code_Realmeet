@@ -1,3 +1,6 @@
+// app/auth/login-business.tsx
+// Page de connexion entreprise - SIRET optionnel + lien inscription
+
 import React, { useState } from 'react';
 import {
   View,
@@ -18,52 +21,34 @@ import { authService } from '@/services/auth.service';
 export default function LoginBusinessScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
-  const [siret, setSiret] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-    if (!email || !siret || !password) {
+    if (!email || !password) {
       Alert.alert('Erreur', 'Veuillez remplir tous les champs');
-      return;
-    }
-
-    // Validation du SIRET (14 chiffres)
-    if (!/^\d{14}$/.test(siret.replace(/\s/g, ''))) {
-      Alert.alert('Erreur', 'Le numéro SIRET doit contenir 14 chiffres');
       return;
     }
 
     setLoading(true);
 
     try {
-      // Pour l'instant, login normal (à adapter selon vos besoins entreprise)
       const result = await authService.loginUser({ 
         email, 
         password 
       });
 
       if (result.success) {
-        Alert.alert('Succès', result.message, [
-          { text: 'OK', onPress: () => router.replace('/(tabs)/browse') },
-        ]);
+        router.replace('/(tabs)/profile');
       } else {
-        Alert.alert('Erreur', result.error);
+        Alert.alert('Erreur', result.error || 'Identifiants incorrects');
       }
     } catch (error: any) {
       Alert.alert('Erreur', error.message);
     } finally {
       setLoading(false);
     }
-  };
-
-  const formatSiret = (text: string) => {
-    // Supprimer tous les espaces
-    const cleaned = text.replace(/\s/g, '');
-    // Ajouter un espace tous les 3 chiffres
-    const formatted = cleaned.match(/.{1,3}/g)?.join(' ') || cleaned;
-    return formatted.substring(0, 17); // 14 chiffres + 3 espaces
   };
 
   return (
@@ -83,6 +68,7 @@ export default function LoginBusinessScreen() {
         style={styles.scrollView}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         <View style={styles.welcomeSection}>
           <View style={[styles.iconContainer, { backgroundColor: colors.secondary + '20' }]}>
@@ -94,47 +80,22 @@ export default function LoginBusinessScreen() {
           </Text>
         </View>
 
-        <View style={styles.infoCard}>
-          <IconSymbol name="info.circle.fill" size={24} color={colors.secondary} />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoTitle}>Compte entreprise</Text>
-            <Text style={styles.infoText}>
-              Accédez à des fonctionnalités dédiées aux professionnels : gestion d'événements B2B, analytics avancés et support prioritaire.
-            </Text>
-          </View>
-        </View>
-
         <View style={styles.form}>
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Email professionnel</Text>
             <View style={styles.inputContainer}>
-              <IconSymbol name="envelope" size={20} color={colors.textSecondary} />
+              <IconSymbol name="envelope.fill" size={20} color={colors.textSecondary} />
               <TextInput
                 style={styles.input}
-                placeholder="contact@entreprise.com"
-                placeholderTextColor={colors.textSecondary}
                 value={email}
                 onChangeText={setEmail}
+                placeholder="contact@entreprise.com"
+                placeholderTextColor={colors.textSecondary}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                autoCorrect={false}
               />
             </View>
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Numéro SIRET</Text>
-            <View style={styles.inputContainer}>
-              <IconSymbol name="building.2" size={20} color={colors.textSecondary} />
-              <TextInput
-                style={styles.input}
-                placeholder="123 456 789 12345"
-                placeholderTextColor={colors.textSecondary}
-                value={siret}
-                onChangeText={(text) => setSiret(formatSiret(text))}
-                keyboardType="numeric"
-              />
-            </View>
-            <Text style={styles.helperText}>14 chiffres sans espaces</Text>
           </View>
 
           <View style={styles.inputGroup}>
@@ -143,10 +104,10 @@ export default function LoginBusinessScreen() {
               <IconSymbol name="lock.fill" size={20} color={colors.textSecondary} />
               <TextInput
                 style={styles.input}
-                placeholder="••••••••"
-                placeholderTextColor={colors.textSecondary}
                 value={password}
                 onChangeText={setPassword}
+                placeholder="••••••••"
+                placeholderTextColor={colors.textSecondary}
                 secureTextEntry={!showPassword}
               />
               <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
@@ -192,7 +153,7 @@ export default function LoginBusinessScreen() {
             <View style={styles.featureContent}>
               <Text style={styles.featureTitle}>Événements professionnels</Text>
               <Text style={styles.featureText}>
-                Organisez des événements B2B et développez votre réseau professionnel
+                Organisez des événements et développez votre activité
               </Text>
             </View>
           </View>
@@ -211,22 +172,23 @@ export default function LoginBusinessScreen() {
 
           <View style={styles.feature}>
             <View style={[styles.featureIcon, { backgroundColor: colors.secondary + '20' }]}>
-              <IconSymbol name="headphones" size={24} color={colors.secondary} />
+              <IconSymbol name="person.2.fill" size={24} color={colors.secondary} />
             </View>
             <View style={styles.featureContent}>
-              <Text style={styles.featureTitle}>Support prioritaire</Text>
+              <Text style={styles.featureTitle}>Gestion des participants</Text>
               <Text style={styles.featureText}>
-                Une équipe dédiée pour répondre à vos questions rapidement
+                Gérez facilement les inscriptions à vos activités
               </Text>
             </View>
           </View>
         </View>
 
+        {/* Lien vers inscription */}
         <View style={styles.signupSection}>
           <Text style={styles.signupText}>Pas encore de compte entreprise ?</Text>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push('/auth/register-business')}>
             <Text style={[styles.signupLink, { color: colors.secondary }]}>
-              Contactez notre équipe commerciale
+              Créer un compte
             </Text>
           </TouchableOpacity>
         </View>
@@ -289,30 +251,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
   },
-  infoCard: {
-    flexDirection: 'row',
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
-    gap: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: colors.secondary,
-  },
-  infoContent: {
-    flex: 1,
-  },
-  infoTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  infoText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    lineHeight: 20,
-  },
   form: {
     gap: 20,
     marginBottom: 24,
@@ -341,11 +279,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.text,
     paddingVertical: 12,
-  },
-  helperText: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginTop: 4,
   },
   forgotPassword: {
     alignSelf: 'flex-end',
@@ -424,6 +357,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     flexWrap: 'wrap',
+    paddingBottom: 20,
   },
   signupText: {
     fontSize: 15,
