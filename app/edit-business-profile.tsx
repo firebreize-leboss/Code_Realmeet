@@ -18,12 +18,24 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
-import { PREDEFINED_CATEGORIES } from '@/constants/categories';
+
+const BUSINESS_CATEGORIES = [
+  'Sport & Fitness',
+  'Art & Culture',
+  'Gastronomie',
+  'Bien-être & Spa',
+  'Aventure & Nature',
+  'Éducation & Formation',
+  'Musique & Spectacle',
+  'Technologie',
+  'Mode & Beauté',
+  'Autre',
+];
 
 const DAYS_OF_WEEK = [
   { key: 'lundi', label: 'Lundi' },
@@ -140,7 +152,7 @@ export default function EditBusinessProfileScreen() {
 
           // Lire l'image en base64
           const base64 = await FileSystem.readAsStringAsync(result.assets[0].uri, {
-            encoding: FileSystem.EncodingType.Base64,
+            encoding: 'base64',
           });
 
           // Générer un nom de fichier unique
@@ -587,30 +599,25 @@ export default function EditBusinessProfileScreen() {
                 </TouchableOpacity>
               </View>
               <ScrollView style={styles.modalScroll}>
-                {PREDEFINED_CATEGORIES.map((cat) => (
+                {BUSINESS_CATEGORIES.map((cat) => (
                   <TouchableOpacity
-                    key={cat.id}
+                    key={cat}
                     style={[
                       styles.categoryOption,
-                      businessCategory === cat.name && styles.categoryOptionSelected
+                      businessCategory === cat && styles.categoryOptionSelected
                     ]}
                     onPress={() => {
-                      setBusinessCategory(cat.name);
+                      setBusinessCategory(cat);
                       setShowCategoryPicker(false);
                     }}
                   >
-                    <View style={styles.categoryOptionContent}>
-                      <View style={[styles.categoryIconSmall, { backgroundColor: cat.color + '20' }]}>
-                        <IconSymbol name={cat.icon} size={20} color={cat.color} />
-                      </View>
-                      <Text style={[
-                        styles.categoryOptionText,
-                        businessCategory === cat.name && styles.categoryOptionTextSelected
-                      ]}>
-                        {cat.name}
-                      </Text>
-                    </View>
-                    {businessCategory === cat.name && (
+                    <Text style={[
+                      styles.categoryOptionText,
+                      businessCategory === cat && styles.categoryOptionTextSelected
+                    ]}>
+                      {cat}
+                    </Text>
+                    {businessCategory === cat && (
                       <IconSymbol name="checkmark" size={20} color={colors.primary} />
                     )}
                   </TouchableOpacity>
@@ -925,18 +932,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary + '10',
     marginHorizontal: -20,
     paddingHorizontal: 20,
-  },
-  categoryOptionContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  categoryIconSmall: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   categoryOptionText: {
     fontSize: 16,

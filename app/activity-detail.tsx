@@ -1,4 +1,6 @@
 // app/activity-detail.tsx
+// Page de détail d'une activité avec restrictions entreprise
+
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -9,6 +11,7 @@ import {
   Image,
   ActivityIndicator,
   Alert,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -16,6 +19,10 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
 import ActivityCalendar from '@/components/ActivityCalendar';
+import { useBusinessRestrictions } from '@/hooks/useBusinessRestrictions';
+import { LinearGradient } from 'expo-linear-gradient';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface ActivityDetail {
   id: string;
@@ -27,6 +34,8 @@ interface ActivityDetail {
     name: string;
     avatar: string;
     type: string;
+    accountType: 'user' | 'business';
+    isVerified?: boolean;
   };
   date: string;
   time: string;
@@ -45,6 +54,10 @@ interface ActivityDetail {
 export default function ActivityDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
+  
+  // Hook de restrictions entreprise
+  const { isBusiness, showJoinRestriction } = useBusinessRestrictions();
+  
   const [activity, setActivity] = useState<ActivityDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [isJoined, setIsJoined] = useState(false);
@@ -55,6 +68,23 @@ export default function ActivityDetailScreen() {
   useEffect(() => {
     loadActivity();
   }, [id]);
+
+  // Fonction pour envoyer un message système
+  const sendSystemMessage = async (conversationId: string, content: string) => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData?.user) return;
+
+      await supabase.from('messages').insert({
+        conversation_id: conversationId,
+        sender_id: userData.user.id,
+        content,
+        message_type: 'system',
+      });
+    } catch (error) {
+      console.error('Erreur envoi message système:', error);
+    }
+  };
 
   const loadActivity = async () => {
     try {
@@ -79,19 +109,22 @@ export default function ActivityDetailScreen() {
         // Récupérer le profil de l'hôte séparément
         const { data: hostProfile } = await supabase
           .from('profiles')
-          .select('id, full_name, avatar_url')
+          .select('id, full_name, avatar_url, account_type, business_name, business_verified')
           .eq('id', activityData.host_id)
           .single();
-        // Compter le nombre RÉEL de participants depuis activity_participants
+
+        const isHostBusiness = hostProfile?.account_type === 'business';
+        
+        // Compter le nombre RÉEL de participants
         const { count: realParticipantCount } = await supabase
-          .from('activity_participants')
+          .from('slot_participants')
           .select('*', { count: 'exact', head: true })
           .eq('activity_id', activityId);
 
-        const participantCount = realParticipantCount || 0;
+        const participantCount = realParticipantCount || activityData.participants || 0;
 
-        // Vérifier si l'utilisateur actuel est déjà inscrit
-        if (userId) {
+        // Vérifier si l'utilisateur actuel est déjà inscrit (seulement si pas entreprise)
+        if (userId && !isBusiness) {
           const { data: participation } = await supabase
             .from('slot_participants')
             .select('id, slot_id')
@@ -101,7 +134,6 @@ export default function ActivityDetailScreen() {
 
           setIsJoined(!!participation);
           
-          // Si l'utilisateur est inscrit, récupérer les infos du créneau pour pré-sélectionner
           if (participation?.slot_id) {
             const { data: slotData } = await supabase
               .from('activity_slots')
@@ -127,9 +159,13 @@ export default function ActivityDetailScreen() {
           image: activityData.image_url,
           host: {
             id: activityData.host_id,
-            name: hostProfile?.full_name || 'Organisateur',
+            name: isHostBusiness 
+              ? hostProfile?.business_name 
+              : hostProfile?.full_name || 'Organisateur',
             avatar: hostProfile?.avatar_url || '',
-            type: activityData.host_type || 'Particulier',
+            type: isHostBusiness ? 'Entreprise' : 'Particulier',
+            accountType: hostProfile?.account_type || 'user',
+            isVerified: hostProfile?.business_verified || false,
           },
           date: activityData.date
             ? new Date(activityData.date).toLocaleDateString('fr-FR', {
@@ -140,19 +176,19 @@ export default function ActivityDetailScreen() {
             : 'Date à confirmer',
           time: activityData.time_start
             ? `${activityData.time_start.slice(0, 5)} - ${activityData.time_end?.slice(0, 5) || ''}`
-            : 'Horaires à confirmer',
-          location: activityData.adresse,
-          city: `${activityData.ville} ${activityData.code_postal || ''}`.trim(),
-          capacity: activityData.max_participants,
-          participants: participantCount,
-          placesRestantes: activityData.max_participants - participantCount,
-          category: activityData.categorie,
-          price: activityData.prix > 0 ? `€${activityData.prix.toFixed(2)}` : 'Gratuit',
-          includes: activityData.inclusions || [],
-          rules: activityData.regles || [],
-          nextDates: activityData.dates_supplementaires
+            : 'Horaire à confirmer',
+          nextDates: activityData.dates_supplementaires 
             ? activityData.dates_supplementaires.split(', ')
             : [],
+          location: activityData.adresse || '',
+          city: `${activityData.ville || ''} ${activityData.code_postal || ''}`.trim(),
+          capacity: activityData.max_participants || 0,
+          participants: participantCount,
+          placesRestantes: (activityData.max_participants || 0) - participantCount,
+          category: activityData.categorie || '',
+          price: activityData.prix ? `${activityData.prix}€` : 'Gratuit',
+          includes: activityData.inclusions || [],
+          rules: activityData.regles || [],
         });
       }
     } catch (error) {
@@ -162,81 +198,62 @@ export default function ActivityDetailScreen() {
     }
   };
 
-  // Fonction pour envoyer un message système dans le groupe
-  const sendSystemMessage = async (conversationId: string, message: string) => {
+  // Gérer le groupe de conversation du créneau
+  const handleSlotGroup = async (
+    slotId: string,
+    activityTitle: string,
+    activityImage: string,
+    slotDate: string,
+    slotTime: string
+  ) => {
     try {
-      await supabase.from('messages').insert({
-        conversation_id: conversationId,
-        sender_id: currentUserId,
-        content: message,
-        message_type: 'system', // Type spécial pour les messages système
-      });
-      console.log('✅ Message système envoyé:', message);
-    } catch (error) {
-      console.error('Erreur envoi message système:', error);
-    }
-  };
-
-  // Fonction pour créer ou rejoindre le groupe de conversation du CRÉNEAU
-  const handleSlotGroup = async (slotId: string, activityTitle: string, activityImage: string, slotDate: string, slotTime: string) => {
-    if (!currentUserId) return;
-
-    try {
-      // Récupérer le nom de l'utilisateur actuel
-      const { data: userProfile } = await supabase
-        .from('profiles')
-        .select('full_name')
-        .eq('id', currentUserId)
-        .single();
-      const userName = userProfile?.full_name || 'Un utilisateur';
-
-      // Formater la date pour le nom du groupe
-      const dateObj = new Date(slotDate);
-      const formattedDate = dateObj.toLocaleDateString('fr-FR', { 
-        weekday: 'short', 
-        day: 'numeric', 
-        month: 'short' 
-      });
-      const formattedTime = slotTime.replace(':', 'h');
-      const groupName = `${activityTitle} - ${formattedDate} ${formattedTime}`;
-
-      // Vérifier s'il existe déjà une conversation pour CE CRÉNEAU
+      // Vérifier si une conversation existe déjà pour ce créneau
       const { data: existingConv } = await supabase
         .from('conversations')
         .select('id')
         .eq('slot_id', slotId)
         .maybeSingle();
 
+      const groupName = `${activityTitle} - ${slotDate}`;
+
       if (existingConv) {
-        // La conversation existe, vérifier si l'utilisateur y est déjà
+        // Ajouter l'utilisateur au groupe existant
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData?.user) return;
+
         const { data: existingParticipant } = await supabase
           .from('conversation_participants')
           .select('id')
           .eq('conversation_id', existingConv.id)
-          .eq('user_id', currentUserId)
+          .eq('user_id', userData.user.id)
           .maybeSingle();
 
         if (!existingParticipant) {
-          // Ajouter l'utilisateur au groupe existant
           await supabase
             .from('conversation_participants')
             .insert({
               conversation_id: existingConv.id,
-              user_id: currentUserId,
+              user_id: userData.user.id,
             });
-          
-          // Envoyer un message système
-          await sendSystemMessage(existingConv.id, `${userName} a rejoint le groupe`);
-          console.log('✅ Utilisateur ajouté au groupe du créneau');
+
+          const { data: userProfile } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', userData.user.id)
+            .single();
+
+          await sendSystemMessage(
+            existingConv.id,
+            `${userProfile?.full_name || 'Un utilisateur'} a rejoint le groupe`
+          );
         }
       } else {
-        // Compter les participants pour ce créneau
+        // Créer une nouvelle conversation si >= 2 participants
         const { count } = await supabase
           .from('slot_participants')
           .select('*', { count: 'exact', head: true })
           .eq('slot_id', slotId);
 
-        // Créer le groupe seulement si >= 2 participants
         if (count && count >= 2) {
           const { data: newConv, error: convError } = await supabase
             .from('conversations')
@@ -249,12 +266,8 @@ export default function ActivityDetailScreen() {
             .select()
             .single();
 
-          if (convError) {
-            console.error('❌ Erreur création conversation:', convError);
-            throw convError;
-          }
+          if (convError) throw convError;
 
-          // Récupérer tous les participants du créneau
           const { data: allParticipants } = await supabase
             .from('slot_participants')
             .select('user_id')
@@ -270,9 +283,7 @@ export default function ActivityDetailScreen() {
               .from('conversation_participants')
               .insert(participantsToInsert);
 
-            // Message système de bienvenue
             await sendSystemMessage(newConv.id, `Groupe créé pour "${groupName}"`);
-            console.log('✅ Groupe créé pour le créneau:', groupName);
           }
         }
       }
@@ -281,7 +292,7 @@ export default function ActivityDetailScreen() {
     }
   };
 
-  // Fonction pour retirer l'utilisateur du groupe du créneau
+  // Retirer l'utilisateur du groupe du créneau
   const handleLeaveSlotGroup = async (slotId: string) => {
     if (!currentUserId) return;
 
@@ -293,7 +304,6 @@ export default function ActivityDetailScreen() {
         .single();
       const userName = userProfile?.full_name || 'Un utilisateur';
 
-      // Trouver la conversation du créneau
       const { data: conv } = await supabase
         .from('conversations')
         .select('id')
@@ -315,10 +325,7 @@ export default function ActivityDetailScreen() {
           .eq('conversation_id', conv.id);
 
         if (count !== null && count < 2) {
-          await supabase
-            .from('conversations')
-            .delete()
-            .eq('id', conv.id);
+          await supabase.from('conversations').delete().eq('id', conv.id);
         }
       }
     } catch (error) {
@@ -326,10 +333,16 @@ export default function ActivityDetailScreen() {
     }
   };
 
+  // Gérer l'inscription/désinscription
   const handleJoinLeave = async () => {
+    // Bloquer si compte entreprise
+    if (isBusiness) {
+      showJoinRestriction();
+      return;
+    }
+
     if (!activity || !currentUserId || joiningInProgress) return;
 
-    // Si on rejoint, vérifier qu'un créneau est sélectionné
     if (!isJoined && !selectedSlot) {
       Alert.alert('Sélectionnez un créneau', 'Veuillez choisir une date et un horaire avant de rejoindre.');
       return;
@@ -340,8 +353,6 @@ export default function ActivityDetailScreen() {
     try {
       if (isJoined) {
         // === SE DÉSINSCRIRE ===
-        
-        // Récupérer le slot_id de l'inscription actuelle
         const { data: currentParticipation } = await supabase
           .from('slot_participants')
           .select('slot_id')
@@ -350,18 +361,15 @@ export default function ActivityDetailScreen() {
           .maybeSingle();
 
         if (currentParticipation?.slot_id) {
-          // Supprimer de slot_participants
           await supabase
             .from('slot_participants')
             .delete()
             .eq('activity_id', activity.id)
             .eq('user_id', currentUserId);
 
-          // Retirer du groupe du créneau
           await handleLeaveSlotGroup(currentParticipation.slot_id);
         }
 
-        // Mettre à jour le compteur dans activities
         const newCount = Math.max(0, activity.participants - 1);
         await supabase
           .from('activities')
@@ -377,10 +385,8 @@ export default function ActivityDetailScreen() {
         });
 
         Alert.alert('Succès', 'Vous vous êtes désinscrit de cette activité.');
-
       } else {
         // === REJOINDRE ===
-        
         if (!selectedSlot) return;
 
         if (activity.placesRestantes <= 0) {
@@ -388,7 +394,6 @@ export default function ActivityDetailScreen() {
           return;
         }
 
-        // Ajouter dans slot_participants (table liée au créneau)
         const { error: insertError } = await supabase
           .from('slot_participants')
           .insert({
@@ -406,19 +411,17 @@ export default function ActivityDetailScreen() {
           throw insertError;
         }
 
-        // Mettre à jour le compteur dans activities
         const newCount = activity.participants + 1;
         await supabase
           .from('activities')
           .update({ participants: newCount })
           .eq('id', activity.id);
 
-        // Gérer le groupe de conversation du CRÉNEAU
         await handleSlotGroup(
-          selectedSlot.id, 
-          activity.title, 
-          activity.image, 
-          selectedSlot.date, 
+          selectedSlot.id,
+          activity.title,
+          activity.image,
+          selectedSlot.date,
           selectedSlot.time
         );
 
@@ -439,6 +442,18 @@ export default function ActivityDetailScreen() {
     }
   };
 
+  // Navigation vers le profil de l'organisateur
+  const handleOrganizerPress = () => {
+    if (!activity) return;
+    
+    if (activity.host.accountType === 'business') {
+      router.push(`/business-profile?id=${activity.host.id}`);
+    } else {
+      router.push(`/user-profile?id=${activity.host.id}`);
+    }
+  };
+
+  // Loading
   if (loading) {
     return (
       <SafeAreaView style={commonStyles.container}>
@@ -450,17 +465,15 @@ export default function ActivityDetailScreen() {
     );
   }
 
+  // Erreur
   if (!activity) {
     return (
       <SafeAreaView style={commonStyles.container}>
         <View style={styles.errorContainer}>
           <IconSymbol name="exclamationmark.triangle" size={64} color={colors.textSecondary} />
           <Text style={styles.errorText}>Activité non trouvée</Text>
-          <TouchableOpacity
-            style={styles.backButtonError}
-            onPress={() => router.back()}
-          >
-            <Text style={styles.backButtonText}>Retour</Text>
+          <TouchableOpacity style={styles.backButtonError} onPress={() => router.back()}>
+            <Text style={styles.backButtonErrorText}>Retour</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -469,14 +482,13 @@ export default function ActivityDetailScreen() {
 
   const isFull = activity.placesRestantes <= 0;
   const isHost = currentUserId === activity.host.id;
+  const isCompetitorActivity = isBusiness && activity.host.id !== currentUserId;
 
   return (
     <SafeAreaView style={commonStyles.container} edges={['top']}>
+      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.headerButton}
-          onPress={() => router.back()}
-        >
+        <TouchableOpacity style={styles.headerButton} onPress={() => router.back()}>
           <IconSymbol name="chevron.left" size={24} color={colors.text} />
         </TouchableOpacity>
         <TouchableOpacity style={styles.headerButton}>
@@ -485,9 +497,25 @@ export default function ActivityDetailScreen() {
       </View>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer}>
-        <Image source={{ uri: activity.image }} style={styles.heroImage} />
+        {/* Hero Image */}
+        <View style={styles.heroContainer}>
+          <Image source={{ uri: activity.image || 'https://via.placeholder.com/400' }} style={styles.heroImage} />
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.6)']}
+            style={styles.heroGradient}
+          />
+          
+          {/* Badge concurrent pour les entreprises */}
+          {isCompetitorActivity && (
+            <View style={styles.competitorBadge}>
+              <IconSymbol name="eye.fill" size={14} color={colors.background} />
+              <Text style={styles.competitorBadgeText}>Veille concurrentielle</Text>
+            </View>
+          )}
+        </View>
 
         <View style={styles.content}>
+          {/* Titre et catégorie */}
           <View style={styles.titleSection}>
             <View style={styles.titleContainer}>
               <Text style={styles.title}>{activity.title}</Text>
@@ -498,21 +526,30 @@ export default function ActivityDetailScreen() {
             </View>
           </View>
 
-          <TouchableOpacity
-            style={styles.hostSection}
-            onPress={() => router.push(`/user-profile?id=${activity.host.id}`)}
-          >
+          {/* Organisateur */}
+          <TouchableOpacity style={styles.hostSection} onPress={handleOrganizerPress}>
             <Image
               source={{ uri: activity.host.avatar || 'https://via.placeholder.com/48' }}
               style={styles.hostAvatar}
             />
             <View style={styles.hostInfo}>
-              <Text style={styles.hostName}>{activity.host.name}</Text>
+              <View style={styles.hostNameRow}>
+                <Text style={styles.hostName}>{activity.host.name}</Text>
+                {activity.host.isVerified && (
+                  <IconSymbol name="checkmark.seal.fill" size={18} color={colors.primary} />
+                )}
+              </View>
               <Text style={styles.hostLabel}>Organisateur</Text>
             </View>
+            {activity.host.accountType === 'business' && (
+              <View style={styles.proBadge}>
+                <Text style={styles.proBadgeText}>PRO</Text>
+              </View>
+            )}
             <IconSymbol name="chevron.right" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
 
+          {/* Détails */}
           <View style={styles.detailsCard}>
             <View style={styles.detailRow}>
               <IconSymbol name="calendar" size={20} color={colors.primary} />
@@ -525,7 +562,7 @@ export default function ActivityDetailScreen() {
             <View style={styles.detailRow}>
               <IconSymbol name="clock" size={20} color={colors.primary} />
               <View style={styles.detailContent}>
-                <Text style={styles.detailLabel}>Horaires</Text>
+                <Text style={styles.detailLabel}>Horaire</Text>
                 <Text style={styles.detailValue}>{activity.time}</Text>
               </View>
             </View>
@@ -542,45 +579,33 @@ export default function ActivityDetailScreen() {
             <View style={styles.detailRow}>
               <IconSymbol name="person.2.fill" size={20} color={colors.primary} />
               <View style={styles.detailContent}>
-                <Text style={styles.detailLabel}>Participants</Text>
-                <Text style={styles.detailValue}>
-                  {activity.participants} / {activity.capacity} inscrits
+                <Text style={styles.detailLabel}>Places</Text>
+                <Text style={[styles.detailValue, isFull && styles.fullText]}>
+                  {activity.participants}/{activity.capacity} 
+                  {isFull ? ' (Complet)' : ` (${activity.placesRestantes} restantes)`}
                 </Text>
               </View>
             </View>
-
-            {/* Bouton Voir sur la carte */}
-            <TouchableOpacity
-              style={styles.mapButton}
-              onPress={() =>
-                router.push({
-                  pathname: '/(tabs)/browse',
-                  params: {
-                    viewMode: 'maps',
-                    selectedActivityId: activity.id,
-                  },
-                })
-              }
-            >
-              <IconSymbol name="map.fill" size={18} color={colors.primary} />
-              <Text style={styles.mapButtonText}>Voir sur la carte</Text>
-            </TouchableOpacity>
           </View>
 
-          {/* Calendrier des créneaux */}
-          <View style={styles.section}>
-            <ActivityCalendar 
-              activityId={activity.id} 
-              onSlotSelect={(slot) => setSelectedSlot(slot)}
-              externalSelectedSlot={selectedSlot}
-            />
-          </View>
+          {/* Calendrier de sélection - Masqué pour les entreprises */}
+          {!isBusiness && (
+            <View style={styles.section}>
+              <ActivityCalendar 
+                activityId={activity.id} 
+                onSlotSelect={(slot) => setSelectedSlot(slot)}
+                externalSelectedSlot={selectedSlot}
+              />
+            </View>
+          )}
 
+          {/* Description */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>À propos</Text>
             <Text style={styles.description}>{activity.description}</Text>
           </View>
 
+          {/* Inclus */}
           {activity.includes.length > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Ce qui est inclus</Text>
@@ -593,6 +618,7 @@ export default function ActivityDetailScreen() {
             </View>
           )}
 
+          {/* Règles */}
           {activity.rules.length > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Informations importantes</Text>
@@ -605,63 +631,93 @@ export default function ActivityDetailScreen() {
             </View>
           )}
 
+          {/* Participants */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
-              Participants ({activity.participants})
-            </Text>
+            <Text style={styles.sectionTitle}>Participants ({activity.participants})</Text>
             {activity.participants === 0 ? (
               <View style={styles.emptyParticipants}>
                 <IconSymbol name="person.2" size={48} color={colors.textSecondary} />
                 <Text style={styles.emptyParticipantsText}>
-                  Soyez le premier à rejoindre !
+                  {isBusiness ? 'Aucun participant inscrit' : 'Soyez le premier à rejoindre !'}
                 </Text>
               </View>
             ) : (
               <View style={styles.participantsInfo}>
                 <IconSymbol name="person.2.fill" size={24} color={colors.primary} />
                 <Text style={styles.participantsText}>
-                  {activity.participants}{' '}
-                  {activity.participants === 1 ? 'personne inscrite' : 'personnes inscrites'}
+                  {activity.participants} {activity.participants === 1 ? 'personne inscrite' : 'personnes inscrites'}
                 </Text>
               </View>
             )}
           </View>
+
+          {/* Espacement pour le footer */}
+          <View style={{ height: 100 }} />
         </View>
       </ScrollView>
 
-      {/* Footer - Ne pas afficher si c'est l'hôte */}
+      {/* Footer - Différent selon le type de compte */}
       {!isHost && (
         <View style={styles.footer}>
-          <View style={styles.footerInfo}>
-            <Text style={styles.footerPrice}>{activity.price}</Text>
-            <Text style={styles.footerLabel}>par personne</Text>
-          </View>
-          <TouchableOpacity
-            style={[
-              styles.actionButton,
-              isJoined && styles.actionButtonLeave,
-              !isJoined && !selectedSlot && styles.actionButtonDisabled,
-              isFull && !isJoined && styles.actionButtonDisabled,
-            ]}
-            onPress={handleJoinLeave}
-            disabled={(!isJoined && !selectedSlot) || (isFull && !isJoined) || joiningInProgress}
-          >
-            {joiningInProgress ? (
-              <ActivityIndicator size="small" color={colors.background} />
-            ) : (
-              <Text style={[
-                styles.actionButtonText,
-                !isJoined && !selectedSlot && styles.actionButtonTextDisabled,
-              ]}>
-                {isFull && !isJoined
-                  ? 'Complet'
-                  : isJoined
-                  ? 'Se désinscrire'
-                  : !selectedSlot
-                  ? 'Sélectionnez un horaire'
-                  : 'Rejoindre'}
+          {isBusiness ? (
+            // Footer pour les entreprises - Mode observation
+            <View style={styles.businessFooter}>
+              <View style={styles.businessFooterInfo}>
+                <IconSymbol name="eye.fill" size={20} color={colors.primary} />
+                <Text style={styles.businessFooterText}>Mode observation</Text>
+              </View>
+              <Text style={styles.businessFooterHint}>
+                Les entreprises ne peuvent pas participer aux activités
               </Text>
-            )}
+            </View>
+          ) : (
+            // Footer normal pour les utilisateurs
+            <>
+              <View style={styles.footerInfo}>
+                <Text style={styles.footerPrice}>{activity.price}</Text>
+                <Text style={styles.footerLabel}>par personne</Text>
+              </View>
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  isJoined && styles.actionButtonLeave,
+                  !isJoined && !selectedSlot && styles.actionButtonDisabled,
+                  isFull && !isJoined && styles.actionButtonDisabled,
+                ]}
+                onPress={handleJoinLeave}
+                disabled={(!isJoined && !selectedSlot) || (isFull && !isJoined) || joiningInProgress}
+              >
+                {joiningInProgress ? (
+                  <ActivityIndicator size="small" color={colors.background} />
+                ) : (
+                  <Text style={[
+                    styles.actionButtonText,
+                    !isJoined && !selectedSlot && styles.actionButtonTextDisabled,
+                  ]}>
+                    {isFull && !isJoined
+                      ? 'Complet'
+                      : isJoined
+                      ? 'Se désinscrire'
+                      : !selectedSlot
+                      ? 'Choisir un créneau'
+                      : 'Rejoindre'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      )}
+
+      {/* Footer pour l'hôte entreprise - Gérer l'activité */}
+      {isHost && isBusiness && (
+        <View style={styles.footer}>
+          <TouchableOpacity
+            style={styles.manageButton}
+            onPress={() => router.push(`/manage-activity?id=${activity.id}`)}
+          >
+            <IconSymbol name="chart.bar.fill" size={20} color={colors.background} />
+            <Text style={styles.manageButtonText}>Gérer cette activité</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -670,16 +726,46 @@ export default function ActivityDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: colors.textSecondary,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+  },
+  errorText: {
+    fontSize: 18,
+    color: colors.text,
+  },
+  backButtonError: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  backButtonErrorText: {
+    color: colors.background,
+    fontWeight: '600',
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 12,
   },
   headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: colors.card,
     justifyContent: 'center',
     alignItems: 'center',
@@ -688,56 +774,81 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingBottom: 100,
+    paddingBottom: 20,
+  },
+  heroContainer: {
+    position: 'relative',
   },
   heroImage: {
-    width: '100%',
-    height: 300,
+    width: SCREEN_WIDTH,
+    height: 280,
     backgroundColor: colors.border,
   },
+  heroGradient: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 100,
+  },
+  competitorBadge: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FF9500',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  competitorBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.background,
+  },
   content: {
-    padding: 20,
+    paddingHorizontal: 20,
+    marginTop: -20,
   },
   titleSection: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 20,
-    gap: 12,
+    marginBottom: 16,
   },
   titleContainer: {
     flex: 1,
+    marginRight: 12,
   },
   title: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '700',
     color: colors.text,
-    lineHeight: 34,
+    marginBottom: 4,
   },
   subtitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 14,
     color: colors.textSecondary,
-    marginTop: 4,
   },
   categoryBadge: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: 20,
   },
   categoryText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
     color: colors.primary,
   },
   hostSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
-    gap: 12,
     backgroundColor: colors.card,
-    padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 16,
   },
   hostAvatar: {
     width: 48,
@@ -747,6 +858,12 @@ const styles = StyleSheet.create({
   },
   hostInfo: {
     flex: 1,
+    marginLeft: 12,
+  },
+  hostNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   hostName: {
     fontSize: 16,
@@ -754,23 +871,38 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   hostLabel: {
-    fontSize: 14,
+    fontSize: 13,
     color: colors.textSecondary,
+    marginTop: 2,
+  },
+  proBadge: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  proBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.background,
   },
   detailsCard: {
     backgroundColor: colors.card,
     borderRadius: 16,
     padding: 16,
-    gap: 16,
-    marginBottom: 24,
+    marginBottom: 16,
   },
   detailRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   detailContent: {
     flex: 1,
+    marginLeft: 14,
   },
   detailLabel: {
     fontSize: 12,
@@ -779,64 +911,36 @@ const styles = StyleSheet.create({
   },
   detailValue: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '500',
     color: colors.text,
   },
   detailSubvalue: {
-    fontSize: 14,
+    fontSize: 13,
     color: colors.textSecondary,
     marginTop: 2,
   },
-  mapButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: colors.primary + '15',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 10,
-    marginTop: 8,
-  },
-  mapButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.primary,
+  fullText: {
+    color: colors.error,
   },
   section: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '600',
     color: colors.text,
     marginBottom: 12,
   },
   description: {
     fontSize: 15,
-    lineHeight: 24,
-    color: colors.textSecondary,
-  },
-  datesContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  dateChip: {
-    backgroundColor: colors.card,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  dateChipText: {
-    fontSize: 14,
     color: colors.text,
+    lineHeight: 24,
   },
   listItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 8,
     gap: 12,
-    marginBottom: 12,
   },
   listItemText: {
     flex: 1,
@@ -845,28 +949,26 @@ const styles = StyleSheet.create({
   },
   emptyParticipants: {
     alignItems: 'center',
-    padding: 24,
+    paddingVertical: 24,
     backgroundColor: colors.card,
-    borderRadius: 12,
+    borderRadius: 16,
   },
   emptyParticipantsText: {
-    fontSize: 15,
+    fontSize: 14,
     color: colors.textSecondary,
-    marginTop: 12,
-    textAlign: 'center',
+    marginTop: 8,
   },
   participantsInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
     backgroundColor: colors.card,
+    borderRadius: 16,
     padding: 16,
-    borderRadius: 12,
   },
   participantsText: {
     fontSize: 15,
     color: colors.text,
-    fontWeight: '500',
   },
   footer: {
     position: 'absolute',
@@ -876,75 +978,83 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 20,
-    paddingBottom: 34,
-    backgroundColor: colors.background,
+    backgroundColor: colors.card,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    paddingBottom: 32,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
-  footerInfo: {},
+  footerInfo: {
+    flex: 1,
+  },
   footerPrice: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
     color: colors.text,
   },
   footerLabel: {
-    fontSize: 14,
+    fontSize: 13,
     color: colors.textSecondary,
   },
   actionButton: {
     backgroundColor: colors.primary,
     paddingHorizontal: 32,
     paddingVertical: 16,
-    borderRadius: 12,
-    minWidth: 140,
+    borderRadius: 14,
+    minWidth: 160,
     alignItems: 'center',
   },
   actionButtonLeave: {
-    backgroundColor: colors.textSecondary,
+    backgroundColor: colors.error,
   },
   actionButtonDisabled: {
     backgroundColor: colors.border,
   },
   actionButtonText: {
-    color: colors.background,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  actionButtonTextDisabled: {
-    color: colors.background + '99',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: colors.textSecondary,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  errorText: {
-    fontSize: 18,
-    color: colors.textSecondary,
-    marginTop: 16,
-    marginBottom: 24,
-  },
-  backButtonError: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  backButtonText: {
-    color: colors.background,
     fontSize: 16,
     fontWeight: '600',
+    color: colors.background,
+  },
+  actionButtonTextDisabled: {
+    color: colors.textSecondary,
+  },
+  businessFooter: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  businessFooterInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: colors.primary + '20',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  businessFooterText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  businessFooterHint: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 8,
+  },
+  manageButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: colors.primary,
+    paddingVertical: 16,
+    borderRadius: 14,
+  },
+  manageButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.background,
   },
 });

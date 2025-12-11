@@ -1,6 +1,9 @@
+// services/storage.service.ts
+// Service de gestion du stockage d'images - Version corrigée
+
 import { supabase } from '@/lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
-// ✅ important : on utilise l’API legacy conseillée par Expo
+// ✅ important : on utilise l'API legacy conseillée par Expo
 import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
 
@@ -15,7 +18,7 @@ class StorageService {
       console.log('🔵 Upload avatar - URI:', uri);
       console.log('🔵 Upload avatar - UserID:', userId);
 
-      // 1. Lire le fichier en base64 via l’API legacy
+      // 1. Lire le fichier en base64 via l'API legacy
       const base64 = await FileSystem.readAsStringAsync(uri, {
         encoding: 'base64',
       });
@@ -176,6 +179,10 @@ class StorageService {
       };
     }
   }
+
+  /**
+   * Upload d'une image d'activité
+   */
   async uploadActivityImage(uri: string) {
     try {
       console.log('🔵 Upload image activité - URI:', uri);
@@ -235,4 +242,5 @@ class StorageService {
     }
   }
 }
+
 export const storageService = new StorageService();

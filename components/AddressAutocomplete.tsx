@@ -1,5 +1,5 @@
 // components/AddressAutocomplete.tsx
-// Composant d'autocomplétion d'adresse style Google Maps
+// Composant d'autocomplétion d'adresse - CORRIGÉ sans FlatList
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -8,9 +8,9 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  FlatList,
   ActivityIndicator,
   Keyboard,
+  ScrollView,
 } from 'react-native';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
@@ -166,26 +166,6 @@ export function AddressAutocomplete({
     inputRef.current?.focus();
   };
 
-  const renderResultItem = ({ item }: { item: AutocompleteResult }) => (
-    <TouchableOpacity
-      style={styles.resultItem}
-      onPress={() => handleSelect(item)}
-      activeOpacity={0.7}
-    >
-      <View style={styles.resultIcon}>
-        <IconSymbol name="location.fill" size={20} color={colors.primary} />
-      </View>
-      <View style={styles.resultTextContainer}>
-        <Text style={styles.resultAddress} numberOfLines={1}>
-          {item.address || item.displayName.split(',')[0]}
-        </Text>
-        <Text style={styles.resultCity} numberOfLines={1}>
-          {[item.postcode, item.city].filter(Boolean).join(' ')}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
-
   return (
     <View style={styles.container}>
       <Text style={styles.label}>{label}</Text>
@@ -214,16 +194,35 @@ export function AddressAutocomplete({
           )}
         </View>
 
+        {/* Résultats - Utilisation de ScrollView + map au lieu de FlatList */}
         {showResults && results.length > 0 && (
           <View style={styles.resultsContainer}>
-            <FlatList
-              data={results}
-              keyExtractor={(item) => item.placeId}
-              renderItem={renderResultItem}
+            <ScrollView
+              style={styles.resultsList}
               keyboardShouldPersistTaps="handled"
               nestedScrollEnabled
-              style={styles.resultsList}
-            />
+            >
+              {results.map((item) => (
+                <TouchableOpacity
+                  key={item.placeId}
+                  style={styles.resultItem}
+                  onPress={() => handleSelect(item)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.resultIcon}>
+                    <IconSymbol name="location.fill" size={20} color={colors.primary} />
+                  </View>
+                  <View style={styles.resultTextContainer}>
+                    <Text style={styles.resultAddress} numberOfLines={1}>
+                      {item.address || item.displayName.split(',')[0]}
+                    </Text>
+                    <Text style={styles.resultCity} numberOfLines={1}>
+                      {[item.postcode, item.city].filter(Boolean).join(' ')}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           </View>
         )}
       </View>

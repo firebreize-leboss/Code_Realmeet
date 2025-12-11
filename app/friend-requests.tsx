@@ -1,4 +1,6 @@
 // app/friend-requests.tsx
+// Page des demandes d'amis avec protection entreprise
+
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -8,12 +10,14 @@ import {
   TouchableOpacity,
   Image,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
+import { useBusinessRestrictions } from '@/hooks/useBusinessRestrictions';
 
 interface FriendRequest {
   id: string;
@@ -26,42 +30,65 @@ interface FriendRequest {
 
 export default function FriendRequestsScreen() {
   const router = useRouter();
+  const { isBusiness } = useBusinessRestrictions();
+  
   const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<string | null>(null);
 
+  // Rediriger si entreprise
   useEffect(() => {
-    const loadRequests = async () => {
-      try {
-        const { data: currentUserData } = await supabase.auth.getUser();
-        const currentUser = currentUserData?.user;
-        if (!currentUser) throw new Error("Utilisateur non connecté");
-        const { data, error } = await supabase
-          .from('friend_requests_with_profiles')
-          .select('*')
-          .eq('receiver_id', currentUser.id)
-          .eq('status', 'pending')
-          .order('created_at', { ascending: false });
-        if (error) throw error;
-        setRequests(data || []);
-      } catch (err) {
-        console.error('Error loading friend requests:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadRequests();
-  }, []);
+    if (isBusiness) {
+      Alert.alert(
+        'Fonctionnalité non disponible',
+        'Les comptes entreprise ne peuvent pas recevoir de demandes d\'amis.',
+        [{ text: 'Compris', onPress: () => router.back() }]
+      );
+    }
+  }, [isBusiness]);
+
+  useEffect(() => {
+    if (!isBusiness) {
+      loadRequests();
+    }
+  }, [isBusiness]);
+
+  const loadRequests = async () => {
+    try {
+      const { data: currentUserData } = await supabase.auth.getUser();
+      const currentUser = currentUserData?.user;
+      if (!currentUser) throw new Error('Utilisateur non connecté');
+
+      const { data, error } = await supabase
+        .from('friend_requests_with_profiles')
+        .select('*')
+        .eq('receiver_id', currentUser.id)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setRequests(data || []);
+    } catch (err) {
+      console.error('Error loading friend requests:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAcceptRequest = async (requestId: string) => {
     setProcessing(requestId);
     try {
-      const { error } = await supabase.rpc('accept_friend_request', { p_request_id: requestId });
+      const { error } = await supabase.rpc('accept_friend_request', { 
+        p_request_id: requestId 
+      });
+      
       if (error) throw error;
-      // Retirer la demande acceptée de la liste locale
+      
       setRequests(prev => prev.filter(req => req.id !== requestId));
+      Alert.alert('Succès', 'Demande acceptée ! Vous êtes maintenant amis.');
     } catch (error) {
       console.error('Error accepting friend request:', error);
+      Alert.alert('Erreur', 'Impossible d\'accepter la demande');
     } finally {
       setProcessing(null);
     }
@@ -74,11 +101,13 @@ export default function FriendRequestsScreen() {
         .from('friend_requests')
         .update({ status: 'rejected' })
         .eq('id', requestId);
+        
       if (error) throw error;
-      // Retirer la demande rejetée de la liste locale
+      
       setRequests(prev => prev.filter(req => req.id !== requestId));
     } catch (error) {
       console.error('Error rejecting friend request:', error);
+      Alert.alert('Erreur', 'Impossible de refuser la demande');
     } finally {
       setProcessing(null);
     }
@@ -89,21 +118,50 @@ export default function FriendRequestsScreen() {
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - date.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
     if (diffDays === 1) return "Aujourd'hui";
     if (diffDays === 2) return 'Hier';
     if (diffDays <= 7) return `Il y a ${diffDays} jours`;
     return date.toLocaleDateString('fr-FR');
   };
 
+  // Écran de blocage pour les entreprises
+  if (isBusiness) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <IconSymbol name="chevron.left" size={24} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Demandes d'amis</Text>
+          <View style={styles.placeholder} />
+        </View>
+        
+        <View style={styles.restrictedContainer}>
+          <IconSymbol name="building.2.fill" size={64} color={colors.textSecondary} />
+          <Text style={styles.restrictedTitle}>Fonctionnalité non disponible</Text>
+          <Text style={styles.restrictedText}>
+            Les comptes entreprise ne peuvent pas recevoir de demandes d'amis.
+            Les utilisateurs peuvent découvrir votre entreprise via vos activités.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   const renderRequestItem = ({ item }: { item: FriendRequest }) => {
     const isProcessing = processing === item.id;
+    
     return (
       <View style={styles.requestItem}>
         <TouchableOpacity
           onPress={() => router.push(`/user-profile?id=${item.sender_id}`)}
           style={styles.userInfo}
         >
-          <Image source={{ uri: item.sender_avatar }} style={styles.userAvatar} />
+          <Image 
+            source={{ uri: item.sender_avatar || 'https://via.placeholder.com/56' }} 
+            style={styles.userAvatar} 
+          />
           <View style={styles.userDetails}>
             <Text style={styles.userName}>{item.sender_name}</Text>
             {item.sender_city && (
@@ -115,6 +173,7 @@ export default function FriendRequestsScreen() {
             <Text style={styles.requestDate}>{formatDate(item.created_at)}</Text>
           </View>
         </TouchableOpacity>
+        
         <View style={styles.actionButtons}>
           <TouchableOpacity
             style={[styles.rejectButton, isProcessing && styles.buttonDisabled]}
@@ -127,6 +186,7 @@ export default function FriendRequestsScreen() {
               <Text style={styles.rejectButtonText}>Refuser</Text>
             )}
           </TouchableOpacity>
+          
           <TouchableOpacity
             style={[styles.acceptButton, isProcessing && styles.buttonDisabled]}
             onPress={() => handleAcceptRequest(item.id)}
@@ -146,25 +206,31 @@ export default function FriendRequestsScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <IconSymbol name="chevron.left" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Demandes d'amitié</Text>
+        <Text style={styles.headerTitle}>Demandes d'amis</Text>
         <View style={styles.placeholder} />
       </View>
 
       {loading ? (
-        <View style={styles.emptyState}>
+        <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.emptyText}>Chargement...</Text>
         </View>
       ) : requests.length === 0 ? (
         <View style={styles.emptyState}>
-          <IconSymbol name="envelope.fill" size={64} color={colors.textSecondary} />
+          <IconSymbol name="person.crop.circle.badge.checkmark" size={64} color={colors.textSecondary} />
           <Text style={styles.emptyText}>Aucune demande</Text>
           <Text style={styles.emptySubtext}>
-            Les demandes d'amitié que vous recevez apparaîtront ici
+            Vous n'avez pas de demandes d'amis en attente
           </Text>
+          <TouchableOpacity 
+            style={styles.addFriendsButton}
+            onPress={() => router.push('/add-friends')}
+          >
+            <IconSymbol name="person.badge.plus" size={20} color={colors.background} />
+            <Text style={styles.addFriendsButtonText}>Ajouter des amis</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <FlatList
@@ -188,24 +254,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.card,
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: 8,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '600',
     color: colors.text,
   },
   placeholder: {
     width: 40,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   emptyState: {
     flex: 1,
@@ -218,13 +286,28 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text,
     marginTop: 16,
-    marginBottom: 8,
   },
   emptySubtext: {
-    fontSize: 16,
+    fontSize: 15,
     color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 24,
+    marginTop: 8,
+    lineHeight: 22,
+  },
+  addFriendsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginTop: 24,
+  },
+  addFriendsButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.background,
   },
   listContainer: {
     paddingHorizontal: 20,
@@ -232,14 +315,13 @@ const styles = StyleSheet.create({
   },
   requestItem: {
     backgroundColor: colors.card,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 12,
-    gap: 16,
   },
   userInfo: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 14,
   },
   userAvatar: {
     width: 56,
@@ -263,17 +345,18 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   userCity: {
-    fontSize: 14,
+    fontSize: 13,
     color: colors.textSecondary,
   },
   requestDate: {
-    fontSize: 13,
+    fontSize: 12,
     color: colors.textSecondary,
+    marginTop: 2,
   },
   actionButtons: {
     flexDirection: 'row',
     gap: 12,
-    marginTop: 12,
+    marginTop: 16,
   },
   rejectButton: {
     flex: 1,
@@ -281,10 +364,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 44,
   },
   rejectButtonText: {
     fontSize: 15,
@@ -295,10 +377,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.primary,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 44,
   },
   acceptButtonText: {
     fontSize: 15,
@@ -307,5 +388,26 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.5,
+  },
+  // Styles pour l'écran restreint
+  restrictedContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  restrictedTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: colors.text,
+    marginTop: 20,
+    textAlign: 'center',
+  },
+  restrictedText: {
+    fontSize: 15,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 12,
+    lineHeight: 22,
   },
 });
