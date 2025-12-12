@@ -19,8 +19,11 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
+import ActivityCalendar from '@/components/ActivityCalendar';
+import { Modal } from 'react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
 
 interface ActivityStats {
   id: string;
@@ -64,6 +67,7 @@ export default function ManageActivityScreen() {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'participants' | 'slots'>('overview');
+  const [showSlotModal, setShowSlotModal] = useState(false);
 
   useEffect(() => {
     loadActivityData();
@@ -358,7 +362,7 @@ export default function ManageActivityScreen() {
 
               <TouchableOpacity 
                 style={styles.actionCard} 
-                onPress={() => router.push('/create-slot?activityId=' + activity.id)}
+                onPress={() => setShowSlotModal(true)}
               >
                 <View style={[styles.actionIcon, { backgroundColor: '#10b981' + '20' }]}>
                   <IconSymbol name="plus.circle.fill" size={20} color="#10b981" />
@@ -406,7 +410,7 @@ export default function ManageActivityScreen() {
                   <Text style={styles.emptyText}>Aucun créneau</Text>
                   <TouchableOpacity 
                     style={styles.addSlotButton}
-                    onPress={() => router.push('/create-slot?activityId=' + activity.id)}
+                    onPress={() => setShowSlotModal(true)}
                   >
                     <Text style={styles.addSlotButtonText}>Ajouter un créneau</Text>
                   </TouchableOpacity>
@@ -478,6 +482,36 @@ export default function ManageActivityScreen() {
         {/* Bottom spacing */}
         <View style={{ height: 40 }} />
       </ScrollView>
+
+
+      {/* Modal Calendrier pour ajouter des créneaux */}
+<Modal
+  visible={showSlotModal}
+  animationType="slide"
+  presentationStyle="pageSheet"
+  onRequestClose={() => setShowSlotModal(false)}
+>
+  <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+    <View style={styles.modalSlotHeader}>
+      <TouchableOpacity onPress={() => setShowSlotModal(false)}>
+        <IconSymbol name="xmark" size={24} color={colors.text} />
+      </TouchableOpacity>
+      <Text style={styles.modalSlotTitle}>Gérer les créneaux</Text>
+      <TouchableOpacity onPress={() => {
+        setShowSlotModal(false);
+        loadActivityData(); // Recharger les données
+      }}>
+        <Text style={styles.modalSlotDone}>Terminé</Text>
+      </TouchableOpacity>
+    </View>
+    <ScrollView style={{ flex: 1, padding: 20 }}>
+      <ActivityCalendar
+        activityId={activity?.id}
+        mode="edit"
+      />
+    </ScrollView>
+  </SafeAreaView>
+</Modal>
     </SafeAreaView>
   );
 }
@@ -796,6 +830,24 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text,
   },
+  modalSlotHeader: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  padding: 20,
+  borderBottomWidth: 1,
+  borderBottomColor: colors.border,
+},
+modalSlotTitle: {
+  fontSize: 18,
+  fontWeight: '700',
+  color: colors.text,
+},
+modalSlotDone: {
+  fontSize: 16,
+  fontWeight: '600',
+  color: colors.primary,
+},
   participantMeta: {
     fontSize: 12,
     color: colors.textSecondary,

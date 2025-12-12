@@ -25,6 +25,7 @@ import { storageService } from '@/services/storage.service';
 import { PREDEFINED_CATEGORIES } from '@/constants/categories';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 import { DateTimeRangePicker } from '@/components/DateTimePicker';
+import ActivityCalendar from '@/components/ActivityCalendar';
 
 export default function EditActivityScreen() {
   const router = useRouter();
@@ -494,6 +495,20 @@ export default function EditActivityScreen() {
             </View>
           </View>
         </View>
+        
+        {/* Gestion des créneaux */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Créneaux disponibles</Text>
+          <Text style={styles.helperText}>
+            Appuyez sur + pour ajouter un créneau, ou sur × pour supprimer
+          </Text>
+          <View style={{ marginTop: 12 }}>
+            <ActivityCalendar
+              activityId={activityId}
+              mode="edit"
+            />
+          </View>
+        </View>
 
         {/* Bouton de sauvegarde */}
         <TouchableOpacity
@@ -774,6 +789,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: colors.background,
+  },
+  helperText: {
+  fontSize: 13,
+  color: colors.textSecondary,
+  marginTop: 4,
   },
   modalOverlay: {
     flex: 1,

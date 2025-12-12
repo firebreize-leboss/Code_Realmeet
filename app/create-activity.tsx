@@ -24,6 +24,8 @@ import { storageService } from '@/services/storage.service';
 import { PREDEFINED_CATEGORIES } from '@/constants/categories';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 import { DateTimeRangePicker } from '@/components/DateTimePicker';
+import ActivityCalendar from '@/components/ActivityCalendar';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function CreateActivityScreen() {
   const router = useRouter();
@@ -59,6 +61,10 @@ export default function CreateActivityScreen() {
   const [loading, setLoading] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+
+  const [pendingSlots, setPendingSlots] = useState<{date: string; time: string; duration: number}[]>([]);
+  const { profile } = useAuth();
+  const isBusiness = profile?.account_type === 'business';
 
   // Fonction pour obtenir la couleur d'une catégorie
   const getCategoryColor = (categoryName: string): string => {
@@ -182,10 +188,29 @@ export default function CreateActivityScreen() {
       });
 
       if (result.success) {
-        Alert.alert('Succès', 'Activité créée avec succès !', [
-          { text: 'OK', onPress: () => router.back() },
-        ]);
-      } else {
+  // 3. Créer les créneaux si c'est une entreprise
+  if (isBusiness && pendingSlots.length > 0 && result.data?.id) {
+    const slotsToInsert = pendingSlots.map(slot => ({
+      activity_id: result.data.id,
+      date: slot.date,
+      time: slot.time,
+      duration: slot.duration,
+      created_by: result.data.host_id,
+    }));
+
+    const { error: slotsError } = await supabase
+      .from('activity_slots')
+      .insert(slotsToInsert);
+
+    if (slotsError) {
+      console.error('Erreur création créneaux:', slotsError);
+    }
+  }
+
+  Alert.alert('Succès', 'Activité créée avec succès !', [
+    { text: 'OK', onPress: () => router.back() },
+  ]);
+} else {
         Alert.alert('Erreur', result.error || 'Erreur lors de la création');
       }
     } catch (error: any) {
@@ -385,6 +410,24 @@ export default function CreateActivityScreen() {
               />
             </View>
           </View>
+          
+          {/* Créneaux horaires - Uniquement pour les entreprises */}
+          {isBusiness && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Créneaux disponibles</Text>
+              <Text style={styles.helperText}>
+                Ajoutez les créneaux horaires pour cette activité
+              </Text>
+              <View style={{ marginTop: 12 }}>
+                <ActivityCalendar
+                  mode="edit"
+                  pendingSlots={pendingSlots}
+                  onSlotsChange={setPendingSlots}
+                />
+              </View>
+            </View>
+          )}
+
 
           {/* URL image manuelle (optionnel si pas d'upload) */}
           {!imageUri && (
@@ -694,6 +737,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     color: colors.text,
+  },
+  helperText: {
+  fontSize: 13,
+  color: colors.textSecondary,
+  marginTop: 4,
   },
   categoryItemTextDisabled: {
     color: colors.textSecondary,

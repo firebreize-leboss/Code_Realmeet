@@ -1,5 +1,7 @@
 // components/ActivityCalendar.tsx
 // Calendrier hebdomadaire pour les créneaux d'activité
+// Mode "select" = lecture seule pour choisir un créneau
+// Mode "edit" = permet d'ajouter/supprimer des créneaux (entreprises)
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -20,6 +22,7 @@ import { supabase } from '@/lib/supabase';
 interface TimeSlot {
   id: string;
   time: string;
+  duration: number; // durée en minutes
   createdBy: string;
   date: string;
 }
@@ -37,29 +40,60 @@ interface SelectedSlot {
   id: string;
   date: string;
   time: string;
+  duration?: number;
+}
+
+interface PendingSlot {
+  date: string;
+  time: string;
+  duration: number;
 }
 
 interface ActivityCalendarProps {
-  activityId: string;
+  activityId?: string;
   onSlotSelect?: (slot: SelectedSlot | null) => void;
   externalSelectedSlot?: SelectedSlot | null;
+  mode?: 'select' | 'edit';
+  onSlotsChange?: (slots: PendingSlot[]) => void;
+  pendingSlots?: PendingSlot[];
+  readOnly?: boolean;
+  userJoinedSlotId?: string;
 }
 
-export default function ActivityCalendar({ activityId, onSlotSelect,externalSelectedSlot }: ActivityCalendarProps) {
+export default function ActivityCalendar({ 
+  activityId, 
+  onSlotSelect,
+  externalSelectedSlot,
+  mode = 'select',
+  onSlotsChange,
+  pendingSlots = [],
+  readOnly = false,
+  userJoinedSlotId,
+}: ActivityCalendarProps) {
   const [weekOffset, setWeekOffset] = useState(0);
   const [weekDays, setWeekDays] = useState<DaySlots[]>([]);
   const [loading, setLoading] = useState(true);
   const [showTimeModal, setShowTimeModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [newTime, setNewTime] = useState('');
+  const [newDuration, setNewDuration] = useState('60');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [addingSlot, setAddingSlot] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<SelectedSlot | null>(null);
   const [shouldLoadSlots, setShouldLoadSlots] = useState(false);
 
-  // Noms des jours en français
   const dayNames = ['LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM', 'DIM'];
   const monthNames = ['jan', 'fév', 'mar', 'avr', 'mai', 'juin', 'juil', 'août', 'sep', 'oct', 'nov', 'déc'];
+
+  const durationOptions = [
+    { label: '30 min', value: 30 },
+    { label: '1h', value: 60 },
+    { label: '1h30', value: 90 },
+    { label: '2h', value: 120 },
+    { label: '2h30', value: 150 },
+    { label: '3h', value: 180 },
+    { label: '4h', value: 240 },
+  ];
 
   useEffect(() => {
     loadCurrentUser();
@@ -72,10 +106,22 @@ export default function ActivityCalendar({ activityId, onSlotSelect,externalSele
 
   useEffect(() => {
     if (shouldLoadSlots && weekDays.length > 0) {
-      loadSlots();
+      if (activityId) {
+        loadSlots();
+      } else {
+        applyPendingSlots();
+      }
       setShouldLoadSlots(false);
     }
-  }, [shouldLoadSlots, activityId]);
+  }, [shouldLoadSlots, activityId, pendingSlots]);
+
+  useEffect(() => {
+    if (externalSelectedSlot === null) {
+      setSelectedSlot(null);
+    } else if (externalSelectedSlot && externalSelectedSlot.id !== selectedSlot?.id) {
+      setSelectedSlot(externalSelectedSlot);
+    }
+  }, [externalSelectedSlot]);
 
   const loadCurrentUser = async () => {
     const { data } = await supabase.auth.getUser();
@@ -107,6 +153,26 @@ export default function ActivityCalendar({ activityId, onSlotSelect,externalSele
     setWeekDays(days);
   };
 
+  const applyPendingSlots = () => {
+    const updatedDays = weekDays.map(day => {
+      const dayStr = day.date.toISOString().split('T')[0];
+      const daySlots = pendingSlots
+        .filter(slot => slot.date === dayStr)
+        .map((slot, idx) => ({
+          id: `pending-${dayStr}-${idx}`,
+          time: slot.time,
+          duration: slot.duration,
+          createdBy: currentUserId || '',
+          date: slot.date,
+        }));
+      
+      return { ...day, slots: daySlots };
+    });
+
+    setWeekDays(updatedDays);
+    setLoading(false);
+  };
+
   const loadSlots = async () => {
     try {
       setLoading(true);
@@ -121,7 +187,7 @@ export default function ActivityCalendar({ activityId, onSlotSelect,externalSele
 
       const { data, error } = await supabase
         .from('activity_slots')
-        .select('id, date, time, created_by')
+        .select('id, date, time, duration, created_by')
         .eq('activity_id', activityId)
         .gte('date', startStr)
         .lte('date', endStr)
@@ -134,6 +200,7 @@ export default function ActivityCalendar({ activityId, onSlotSelect,externalSele
         const daySlots = data?.filter(slot => slot.date === dayStr).map(slot => ({
           id: slot.id,
           time: slot.time.slice(0, 5),
+          duration: slot.duration || 60,
           createdBy: slot.created_by,
           date: slot.date,
         })) || [];
@@ -149,14 +216,22 @@ export default function ActivityCalendar({ activityId, onSlotSelect,externalSele
     }
   };
 
+  const formatDuration = (minutes: number): string => {
+    if (minutes < 60) return `${minutes}min`;
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return m > 0 ? `${h}h${m.toString().padStart(2, '0')}` : `${h}h`;
+  };
+
   const handleAddSlot = (date: Date) => {
     setSelectedDate(date);
     setNewTime('');
+    setNewDuration('60');
     setShowTimeModal(true);
   };
 
   const handleConfirmAddSlot = async () => {
-    if (!selectedDate || !newTime || !currentUserId) return;
+    if (!selectedDate || !newTime) return;
 
     const timeRegex = /^(\d{1,2})[hH:]?(\d{2})$/;
     const match = newTime.match(timeRegex);
@@ -176,7 +251,32 @@ export default function ActivityCalendar({ activityId, onSlotSelect,externalSele
 
     const formattedTime = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
     const dateStr = selectedDate.toISOString().split('T')[0];
+    const duration = parseInt(newDuration, 10);
 
+    // Mode création (pas d'activityId) - on stocke localement
+    if (!activityId) {
+      const newPendingSlot: PendingSlot = {
+        date: dateStr,
+        time: formattedTime,
+        duration,
+      };
+      
+      const exists = pendingSlots.some(
+        s => s.date === dateStr && s.time === formattedTime
+      );
+      
+      if (exists) {
+        Alert.alert('Créneau existant', 'Ce créneau existe déjà.');
+        return;
+      }
+
+      onSlotsChange?.([...pendingSlots, newPendingSlot]);
+      setShowTimeModal(false);
+      setShouldLoadSlots(true);
+      return;
+    }
+
+    // Mode édition avec activityId - on sauvegarde en BDD
     try {
       setAddingSlot(true);
 
@@ -186,6 +286,7 @@ export default function ActivityCalendar({ activityId, onSlotSelect,externalSele
           activity_id: activityId,
           date: dateStr,
           time: formattedTime,
+          duration,
           created_by: currentUserId,
         });
 
@@ -208,6 +309,8 @@ export default function ActivityCalendar({ activityId, onSlotSelect,externalSele
   };
 
   const handleSlotSelect = (slot: TimeSlot) => {
+    if (mode === 'edit' || readOnly) return;
+    
     if (selectedSlot?.id === slot.id) {
       setSelectedSlot(null);
       onSlotSelect?.(null);
@@ -216,21 +319,30 @@ export default function ActivityCalendar({ activityId, onSlotSelect,externalSele
         id: slot.id,
         date: slot.date,
         time: slot.time,
+        duration: slot.duration,
       };
       setSelectedSlot(newSelection);
       onSlotSelect?.(newSelection);
     }
   };
 
-  const handleDeleteSlot = async (slotId: string, createdBy: string) => {
-    if (createdBy !== currentUserId) {
-      Alert.alert('Non autorisé', 'Vous ne pouvez supprimer que vos propres créneaux.');
+  const handleDeleteSlot = async (slot: TimeSlot) => {
+    if (mode !== 'edit') return;
+
+    // Mode création sans activityId
+    if (!activityId) {
+      const filtered = pendingSlots.filter(
+        s => !(s.date === slot.date && s.time === slot.time)
+      );
+      onSlotsChange?.(filtered);
+      setShouldLoadSlots(true);
       return;
     }
 
+    // Mode édition avec activityId - confirmation puis suppression BDD
     Alert.alert(
       'Supprimer le créneau',
-      'Êtes-vous sûr de vouloir supprimer ce créneau ?',
+      `Supprimer le créneau de ${slot.time} ?`,
       [
         { text: 'Annuler', style: 'cancel' },
         {
@@ -241,15 +353,16 @@ export default function ActivityCalendar({ activityId, onSlotSelect,externalSele
               await supabase
                 .from('activity_slots')
                 .delete()
-                .eq('id', slotId);
+                .eq('id', slot.id);
               
-              if (selectedSlot?.id === slotId) {
+              if (selectedSlot?.id === slot.id) {
                 setSelectedSlot(null);
                 onSlotSelect?.(null);
               }
               setShouldLoadSlots(true);
             } catch (error) {
               console.error('Erreur suppression:', error);
+              Alert.alert('Erreur', 'Impossible de supprimer le créneau.');
             }
           },
         },
@@ -268,30 +381,24 @@ export default function ActivityCalendar({ activityId, onSlotSelect,externalSele
     
     if (start.getMonth() === end.getMonth()) {
       return `${start.getDate()} - ${end.getDate()} ${monthNames[start.getMonth()]} ${start.getFullYear()}`;
-    } else {
-      return `${start.getDate()} ${monthNames[start.getMonth()]} - ${end.getDate()} ${monthNames[end.getMonth()]} ${end.getFullYear()}`;
     }
+    return `${start.getDate()} ${monthNames[start.getMonth()]} - ${end.getDate()} ${monthNames[end.getMonth()]} ${end.getFullYear()}`;
   };
-
-
-  useEffect(() => {
-  // Si le parent passe null ou undefined, on désélectionne
-  if (externalSelectedSlot === null) {
-    setSelectedSlot(null);
-  } 
-  // Si le parent passe un slot valide et différent du current, on le sélectionne
-  else if (externalSelectedSlot && externalSelectedSlot.id !== selectedSlot?.id) {
-    setSelectedSlot(externalSelectedSlot);
-  }
-}, [externalSelectedSlot]);
-
 
   const maxSlots = Math.max(...weekDays.map(d => d.slots.length), 0);
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Choix d'une date</Text>
+        <Text style={styles.title}>
+          {mode === 'edit' ? 'Gérer les créneaux' : readOnly ? 'Créneaux disponibles' : 'Choix d\'une date'}
+        </Text>
+        {userJoinedSlotId && (
+          <View style={styles.joinedLegend}>
+            <View style={styles.joinedLegendDot} />
+            <Text style={styles.joinedLegendText}>Votre créneau</Text>
+          </View>
+        )}
         <View style={styles.weekNav}>
           <TouchableOpacity onPress={() => navigateWeek(-1)} style={styles.navButton}>
             <IconSymbol name="chevron.left" size={20} color={colors.text} />
@@ -309,56 +416,77 @@ export default function ActivityCalendar({ activityId, onSlotSelect,externalSele
         </View>
       ) : (
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={styles.calendarGrid}>
-            <View style={styles.headerRow}>
+          <View style={styles.weekContainer}>
+            <View style={styles.daysRow}>
               {weekDays.map((day, index) => (
-                <View key={index} style={styles.dayHeader}>
-                  <Text style={styles.dayName}>{day.dayName}</Text>
-                  <Text style={styles.dayDate}>{day.dayNumber}-{day.monthShort}</Text>
-                </View>
-              ))}
-            </View>
-
-            <View style={styles.slotsGrid}>
-              {weekDays.map((day, dayIndex) => (
-                <View key={dayIndex} style={styles.dayColumn}>
-                  {day.slots.map((slot) => {
-                    const isSelected = selectedSlot?.id === slot.id;
-                    return (
+                <View key={index} style={styles.dayColumn}>
+                  <View style={styles.dayHeader}>
+                    <Text style={styles.dayName}>{day.dayName}</Text>
+                    <Text style={styles.dayNumber}>{day.dayNumber}</Text>
+                    <Text style={styles.monthShort}>{day.monthShort}</Text>
+                  </View>
+                  
+                  <View style={styles.slotsContainer}>
+                    {day.slots.map((slot) => {
+                      const isUserJoined = userJoinedSlotId === slot.id;
+                      const isSelected = selectedSlot?.id === slot.id;
+                      
+                      return (
+                        <TouchableOpacity
+                          key={slot.id}
+                          style={[
+                            styles.slotBadge,
+                            isSelected && styles.slotBadgeSelected,
+                            isUserJoined && styles.slotBadgeJoined,
+                            mode === 'edit' && styles.slotBadgeEdit,
+                            readOnly && styles.slotBadgeReadOnly,
+                          ]}
+                          onPress={() => handleSlotSelect(slot)}
+                          onLongPress={() => mode === 'edit' && handleDeleteSlot(slot)}
+                          delayLongPress={500}
+                          disabled={readOnly && !isUserJoined}
+                        >
+                          {isUserJoined && (
+                            <View style={styles.joinedIndicator}>
+                              <IconSymbol name="checkmark.circle.fill" size={12} color="#10b981" />
+                            </View>
+                          )}
+                          <Text style={[
+                            styles.slotTime,
+                            isSelected && styles.slotTimeSelected,
+                            isUserJoined && styles.slotTimeJoined,
+                          ]}>
+                            {slot.time}
+                          </Text>
+                          <Text style={[
+                            styles.slotDuration,
+                            isSelected && styles.slotDurationSelected,
+                            isUserJoined && styles.slotDurationJoined,
+                          ]}>
+                            {formatDuration(slot.duration)}
+                          </Text>
+                          {mode === 'edit' && (
+                            <TouchableOpacity
+                              style={styles.deleteSlotButton}
+                              onPress={() => handleDeleteSlot(slot)}
+                              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            >
+                              <IconSymbol name="xmark.circle.fill" size={16} color="#EF4444" />
+                            </TouchableOpacity>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                    
+                    {mode === 'edit' && (
                       <TouchableOpacity
-                        key={slot.id}
-                        style={[
-                          styles.slotCell,
-                          isSelected && styles.slotCellSelected,
-                        ]}
-                        onPress={() => handleSlotSelect(slot)}
-                        onLongPress={() => handleDeleteSlot(slot.id, slot.createdBy)}
-                        delayLongPress={500}
-                        activeOpacity={0.7}
+                        style={styles.addSlotButton}
+                        onPress={() => handleAddSlot(day.date)}
                       >
-                        <Text style={[
-                          styles.slotTime,
-                          isSelected && styles.slotTimeSelected,
-                        ]}>
-                          {slot.time.replace(':', 'h')}
-                        </Text>
-                        {isSelected && (
-                          <IconSymbol name="checkmark" size={12} color={colors.background} />
-                        )}
+                        <IconSymbol name="plus" size={16} color={colors.primary} />
                       </TouchableOpacity>
-                    );
-                  })}
-                  
-                  {Array.from({ length: Math.max(0, maxSlots - day.slots.length) }).map((_, i) => (
-                    <View key={`empty-${i}`} style={styles.emptyCell} />
-                  ))}
-                  
-                  <TouchableOpacity
-                    style={styles.addButton}
-                    onPress={() => handleAddSlot(day.date)}
-                  >
-                    <IconSymbol name="plus" size={20} color={colors.textSecondary} />
-                  </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
               ))}
             </View>
@@ -366,6 +494,7 @@ export default function ActivityCalendar({ activityId, onSlotSelect,externalSele
         </ScrollView>
       )}
 
+      {/* Modal ajout de créneau */}
       <Modal
         visible={showTimeModal}
         transparent
@@ -374,44 +503,70 @@ export default function ActivityCalendar({ activityId, onSlotSelect,externalSele
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Ajouter un créneau</Text>
-            <Text style={styles.modalSubtitle}>
-              {selectedDate?.toLocaleDateString('fr-FR', { 
-                weekday: 'long', 
-                day: 'numeric', 
-                month: 'long' 
-              })}
-            </Text>
-            
-            <TextInput
-              style={styles.timeInput}
-              placeholder="Ex: 14h30 ou 14:30"
-              placeholderTextColor={colors.textSecondary}
-              value={newTime}
-              onChangeText={setNewTime}
-              keyboardType="default"
-              autoFocus
-            />
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.modalButtonCancel}
-                onPress={() => setShowTimeModal(false)}
-              >
-                <Text style={styles.modalButtonCancelText}>Annuler</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalButtonConfirm}
-                onPress={handleConfirmAddSlot}
-                disabled={addingSlot}
-              >
-                {addingSlot ? (
-                  <ActivityIndicator size="small" color={colors.background} />
-                ) : (
-                  <Text style={styles.modalButtonConfirmText}>Ajouter</Text>
-                )}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Ajouter un créneau</Text>
+              <TouchableOpacity onPress={() => setShowTimeModal(false)}>
+                <IconSymbol name="xmark" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
+            
+            {selectedDate && (
+              <Text style={styles.modalDate}>
+                {selectedDate.toLocaleDateString('fr-FR', { 
+                  weekday: 'long', 
+                  day: 'numeric', 
+                  month: 'long' 
+                })}
+              </Text>
+            )}
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Heure de début</Text>
+              <TextInput
+                style={styles.timeInput}
+                placeholder="14:30 ou 14h30"
+                placeholderTextColor={colors.textSecondary}
+                value={newTime}
+                onChangeText={setNewTime}
+                keyboardType="numbers-and-punctuation"
+                autoFocus
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Durée</Text>
+              <View style={styles.durationGrid}>
+                {durationOptions.map((option) => (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[
+                      styles.durationOption,
+                      parseInt(newDuration) === option.value && styles.durationOptionSelected,
+                    ]}
+                    onPress={() => setNewDuration(option.value.toString())}
+                  >
+                    <Text style={[
+                      styles.durationOptionText,
+                      parseInt(newDuration) === option.value && styles.durationOptionTextSelected,
+                    ]}>
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.confirmButton, addingSlot && styles.confirmButtonDisabled]}
+              onPress={handleConfirmAddSlot}
+              disabled={addingSlot}
+            >
+              {addingSlot ? (
+                <ActivityIndicator color={colors.background} />
+              ) : (
+                <Text style={styles.confirmButtonText}>Ajouter le créneau</Text>
+              )}
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -422,18 +577,33 @@ export default function ActivityCalendar({ activityId, onSlotSelect,externalSele
 const styles = StyleSheet.create({
   container: {
     backgroundColor: colors.card,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
   },
   header: {
     marginBottom: 16,
   },
   title: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
     marginBottom: 8,
+  },
+  joinedLegend: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  joinedLegendDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#10b981',
+    marginRight: 6,
+  },
+  joinedLegendText: {
+    fontSize: 13,
+    color: colors.textSecondary,
   },
   weekNav: {
     flexDirection: 'row',
@@ -444,7 +614,7 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   weekTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     color: colors.text,
   },
@@ -452,142 +622,198 @@ const styles = StyleSheet.create({
     padding: 40,
     alignItems: 'center',
   },
-  calendarGrid: {
+  weekContainer: {
     minWidth: '100%',
   },
-  headerRow: {
+  daysRow: {
     flexDirection: 'row',
-    borderBottomWidth: 2,
-    borderBottomColor: colors.border,
-    paddingBottom: 8,
-  },
-  dayHeader: {
-    width: 75,
-    alignItems: 'center',
-  },
-  dayName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  dayDate: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  slotsGrid: {
-    flexDirection: 'row',
-    paddingTop: 8,
   },
   dayColumn: {
-    width: 75,
-    alignItems: 'center',
+    width: 80,
+    marginRight: 8,
   },
-  slotCell: {
-    width: 65,
-    height: 40,
-    backgroundColor: '#87CEEB',
-    borderRadius: 6,
-    justifyContent: 'center',
+  dayHeader: {
     alignItems: 'center',
-    marginVertical: 4,
-    flexDirection: 'row',
-    gap: 2,
+    paddingVertical: 8,
+    backgroundColor: colors.background,
+    borderRadius: 10,
+    marginBottom: 8,
   },
-  slotCellSelected: {
+  dayName: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  dayNumber: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.text,
+    marginVertical: 2,
+  },
+  monthShort: {
+    fontSize: 11,
+    color: colors.textSecondary,
+  },
+  slotsContainer: {
+    gap: 6,
+  },
+  slotBadge: {
+    backgroundColor: colors.background,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  slotBadgeSelected: {
     backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  slotBadgeJoined: {
+    backgroundColor: '#10b981',
+    borderColor: '#10b981',
+  },
+  slotBadgeEdit: {
+    position: 'relative',
+  },
+  slotBadgeReadOnly: {
+    opacity: 0.7,
+  },
+  joinedIndicator: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: colors.background,
+    borderRadius: 8,
   },
   slotTime: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
     color: colors.text,
   },
   slotTimeSelected: {
     color: colors.background,
   },
-  emptyCell: {
-    width: 65,
-    height: 40,
-    backgroundColor: '#87CEEB20',
-    borderRadius: 6,
-    marginVertical: 4,
+  slotTimeJoined: {
+    color: colors.background,
   },
-  addButton: {
-    width: 65,
-    height: 40,
-    backgroundColor: '#87CEEB40',
-    borderRadius: 6,
-    justifyContent: 'center',
+  slotDuration: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  slotDurationSelected: {
+    color: colors.background,
+    opacity: 0.8,
+  },
+  slotDurationJoined: {
+    color: colors.background,
+    opacity: 0.8,
+  },
+  deleteSlotButton: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    backgroundColor: colors.background,
+    borderRadius: 10,
+  },
+  addSlotButton: {
+    backgroundColor: colors.primary + '15',
+    borderRadius: 8,
+    paddingVertical: 10,
     alignItems: 'center',
-    marginVertical: 4,
     borderWidth: 1,
-    borderColor: '#87CEEB',
+    borderColor: colors.primary + '30',
     borderStyle: 'dashed',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
   modalContent: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
+    backgroundColor: colors.background,
+    borderRadius: 20,
     padding: 24,
     width: '100%',
-    maxWidth: 320,
+    maxWidth: 360,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: colors.text,
-    textAlign: 'center',
-    marginBottom: 4,
   },
-  modalSubtitle: {
-    fontSize: 14,
+  modalDate: {
+    fontSize: 15,
     color: colors.textSecondary,
-    textAlign: 'center',
     marginBottom: 20,
     textTransform: 'capitalize',
   },
-  timeInput: {
-    backgroundColor: colors.background,
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 18,
-    color: colors.text,
-    textAlign: 'center',
+  inputGroup: {
     marginBottom: 20,
   },
-  modalButtons: {
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  timeInput: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text,
+    textAlign: 'center',
+  },
+  durationGrid: {
     flexDirection: 'row',
-    gap: 12,
+    flexWrap: 'wrap',
+    gap: 8,
   },
-  modalButtonCancel: {
-    flex: 1,
-    paddingVertical: 14,
+  durationOption: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: colors.card,
     borderRadius: 10,
-    backgroundColor: colors.border,
-    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  modalButtonCancelText: {
-    fontSize: 16,
+  durationOptionSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  durationOptionText: {
+    fontSize: 14,
     fontWeight: '600',
     color: colors.text,
   },
-  modalButtonConfirm: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 10,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
+  durationOptionTextSelected: {
+    color: colors.background,
   },
-  modalButtonConfirmText: {
+  confirmButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  confirmButtonDisabled: {
+    opacity: 0.6,
+  },
+  confirmButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     color: colors.background,
   },
 });

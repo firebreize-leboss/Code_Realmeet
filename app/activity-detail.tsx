@@ -137,7 +137,7 @@ export default function ActivityDetailScreen() {
           if (participation?.slot_id) {
             const { data: slotData } = await supabase
               .from('activity_slots')
-              .select('id, date, time_start, time_end')
+              .select('id, date, time, duration')
               .eq('id', participation.slot_id)
               .single();
             
@@ -145,7 +145,8 @@ export default function ActivityDetailScreen() {
               setSelectedSlot({
                 id: slotData.id,
                 date: slotData.date,
-                time: `${slotData.time_start?.slice(0, 5) || ''} - ${slotData.time_end?.slice(0, 5) || ''}`,
+                time: slotData.time?.slice(0, 5) || '',
+                duration: slotData.duration || 60,
               });
             }
           }
@@ -588,16 +589,17 @@ export default function ActivityDetailScreen() {
             </View>
           </View>
 
-          {/* Calendrier de sélection - Masqué pour les entreprises */}
-          {!isBusiness && (
-            <View style={styles.section}>
-              <ActivityCalendar 
-                activityId={activity.id} 
-                onSlotSelect={(slot) => setSelectedSlot(slot)}
-                externalSelectedSlot={selectedSlot}
-              />
-            </View>
-          )}
+          {/* Calendrier de sélection */}
+          <View style={styles.section}>
+            <ActivityCalendar 
+              activityId={activity.id} 
+              onSlotSelect={(isBusiness || isJoined) ? undefined : (slot) => setSelectedSlot(slot)}
+              externalSelectedSlot={selectedSlot}
+              mode="select"
+              readOnly={isBusiness || isJoined}
+              userJoinedSlotId={isJoined ? selectedSlot?.id : undefined}
+            />
+          </View>
 
           {/* Description */}
           <View style={styles.section}>
