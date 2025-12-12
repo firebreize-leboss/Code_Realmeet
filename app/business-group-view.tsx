@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
-import { colors } from '@/styles/commonStyles';
+import { colors, commonStyles } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
 
 interface Message {
@@ -46,9 +46,15 @@ export default function BusinessGroupViewScreen() {
   const [showParticipants, setShowParticipants] = useState(false);
 
   useEffect(() => {
-    loadGroupData();
-    
-    // Souscrire aux nouveaux messages (lecture seule)
+    if (conversationId) {
+      loadGroupData();
+    }
+  }, [conversationId]);
+
+  // Souscrire aux nouveaux messages (lecture seule)
+  useEffect(() => {
+    if (!conversationId) return;
+
     const channel = supabase
       .channel(`business-view:${conversationId}`)
       .on(
@@ -60,6 +66,8 @@ export default function BusinessGroupViewScreen() {
           filter: `conversation_id=eq.${conversationId}`,
         },
         async (payload: any) => {
+          console.log('📩 Nouveau message reçu:', payload.new);
+          
           const { data: profile } = await supabase
             .from('profiles')
             .select('full_name, avatar_url')
@@ -93,8 +101,11 @@ export default function BusinessGroupViewScreen() {
 
   const loadGroupData = async () => {
     try {
+      setLoading(true);
+      console.log('🔍 Chargement du groupe, conversationId:', conversationId);
+
       // Charger les participants
-      const { data: participantsData } = await supabase
+      const { data: participantsData, error: partError } = await supabase
         .from('conversation_participants')
         .select(`
           user_id,
@@ -106,17 +117,25 @@ export default function BusinessGroupViewScreen() {
         `)
         .eq('conversation_id', conversationId);
 
+      if (partError) {
+        console.error('❌ Erreur chargement participants:', partError);
+      } else {
+        console.log('✅ Participants chargés:', participantsData?.length);
+      }
+
       if (participantsData) {
-        const formattedParticipants = participantsData.map((p: any) => ({
-          id: p.profiles.id,
-          name: p.profiles.full_name || 'Participant',
-          avatar: p.profiles.avatar_url || '',
-        }));
+        const formattedParticipants = participantsData
+          .filter((p: any) => p.profiles) // Filtrer les profils null
+          .map((p: any) => ({
+            id: p.profiles.id,
+            name: p.profiles.full_name || 'Participant',
+            avatar: p.profiles.avatar_url || '',
+          }));
         setParticipants(formattedParticipants);
       }
 
       // Charger les messages
-      const { data: messagesData } = await supabase
+      const { data: messagesData, error: msgError } = await supabase
         .from('messages')
         .select(`
           id,
@@ -127,14 +146,30 @@ export default function BusinessGroupViewScreen() {
           created_at
         `)
         .eq('conversation_id', conversationId)
+        .is('deleted_at', null)
         .order('created_at', { ascending: true });
 
-      if (messagesData) {
+      if (msgError) {
+        console.error('❌ Erreur chargement messages:', msgError);
+      } else {
+        console.log('✅ Messages chargés:', messagesData?.length, messagesData);
+      }
+
+      if (messagesData && messagesData.length > 0) {
+        // Récupérer les profils des expéditeurs
         const senderIds = [...new Set(messagesData.map(m => m.sender_id))];
-        const { data: profiles } = await supabase
+        console.log('👤 Sender IDs:', senderIds);
+        
+        const { data: profiles, error: profileError } = await supabase
           .from('profiles')
           .select('id, full_name, avatar_url')
           .in('id', senderIds);
+
+        if (profileError) {
+          console.error('❌ Erreur chargement profils:', profileError);
+        } else {
+          console.log('✅ Profils chargés:', profiles?.length);
+        }
 
         const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
 
@@ -156,14 +191,28 @@ export default function BusinessGroupViewScreen() {
           };
         });
 
+        console.log('📝 Messages formatés:', formattedMessages.length);
         setMessages(formattedMessages);
+      } else {
+        console.log('⚠️ Aucun message trouvé pour cette conversation');
+        setMessages([]);
       }
     } catch (error) {
-      console.error('Erreur chargement groupe:', error);
+      console.error('❌ Erreur chargement groupe:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  const renderParticipant = ({ item }: { item: Participant }) => (
+    <View style={styles.participantItem}>
+      <Image
+        source={{ uri: item.avatar || 'https://via.placeholder.com/40' }}
+        style={styles.participantAvatar}
+      />
+      <Text style={styles.participantName} numberOfLines={1}>{item.name}</Text>
+    </View>
+  );
 
   const renderMessage = ({ item, index }: { item: Message; index: number }) => {
     const showDateHeader = index === 0 || messages[index - 1]?.fullDate !== item.fullDate;
@@ -193,7 +242,7 @@ export default function BusinessGroupViewScreen() {
                 <Image source={{ uri: item.mediaUrl }} style={styles.messageImage} />
               ) : item.type === 'voice' ? (
                 <View style={styles.voiceMessage}>
-                  <IconSymbol name="waveform" size={20} color={colors.primary} />
+                  <IconSymbol name="waveform" size={20} color={colors.textSecondary} />
                   <Text style={styles.voiceText}>Message vocal</Text>
                 </View>
               ) : (
@@ -208,46 +257,35 @@ export default function BusinessGroupViewScreen() {
     );
   };
 
-  const renderParticipant = ({ item }: { item: Participant }) => (
-    <View style={styles.participantItem}>
-      <Image
-        source={{ uri: item.avatar || 'https://via.placeholder.com/40' }}
-        style={styles.participantAvatar}
-      />
-      <Text style={styles.participantName}>{item.name}</Text>
-    </View>
-  );
-
   if (loading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={commonStyles.container} edges={['top']}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Chargement des messages...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={commonStyles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <IconSymbol name="chevron.left" size={24} color={colors.text} />
         </TouchableOpacity>
         
-        <View style={styles.headerInfo}>
+        <View style={styles.headerCenter}>
           <Text style={styles.headerTitle} numberOfLines={1}>
-            {decodeURIComponent(activityName as string)}
+            {decodeURIComponent(activityName as string || 'Groupe')}
           </Text>
-          <Text style={styles.headerSubtitle}>
-            {participants.length} participants
-          </Text>
+          <Text style={styles.headerSubtitle}>{participants.length} participants</Text>
         </View>
 
         <TouchableOpacity 
-          style={styles.participantsButton}
           onPress={() => setShowParticipants(!showParticipants)}
+          style={styles.participantsButton}
         >
           <IconSymbol name="person.2.fill" size={20} color={colors.text} />
         </TouchableOpacity>
@@ -280,13 +318,23 @@ export default function BusinessGroupViewScreen() {
         data={messages}
         renderItem={renderMessage}
         keyExtractor={item => item.id}
-        contentContainerStyle={styles.messagesContent}
+        contentContainerStyle={[
+          styles.messagesContent,
+          messages.length === 0 && styles.emptyContent
+        ]}
         showsVerticalScrollIndicator={false}
-        onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
+        onContentSizeChange={() => {
+          if (messages.length > 0) {
+            flatListRef.current?.scrollToEnd();
+          }
+        }}
         ListEmptyComponent={
           <View style={styles.emptyMessages}>
             <IconSymbol name="bubble.left.and.bubble.right" size={48} color={colors.textSecondary} />
             <Text style={styles.emptyText}>Aucun message dans ce groupe</Text>
+            <Text style={styles.emptySubtext}>
+              Les messages des participants apparaîtront ici
+            </Text>
           </View>
         }
       />
@@ -303,14 +351,15 @@ export default function BusinessGroupViewScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: colors.textSecondary,
   },
   header: {
     flexDirection: 'row',
@@ -322,42 +371,39 @@ const styles = StyleSheet.create({
   },
   backButton: {
     padding: 8,
-    marginRight: 8,
   },
-  headerInfo: {
+  headerCenter: {
     flex: 1,
+    marginHorizontal: 12,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
     color: colors.text,
   },
   headerSubtitle: {
     fontSize: 13,
     color: colors.textSecondary,
-    marginTop: 2,
   },
   participantsButton: {
-    padding: 10,
-    backgroundColor: colors.card,
-    borderRadius: 20,
+    padding: 8,
   },
   readOnlyBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
     backgroundColor: colors.primary,
-    paddingVertical: 10,
+    paddingVertical: 8,
     paddingHorizontal: 16,
+    gap: 8,
   },
   readOnlyText: {
-    fontSize: 13,
-    fontWeight: '500',
+    fontSize: 12,
     color: colors.background,
+    fontWeight: '500',
   },
   participantsPanel: {
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
@@ -370,30 +416,31 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   participantsList: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     gap: 12,
   },
   participantItem: {
     alignItems: 'center',
-    marginRight: 16,
+    width: 60,
   },
   participantAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.border,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginBottom: 4,
   },
   participantName: {
-    fontSize: 12,
-    color: colors.text,
-    marginTop: 4,
-    maxWidth: 60,
+    fontSize: 11,
+    color: colors.textSecondary,
     textAlign: 'center',
   },
   messagesContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    padding: 16,
     paddingBottom: 20,
+  },
+  emptyContent: {
+    flex: 1,
+    justifyContent: 'center',
   },
   dateHeader: {
     alignItems: 'center',
@@ -402,10 +449,10 @@ const styles = StyleSheet.create({
   dateHeaderText: {
     fontSize: 12,
     color: colors.textSecondary,
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
     paddingHorizontal: 12,
     paddingVertical: 4,
-    borderRadius: 10,
+    borderRadius: 12,
   },
   systemMessage: {
     alignItems: 'center',
@@ -418,7 +465,7 @@ const styles = StyleSheet.create({
   },
   messageRow: {
     flexDirection: 'row',
-    marginVertical: 4,
+    marginBottom: 12,
     alignItems: 'flex-start',
   },
   messageAvatar: {
@@ -426,11 +473,10 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     marginRight: 10,
-    backgroundColor: colors.border,
   },
   messageBubble: {
     flex: 1,
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderTopLeftRadius: 4,
     padding: 12,
@@ -466,34 +512,40 @@ const styles = StyleSheet.create({
   messageTime: {
     fontSize: 11,
     color: colors.textSecondary,
-    marginTop: 6,
-    alignSelf: 'flex-end',
+    marginTop: 4,
+    textAlign: 'right',
   },
   emptyMessages: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 60,
+    gap: 12,
   },
   emptyText: {
-    fontSize: 15,
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  emptySubtext: {
+    fontSize: 14,
     color: colors.textSecondary,
-    marginTop: 12,
+    textAlign: 'center',
   },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
+    paddingVertical: 12,
     paddingHorizontal: 20,
-    backgroundColor: colors.card,
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
     borderTopColor: colors.border,
+    gap: 8,
   },
   footerText: {
-    fontSize: 13,
+    fontSize: 12,
     color: colors.textSecondary,
     textAlign: 'center',
+    flex: 1,
   },
 });
