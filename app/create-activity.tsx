@@ -26,6 +26,7 @@ import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 import { DateTimeRangePicker } from '@/components/DateTimePicker';
 import ActivityCalendar from '@/components/ActivityCalendar';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 export default function CreateActivityScreen() {
   const router = useRouter();
