@@ -274,7 +274,7 @@ export default function ChatDetailScreen() {
     setLocalMessages(prev => [...prev, optimisticMessage]);
 
     try {
-      await sendMessage(conversationId as string, userMessage, 'text');
+      await sendMessage(userMessage, 'text');
       setLocalMessages(prev => prev.filter(msg => msg.id !== optimisticId));
     } catch (error) {
       setLocalMessages(prev =>
@@ -353,54 +353,65 @@ export default function ChatDetailScreen() {
     }
   };
 
-  const handleStopRecording = async () => {
-    if (recordingIntervalRef.current) {
-      clearInterval(recordingIntervalRef.current);
-      recordingIntervalRef.current = null;
+ const handleStopRecording = async () => {
+  if (recordingIntervalRef.current) {
+    clearInterval(recordingIntervalRef.current);
+    recordingIntervalRef.current = null;
+  }
+
+  try {
+    const result = await voiceMessageService.stopRecording();
+    setIsRecording(false);
+    setRecordingTime(0);
+
+    // ✅ Vérifier le succès et extraire l'URI correctement
+    if (!result.success || !result.uri) {
+      console.error('Erreur enregistrement:', result.error);
+      Alert.alert('Erreur', result.error || "Impossible d'enregistrer le message vocal");
+      return;
     }
 
-    try {
-      const uri = await voiceMessageService.stopRecording();
-      setIsRecording(false);
-      const duration = recordingTime;
-      setRecordingTime(0);
+    const uri = result.uri;
+    const duration = result.duration || recordingTime;
 
-      if (uri && duration >= 1) {
-        const optimisticId = `temp-${Date.now()}`;
-        const optimisticMessage: Message = {
-          id: optimisticId,
-          senderId: currentUserId!,
-          senderName: currentUserName,
-          senderAvatar: currentUserAvatar,
-          voiceUrl: uri,
-          voiceDuration: duration,
-          timestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-          status: 'sending' as MessageStatus,
-          type: 'voice',
-        };
+    if (duration >= 1) {
+      const optimisticId = `temp-${Date.now()}`;
+      const optimisticMessage: Message = {
+        id: optimisticId,
+        senderId: currentUserId!,
+        senderName: currentUserName,
+        senderAvatar: currentUserAvatar,
+        voiceUrl: uri,
+        voiceDuration: duration,
+        timestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+        status: 'sending' as MessageStatus,
+        type: 'voice',
+      };
 
-        setLocalMessages(prev => [...prev, optimisticMessage]);
+      setLocalMessages(prev => [...prev, optimisticMessage]);
 
-        try {
-          const uploadedUrl = await messageStorageService.uploadVoiceMessage(uri);
-          if (uploadedUrl) {
-            await sendMessage('', 'voice', uploadedUrl, duration);
-            setLocalMessages(prev => prev.filter(msg => msg.id !== optimisticId));
-          } else {
-            throw new Error('Upload failed');
-          }
-        } catch (error) {
-          setLocalMessages(prev =>
-            prev.map(msg => (msg.id === optimisticId ? { ...msg, status: 'failed' as MessageStatus } : msg))
-          );
-          Alert.alert('Erreur', "Impossible d'envoyer le message vocal");
+      try {
+        const uploadedUrl = await messageStorageService.uploadVoiceMessage(uri);
+        if (uploadedUrl) {
+          await sendMessage('', 'voice', uploadedUrl, duration);
+          setLocalMessages(prev => prev.filter(msg => msg.id !== optimisticId));
+        } else {
+          throw new Error('Upload failed');
         }
+      } catch (error) {
+        console.error('Erreur upload message vocal:', error);
+        setLocalMessages(prev =>
+          prev.map(msg => (msg.id === optimisticId ? { ...msg, status: 'failed' as MessageStatus } : msg))
+        );
+        Alert.alert('Erreur', "Impossible d'envoyer le message vocal");
       }
-    } catch (error) {
-      setIsRecording(false);
-      setRecordingTime(0);
     }
-  };
+  } catch (error) {
+    console.error('Erreur stop recording:', error);
+    setIsRecording(false);
+    setRecordingTime(0);
+  }
+};
 
   const handlePlayVoice = async (messageId: string, voiceUrl: string) => {
     if (playingVoiceId === messageId) {

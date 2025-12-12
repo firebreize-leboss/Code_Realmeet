@@ -8,7 +8,7 @@ import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
 import { useAuth } from '@/contexts/AuthContext';
 import { colors } from '@/styles/commonStyles';
 
-// Tabs pour les utilisateurs standard
+// Tabs pour les utilisateurs standard (5 tabs)
 const userTabs: TabBarItem[] = [
   {
     name: 'profile',
@@ -21,6 +21,12 @@ const userTabs: TabBarItem[] = [
     route: '/(tabs)/browse',
     icon: 'square.grid.2x2.fill',
     label: 'Explorer',
+  },
+  {
+    name: 'category',
+    route: '/(tabs)/category',
+    icon: 'list.bullet.rectangle.fill',
+    label: 'Catégories',
   },
   {
     name: 'activity',
@@ -36,7 +42,7 @@ const userTabs: TabBarItem[] = [
   },
 ];
 
-// Tabs pour les comptes entreprise
+// Tabs pour les comptes entreprise (5 tabs)
 const businessTabs: TabBarItem[] = [
   {
     name: 'profile',
@@ -49,6 +55,12 @@ const businessTabs: TabBarItem[] = [
     route: '/(tabs)/browse',
     icon: 'eye.fill',
     label: 'Veille',
+  },
+  {
+    name: 'category',
+    route: '/(tabs)/category',
+    icon: 'list.bullet.rectangle.fill',
+    label: 'Catégories',
   },
   {
     name: 'activity',
@@ -71,6 +83,9 @@ export default function TabLayout() {
   useEffect(() => {
     if (profile) {
       setTabs(profile.account_type === 'business' ? businessTabs : userTabs);
+    } else {
+      // Si pas de profil (non connecté), afficher les tabs utilisateur par défaut
+      setTabs(userTabs);
     }
   }, [profile?.account_type]);
 
@@ -97,15 +112,15 @@ export default function TabLayout() {
         <Stack.Screen name="profile" />
         <Stack.Screen name="browse" />
         <Stack.Screen name="activity" />
+        <Stack.Screen name="category" />
         
         {/* Écrans spécifiques */}
         <Stack.Screen name="chat" />
-        <Stack.Screen name="category" />
         <Stack.Screen name="business-groups" />
       </Stack>
       <FloatingTabBar 
         tabs={tabs} 
-        containerWidth={isBusiness ? 340 : 360} 
+        containerWidth={380}
       />
     </>
   );

@@ -65,9 +65,9 @@ export default function BusinessGroupsScreen() {
 
       // Récupérer tous les créneaux avec leurs conversations
       const { data: slots, error: slotsError } = await supabase
-        .from('activity_slots')
-        .select('id, activity_id, date, time_start')
-        .in('activity_id', activityIds);
+  .from('activity_slots')
+  .select('id, activity_id, date, time')  // La colonne s'appelle "time"
+  .in('activity_id', activityIds);
 
       if (slotsError) throw slotsError;
       
@@ -154,7 +154,7 @@ export default function BusinessGroupsScreen() {
           activityName: activity.nom,
           activityImage: activity.image_url || conv.image_url || '',
           slotDate: formatDate(slot.date),
-          slotTime: slot.time_start?.slice(0, 5) || '',
+          slotTime: slot.time?.slice(0, 5) || '',
           participantCount: participantCount || 0,
           maxParticipants: activity.max_participants,
           lastMessage: lastMessageText,

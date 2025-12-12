@@ -9,20 +9,20 @@ class UserService {
    * Récupérer le profil d'un utilisateur
    */
   async getProfile(userId: string): Promise<Profile | null> {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();  // ✅ Utiliser maybeSingle() au lieu de single()
 
-      if (error) throw error;
-      return data;
-    } catch (error: any) {
-      console.error('Erreur récupération profil:', error);
-      return null;
-    }
+    if (error) throw error;
+    return data;  // Retourne null si pas de résultat, sans erreur
+  } catch (error: any) {
+    console.error('Erreur récupération profil:', error);
+    return null;
   }
+}
 
   /**
    * Mettre à jour le profil
