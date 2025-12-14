@@ -535,7 +535,16 @@ if (participantCount > 0) {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer}>
+      <ScrollView
+  style={styles.scrollView}
+  contentContainerStyle={[
+    styles.contentContainer,
+    { paddingBottom: (!isHost || (isHost && isBusiness)) ? 140 : 20 },
+  ]}
+>
+
+
+
         {/* Hero Image */}
         <View style={styles.heroContainer}>
           <Image source={{ uri: activity.image || 'https://via.placeholder.com/400' }} style={styles.heroImage} />
@@ -817,7 +826,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingBottom: 20,
+    paddingBottom: 0,
   },
   heroContainer: {
     position: 'relative',

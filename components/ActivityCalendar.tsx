@@ -23,19 +23,19 @@ import { supabase } from '@/lib/supabase';
 
 interface TimeSlot {
   id: string;
-  time: string;          // "HH:MM"
-  duration: number;      // minutes
+  time: string; // "HH:MM"
+  duration: number; // minutes
   createdBy: string;
-  date: string;          // "YYYY-MM-DD"
+  date: string; // "YYYY-MM-DD"
   participantCount?: number;
 }
 
 interface DaySlots {
   date: Date;
-  dateStr: string;       // "YYYY-MM-DD"
-  dayName: string;       // "LUN"
-  dayNumber: string;     // "01"
-  monthShort: string;    // "jan"
+  dateStr: string; // "YYYY-MM-DD"
+  dayName: string; // "LUN"
+  dayNumber: string; // "01"
+  monthShort: string; // "jan"
   slots: TimeSlot[];
 }
 
@@ -145,7 +145,6 @@ export default function ActivityCalendar({
 
   const buildDaySlotsFromDateStr = (dateStr: string, slots: TimeSlot[]): DaySlots => {
     const d = new Date(`${dateStr}T00:00:00`);
-    // JS: 0=dim, on remap pour retrouver notre tableau LUN..DIM
     const jsDay = d.getDay(); // 0..6
     const idx = jsDay === 0 ? 6 : jsDay - 1;
 
@@ -183,10 +182,10 @@ export default function ActivityCalendar({
     setWeekDays(buildWeekDays(weekOffset));
   }, [mode, weekOffset]);
 
-  // Load slots: edit mode = slots for the week; select mode = all future slots grouped by day
+  // Load slots
   useEffect(() => {
+    // Mode création (pas d'activityId)
     if (!activityId) {
-      // Mode création (pas d'activityId) : on applique les pendingSlots sur weekDays uniquement (comme avant)
       if (mode === 'edit') {
         const days = buildWeekDays(weekOffset).map(day => {
           const daySlots = pendingSlots
@@ -202,7 +201,6 @@ export default function ActivityCalendar({
         });
         setWeekDays(days);
       } else {
-        // En select sans activityId, on ne peut pas charger depuis la BDD : on affiche seulement les jours ayant des pendingSlots
         const grouped = new Map<string, TimeSlot[]>();
         pendingSlots.forEach((s, idx) => {
           const list = grouped.get(s.date) || [];
@@ -218,7 +216,12 @@ export default function ActivityCalendar({
 
         const days = Array.from(grouped.entries())
           .sort(([a], [b]) => a.localeCompare(b))
-          .map(([dateStr, slots]) => buildDaySlotsFromDateStr(dateStr, slots.sort((a, b) => a.time.localeCompare(b.time))));
+          .map(([dateStr, slots]) =>
+            buildDaySlotsFromDateStr(
+              dateStr,
+              slots.sort((a, b) => a.time.localeCompare(b.time))
+            )
+          );
 
         setUserDays(days);
         setPageIndex(0);
@@ -228,7 +231,7 @@ export default function ActivityCalendar({
       return;
     }
 
-    // Avec activityId -> on charge depuis supabase
+    // Avec activityId -> charge depuis supabase
     const load = async () => {
       try {
         setLoading(true);
@@ -245,48 +248,45 @@ export default function ActivityCalendar({
             .from('activity_slots')
             .select('id, date, time, duration, created_by')
             .eq('activity_id', activityId)
-            .gte('date', todayStr) // seulement futur
+            .gte('date', todayStr)
             .gte('date', startStr)
             .lte('date', endStr)
             .order('time', { ascending: true });
 
           if (error) throw error;
 
-const slotIds = (data || []).map(s => s.id);
+          const slotIds = (data || []).map(s => s.id);
 
-let countBySlotId: Record<string, number> = {};
-if (slotIds.length > 0) {
-  const { data: participants, error: pErr } = await supabase
-    .from('slot_participants')
-    .select('slot_id')
-    .in('slot_id', slotIds);
+          let countBySlotId: Record<string, number> = {};
+          if (slotIds.length > 0) {
+            const { data: participants, error: pErr } = await supabase
+              .from('slot_participants')
+              .select('slot_id')
+              .in('slot_id', slotIds);
 
-  if (!pErr && participants) {
-    countBySlotId = participants.reduce((acc: Record<string, number>, row: any) => {
-      acc[row.slot_id] = (acc[row.slot_id] || 0) + 1;
-      return acc;
-    }, {});
-  }
-}
+            if (!pErr && participants) {
+              countBySlotId = participants.reduce((acc: Record<string, number>, row: any) => {
+                acc[row.slot_id] = (acc[row.slot_id] || 0) + 1;
+                return acc;
+              }, {});
+            }
+          }
 
-const updated = days.map((day) => {
-  const daySlotsRaw = (data?.filter(s => s.date === day.dateStr) || []);
-  const daySlots: TimeSlot[] = daySlotsRaw.map((slot) => ({
-    id: slot.id,
-    time: slot.time.slice(0, 5),
-    duration: slot.duration || 60,
-    createdBy: slot.created_by,
-    date: slot.date,
-    participantCount: countBySlotId[slot.id] || 0,
-  }));
+          const updated = days.map(day => {
+            const daySlotsRaw = (data?.filter(s => s.date === day.dateStr) || []);
+            const daySlots: TimeSlot[] = daySlotsRaw.map(slot => ({
+              id: slot.id,
+              time: slot.time.slice(0, 5),
+              duration: slot.duration || 60,
+              createdBy: slot.created_by,
+              date: slot.date,
+              participantCount: countBySlotId[slot.id] || 0,
+            }));
+            return { ...day, slots: daySlots };
+          });
 
-  return { ...day, slots: daySlots };
-});
-
-setWeekDays(updated);
-
+          setWeekDays(updated);
         } else {
-          // mode select -> toutes les dates futures qui ont des créneaux (groupées)
           const { data, error } = await supabase
             .from('activity_slots')
             .select('id, date, time, duration, created_by')
@@ -298,7 +298,7 @@ setWeekDays(updated);
           if (error) throw error;
 
           const grouped = new Map<string, any[]>();
-          (data || []).forEach((s) => {
+          (data || []).forEach(s => {
             const list = grouped.get(s.date) || [];
             list.push(s);
             grouped.set(s.date, list);
@@ -309,7 +309,7 @@ setWeekDays(updated);
               .sort(([a], [b]) => a.localeCompare(b))
               .map(async ([dateStr, slotsRaw]) => {
                 const slots: TimeSlot[] = await Promise.all(
-                  slotsRaw.map(async (slot) => {
+                  slotsRaw.map(async slot => {
                     const { count } = await supabase
                       .from('slot_participants')
                       .select('*', { count: 'exact', head: true })
@@ -332,7 +332,6 @@ setWeekDays(updated);
 
           setUserDays(days);
           setPageIndex(0);
-          // Remet le scroll au début si on repasse ici
           requestAnimationFrame(() => {
             scrollRef.current?.scrollTo({ x: 0, animated: false });
           });
@@ -345,7 +344,7 @@ setWeekDays(updated);
     };
 
     load();
-}, [activityId, mode, weekOffset, currentUserId]);
+  }, [activityId, mode, weekOffset, currentUserId]);
 
   // ---------- Pagination (select mode) ----------
   const visibleDays: DaySlots[] = useMemo(() => {
@@ -353,10 +352,8 @@ setWeekDays(updated);
   }, [mode, weekDays, userDays]);
 
   const dayPages: DaySlots[][] = useMemo(() => {
-    if (mode === 'edit') {
-      // En edit : toujours 7 jours = une page
-      return [weekDays];
-    }
+    if (mode === 'edit') return [weekDays];
+
     const pages: DaySlots[][] = [];
     for (let i = 0; i < userDays.length; i += 7) {
       pages.push(userDays.slice(i, i + 7));
@@ -391,7 +388,6 @@ setWeekDays(updated);
       return `${start.getDate()} ${monthNames[start.getMonth()]} - ${end.getDate()} ${monthNames[end.getMonth()]} ${end.getFullYear()}`;
     }
 
-    // mode select : titre = plage des jours visibles sur la page
     const page = currentPage;
     if (!page || page.length === 0) return '';
     const start = page[0].date;
@@ -410,17 +406,17 @@ setWeekDays(updated);
       return;
     }
 
-    // mode select -> change de page (7 jours)
     const next = pageIndex + direction;
     if (next < 0 || next > dayPages.length - 1) return;
 
     setPageIndex(next);
     requestAnimationFrame(() => {
-      scrollRef.current?.scrollTo({ x: next * 99999, animated: true }); // on corrige juste après via mesure
+      // sera recalé via scrollWidth ensuite
+      scrollRef.current?.scrollTo({ x: next * 99999, animated: true });
     });
   };
 
-  // Petit hack: scrollTo avec vraie largeur, une fois que la ScrollView a mesuré sa largeur
+  // hack: scrollTo avec vraie largeur
   const [scrollWidth, setScrollWidth] = useState(0);
   useEffect(() => {
     if (!canScrollDays) return;
@@ -474,10 +470,11 @@ setWeekDays(updated);
       return;
     }
 
-    // Edition avec activityId
+    // Edition avec activityId -> INSERT + MAJ immédiate de l'UI (pas de loading infini)
     try {
       setAddingSlot(true);
-      const { error } = await supabase
+
+      const { data: inserted, error } = await supabase
         .from('activity_slots')
         .insert({
           activity_id: activityId,
@@ -485,23 +482,37 @@ setWeekDays(updated);
           time: formattedTime,
           duration,
           created_by: currentUserId,
-        });
+        })
+        .select('id')
+        .single();
 
       if (error) {
         if ((error as any).code === '23505') {
           Alert.alert('Créneau existant', 'Ce créneau existe déjà pour cette date.');
-        } else {
-          throw error;
+          return;
         }
-      } else {
-        setShowTimeModal(false);
-        // refresh
-        setWeekOffset(prev => prev); // no-op to trigger effect? not needed; effect depends on weekOffset. We'll just reload via state toggle:
-        setLoading(true);
-        // reload by forcing effect: simplest is to bump weekOffset by 0 - already same.
-        // We'll call load by changing weekOffset to itself doesn't rerender. So instead, do:
-        // quick: setWeekOffset(prev => prev); and rely on setLoading(false) ??? not good.
+        throw error;
       }
+
+      const newSlot: TimeSlot = {
+        id: inserted?.id || `tmp-${dateStr}-${formattedTime}`,
+        time: formattedTime,
+        duration,
+        createdBy: currentUserId || '',
+        date: dateStr,
+        participantCount: 0,
+      };
+
+      // ✅ MAJ immédiate pour la semaine affichée
+      setWeekDays(prev =>
+        prev.map(day => {
+          if (day.dateStr !== dateStr) return day;
+          const merged = [...day.slots, newSlot].sort((a, b) => a.time.localeCompare(b.time));
+          return { ...day, slots: merged };
+        })
+      );
+
+      setShowTimeModal(false);
     } catch (e) {
       console.error('Erreur ajout créneau:', e);
       Alert.alert('Erreur', "Impossible d'ajouter le créneau.");
@@ -537,36 +548,34 @@ setWeekDays(updated);
       return;
     }
 
-    Alert.alert(
-      'Supprimer le créneau',
-      `Supprimer le créneau de ${slot.time} ?`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Supprimer',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await supabase.from('activity_slots').delete().eq('id', slot.id);
-              if (selectedSlot?.id === slot.id) {
-                setSelectedSlot(null);
-                onSlotSelect?.(null);
-              }
-              // refresh
-              setLoading(true);
-              // re-trigger load by toggling weekOffset (edit) or just call setWeekOffset(prev=>prev) doesn't help.
-              // easiest: bump weekOffset by 0. We'll instead call setWeekOffset(prev=>prev+0) doesn't help.
-              // So we rely on effect dependency 'weekOffset' not changing; instead we can call setWeekOffset(prev=>prev); not.
-              // We'll just bump to force refresh then revert in next tick:
-              setWeekOffset(prev => prev + 0);
-            } catch (e) {
-              console.error('Erreur suppression:', e);
-              Alert.alert('Erreur', 'Impossible de supprimer le créneau.');
+    Alert.alert('Supprimer le créneau', `Supprimer le créneau de ${slot.time} ?`, [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Supprimer',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await supabase.from('activity_slots').delete().eq('id', slot.id);
+
+            if (selectedSlot?.id === slot.id) {
+              setSelectedSlot(null);
+              onSlotSelect?.(null);
             }
-          },
+
+            // ✅ MAJ UI immédiate
+            setWeekDays(prev =>
+              prev.map(day => {
+                if (day.dateStr !== slot.date) return day;
+                return { ...day, slots: day.slots.filter(s => s.id !== slot.id) };
+              })
+            );
+          } catch (e) {
+            console.error('Erreur suppression:', e);
+            Alert.alert('Erreur', 'Impossible de supprimer le créneau.');
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
   // ---------- Render helpers ----------
@@ -579,7 +588,7 @@ setWeekDays(updated);
       </View>
 
       <View style={styles.slotsContainer}>
-        {day.slots.map((slot) => {
+        {day.slots.map(slot => {
           const isUserJoined = userJoinedSlotId === slot.id;
           const isSelected = selectedSlot?.id === slot.id;
 
@@ -645,10 +654,7 @@ setWeekDays(updated);
         })}
 
         {mode === 'edit' && (
-          <TouchableOpacity
-            style={styles.addSlotButton}
-            onPress={() => handleAddSlot(day.date)}
-          >
+          <TouchableOpacity style={styles.addSlotButton} onPress={() => handleAddSlot(day.date)}>
             <IconSymbol name="plus" size={16} color={colors.primary} />
           </TouchableOpacity>
         )}
@@ -677,7 +683,11 @@ setWeekDays(updated);
         )}
 
         <View style={styles.weekNav}>
-          <TouchableOpacity onPress={() => navigate(-1)} style={styles.navButton} disabled={mode !== 'edit' && pageIndex === 0}>
+          <TouchableOpacity
+            onPress={() => navigate(-1)}
+            style={styles.navButton}
+            disabled={mode !== 'edit' && pageIndex === 0}
+          >
             <IconSymbol name="chevron.left" size={20} color={colors.text} />
           </TouchableOpacity>
 
@@ -699,46 +709,37 @@ setWeekDays(updated);
         </View>
       ) : visibleDays.length === 0 ? (
         <View style={styles.loadingContainer}>
-          <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>
-            Aucun créneau disponible.
-          </Text>
+          <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Aucun créneau disponible.</Text>
         </View>
       ) : mode === 'edit' ? (
-        // ENTREPRISE: semaine fixe (7 jours), pas de pagination
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={styles.weekContainer}>
-            <View style={styles.daysRow}>
-              {weekDays.map((day, i) => renderDayColumn(day, `edit-${i}`))}
-            </View>
+            <View style={styles.daysRow}>{weekDays.map((day, i) => renderDayColumn(day, `edit-${i}`))}</View>
           </View>
         </ScrollView>
       ) : canScrollDays ? (
-        // UTILISATEUR: pagination par 7 jours, scroll uniquement si > 7 jours
         <ScrollView
-          ref={(r) => { scrollRef.current = r; }}
+          ref={r => {
+            scrollRef.current = r;
+          }}
           horizontal
           pagingEnabled
           showsHorizontalScrollIndicator={false}
-          onLayout={(e) => setScrollWidth(e.nativeEvent.layout.width)}
+          onLayout={e => setScrollWidth(e.nativeEvent.layout.width)}
           onMomentumScrollEnd={onHorizontalScrollEnd}
         >
           {dayPages.map((page, pIdx) => (
             <View key={`page-${pIdx}`} style={styles.weekPage}>
               <View style={styles.weekContainer}>
-                <View style={styles.daysRow}>
-                  {page.map((day, i) => renderDayColumn(day, `p${pIdx}-${i}`))}
-                </View>
+                <View style={styles.daysRow}>{page.map((day, i) => renderDayColumn(day, `p${pIdx}-${i}`))}</View>
               </View>
             </View>
           ))}
         </ScrollView>
       ) : (
-        // UTILISATEUR: <= 7 jours -> pas de scroll horizontal, aligné à gauche
         <View style={styles.weekPageNoScroll}>
           <View style={styles.weekContainer}>
-            <View style={styles.daysRow}>
-              {dayPages[0].map((day, i) => renderDayColumn(day, `nos-${i}`))}
-            </View>
+            <View style={styles.daysRow}>{dayPages[0].map((day, i) => renderDayColumn(day, `nos-${i}`))}</View>
           </View>
         </View>
       )}
@@ -785,7 +786,7 @@ setWeekDays(updated);
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Durée</Text>
               <View style={styles.durationGrid}>
-                {durationOptions.map((option) => (
+                {durationOptions.map(option => (
                   <TouchableOpacity
                     key={option.value}
                     style={[
@@ -812,11 +813,7 @@ setWeekDays(updated);
               onPress={handleConfirmAddSlot}
               disabled={addingSlot}
             >
-              {addingSlot ? (
-                <ActivityIndicator color={colors.background} />
-              ) : (
-                <Text style={styles.confirmButtonText}>Ajouter le créneau</Text>
-              )}
+              {addingSlot ? <ActivityIndicator color={colors.background} /> : <Text style={styles.confirmButtonText}>Ajouter le créneau</Text>}
             </TouchableOpacity>
           </View>
         </View>

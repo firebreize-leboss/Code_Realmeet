@@ -20,6 +20,7 @@ import { colors, commonStyles } from '@/styles/commonStyles';
 import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
 import { WebView } from 'react-native-webview';
 import { activityService } from '@/services/activity.service';
+import { supabase } from '@/lib/supabase';
 import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -70,12 +71,15 @@ export default function BrowseScreen() {
   const [viewMode, setViewMode] = useState<ViewMode>('liste');
   const [selectedActivity, setSelectedActivity] = useState<SelectedActivity | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [latestSlotDateByActivity, setLatestSlotDateByActivity] = useState<Record<string, string | null>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const webViewRef = useRef<WebView>(null);
   const hasHandledParams = useRef(false);
   const hasCenteredOnActivity = useRef(false);
+  const [isBusiness, setIsBusiness] = useState(false);
+
 
   useEffect(() => {
     (async () => {
@@ -91,6 +95,13 @@ export default function BrowseScreen() {
       }
     })();
   }, []);
+
+  useEffect(() => {
+  supabase.auth.getUser().then(({ data }) => {
+    setIsBusiness(data.user?.user_metadata?.role === 'business');
+  });
+  }, []);
+
 
   useEffect(() => {
     if (hasHandledParams.current) return;
@@ -142,11 +153,32 @@ export default function BrowseScreen() {
     try {
       const result = await activityService.getActivities();
       if (result.success && result.data) {
-        setActivities(result.data);
-        if (viewMode === 'maps' && result.data.length > 0) {
-          setTimeout(() => sendActivitiesToMap(result.data), 1000);
-        }
-      }
+  setActivities(result.data);
+
+  // Charge la date la plus récente dispo (activity_slots) pour chaque activité
+  const ids = result.data.map(a => a.id);
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  const { data: slots } = await supabase
+    .from('activity_slots')
+    .select('activity_id, date')
+    .in('activity_id', ids)
+    .gte('date', todayStr)
+    .order('date', { ascending: true });
+
+  const map: Record<string, string | null> = {};
+  ids.forEach(id => (map[id] = null)); // par défaut : aucune date
+  (slots || []).forEach(s => {
+    // comme c'est trié DESC, on garde la 1ère rencontrée = la plus récente
+    if (map[s.activity_id] == null) map[s.activity_id] = s.date;
+  });
+  setLatestSlotDateByActivity(map);
+
+  if (viewMode === 'maps' && result.data.length > 0) {
+    setTimeout(() => sendActivitiesToMap(result.data, map), 1000);
+  }
+}
+
     } catch (error) {
       console.error('Erreur chargement activités:', error);
     } finally {
@@ -168,17 +200,29 @@ export default function BrowseScreen() {
     loadActivities();
   };
 
-  const sendActivitiesToMap = (activitiesData: Activity[], shouldCenter: boolean = true) => {
+  const sendActivitiesToMap = (
+  activitiesData: Activity[],
+  latestMap: Record<string, string | null> = latestSlotDateByActivity,
+  shouldCenter: boolean = true
+) => {
+
     if (webViewRef.current) {
       const activitiesWithCoords = activitiesData.filter(a => a.latitude && a.longitude);
       webViewRef.current.postMessage(JSON.stringify({
         type: 'loadActivities',
         activities: activitiesWithCoords.map(a => ({
-          id: a.id, nom: a.nom, categorie: a.categorie, date: a.date,
-          adresse: a.adresse, latitude: a.latitude, longitude: a.longitude,
-          participants: a.participants || 0, max_participants: a.max_participants,
-          image_url: a.image_url,
-        })),
+  id: a.id,
+  nom: a.nom,
+  categorie: a.categorie,
+  date: latestMap[a.id] || 'Aucune date disponible',
+  adresse: a.adresse,
+  latitude: a.latitude,
+  longitude: a.longitude,
+  participants: a.participants || 0,
+  max_participants: a.max_participants,
+  image_url: a.image_url,
+})),
+
         userLocation,
         shouldCenter,
       }));
@@ -346,15 +390,15 @@ export default function BrowseScreen() {
     const fillPercent = Math.min((activity.participants / activity.max_participants) * 100, 100);
     
     const formattedDate = (() => {
-      try {
-        return new Date(activity.date).toLocaleDateString('fr-FR', { 
-          day: 'numeric', 
-          month: 'short' 
-        });
-      } catch {
-        return activity.date;
-      }
-    })();
+  const latest = latestSlotDateByActivity[activity.id];
+  if (!latest) return 'Aucune date disponible';
+  try {
+    return new Date(latest).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+  } catch {
+    return latest;
+  }
+})();
+
 
     return (
       <TouchableOpacity
@@ -498,9 +542,11 @@ export default function BrowseScreen() {
               <Text style={[styles.toggleText, viewMode === 'maps' && styles.toggleTextActive]}>Maps</Text>
             </TouchableOpacity>
           </View>
-          <TouchableOpacity onPress={() => router.push('/create-activity')} style={styles.createButton}>
-            <IconSymbol name="plus" size={24} color={colors.background} />
-          </TouchableOpacity>
+          {isBusiness && (
+  <TouchableOpacity onPress={() => router.push('/create-activity')} style={styles.createButton}>
+    <IconSymbol name="plus" size={24} color={colors.background} />
+  </TouchableOpacity>
+)}
         </View>
       </View>
 

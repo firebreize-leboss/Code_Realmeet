@@ -16,7 +16,7 @@ import {
   ActivityIndicator,
   Modal,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
@@ -44,6 +44,8 @@ export default function ChatDetailScreen() {
   const { id: conversationId } = useLocalSearchParams();
   const scrollViewRef = useRef<ScrollView>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  const insets = useSafeAreaInsets();
 
   // États de base
   const [convName, setConvName] = useState('Conversation');
@@ -81,6 +83,8 @@ export default function ChatDetailScreen() {
   const { markAsRead } = useConversations();
   
   const combinedMessages: Message[] = [...(messages || []), ...localMessages];
+
+  const [keyboardExtraOffset, setKeyboardExtraOffset] = useState(0);
 
   // ✅ NOUVEAU : Marquer la conversation comme lue quand on l'ouvre
   useEffect(() => {
@@ -183,6 +187,28 @@ export default function ChatDetailScreen() {
     Keyboard.dismiss();
   }, [conversationId]);
 
+useEffect(() => {
+  const sub = Keyboard.addListener('keyboardDidChangeFrame', e => {
+    if (!e.endCoordinates) {
+      setKeyboardExtraOffset(0);
+      return;
+    }
+
+    // petite marge visuelle constante
+    setKeyboardExtraOffset(10);
+  });
+
+  const hideSub = Keyboard.addListener('keyboardDidHide', () => {
+    setKeyboardExtraOffset(0);
+  });
+
+  return () => {
+    sub.remove();
+    hideSub.remove();
+  };
+}, []);
+
+  
   useEffect(() => {
     scrollViewRef.current?.scrollToEnd({ animated: true });
   }, [combinedMessages]);
@@ -570,7 +596,14 @@ export default function ChatDetailScreen() {
         </ScrollView>
 
         {/* Zone de saisie */}
-        <View style={styles.inputContainer}>
+       <View
+  style={[
+    styles.inputContainer,
+    { paddingBottom: Math.max(insets.bottom, 12) + keyboardExtraOffset },
+  ]}
+>
+
+
           {inputWarning && (
             <View style={styles.warningBanner}>
               <IconSymbol name="exclamationmark.triangle.fill" size={16} color={colors.warning} />
@@ -854,13 +887,13 @@ headerTitleContainer: {
     marginLeft: -8,
   },
   inputContainer: {
-    backgroundColor: colors.card,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    paddingBottom: Platform.OS === 'ios' ? 28 : 12,
-  },
+  backgroundColor: colors.card,
+  borderTopWidth: 1,
+  borderTopColor: colors.border,
+  paddingHorizontal: 16,
+  paddingTop: 12,
+},
+
   warningBanner: {
     flexDirection: 'row',
     alignItems: 'center',
