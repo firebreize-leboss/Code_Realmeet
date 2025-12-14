@@ -1,10 +1,12 @@
+// app/auth/account-type.tsx
+// Page de sélection du type de compte avec connexion séparée
+
 import React from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  Image,
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,87 +18,84 @@ export default function AccountTypeScreen() {
   const router = useRouter();
 
   return (
-    <SafeAreaView style={commonStyles.container} edges={['top']}>
-      <ScrollView 
+    <SafeAreaView style={commonStyles.container} edges={['top', 'bottom']}>
+      <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <Text style={styles.title}>Bienvenue sur</Text>
-          <Text style={styles.brandName}>RealMeet</Text>
+          <Text style={styles.title}>Bienvenue sur RealMeet</Text>
           <Text style={styles.subtitle}>
-            Choisissez votre type de compte
+            Choisissez votre type de compte pour continuer
           </Text>
         </View>
 
-        <View style={styles.cardsContainer}>
-          {/* Card Particulier */}
-          <TouchableOpacity
-            style={styles.card}
-            onPress={() => router.push('/auth/login-individual')}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.iconContainer, { backgroundColor: colors.primary + '20' }]}>
-              <IconSymbol name="person.fill" size={48} color={colors.primary} />
+        {/* Card Particulier */}
+        <TouchableOpacity
+          style={styles.card}
+          onPress={() => router.push('/auth/login')}
+          activeOpacity={0.8}
+        >
+          <View style={[styles.iconContainer, { backgroundColor: colors.primary + '20' }]}>
+            <IconSymbol name="person.fill" size={48} color={colors.primary} />
+          </View>
+          <Text style={styles.cardTitle}>Particulier</Text>
+          <Text style={styles.cardDescription}>
+            Rejoignez des activités et rencontrez de nouvelles personnes
+          </Text>
+          <View style={styles.cardFeatures}>
+            <View style={styles.feature}>
+              <IconSymbol name="checkmark.circle.fill" size={20} color={colors.primary} />
+              <Text style={styles.featureText}>Rejoindre des activités</Text>
             </View>
-            <Text style={styles.cardTitle}>Particulier</Text>
-            <Text style={styles.cardDescription}>
-              Rejoignez des activités et rencontrez de nouvelles personnes
-            </Text>
-            <View style={styles.cardFeatures}>
-              <View style={styles.feature}>
-                <IconSymbol name="checkmark.circle.fill" size={20} color={colors.primary} />
-                <Text style={styles.featureText}>Rejoindre des activités</Text>
-              </View>
-              <View style={styles.feature}>
-                <IconSymbol name="checkmark.circle.fill" size={20} color={colors.primary} />
-                <Text style={styles.featureText}>Créer vos événements</Text>
-              </View>
-              <View style={styles.feature}>
-                <IconSymbol name="checkmark.circle.fill" size={20} color={colors.primary} />
-                <Text style={styles.featureText}>Messagerie intégrée</Text>
-              </View>
+            <View style={styles.feature}>
+              <IconSymbol name="checkmark.circle.fill" size={20} color={colors.primary} />
+              <Text style={styles.featureText}>Créer vos événements</Text>
             </View>
-            <View style={styles.continueButton}>
-              <Text style={styles.continueButtonText}>Continuer</Text>
-              <IconSymbol name="chevron.right" size={20} color={colors.background} />
+            <View style={styles.feature}>
+              <IconSymbol name="checkmark.circle.fill" size={20} color={colors.primary} />
+              <Text style={styles.featureText}>Messagerie intégrée</Text>
             </View>
-          </TouchableOpacity>
+          </View>
+          <View style={styles.continueButton}>
+            <Text style={styles.continueButtonText}>Continuer</Text>
+            <IconSymbol name="chevron.right" size={20} color={colors.background} />
+          </View>
+        </TouchableOpacity>
 
-          {/* Card Entreprise */}
-          <TouchableOpacity
-            style={styles.card}
-            onPress={() => router.push('/auth/login-business')}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.iconContainer, { backgroundColor: colors.secondary + '20' }]}>
-              <IconSymbol name="building.2.fill" size={48} color={colors.secondary} />
+        {/* Card Entreprise */}
+        <TouchableOpacity
+          style={styles.card}
+          onPress={() => router.push('/auth/login-business')}
+          activeOpacity={0.8}
+        >
+          <View style={[styles.iconContainer, { backgroundColor: colors.secondary + '20' }]}>
+            <IconSymbol name="building.2.fill" size={48} color={colors.secondary} />
+          </View>
+          <Text style={styles.cardTitle}>Entreprise</Text>
+          <Text style={styles.cardDescription}>
+            Développez votre activité avec des événements professionnels
+          </Text>
+          <View style={styles.cardFeatures}>
+            <View style={styles.feature}>
+              <IconSymbol name="checkmark.circle.fill" size={20} color={colors.secondary} />
+              <Text style={styles.featureText}>Créer des événements pro</Text>
             </View>
-            <Text style={styles.cardTitle}>Entreprise</Text>
-            <Text style={styles.cardDescription}>
-              Organisez des événements professionnels et développez votre réseau
-            </Text>
-            <View style={styles.cardFeatures}>
-              <View style={styles.feature}>
-                <IconSymbol name="checkmark.circle.fill" size={20} color={colors.secondary} />
-                <Text style={styles.featureText}>Événements B2B</Text>
-              </View>
-              <View style={styles.feature}>
-                <IconSymbol name="checkmark.circle.fill" size={20} color={colors.secondary} />
-                <Text style={styles.featureText}>Outils analytics</Text>
-              </View>
-              <View style={styles.feature}>
-                <IconSymbol name="checkmark.circle.fill" size={20} color={colors.secondary} />
-                <Text style={styles.featureText}>Support prioritaire</Text>
-              </View>
+            <View style={styles.feature}>
+              <IconSymbol name="checkmark.circle.fill" size={20} color={colors.secondary} />
+              <Text style={styles.featureText}>Analytics avancés</Text>
             </View>
-            <View style={[styles.continueButton, { backgroundColor: colors.secondary }]}>
-              <Text style={styles.continueButtonText}>Continuer</Text>
-              <IconSymbol name="chevron.right" size={20} color={colors.background} />
+            <View style={styles.feature}>
+              <IconSymbol name="checkmark.circle.fill" size={20} color={colors.secondary} />
+              <Text style={styles.featureText}>Gestion des participants</Text>
             </View>
-          </TouchableOpacity>
-        </View>
+          </View>
+          <View style={[styles.continueButton, { backgroundColor: colors.secondary }]}>
+            <Text style={styles.continueButtonText}>Continuer</Text>
+            <IconSymbol name="chevron.right" size={20} color={colors.background} />
+          </View>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -106,44 +105,32 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
+  contentContainer: {
+    padding: 20,
   },
   header: {
-    paddingTop: 40,
-    paddingBottom: 40,
+    marginBottom: 32,
     alignItems: 'center',
   },
   title: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginBottom: 8,
-  },
-  brandName: {
-    fontSize: 40,
+    fontSize: 28,
     fontWeight: '700',
-    color: colors.primary,
-    marginBottom: 16,
-  },
-  subtitle: {
-    fontSize: 18,
-    color: colors.textSecondary,
+    color: colors.text,
+    marginBottom: 8,
     textAlign: 'center',
   },
-  cardsContainer: {
-    gap: 20,
+  subtitle: {
+    fontSize: 16,
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
   card: {
     backgroundColor: colors.card,
     borderRadius: 20,
     padding: 24,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   iconContainer: {
     width: 80,
@@ -152,40 +139,42 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
+    alignSelf: 'center',
   },
   cardTitle: {
     fontSize: 24,
     fontWeight: '700',
     color: colors.text,
+    textAlign: 'center',
     marginBottom: 8,
   },
   cardDescription: {
-    fontSize: 15,
+    fontSize: 14,
     color: colors.textSecondary,
-    lineHeight: 22,
+    textAlign: 'center',
     marginBottom: 20,
+    lineHeight: 20,
   },
   cardFeatures: {
     gap: 12,
-    marginBottom: 24,
+    marginBottom: 20,
   },
   feature: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
   },
   featureText: {
-    fontSize: 14,
+    fontSize: 15,
     color: colors.text,
-    fontWeight: '500',
   },
   continueButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: colors.primary,
     borderRadius: 12,
-    paddingVertical: 16,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
+    paddingVertical: 14,
     gap: 8,
   },
   continueButtonText: {

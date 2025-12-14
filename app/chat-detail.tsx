@@ -516,16 +516,30 @@ export default function ChatDetailScreen() {
           <IconSymbol name="chevron.left" size={24} color={colors.text} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.headerInfo} onPress={handleHeaderPress}>
-          <Image source={{ uri: convImage || 'https://via.placeholder.com/40' }} style={styles.headerAvatar} />
-          <View>
-            <Text style={styles.headerName}>{convName}</Text>
-            {conversationStatus.isClosed && <Text style={styles.closedBadge}>Conversation fermée</Text>}
-            {isGroup && !conversationStatus.isClosed && (
-              <Text style={styles.groupSubtitle}>Appuyez pour voir les membres</Text>
-            )}
-          </View>
-        </TouchableOpacity>
+        <TouchableOpacity
+  style={styles.headerCenter}
+  onPress={() => {
+    if (isGroup) {
+      router.push(`/group-info?id=${conversationId}`);
+    }
+  }}
+>
+  {!!convImage && (
+    <Image
+      source={{ uri: convImage }}
+      style={styles.headerActivityImage}
+    />
+  )}
+
+  <View style={styles.headerTitleContainer}>
+<Text style={styles.headerTitle} numberOfLines={1}>{convName}</Text>
+{isGroup && (
+  <Text style={styles.headerSubtitle}>Voir les infos du groupe</Text>
+)}
+
+  </View>
+</TouchableOpacity>
+
 
         <TouchableOpacity style={styles.moreButton} onPress={() => setShowOptionsModal(true)}>
           <IconSymbol name="ellipsis" size={24} color={colors.text} />
@@ -672,6 +686,26 @@ const styles = StyleSheet.create({
     color: colors.primary,
     marginTop: 2,
   },
+  headerCenter: {
+  flex: 1,
+  flexDirection: 'row',
+  alignItems: 'center',
+  marginHorizontal: 12,
+  gap: 10,
+},
+
+headerActivityImage: {
+  width: 40,
+  height: 40,
+  borderRadius: 20, // rond
+  borderWidth: 2,
+  borderColor: colors.background,
+},
+headerTitleContainer: {
+  flex: 1,
+  justifyContent: 'center',
+},
+
   moreButton: {
     width: 40,
     height: 40,
@@ -916,6 +950,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 20,
   },
+  headerTitle: {
+  fontSize: 17,
+  fontWeight: '700',
+  color: colors.text,         // ou '#fff' si ton header est sombre
+  letterSpacing: 0.2,
+},
+headerSubtitle: {
+  fontSize: 12,
+  fontWeight: '600',
+  color: colors.primary,      // petit accent couleur
+  opacity: 0.9,
+},
   modalOption: {
     flexDirection: 'row',
     alignItems: 'center',

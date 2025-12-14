@@ -64,6 +64,12 @@ export default function ActivityDetailScreen() {
   const [joiningInProgress, setJoiningInProgress] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<{id: string; date: string; time: string} | null>(null);
+  const [participantsList, setParticipantsList] = useState<Array<{
+  id: string;
+  name: string;
+  avatar: string;
+  }>>([]);
+  const [isActivityPast, setIsActivityPast] = useState(false);
 
   useEffect(() => {
     loadActivity();
@@ -191,6 +197,38 @@ export default function ActivityDetailScreen() {
           includes: activityData.inclusions || [],
           rules: activityData.regles || [],
         });
+        // Vérifier si l'activité est passée
+const checkIfPast = () => {
+  if (selectedSlot) {
+    const slotDateTime = new Date(`${selectedSlot.date}T${selectedSlot.time}`);
+    return slotDateTime < new Date();
+  }
+  return false;
+};
+setIsActivityPast(checkIfPast());
+
+// Si l'activité est passée ou si on veut afficher les participants
+if (participantCount > 0) {
+  const { data: participants } = await supabase
+    .from('slot_participants')
+    .select(`
+      user_id,
+      profiles:user_id (
+        id,
+        full_name,
+        avatar_url
+      )
+    `)
+    .eq('activity_id', activityId);
+
+  if (participants) {
+    setParticipantsList(participants.map((p: any) => ({
+      id: p.profiles?.id || p.user_id,
+      name: p.profiles?.full_name || 'Participant',
+      avatar: p.profiles?.avatar_url || '',
+    })));
+  }
+}
       }
     } catch (error) {
       console.error('Erreur chargement activité:', error);
@@ -550,16 +588,6 @@ export default function ActivityDetailScreen() {
             <IconSymbol name="chevron.right" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
 
-          {/* Détails */}
-          <View style={styles.detailsCard}>
-            <View style={styles.detailRow}>
-              <IconSymbol name="calendar" size={20} color={colors.primary} />
-              <View style={styles.detailContent}>
-                <Text style={styles.detailLabel}>Date</Text>
-                <Text style={styles.detailValue}>{activity.date}</Text>
-              </View>
-            </View>
-
             <View style={styles.detailRow}>
               <IconSymbol name="clock" size={20} color={colors.primary} />
               <View style={styles.detailContent}>
@@ -634,28 +662,41 @@ export default function ActivityDetailScreen() {
           )}
 
           {/* Participants */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Participants ({activity.participants})</Text>
-            {activity.participants === 0 ? (
-              <View style={styles.emptyParticipants}>
-                <IconSymbol name="person.2" size={48} color={colors.textSecondary} />
-                <Text style={styles.emptyParticipantsText}>
-                  {isBusiness ? 'Aucun participant inscrit' : 'Soyez le premier à rejoindre !'}
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.participantsInfo}>
-                <IconSymbol name="person.2.fill" size={24} color={colors.primary} />
-                <Text style={styles.participantsText}>
-                  {activity.participants} {activity.participants === 1 ? 'personne inscrite' : 'personnes inscrites'}
-                </Text>
-              </View>
-            )}
-          </View>
-
-          {/* Espacement pour le footer */}
-          <View style={{ height: 100 }} />
-        </View>
+<View style={styles.section}>
+  <Text style={styles.sectionTitle}>Participants ({activity.participants})</Text>
+  {activity.participants === 0 ? (
+    <View style={styles.emptyParticipants}>
+      <IconSymbol name="person.2" size={48} color={colors.textSecondary} />
+      <Text style={styles.emptyParticipantsText}>
+        {isBusiness ? 'Aucun participant inscrit' : 'Soyez le premier à rejoindre !'}
+      </Text>
+    </View>
+  ) : participantsList.length > 0 ? (
+    <View style={styles.participantsList}>
+      {participantsList.map((participant) => (
+        <TouchableOpacity
+          key={participant.id}
+          style={styles.participantItem}
+          onPress={() => router.push(`/user-profile?id=${participant.id}`)}
+        >
+          <Image
+            source={{ uri: participant.avatar || 'https://via.placeholder.com/44' }}
+            style={styles.participantAvatar}
+          />
+          <Text style={styles.participantName}>{participant.name}</Text>
+          <IconSymbol name="chevron.right" size={16} color={colors.textSecondary} />
+        </TouchableOpacity>
+      ))}
+    </View>
+  ) : (
+    <View style={styles.participantsInfo}>
+      <IconSymbol name="person.2.fill" size={24} color={colors.primary} />
+      <Text style={styles.participantsText}>
+        {activity.participants} {activity.participants === 1 ? 'personne inscrite' : 'personnes inscrites'}
+      </Text>
+    </View>
+  )}
+</View>
       </ScrollView>
 
       {/* Footer - Différent selon le type de compte */}
@@ -1034,6 +1075,29 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 20,
   },
+  participantsList: {
+  gap: 8,
+},
+participantItem: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  backgroundColor: colors.card,
+  padding: 12,
+  borderRadius: 12,
+  gap: 12,
+},
+participantAvatar: {
+  width: 44,
+  height: 44,
+  borderRadius: 22,
+  backgroundColor: colors.border,
+},
+participantName: {
+  flex: 1,
+  fontSize: 16,
+  fontWeight: '500',
+  color: colors.text,
+},
   businessFooterText: {
     fontSize: 15,
     fontWeight: '600',

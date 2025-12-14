@@ -1,3 +1,6 @@
+// app/auth/login.tsx
+// Page de connexion particulier - Vérifie que le compte n'est pas entreprise
+
 import React, { useState } from 'react';
 import {
   View,
@@ -13,10 +16,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
-import { authService } from '@/services/auth.service';
 import { supabase } from '@/lib/supabase';
 
-export default function LoginIndividualScreen() {
+export default function LoginScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -24,49 +26,66 @@ export default function LoginIndividualScreen() {
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-  if (!email || !password) {
-    Alert.alert('Erreur', 'Veuillez remplir tous les champs');
-    return;
-  }
-
-  setLoading(true);
-
-  try {
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-      email: email.trim().toLowerCase(),
-      password,
-    });
-
-    if (authError) throw new Error('Identifiants incorrects');
-    if (!authData.user) throw new Error('Erreur de connexion');
-
-    // Vérifier le type de compte
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('account_type')
-      .eq('id', authData.user.id)
-      .single();
-
-    if (profile?.account_type === 'business') {
-      await supabase.auth.signOut();
-      Alert.alert(
-        'Type de compte incorrect',
-        'Ce compte est un compte entreprise. Veuillez utiliser la connexion "Entreprise".',
-        [
-          { text: 'Aller vers Entreprise', onPress: () => router.replace('/auth/login-business') },
-          { text: 'OK', style: 'cancel' }
-        ]
-      );
+    if (!email || !password) {
+      Alert.alert('Erreur', 'Veuillez remplir tous les champs');
       return;
     }
 
-    router.replace('/(tabs)/browse');
-  } catch (error: any) {
-    Alert.alert('Erreur', error.message);
-  } finally {
-    setLoading(false);
-  }
-};
+    setLoading(true);
+
+    try {
+      // 1. Connexion avec Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+
+      if (authError) {
+        throw new Error('Identifiants incorrects');
+      }
+
+      if (!authData.user) {
+        throw new Error('Erreur de connexion');
+      }
+
+      // 2. Vérifier le type de compte
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('account_type')
+        .eq('id', authData.user.id)
+        .single();
+
+      if (profileError || !profile) {
+        await supabase.auth.signOut();
+        throw new Error('Profil introuvable');
+      }
+
+      if (profile.account_type === 'business') {
+        // C'est un compte entreprise, déconnecter
+        await supabase.auth.signOut();
+        Alert.alert(
+          'Type de compte incorrect',
+          'Ce compte est un compte entreprise. Veuillez utiliser la connexion "Entreprise".',
+          [
+            { 
+              text: 'Aller vers Entreprise', 
+              onPress: () => router.replace('/auth/login-business') 
+            },
+            { text: 'OK', style: 'cancel' }
+          ]
+        );
+        return;
+      }
+
+      // 3. Tout est OK, rediriger vers le profil
+      router.replace('/(tabs)/profile');
+
+    } catch (error: any) {
+      Alert.alert('Erreur', error.message || 'Une erreur est survenue');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <SafeAreaView style={commonStyles.container} edges={['top']}>
@@ -85,8 +104,12 @@ export default function LoginIndividualScreen() {
         style={styles.scrollView}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         <View style={styles.welcomeSection}>
+          <View style={[styles.iconContainer, { backgroundColor: colors.primary + '20' }]}>
+            <IconSymbol name="person.fill" size={48} color={colors.primary} />
+          </View>
           <Text style={styles.welcomeTitle}>Bon retour !</Text>
           <Text style={styles.welcomeSubtitle}>
             Connectez-vous pour retrouver vos activités
@@ -95,31 +118,32 @@ export default function LoginIndividualScreen() {
 
         <View style={styles.form}>
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email</Text>
+            <Text style={styles.inputLabel}>Email</Text>
             <View style={styles.inputContainer}>
-              <IconSymbol name="envelope" size={20} color={colors.textSecondary} />
+              <IconSymbol name="envelope.fill" size={20} color={colors.textSecondary} />
               <TextInput
                 style={styles.input}
-                placeholder="votre.email@exemple.com"
-                placeholderTextColor={colors.textSecondary}
                 value={email}
                 onChangeText={setEmail}
+                placeholder="votre@email.com"
+                placeholderTextColor={colors.textSecondary}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                autoCorrect={false}
               />
             </View>
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Mot de passe</Text>
+            <Text style={styles.inputLabel}>Mot de passe</Text>
             <View style={styles.inputContainer}>
               <IconSymbol name="lock.fill" size={20} color={colors.textSecondary} />
               <TextInput
                 style={styles.input}
-                placeholder="••••••••"
-                placeholderTextColor={colors.textSecondary}
                 value={password}
                 onChangeText={setPassword}
+                placeholder="••••••••"
+                placeholderTextColor={colors.textSecondary}
                 secureTextEntry={!showPassword}
               />
               <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
@@ -151,27 +175,15 @@ export default function LoginIndividualScreen() {
 
         <View style={styles.divider}>
           <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>OU</Text>
+          <Text style={styles.dividerText}>Pas encore de compte ?</Text>
           <View style={styles.dividerLine} />
         </View>
 
-        <View style={styles.socialButtons}>
-          <TouchableOpacity style={styles.socialButton}>
-            <IconSymbol name="logo.apple" size={24} color={colors.text} />
-            <Text style={styles.socialButtonText}>Continuer avec Apple</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.socialButton}>
-            <IconSymbol name="logo.google" size={24} color={colors.text} />
-            <Text style={styles.socialButtonText}>Continuer avec Google</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.signupSection}>
-          <Text style={styles.signupText}>Vous n'avez pas de compte RealMeet ?</Text>
-        </View>
-        <TouchableOpacity onPress={() => router.push('/auth/signup-individual')}>
-          <Text style={styles.signupLink}>Créez un compte</Text>
+        <TouchableOpacity
+          style={styles.registerButton}
+          onPress={() => router.push('/auth/register')}
+        >
+          <Text style={styles.registerButtonText}>Créer un compte</Text>
         </TouchableOpacity>
 
         <View style={styles.switchSection}>
@@ -180,7 +192,6 @@ export default function LoginIndividualScreen() {
             <Text style={styles.switchLink}>Se connecter ici</Text>
           </TouchableOpacity>
         </View>
-
       </ScrollView>
     </SafeAreaView>
   );
@@ -189,10 +200,10 @@ export default function LoginIndividualScreen() {
 const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 16,
   },
   backButton: {
     width: 40,
@@ -203,7 +214,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '600',
     color: colors.text,
   },
@@ -214,15 +225,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 20,
+    padding: 20,
     paddingBottom: 40,
   },
   welcomeSection: {
-    paddingVertical: 32,
     alignItems: 'center',
+    marginBottom: 32,
+  },
+  iconContainer: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
   },
   welcomeTitle: {
-    fontSize: 32,
+    fontSize: 24,
     fontWeight: '700',
     color: colors.text,
     marginBottom: 8,
@@ -233,14 +252,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   form: {
-    gap: 20,
-    marginBottom: 24,
+    gap: 16,
   },
   inputGroup: {
     gap: 8,
   },
-  label: {
-    fontSize: 16,
+  inputLabel: {
+    fontSize: 14,
     fontWeight: '600',
     color: colors.text,
   },
@@ -250,16 +268,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 4,
+    gap: 12,
     borderWidth: 1,
     borderColor: colors.border,
-    gap: 12,
   },
   input: {
     flex: 1,
+    paddingVertical: 16,
     fontSize: 16,
     color: colors.text,
-    paddingVertical: 12,
   },
   forgotPassword: {
     alignSelf: 'flex-end',
@@ -267,7 +284,7 @@ const styles = StyleSheet.create({
   forgotPasswordText: {
     fontSize: 14,
     color: colors.primary,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   loginButton: {
     backgroundColor: colors.primary,
@@ -281,27 +298,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.background,
   },
-  switchSection: {
-  flexDirection: 'row',
-  justifyContent: 'center',
-  alignItems: 'center',
-  marginTop: 24,
-  gap: 8,
-},
-switchText: {
-  fontSize: 14,
-  color: colors.textSecondary,
-},
-switchLink: {
-  fontSize: 14,
-  color: colors.secondary,
-  fontWeight: '600',
-},
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
     marginVertical: 24,
-    gap: 16,
+    gap: 12,
   },
   dividerLine: {
     flex: 1,
@@ -311,41 +312,33 @@ switchLink: {
   dividerText: {
     fontSize: 14,
     color: colors.textSecondary,
-    fontWeight: '500',
   },
-  socialButtons: {
-    gap: 12,
-    marginBottom: 32,
-  },
-  socialButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.card,
+  registerButton: {
     borderRadius: 12,
-    paddingVertical: 14,
-    gap: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.primary,
   },
-  socialButtonText: {
+  registerButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text,
-  },
-  signupSection: {
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  signupText: {
-    fontSize: 15,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  signupLink: {
-    fontSize: 15,
     color: colors.primary,
+  },
+  switchSection: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 24,
+    gap: 8,
+  },
+  switchText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  switchLink: {
+    fontSize: 14,
+    color: colors.secondary,
     fontWeight: '600',
-    textAlign: 'center',
   },
 });

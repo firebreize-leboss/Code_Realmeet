@@ -23,7 +23,6 @@ import { activityService } from '@/services/activity.service';
 import { storageService } from '@/services/storage.service';
 import { PREDEFINED_CATEGORIES } from '@/constants/categories';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
-import { DateTimeRangePicker } from '@/components/DateTimePicker';
 import ActivityCalendar from '@/components/ActivityCalendar';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -49,11 +48,6 @@ export default function CreateActivityScreen() {
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
   const [addressSelected, setAddressSelected] = useState(false);
-
-  // États pour la date/heure (calendrier)
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [timeStart, setTimeStart] = useState<Date | null>(null);
-  const [timeEnd, setTimeEnd] = useState<Date | null>(null);
 
   // États pour le système de catégories
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
@@ -115,15 +109,6 @@ export default function CreateActivityScreen() {
     setAddressSelected(true);
   };
 
-  // Formatage de la date pour l'API
-  const formatDateForAPI = (date: Date): string => {
-    return date.toISOString().split('T')[0]; // Format YYYY-MM-DD
-  };
-
-  // Formatage de l'heure pour l'API
-  const formatTimeForAPI = (time: Date): string => {
-    return time.toTimeString().slice(0, 5); // Format HH:MM
-  };
 
   // Création de l'activité
   const handleCreate = async () => {
@@ -133,10 +118,11 @@ export default function CreateActivityScreen() {
       return;
     }
 
-    if (!selectedDate || !timeStart) {
-      Alert.alert('Erreur', 'Date et heure de début sont requises');
-      return;
-    }
+    // Vérifier qu'il y a au moins un créneau
+if (pendingSlots.length === 0) {
+  Alert.alert('Erreur', 'Veuillez ajouter au moins un créneau dans le calendrier');
+  return;
+}
 
     if (!addressSelected || !latitude || !longitude) {
       Alert.alert('Erreur', 'Veuillez sélectionner une adresse dans la liste');
@@ -169,15 +155,17 @@ export default function CreateActivityScreen() {
       }
 
       // 2. Créer l'activité
+      const firstSlot = pendingSlots.sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))[0];
+
       const result = await activityService.createActivity({
         nom: nom.trim(),
         titre: titre.trim() || undefined,
         description: description.trim(),
         categorie: categorie.trim(),
         categorie2: categorie2.trim() || undefined,
-        date: formatDateForAPI(selectedDate),
-        time_start: formatTimeForAPI(timeStart),
-        time_end: timeEnd ? formatTimeForAPI(timeEnd) : undefined,
+        date: firstSlot.date,
+        time_start: firstSlot.time,
+        time_end: undefined, // Géré par les créneaux
         adresse: adresse.trim(),
         ville: ville.trim(),
         code_postal: codePostal.trim() || undefined,
@@ -346,17 +334,6 @@ export default function CreateActivityScreen() {
             <Text style={styles.dividerText}>Date et horaire</Text>
             <View style={styles.dividerLine} />
           </View>
-
-          {/* Sélection Date et Heure par calendrier */}
-          <DateTimeRangePicker
-            date={selectedDate}
-            timeStart={timeStart}
-            timeEnd={timeEnd}
-            onDateChange={setSelectedDate}
-            onTimeStartChange={setTimeStart}
-            onTimeEndChange={setTimeEnd}
-            showTimeEnd={true}
-          />
 
           {/* Séparateur Adresse */}
           <View style={styles.divider}>

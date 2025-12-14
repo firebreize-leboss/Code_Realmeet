@@ -17,6 +17,7 @@ import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { authService } from '@/services/auth.service';
+import { supabase } from '@/lib/supabase';
 
 export default function LoginBusinessScreen() {
   const router = useRouter();
@@ -25,31 +26,50 @@ export default function LoginBusinessScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert('Erreur', 'Veuillez remplir tous les champs');
+ const handleLogin = async () => {
+  if (!email || !password) {
+    Alert.alert('Erreur', 'Veuillez remplir tous les champs');
+    return;
+  }
+
+  setLoading(true);
+
+  try {
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
+    });
+
+    if (authError) throw new Error('Identifiants incorrects');
+    if (!authData.user) throw new Error('Erreur de connexion');
+
+    // Vérifier que c'est bien un compte entreprise
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('account_type')
+      .eq('id', authData.user.id)
+      .single();
+
+    if (profile?.account_type !== 'business') {
+      await supabase.auth.signOut();
+      Alert.alert(
+        'Type de compte incorrect',
+        'Ce compte est un compte particulier. Veuillez utiliser la connexion "Particulier".',
+        [
+          { text: 'Aller vers Particulier', onPress: () => router.replace('/auth/login-individual') },
+          { text: 'OK', style: 'cancel' }
+        ]
+      );
       return;
     }
 
-    setLoading(true);
-
-    try {
-      const result = await authService.loginUser({ 
-        email, 
-        password 
-      });
-
-      if (result.success) {
-        router.replace('/(tabs)/profile');
-      } else {
-        Alert.alert('Erreur', result.error || 'Identifiants incorrects');
-      }
-    } catch (error: any) {
-      Alert.alert('Erreur', error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+    router.replace('/(tabs)/profile');
+  } catch (error: any) {
+    Alert.alert('Erreur', error.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <SafeAreaView style={commonStyles.container} edges={['top']}>
@@ -192,6 +212,14 @@ export default function LoginBusinessScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+
+        <View style={styles.switchSection}>
+          <Text style={styles.switchText}>Vous êtes un particulier ?</Text>
+          <TouchableOpacity onPress={() => router.replace('/auth/login-individual')}>
+            <Text style={styles.switchLink}>Se connecter ici</Text>
+          </TouchableOpacity>
+        </View>
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -232,6 +260,22 @@ const styles = StyleSheet.create({
     paddingVertical: 32,
     alignItems: 'center',
   },
+  switchSection: {
+  flexDirection: 'row',
+  justifyContent: 'center',
+  alignItems: 'center',
+  marginTop: 24,
+  gap: 8,
+},
+switchText: {
+  fontSize: 14,
+  color: colors.textSecondary,
+},
+switchLink: {
+  fontSize: 14,
+  color: colors.primary,
+  fontWeight: '600',
+},
   iconContainer: {
     width: 80,
     height: 80,

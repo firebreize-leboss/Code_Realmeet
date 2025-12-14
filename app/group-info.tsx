@@ -261,6 +261,17 @@ export default function GroupInfoScreen() {
           </Text>
         </View>
 
+        {/* Bouton voir l'activité */}
+        {groupInfo.activityId && (
+          <TouchableOpacity
+            style={styles.viewActivityButton}
+            onPress={handleViewActivity}
+          >
+            <IconSymbol name="calendar" size={20} color={colors.background} />
+            <Text style={styles.viewActivityButtonText}>Voir les détails de l'activité</Text>
+          </TouchableOpacity>
+        )}
+
         {/* Bouton voir l'activité (si groupe d'activité) */}
         {groupInfo.activityId && (
           <TouchableOpacity style={styles.activityButton} onPress={handleViewActivity}>
@@ -455,6 +466,22 @@ const styles = StyleSheet.create({
   bottomSpacer: {
     height: 40,
   },
+  viewActivityButton: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  backgroundColor: colors.primary,
+  paddingVertical: 14,
+  paddingHorizontal: 24,
+  borderRadius: 12,
+  marginTop: 16,
+  gap: 10,
+},
+viewActivityButtonText: {
+  color: colors.background,
+  fontSize: 16,
+  fontWeight: '600',
+},
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',

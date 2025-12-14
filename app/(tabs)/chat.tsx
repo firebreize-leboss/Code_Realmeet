@@ -11,6 +11,7 @@ import {
   Modal,
   FlatList,
   ActivityIndicator,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -18,6 +19,8 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { useFriends, useFriendRequests, useConversations } from '@/hooks/useMessaging';
 import { useFocusEffect } from 'expo-router';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from "@/lib/supabase"; // adapte le chemin
 
 interface Friend {
   id: string;
@@ -44,7 +47,9 @@ export default function ChatScreen() {
   const { pendingCount: pendingRequestsCount } = useFriendRequests();
   const { friends: friendData, loading: friendsLoading } = useFriends();
   const { conversations, createConversation, refresh: refreshConversations, loading: convLoading } = useConversations();
-
+  const { profile } = useAuth();
+  const [activityContacts, setActivityContacts] = useState<Friend[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   // État local pour stocker la liste d'amis formatée
   const [friends, setFriends] = useState<Friend[]>([]);
 useEffect(() => {
@@ -124,7 +129,66 @@ const renderChatItem = (chat: Conversation) => (
     </View>
   </TouchableOpacity>
 );
+// Charger les personnes avec qui on a fait des activités
+const loadActivityContacts = async () => {
+  try {
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData?.user) return;
 
+    // Récupérer les activités auxquelles l'utilisateur a participé
+    const { data: myParticipations } = await supabase
+      .from('slot_participants')
+      .select('slot_id, activity_id')
+      .eq('user_id', userData.user.id);
+
+    if (!myParticipations || myParticipations.length === 0) {
+      setActivityContacts([]);
+      return;
+    }
+
+    const slotIds = myParticipations.map(p => p.slot_id);
+
+    // Récupérer les autres participants de ces mêmes créneaux
+    const { data: otherParticipants } = await supabase
+      .from('slot_participants')
+      .select(`
+        user_id,
+        profiles:user_id (
+          id,
+          full_name,
+          avatar_url
+        )
+      `)
+      .in('slot_id', slotIds)
+      .neq('user_id', userData.user.id);
+
+    if (!otherParticipants) {
+      setActivityContacts([]);
+      return;
+    }
+
+    // Dédupliquer par user_id
+    const uniqueContacts = new Map();
+    otherParticipants.forEach((p: any) => {
+      if (p.profiles && !uniqueContacts.has(p.user_id)) {
+        uniqueContacts.set(p.user_id, {
+          id: p.user_id,
+          name: p.profiles.full_name || 'Utilisateur',
+          avatar: p.profiles.avatar_url || '',
+          is_online: false,
+        });
+      }
+    });
+
+    setActivityContacts(Array.from(uniqueContacts.values()));
+  } catch (error) {
+    console.error('Erreur chargement contacts activités:', error);
+  }
+};
+
+useEffect(() => {
+  loadActivityContacts();
+}, []);
   const renderFriendItem = ({ item }: { item: Friend }) => (
     <TouchableOpacity
       style={styles.friendItem}
@@ -246,13 +310,45 @@ const renderChatItem = (chat: Conversation) => (
               </Text>
             </View>
           ) : (
-            <FlatList
-              data={friends}
-              renderItem={renderFriendItem}
-              keyExtractor={item => item.id}
-              contentContainerStyle={styles.friendsList}
-              showsVerticalScrollIndicator={false}
-            />
+            <>
+            <View style={styles.searchContainer}>
+              <IconSymbol name="magnifyingglass" size={20} color={colors.textSecondary} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Rechercher un contact..."
+                placeholderTextColor={colors.textSecondary}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+            </View>
+
+{/* Info */}
+<View style={styles.infoBar}>
+  <IconSymbol name="info.circle.fill" size={14} color={colors.primary} />
+  <Text style={styles.infoBarText}>
+    Vous pouvez contacter les personnes avec qui vous avez fait une activité
+  </Text>
+</View>
+
+<FlatList
+  data={activityContacts.filter(c => 
+    c.name.toLowerCase().includes(searchQuery.toLowerCase())
+  )}
+  renderItem={renderFriendItem}
+  keyExtractor={item => item.id}
+  contentContainerStyle={styles.friendsList}
+  showsVerticalScrollIndicator={false}
+  ListEmptyComponent={
+    <View style={styles.emptyState}>
+      <IconSymbol name="person.2" size={48} color={colors.textSecondary} />
+      <Text style={styles.emptyText}>Aucun contact trouvé</Text>
+      <Text style={styles.emptySubtext}>
+        Participez à des activités pour rencontrer des personnes
+      </Text>
+    </View>
+  }
+/>
+</>
           )}
         </SafeAreaView>
       </Modal>
@@ -309,6 +405,37 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  searchContainer: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  backgroundColor: colors.card,
+  marginHorizontal: 20,
+  marginVertical: 12,
+  paddingHorizontal: 16,
+  borderRadius: 12,
+  gap: 12,
+},
+searchInput: {
+  flex: 1,
+  paddingVertical: 12,
+  fontSize: 16,
+  color: colors.text,
+},
+infoBar: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  backgroundColor: colors.primary + '15',
+  marginHorizontal: 20,
+  marginBottom: 12,
+  padding: 12,
+  borderRadius: 10,
+  gap: 8,
+},
+infoBarText: {
+  flex: 1,
+  fontSize: 12,
+  color: colors.primary,
+},
   contentContainer: {
     paddingBottom: 20,
   },
