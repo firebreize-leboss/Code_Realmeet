@@ -1,5 +1,5 @@
 // app/(tabs)/browse.tsx
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useContext } from 'react';
 import {
   View,
   Text,
@@ -23,6 +23,9 @@ import { activityService } from '@/services/activity.service';
 import { supabase } from '@/lib/supabase';
 import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BottomTabBarHeightContext } from '@react-navigation/bottom-tabs';
+
 
 const PROTOMAPS_KEY = process.env.EXPO_PUBLIC_PROTOMAPS_KEY || '';
 
@@ -79,6 +82,9 @@ export default function BrowseScreen() {
   const hasHandledParams = useRef(false);
   const hasCenteredOnActivity = useRef(false);
   const [isBusiness, setIsBusiness] = useState(false);
+  const [detailFooterHeight, setDetailFooterHeight] = useState(0);
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
 
 
   useEffect(() => {
@@ -476,9 +482,17 @@ export default function BrowseScreen() {
     if (!selectedActivity) return null;
     const isFull = selectedActivity.participants >= selectedActivity.max_participants;
     return (
-      <Animated.View entering={FadeInDown} exiting={FadeOutDown} style={styles.activityDetail} {...panResponder.panHandlers}>
-        <View style={styles.dragHandle} />
-        <ScrollView showsVerticalScrollIndicator={false}>
+      <Animated.View entering={FadeInDown} exiting={FadeOutDown} style={styles.activityDetail}>
+        <View style={styles.dragHandleArea} {...panResponder.panHandlers}>
+  <View style={styles.dragHandle} />
+</View>
+       <ScrollView
+  showsVerticalScrollIndicator={false}
+  nestedScrollEnabled
+  contentContainerStyle={{
+    paddingBottom: detailFooterHeight + insets.bottom+tabBarHeight+20,
+  }}
+>
           <Image source={{ uri: selectedActivity.image_url || 'https://via.placeholder.com/400' }} style={styles.detailImage} />
           <View style={styles.detailContent}>
             <View style={styles.detailHeader}>
@@ -502,14 +516,23 @@ export default function BrowseScreen() {
                 {isFull && ' (Complet)'}
               </Text>
             </View>
-            <View style={styles.detailDivider} />
-            <TouchableOpacity style={styles.viewDetailButton} onPress={() => { closeActivity(); router.push(`/activity-detail?id=${selectedActivity.id}`); }}>
-              <Text style={styles.viewDetailButtonText}>Voir les détails complets</Text>
-              <IconSymbol name="arrow.right" size={20} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
+            <View onLayout={e => setDetailFooterHeight(e.nativeEvent.layout.height)}>
+  <TouchableOpacity
+    style={styles.viewDetailButton}
+    onPress={() => { closeActivity(); router.push(`/activity-detail?id=${selectedActivity.id}`); }}
+  >
+    <Text style={styles.viewDetailButtonText}>Voir les détails complets</Text>
+    <IconSymbol name="arrow.right" size={20} color="#FFFFFF" />
+  </TouchableOpacity>
+</View>
+</View>
+
         </ScrollView>
-        <TouchableOpacity style={styles.closeButton} onPress={closeActivity}>
+        <TouchableOpacity
+  style={styles.closeButton}
+  onPress={closeActivity}
+>
+
           <IconSymbol name="xmark" size={20} color={colors.text} />
         </TouchableOpacity>
       </Animated.View>
@@ -563,7 +586,7 @@ export default function BrowseScreen() {
             />
           </View>
           <ScrollView 
-            style={styles.scrollView} 
+            style={styles.scrollView}
             contentContainerStyle={[styles.contentContainer, Platform.OS !== 'ios' && styles.contentContainerWithTabBar]} 
             showsVerticalScrollIndicator={false} 
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
@@ -804,6 +827,9 @@ const styles = StyleSheet.create({
     color: '#FFFFFF', 
     fontWeight: '600',
   },
+  activityDetailScrollContent: {
+  paddingBottom: 140,
+},
   progressContainer: {
     marginTop: 4,
   },
@@ -923,6 +949,11 @@ const styles = StyleSheet.create({
     borderRadius: 12, 
     gap: 8 
   },
+  dragHandleArea: {
+  paddingTop: 12,
+  paddingBottom: 8,
+  alignItems: 'center',
+},
   viewDetailButtonText: { 
     fontSize: 16, 
     fontWeight: '600', 
