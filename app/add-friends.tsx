@@ -1,5 +1,5 @@
 // app/add-friends.tsx
-// Page de recherche et ajout d'amis avec autocomplétion
+// Page de recherche et ajout d'amis avec contacts des activités passées
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -11,6 +11,7 @@ import {
   Image,
   FlatList,
   ActivityIndicator,
+  SectionList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -25,92 +26,155 @@ interface UserSearchResult {
   city?: string;
   is_friend: boolean;
   request_sent: boolean;
+  from_activity?: boolean; // Indique si c'est un contact d'activité
+  activity_name?: string; // Nom de la dernière activité partagée
 }
 
 export default function AddFriendsScreen() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<UserSearchResult[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [activityContacts, setActivityContacts] = useState<UserSearchResult[]>([]);
+  const [loadingContacts, setLoadingContacts] = useState(true);
   const [sendingRequest, setSendingRequest] = useState<string | null>(null);
 
-  // Déclenche la recherche avec un léger délai (debounce)
+  // Charger les contacts des activités passées au montage
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (searchQuery.trim().length >= 2) {
-        searchUsers();
-      } else {
-        setSearchResults([]);
-      }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
+    loadActivityContacts();
+  }, []);
 
-  const searchUsers = async () => {
-    setLoading(true);
+  // Charger les personnes avec qui on a fait des activités
+  const loadActivityContacts = async () => {
     try {
-      // Récupérer l'utilisateur actuel pour l'exclure des résultats
-      const { data: currentUserData } = await supabase.auth.getUser();
-      const currentUser = currentUserData?.user;
-      if (!currentUser) throw new Error("Utilisateur non connecté");
+      setLoadingContacts(true);
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData?.user) {
+        setLoadingContacts(false);
+        return;
+      }
 
-      // Rechercher des profils correspondant à la requête (nom/prénom)
-      const { data: profiles, error: searchError } = await supabase
-        .from('profiles')
-        .select('id, full_name, avatar_url, city')
-        .ilike('full_name', `%${searchQuery}%`)
-        .neq('id', currentUser.id)
-        .limit(10);
-      if (searchError) throw searchError;
+      const currentUserId = userData.user.id;
 
-      // Récupérer la liste des amis de l'utilisateur actuel et ses demandes envoyées
+      // Récupérer les activités auxquelles l'utilisateur a participé
+      const { data: myParticipations } = await supabase
+        .from('slot_participants')
+        .select('slot_id, activity_id')
+        .eq('user_id', currentUserId);
+
+      if (!myParticipations || myParticipations.length === 0) {
+        setActivityContacts([]);
+        setLoadingContacts(false);
+        return;
+      }
+
+      const slotIds = myParticipations.map(p => p.slot_id);
+      const activityIds = [...new Set(myParticipations.map(p => p.activity_id))];
+
+      // Récupérer les noms des activités
+      const { data: activitiesData } = await supabase
+        .from('activities')
+        .select('id, nom')
+        .in('id', activityIds);
+
+      const activityNames = new Map(activitiesData?.map(a => [a.id, a.nom]) || []);
+
+      // Récupérer les autres participants de ces mêmes créneaux
+      const { data: otherParticipants } = await supabase
+        .from('slot_participants')
+        .select(`
+          user_id,
+          activity_id,
+          profiles:user_id (
+            id,
+            full_name,
+            avatar_url,
+            city
+          )
+        `)
+        .in('slot_id', slotIds)
+        .neq('user_id', currentUserId);
+
+      if (!otherParticipants) {
+        setActivityContacts([]);
+        setLoadingContacts(false);
+        return;
+      }
+
+      // Récupérer les amis et demandes en attente
       const { data: friendships } = await supabase
         .from('friendships')
         .select('friend_id')
-        .eq('user_id', currentUser.id);
+        .eq('user_id', currentUserId);
+
       const { data: requests } = await supabase
         .from('friend_requests')
         .select('receiver_id')
-        .eq('sender_id', currentUser.id)
+        .eq('sender_id', currentUserId)
         .eq('status', 'pending');
 
       const friendIds = new Set(friendships?.map(f => f.friend_id) || []);
       const pendingIds = new Set(requests?.map(r => r.receiver_id) || []);
 
-      // Construire les résultats à afficher
-      const results: UserSearchResult[] = (profiles || []).map(profile => ({
-        id: profile.id,
-        full_name: profile.full_name,
-        avatar_url: profile.avatar_url || undefined,
-        city: profile.city || undefined,
-        is_friend: friendIds.has(profile.id),
-        request_sent: pendingIds.has(profile.id),
-      }));
-      setSearchResults(results);
+      // Dédupliquer par user_id et construire les contacts
+      const uniqueContacts = new Map<string, UserSearchResult>();
+      otherParticipants.forEach((p: any) => {
+        if (p.profiles && !uniqueContacts.has(p.user_id)) {
+          uniqueContacts.set(p.user_id, {
+            id: p.user_id,
+            full_name: p.profiles.full_name || 'Utilisateur',
+            avatar_url: p.profiles.avatar_url || undefined,
+            city: p.profiles.city || undefined,
+            is_friend: friendIds.has(p.user_id),
+            request_sent: pendingIds.has(p.user_id),
+            from_activity: true,
+            activity_name: activityNames.get(p.activity_id) || 'Activité',
+          });
+        }
+      });
+
+      setActivityContacts(Array.from(uniqueContacts.values()));
     } catch (error) {
-      console.error('Error searching users:', error);
+      console.error('Erreur chargement contacts activités:', error);
     } finally {
-      setLoading(false);
+      setLoadingContacts(false);
     }
   };
+
+  // Filtrer les contacts d'activités selon la recherche
+  const getFilteredActivityContacts = () => {
+    if (searchQuery.trim().length === 0) {
+      return activityContacts;
+    }
+    return activityContacts.filter(contact =>
+      contact.full_name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  };
+
+
 
   const handleSendFriendRequest = async (userId: string) => {
     setSendingRequest(userId);
     try {
-      // Envoi d'une demande d'amitié dans la base de données
       const { data: currentUserData } = await supabase.auth.getUser();
       const currentUser = currentUserData?.user;
       if (!currentUser) throw new Error("Utilisateur non connecté");
+
       const { error } = await supabase.from('friend_requests').insert({
         sender_id: currentUser.id,
         receiver_id: userId,
         status: 'pending',
       });
+
       if (error && !error.message.toLowerCase().includes('duplicate')) {
-        throw error; // Erreur autre qu'une duplication de demande
+        throw error;
       }
-      // Mettre à jour l'état local (marquer la demande comme envoyée)
+
+      // Mettre à jour les deux listes
       setSearchResults(prev =>
+        prev.map(user =>
+          user.id === userId ? { ...user, request_sent: true } : user
+        )
+      );
+      setActivityContacts(prev =>
         prev.map(user =>
           user.id === userId ? { ...user, request_sent: true } : user
         )
@@ -132,10 +196,19 @@ export default function AddFriendsScreen() {
       onPress={() => handleViewProfile(item.id)}
       activeOpacity={0.7}
     >
-      <Image source={{ uri: item.avatar_url }} style={styles.userAvatar} />
+      <Image 
+        source={{ uri: item.avatar_url || 'https://via.placeholder.com/56' }} 
+        style={styles.userAvatar} 
+      />
       <View style={styles.userInfo}>
         <Text style={styles.userName}>{item.full_name}</Text>
-        {item.city && (
+        {item.from_activity && item.activity_name && (
+          <View style={styles.activityBadge}>
+            <IconSymbol name="figure.run" size={12} color={colors.primary} />
+            <Text style={styles.activityBadgeText}>{item.activity_name}</Text>
+          </View>
+        )}
+        {item.city && !item.from_activity && (
           <View style={styles.locationRow}>
             <IconSymbol name="location.fill" size={14} color={colors.textSecondary} />
             <Text style={styles.userCity}>{item.city}</Text>
@@ -170,6 +243,10 @@ export default function AddFriendsScreen() {
     </TouchableOpacity>
   );
 
+  const filteredActivityContacts = getFilteredActivityContacts();
+  const hasActivityResults = filteredActivityContacts.length > 0;
+  const isSearching = searchQuery.trim().length > 0;
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
@@ -188,7 +265,7 @@ export default function AddFriendsScreen() {
           placeholderTextColor={colors.textSecondary}
           value={searchQuery}
           onChangeText={setSearchQuery}
-          autoFocus
+          autoFocus={false}
         />
         {searchQuery.length > 0 && (
           <TouchableOpacity onPress={() => setSearchQuery('')}>
@@ -197,31 +274,62 @@ export default function AddFriendsScreen() {
         )}
       </View>
 
-      {loading ? (
+      {loadingContacts ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
-      ) : searchQuery.trim().length < 2 ? (
-        <View style={styles.emptyState}>
-          <IconSymbol name="person.2.fill" size={64} color={colors.textSecondary} />
-          <Text style={styles.emptyText}>Rechercher des personnes</Text>
-          <Text style={styles.emptySubtext}>
-            Tapez au moins 2 caractères pour commencer la recherche
-          </Text>
-        </View>
-      ) : searchResults.length === 0 ? (
-        <View style={styles.emptyState}>
-          <IconSymbol name="magnifyingglass" size={64} color={colors.textSecondary} />
-          <Text style={styles.emptyText}>Aucun résultat</Text>
-          <Text style={styles.emptySubtext}>Essayez avec un autre nom ou prénom</Text>
-        </View>
       ) : (
         <FlatList
-          data={searchResults}
-          renderItem={renderUserItem}
-          keyExtractor={item => item.id}
+          data={[]} // On utilise ListHeaderComponent et ListFooterComponent
+          renderItem={null}
+          ListHeaderComponent={
+            <>
+              {/* Section: Contacts des activités passées */}
+              {hasActivityResults && (
+                <View style={styles.sectionContainer}>
+                  <View style={styles.sectionHeader}>
+                    <IconSymbol name="person.2.fill" size={18} color={colors.primary} />
+                    <Text style={styles.sectionTitle}>
+                      {isSearching ? 'Résultats dans vos activités' : 'Personnes rencontrées'}
+                    </Text>
+                  </View>
+                  <Text style={styles.sectionSubtitle}>
+                    Ajoutez les personnes avec qui vous avez partagé une activité
+                  </Text>
+                  {filteredActivityContacts.map(item => (
+                    <View key={item.id}>
+                      {renderUserItem({ item })}
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {/* État vide: Aucun contact d'activité */}
+              {!hasActivityResults && !isSearching && (
+                <View style={styles.emptyState}>
+                  <IconSymbol name="person.2.fill" size={64} color={colors.textSecondary} />
+                  <Text style={styles.emptyText}>Aucun contact pour l'instant</Text>
+                  <Text style={styles.emptySubtext}>
+                    Participez à des activités pour rencontrer des personnes et les ajouter en amis
+                  </Text>
+                </View>
+              )}
+
+              {/* État vide: Recherche sans résultat dans les contacts */}
+              {isSearching && !hasActivityResults && (
+                <View style={styles.emptyState}>
+                  <IconSymbol name="magnifyingglass" size={64} color={colors.textSecondary} />
+                  <Text style={styles.emptyText}>Aucun résultat</Text>
+                  <Text style={styles.emptySubtext}>
+                    Aucun contact ne correspond à cette recherche
+                  </Text>
+                </View>
+              )}
+            </>
+          }
           contentContainerStyle={styles.listContainer}
           showsVerticalScrollIndicator={false}
+          keyExtractor={() => 'main'}
         />
       )}
     </SafeAreaView>
@@ -277,11 +385,37 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  listContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  sectionContainer: {
+    marginBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  sectionSubtitle: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: 12,
+    marginLeft: 26,
+  },
+
   emptyState: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 40,
+    paddingTop: 60,
   },
   emptyText: {
     fontSize: 20,
@@ -295,10 +429,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
-  },
-  listContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
   },
   userItem: {
     flexDirection: 'row',
@@ -333,45 +463,58 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
   },
+  activityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.primary + '20',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  activityBadgeText: {
+    fontSize: 12,
+    color: colors.primary,
+    fontWeight: '500',
+  },
+  friendBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: colors.primary + '20',
+  },
+  friendBadgeText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.primary,
+  },
+  pendingBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: colors.border,
+  },
+  pendingBadgeText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.textSecondary,
+  },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
     backgroundColor: colors.primary,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 20,
-    gap: 6,
-    minWidth: 100,
-    justifyContent: 'center',
+    borderRadius: 8,
   },
   addButtonText: {
     fontSize: 14,
     fontWeight: '600',
     color: colors.background,
-  },
-  friendBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.primary + '20',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    gap: 6,
-  },
-  friendBadgeText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.primary,
-  },
-  pendingBadge: {
-    backgroundColor: colors.textSecondary + '20',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  pendingBadgeText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textSecondary,
   },
 });
