@@ -410,7 +410,7 @@ export default function BrowseScreen() {
       <TouchableOpacity
         key={activity.id}
         style={styles.activityCard}
-        onPress={() => router.push(`/activity-detail?id=${activity.id}&source=browse`)}
+        onPress={() => router.push(`/activity-detail?id=${activity.id}`)}
         activeOpacity={0.9}
       >
         <Image
@@ -519,7 +519,7 @@ export default function BrowseScreen() {
             <View onLayout={e => setDetailFooterHeight(e.nativeEvent.layout.height)}>
   <TouchableOpacity
     style={styles.viewDetailButton}
-    onPress={() => { closeActivity(); router.push(`/activity-detail?id=${selectedActivity.id}&source=browse`); }}
+    onPress={() => { closeActivity(); router.push(`/activity-detail?id=${selectedActivity.id}`); }}
   >
     <Text style={styles.viewDetailButtonText}>Voir les détails complets</Text>
     <IconSymbol name="arrow.right" size={20} color="#FFFFFF" />
