@@ -90,7 +90,7 @@ export default function ActivityScreen() {
         const activityWithDateTime = {
           ...activity,
           date_heure: activityDateTime,
-          user_slot_id: participation?.slot_id,
+          user_slot_id: undefined,
         };
 
         const activityDate = new Date(activityDateTime);
