@@ -30,6 +30,7 @@ interface Activity {
   participants?: number;
   max_participants?: number;
   status?: string;
+  user_slot_id?: string;
 }
 
 export default function ActivityScreen() {
@@ -89,6 +90,7 @@ export default function ActivityScreen() {
         const activityWithDateTime = {
           ...activity,
           date_heure: activityDateTime,
+          user_slot_id: participation?.slot_id,
         };
 
         const activityDate = new Date(activityDateTime);
@@ -158,7 +160,7 @@ export default function ActivityScreen() {
       const activitiesWithSlotDates = await Promise.all(
         (activities || []).map(async (activity) => {
           const participation = participations?.find(p => p.activity_id === activity.id);
-
+          
           if (participation?.slot_id) {
             const { data: slotData } = await supabase
               .from('activity_slots')
@@ -171,6 +173,7 @@ export default function ActivityScreen() {
               return {
                 ...activity,
                 date_heure: slotDateTime,
+                user_slot_id: participation?.slot_id,
               };
             }
           }
@@ -182,6 +185,7 @@ export default function ActivityScreen() {
           return {
             ...activity,
             date_heure: activityDateTime,
+            user_slot_id: participation?.slot_id,
           };
         })
       );
@@ -233,10 +237,13 @@ export default function ActivityScreen() {
       key={activity.id}
       style={styles.activityItem}
       onPress={() => router.push(
-        isBusiness 
-          ? `/manage-activity?id=${activity.id}` 
-          : `/activity-detail?id=${activity.id}`
-      )}
+  isBusiness
+    ? `/manage-activity?id=${activity.id}`
+    : activeTab === 'past'
+      ? `/activity-detail?id=${activity.id}&from=past&slotId=${activity.user_slot_id ?? ''}`
+      : `/activity-detail?id=${activity.id}&from=myActivities`
+)}
+
       activeOpacity={0.8}
     >
       <Image

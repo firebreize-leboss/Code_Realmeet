@@ -410,7 +410,7 @@ export default function BrowseScreen() {
       <TouchableOpacity
         key={activity.id}
         style={styles.activityCard}
-        onPress={() => router.push(`/activity-detail?id=${activity.id}`)}
+        onPress={() => router.push(`/activity-detail?id=${activity.id}&from=browse`)}
         activeOpacity={0.9}
       >
         <Image

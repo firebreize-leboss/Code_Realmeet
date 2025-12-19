@@ -53,8 +53,11 @@ interface ActivityDetail {
 
 export default function ActivityDetailScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams();
-  
+  const { id, from, slotId } = useLocalSearchParams();
+  const origin = typeof from === 'string' ? from : '';
+  const passedSlotId = typeof slotId === 'string' ? slotId : '';
+  const shouldShowParticipants = origin === 'past' && !!passedSlotId;
+
   // Hook de restrictions entreprise
   const { isBusiness, showJoinRestriction } = useBusinessRestrictions();
   
@@ -208,7 +211,7 @@ const checkIfPast = () => {
 setIsActivityPast(checkIfPast());
 
 // Si l'activité est passée ou si on veut afficher les participants
-if (participantCount > 0) {
+if (shouldShowParticipants) {
   const { data: participants } = await supabase
     .from('slot_participants')
     .select(`
@@ -219,15 +222,24 @@ if (participantCount > 0) {
         avatar_url
       )
     `)
-    .eq('activity_id', activityId);
+    .eq('slot_id', passedSlotId); // ✅ filtre par créneau
 
   if (participants) {
-    setParticipantsList(participants.map((p: any) => ({
-      id: p.profiles?.id || p.user_id,
-      name: p.profiles?.full_name || 'Participant',
-      avatar: p.profiles?.avatar_url || '',
-    })));
+    setParticipantsList(
+      participants
+        .map((p: any) => ({
+          id: p.profiles?.id || p.user_id,
+          name: p.profiles?.full_name || 'Participant',
+          avatar: p.profiles?.avatar_url || '',
+        }))
+        // optionnel: éviter que tu te voies toi-même
+        .filter(p => p.id !== userId)
+    );
+  } else {
+    setParticipantsList([]);
   }
+} else {
+  setParticipantsList([]); // ✅ depuis browse / ongoing, rien
 }
       }
     } catch (error) {
@@ -670,42 +682,42 @@ if (participantCount > 0) {
             </View>
           )}
 
-          {/* Participants */}
-<View style={styles.section}>
-  <Text style={styles.sectionTitle}>Participants ({activity.participants})</Text>
-  {activity.participants === 0 ? (
-    <View style={styles.emptyParticipants}>
-      <IconSymbol name="person.2" size={48} color={colors.textSecondary} />
-      <Text style={styles.emptyParticipantsText}>
-        {isBusiness ? 'Aucun participant inscrit' : 'Soyez le premier à rejoindre !'}
-      </Text>
-    </View>
-  ) : participantsList.length > 0 ? (
-    <View style={styles.participantsList}>
-      {participantsList.map((participant) => (
-        <TouchableOpacity
-          key={participant.id}
-          style={styles.participantItem}
-          onPress={() => router.push(`/user-profile?id=${participant.id}`)}
-        >
-          <Image
-            source={{ uri: participant.avatar || 'https://via.placeholder.com/44' }}
-            style={styles.participantAvatar}
-          />
-          <Text style={styles.participantName}>{participant.name}</Text>
-          <IconSymbol name="chevron.right" size={16} color={colors.textSecondary} />
-        </TouchableOpacity>
-      ))}
-    </View>
-  ) : (
-    <View style={styles.participantsInfo}>
-      <IconSymbol name="person.2.fill" size={24} color={colors.primary} />
-      <Text style={styles.participantsText}>
-        {activity.participants} {activity.participants === 1 ? 'personne inscrite' : 'personnes inscrites'}
-      </Text>
-    </View>
-  )}
-</View>
+{/* Participants */}
+{shouldShowParticipants && (
+  <View style={styles.section}>
+    <Text style={styles.sectionTitle}>
+      Participants ({participantsList.length})
+    </Text>
+
+    {participantsList.length === 0 ? (
+      <View style={styles.emptyParticipants}>
+        <IconSymbol name="person.2" size={48} color={colors.textSecondary} />
+        <Text style={styles.emptyParticipantsText}>
+          Aucun participant sur votre créneau
+        </Text>
+      </View>
+    ) : (
+      <View style={styles.participantsList}>
+        {participantsList.map((participant) => (
+          <TouchableOpacity
+            key={participant.id}
+            style={styles.participantItem}
+            onPress={() => router.push(`/user-profile?id=${participant.id}`)}
+          >
+            <Image
+              source={{ uri: participant.avatar || 'https://via.placeholder.com/44' }}
+              style={styles.participantAvatar}
+            />
+            <Text style={styles.participantName}>{participant.name}</Text>
+            <IconSymbol name="chevron.right" size={16} color={colors.textSecondary} />
+          </TouchableOpacity>
+        ))}
+      </View>
+    )}
+  </View>
+)}
+
+
       </ScrollView>
 
       {/* Footer - Différent selon le type de compte */}
