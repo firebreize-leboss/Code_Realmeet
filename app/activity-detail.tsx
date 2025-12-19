@@ -1,5 +1,6 @@
 // app/activity-detail.tsx
 // Page de détail d'une activité avec restrictions entreprise
+// Affichage des participants conditionnel selon la source (browse, ongoing, past)
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -51,9 +52,17 @@ interface ActivityDetail {
   rules: string[];
 }
 
+// Types de source possibles
+type SourceType = 'browse' | 'ongoing' | 'past' | undefined;
+
 export default function ActivityDetailScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams();
+  // Récupérer les paramètres : id, source (browse/ongoing/past), et slotId (pour past)
+  const { id, source, slotId } = useLocalSearchParams<{
+    id: string;
+    source?: string;
+    slotId?: string;
+  }>();
   
   // Hook de restrictions entreprise
   const { isBusiness, showJoinRestriction } = useBusinessRestrictions();
@@ -63,17 +72,24 @@ export default function ActivityDetailScreen() {
   const [isJoined, setIsJoined] = useState(false);
   const [joiningInProgress, setJoiningInProgress] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [selectedSlot, setSelectedSlot] = useState<{id: string; date: string; time: string} | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<{id: string; date: string; time: string; duration?: number} | null>(null);
   const [participantsList, setParticipantsList] = useState<Array<{
-  id: string;
-  name: string;
-  avatar: string;
+    id: string;
+    name: string;
+    avatar: string;
   }>>([]);
   const [isActivityPast, setIsActivityPast] = useState(false);
 
+  // Déterminer si on doit afficher les participants
+  // - browse : JAMAIS (c'est juste une description)
+  // - ongoing : JAMAIS (l'activité n'a pas encore eu lieu)
+  // - past : OUI, mais uniquement les participants du créneau passé en paramètre
+  const sourceType = source as SourceType;
+  const shouldShowParticipants = sourceType === 'past' && !!slotId;
+
   useEffect(() => {
     loadActivity();
-  }, [id]);
+  }, [id, slotId]);
 
   // Fonction pour envoyer un message système
   const sendSystemMessage = async (conversationId: string, content: string) => {
@@ -197,38 +213,43 @@ export default function ActivityDetailScreen() {
           includes: activityData.inclusions || [],
           rules: activityData.regles || [],
         });
-        // Vérifier si l'activité est passée
-const checkIfPast = () => {
-  if (selectedSlot) {
-    const slotDateTime = new Date(`${selectedSlot.date}T${selectedSlot.time}`);
-    return slotDateTime < new Date();
-  }
-  return false;
-};
-setIsActivityPast(checkIfPast());
 
-// Si l'activité est passée ou si on veut afficher les participants
-if (participantCount > 0) {
-  const { data: participants } = await supabase
-    .from('slot_participants')
-    .select(`
-      user_id,
-      profiles:user_id (
-        id,
-        full_name,
-        avatar_url
-      )
-    `)
-    .eq('activity_id', activityId);
+        // Vérifier si l'activité est passée (basé sur le slot passé en paramètre)
+        if (slotId) {
+          const { data: passedSlot } = await supabase
+            .from('activity_slots')
+            .select('date, time')
+            .eq('id', slotId)
+            .single();
+          
+          if (passedSlot) {
+            const slotDateTime = new Date(`${passedSlot.date}T${passedSlot.time}`);
+            setIsActivityPast(slotDateTime < new Date());
+          }
+        }
 
-  if (participants) {
-    setParticipantsList(participants.map((p: any) => ({
-      id: p.profiles?.id || p.user_id,
-      name: p.profiles?.full_name || 'Participant',
-      avatar: p.profiles?.avatar_url || '',
-    })));
-  }
-}
+        // Charger les participants UNIQUEMENT si source === 'past' et slotId est fourni
+        if (shouldShowParticipants && slotId) {
+          const { data: participants } = await supabase
+            .from('slot_participants')
+            .select(`
+              user_id,
+              profiles:user_id (
+                id,
+                full_name,
+                avatar_url
+              )
+            `)
+            .eq('slot_id', slotId); // Filtrer par le créneau spécifique
+
+          if (participants) {
+            setParticipantsList(participants.map((p: any) => ({
+              id: p.profiles?.id || p.user_id,
+              name: p.profiles?.full_name || 'Participant',
+              avatar: p.profiles?.avatar_url || '',
+            })));
+          }
+        }
       }
     } catch (error) {
       console.error('Erreur chargement activité:', error);
@@ -239,24 +260,22 @@ if (participantCount > 0) {
 
   // Gérer le groupe de conversation du créneau
   const handleSlotGroup = async (
-    slotId: string,
+    slotIdParam: string,
     activityTitle: string,
     activityImage: string,
     slotDate: string,
     slotTime: string
   ) => {
     try {
-      // Vérifier si une conversation existe déjà pour ce créneau
       const { data: existingConv } = await supabase
         .from('conversations')
         .select('id')
-        .eq('slot_id', slotId)
+        .eq('slot_id', slotIdParam)
         .maybeSingle();
 
       const groupName = `${activityTitle} - ${slotDate}`;
 
       if (existingConv) {
-        // Ajouter l'utilisateur au groupe existant
         const { data: userData } = await supabase.auth.getUser();
         if (!userData?.user) return;
 
@@ -287,17 +306,16 @@ if (participantCount > 0) {
           );
         }
       } else {
-        // Créer une nouvelle conversation si >= 2 participants
         const { count } = await supabase
           .from('slot_participants')
           .select('*', { count: 'exact', head: true })
-          .eq('slot_id', slotId);
+          .eq('slot_id', slotIdParam);
 
         if (count && count >= 2) {
           const { data: newConv, error: convError } = await supabase
             .from('conversations')
             .insert({
-              slot_id: slotId,
+              slot_id: slotIdParam,
               name: groupName,
               image_url: activityImage,
               is_group: true,
@@ -310,7 +328,7 @@ if (participantCount > 0) {
           const { data: allParticipants } = await supabase
             .from('slot_participants')
             .select('user_id')
-            .eq('slot_id', slotId);
+            .eq('slot_id', slotIdParam);
 
           if (allParticipants && newConv) {
             const participantsToInsert = allParticipants.map(p => ({
@@ -322,68 +340,58 @@ if (participantCount > 0) {
               .from('conversation_participants')
               .insert(participantsToInsert);
 
-            await sendSystemMessage(newConv.id, `Groupe créé pour "${groupName}"`);
+            await sendSystemMessage(newConv.id, 'Groupe créé pour cette activité');
           }
         }
       }
     } catch (error) {
-      console.error('Erreur gestion groupe créneau:', error);
+      console.error('Erreur gestion groupe:', error);
     }
   };
 
-  // Retirer l'utilisateur du groupe du créneau
-  const handleLeaveSlotGroup = async (slotId: string) => {
-    if (!currentUserId) return;
-
+  // Quitter le groupe du créneau
+  const handleLeaveSlotGroup = async (slotIdParam: string) => {
     try {
-      const { data: userProfile } = await supabase
-        .from('profiles')
-        .select('full_name')
-        .eq('id', currentUserId)
-        .single();
-      const userName = userProfile?.full_name || 'Un utilisateur';
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData?.user) return;
 
       const { data: conv } = await supabase
         .from('conversations')
         .select('id')
-        .eq('slot_id', slotId)
+        .eq('slot_id', slotIdParam)
         .maybeSingle();
 
       if (conv) {
-        await sendSystemMessage(conv.id, `${userName} a quitté le groupe`);
-
         await supabase
           .from('conversation_participants')
           .delete()
           .eq('conversation_id', conv.id)
-          .eq('user_id', currentUserId);
+          .eq('user_id', userData.user.id);
 
-        const { count } = await supabase
-          .from('conversation_participants')
-          .select('*', { count: 'exact', head: true })
-          .eq('conversation_id', conv.id);
+        const { data: userProfile } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', userData.user.id)
+          .single();
 
-        if (count !== null && count < 2) {
-          await supabase.from('conversations').delete().eq('id', conv.id);
-        }
+        await sendSystemMessage(
+          conv.id,
+          `${userProfile?.full_name || 'Un utilisateur'} a quitté le groupe`
+        );
       }
     } catch (error) {
-      console.error('Erreur retrait du groupe créneau:', error);
+      console.error('Erreur départ groupe:', error);
     }
   };
 
-  // Gérer l'inscription/désinscription
   const handleJoinLeave = async () => {
-    // Bloquer si compte entreprise
-    if (isBusiness) {
-      showJoinRestriction();
+    if (!activity || !currentUserId) {
+      Alert.alert('Erreur', 'Vous devez être connecté pour rejoindre une activité.');
       return;
     }
 
-    if (!activity || !currentUserId || joiningInProgress) return;
-
-    if (!isJoined && !selectedSlot) {
-      Alert.alert('Sélectionnez un créneau', 'Veuillez choisir une date et un horaire avant de rejoindre.');
+    if (isBusiness) {
+      showJoinRestriction();
       return;
     }
 
@@ -391,7 +399,6 @@ if (participantCount > 0) {
 
     try {
       if (isJoined) {
-        // === SE DÉSINSCRIRE ===
         const { data: currentParticipation } = await supabase
           .from('slot_participants')
           .select('slot_id')
@@ -425,7 +432,6 @@ if (participantCount > 0) {
 
         Alert.alert('Succès', 'Vous vous êtes désinscrit de cette activité.');
       } else {
-        // === REJOINDRE ===
         if (!selectedSlot) return;
 
         if (activity.placesRestantes <= 0) {
@@ -481,21 +487,9 @@ if (participantCount > 0) {
     }
   };
 
-  // Navigation vers le profil de l'organisateur
-  const handleOrganizerPress = () => {
-    if (!activity) return;
-    
-    if (activity.host.accountType === 'business') {
-      router.push(`/business-profile?id=${activity.host.id}`);
-    } else {
-      router.push(`/user-profile?id=${activity.host.id}`);
-    }
-  };
-
-  // Loading
   if (loading) {
     return (
-      <SafeAreaView style={commonStyles.container}>
+      <SafeAreaView style={commonStyles.safeArea}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Chargement...</Text>
@@ -504,14 +498,16 @@ if (participantCount > 0) {
     );
   }
 
-  // Erreur
   if (!activity) {
     return (
-      <SafeAreaView style={commonStyles.container}>
+      <SafeAreaView style={commonStyles.safeArea}>
         <View style={styles.errorContainer}>
           <IconSymbol name="exclamationmark.triangle" size={64} color={colors.textSecondary} />
           <Text style={styles.errorText}>Activité non trouvée</Text>
-          <TouchableOpacity style={styles.backButtonError} onPress={() => router.back()}>
+          <TouchableOpacity
+            style={styles.backButtonError}
+            onPress={() => router.back()}
+          >
             <Text style={styles.backButtonErrorText}>Retour</Text>
           </TouchableOpacity>
         </View>
@@ -521,198 +517,187 @@ if (participantCount > 0) {
 
   const isFull = activity.placesRestantes <= 0;
   const isHost = currentUserId === activity.host.id;
-  const isCompetitorActivity = isBusiness && activity.host.id !== currentUserId;
 
   return (
-    <SafeAreaView style={commonStyles.container} edges={['top']}>
-      {/* Header */}
+    <SafeAreaView style={commonStyles.safeArea} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.headerButton} onPress={() => router.back()}>
           <IconSymbol name="chevron.left" size={24} color={colors.text} />
         </TouchableOpacity>
         <TouchableOpacity style={styles.headerButton}>
-          <IconSymbol name="square.and.arrow.up" size={24} color={colors.text} />
+          <IconSymbol name="square.and.arrow.up" size={22} color={colors.text} />
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-  style={styles.scrollView}
-  contentContainerStyle={[
-    styles.contentContainer,
-    { paddingBottom: (!isHost || (isHost && isBusiness)) ? 140 : 20 },
-  ]}
->
-
-
-
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
         {/* Hero Image */}
         <View style={styles.heroContainer}>
           <Image source={{ uri: activity.image || 'https://via.placeholder.com/400' }} style={styles.heroImage} />
-          <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.6)']}
-            style={styles.heroGradient}
-          />
-          
-          {/* Badge concurrent pour les entreprises */}
-          {isCompetitorActivity && (
-            <View style={styles.competitorBadge}>
-              <IconSymbol name="eye.fill" size={14} color={colors.background} />
-              <Text style={styles.competitorBadgeText}>Veille concurrentielle</Text>
+          <LinearGradient colors={['transparent', 'rgba(0,0,0,0.7)']} style={styles.heroGradient}>
+            <View style={styles.categoryBadge}>
+              <Text style={styles.categoryBadgeText}>{activity.category}</Text>
             </View>
-          )}
+            <Text style={styles.heroTitle}>{activity.title}</Text>
+          </LinearGradient>
         </View>
 
-        <View style={styles.content}>
-          {/* Titre et catégorie */}
-          <View style={styles.titleSection}>
-            <View style={styles.titleContainer}>
-              <Text style={styles.title}>{activity.title}</Text>
-              <Text style={styles.subtitle}>{activity.host.type}</Text>
+        {/* Organisateur */}
+        <TouchableOpacity 
+          style={styles.hostSection}
+          onPress={() => {
+            if (activity.host.accountType === 'business') {
+              router.push(`/business-profile?id=${activity.host.id}`);
+            } else {
+              router.push(`/user-profile?id=${activity.host.id}`);
+            }
+          }}
+        >
+          <Image source={{ uri: activity.host.avatar || 'https://via.placeholder.com/50' }} style={styles.hostAvatar} />
+          <View style={styles.hostInfo}>
+            <View style={styles.hostNameRow}>
+              <Text style={styles.hostName}>{activity.host.name}</Text>
+              {activity.host.isVerified && (
+                <IconSymbol name="checkmark.seal.fill" size={16} color={colors.primary} />
+              )}
             </View>
-            <View style={[styles.categoryBadge, { backgroundColor: `${colors.primary}20` }]}>
-              <Text style={styles.categoryText}>{activity.category}</Text>
+            <Text style={styles.hostType}>{activity.host.type}</Text>
+          </View>
+          <IconSymbol name="chevron.right" size={20} color={colors.textSecondary} />
+        </TouchableOpacity>
+
+        {/* Détails */}
+        <View style={styles.detailsCard}>
+          <View style={styles.detailRow}>
+            <IconSymbol name="calendar" size={20} color={colors.primary} />
+            <View style={styles.detailContent}>
+              <Text style={styles.detailLabel}>Date</Text>
+              <Text style={styles.detailValue}>{activity.date}</Text>
             </View>
           </View>
-
-          {/* Organisateur */}
-          <TouchableOpacity style={styles.hostSection} onPress={handleOrganizerPress}>
-            <Image
-              source={{ uri: activity.host.avatar || 'https://via.placeholder.com/48' }}
-              style={styles.hostAvatar}
-            />
-            <View style={styles.hostInfo}>
-              <View style={styles.hostNameRow}>
-                <Text style={styles.hostName}>{activity.host.name}</Text>
-                {activity.host.isVerified && (
-                  <IconSymbol name="checkmark.seal.fill" size={18} color={colors.primary} />
-                )}
-              </View>
-              <Text style={styles.hostLabel}>Organisateur</Text>
+          <View style={styles.detailRow}>
+            <IconSymbol name="clock" size={20} color={colors.primary} />
+            <View style={styles.detailContent}>
+              <Text style={styles.detailLabel}>Horaire</Text>
+              <Text style={styles.detailValue}>{activity.time}</Text>
             </View>
-            {activity.host.accountType === 'business' && (
-              <View style={styles.proBadge}>
-                <Text style={styles.proBadgeText}>PRO</Text>
-              </View>
-            )}
-            <IconSymbol name="chevron.right" size={20} color={colors.textSecondary} />
-          </TouchableOpacity>
-
-            <View style={styles.detailRow}>
-              <IconSymbol name="clock" size={20} color={colors.primary} />
-              <View style={styles.detailContent}>
-                <Text style={styles.detailLabel}>Horaire</Text>
-                <Text style={styles.detailValue}>{activity.time}</Text>
-              </View>
+          </View>
+          <View style={styles.detailRow}>
+            <IconSymbol name="location.fill" size={20} color={colors.primary} />
+            <View style={styles.detailContent}>
+              <Text style={styles.detailLabel}>Lieu</Text>
+              <Text style={styles.detailValue}>{activity.location}</Text>
+              <Text style={styles.detailSubvalue}>{activity.city}</Text>
             </View>
-
-            <View style={styles.detailRow}>
-              <IconSymbol name="location.fill" size={20} color={colors.primary} />
-              <View style={styles.detailContent}>
-                <Text style={styles.detailLabel}>Lieu</Text>
-                <Text style={styles.detailValue}>{activity.location}</Text>
-                <Text style={styles.detailSubvalue}>{activity.city}</Text>
-              </View>
+          </View>
+          <View style={styles.detailRow}>
+            <IconSymbol name="person.2.fill" size={20} color={colors.primary} />
+            <View style={styles.detailContent}>
+              <Text style={styles.detailLabel}>Places</Text>
+              <Text style={[styles.detailValue, isFull && styles.fullText]}>
+                {activity.participants}/{activity.capacity} 
+                {isFull ? ' (Complet)' : ` (${activity.placesRestantes} restantes)`}
+              </Text>
             </View>
+          </View>
+        </View>
 
-            <View style={styles.detailRow}>
-              <IconSymbol name="person.2.fill" size={20} color={colors.primary} />
-              <View style={styles.detailContent}>
-                <Text style={styles.detailLabel}>Places</Text>
-                <Text style={[styles.detailValue, isFull && styles.fullText]}>
-                  {activity.participants}/{activity.capacity} 
-                  {isFull ? ' (Complet)' : ` (${activity.placesRestantes} restantes)`}
+        {/* Calendrier de sélection */}
+        <View style={styles.section}>
+          <ActivityCalendar 
+            activityId={activity.id} 
+            onSlotSelect={(isBusiness || isJoined || isActivityPast) ? undefined : (slot) => setSelectedSlot(slot)}
+            externalSelectedSlot={selectedSlot}
+            mode="select"
+            readOnly={isBusiness || isJoined || isActivityPast}
+            userJoinedSlotId={isJoined ? selectedSlot?.id : undefined}
+          />
+        </View>
+
+        {/* Description */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>À propos</Text>
+          <Text style={styles.description}>{activity.description}</Text>
+        </View>
+
+        {/* Inclus */}
+        {activity.includes.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Ce qui est inclus</Text>
+            {activity.includes.map((item: string, index: number) => (
+              <View key={index} style={styles.listItem}>
+                <IconSymbol name="checkmark.circle.fill" size={20} color="#10b981" />
+                <Text style={styles.listItemText}>{item}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Règles */}
+        {activity.rules.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Informations importantes</Text>
+            {activity.rules.map((rule: string, index: number) => (
+              <View key={index} style={styles.listItem}>
+                <IconSymbol name="info.circle.fill" size={20} color={colors.primary} />
+                <Text style={styles.listItemText}>{rule}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Section Participants - AFFICHÉE UNIQUEMENT SI source === 'past' */}
+        {shouldShowParticipants && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>
+              Participants du créneau ({participantsList.length})
+            </Text>
+            {participantsList.length === 0 ? (
+              <View style={styles.emptyParticipants}>
+                <IconSymbol name="person.2" size={48} color={colors.textSecondary} />
+                <Text style={styles.emptyParticipantsText}>
+                  Aucun participant pour ce créneau
                 </Text>
               </View>
-            </View>
+            ) : (
+              <View style={styles.participantsList}>
+                {participantsList.map((participant) => (
+                  <TouchableOpacity
+                    key={participant.id}
+                    style={styles.participantItem}
+                    onPress={() => router.push(`/user-profile?id=${participant.id}`)}
+                  >
+                    <Image
+                      source={{ uri: participant.avatar || 'https://via.placeholder.com/44' }}
+                      style={styles.participantAvatar}
+                    />
+                    <Text style={styles.participantName}>{participant.name}</Text>
+                    <IconSymbol name="chevron.right" size={16} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
           </View>
+        )}
 
-          {/* Calendrier de sélection */}
+        {/* Message informatif si source !== 'past' */}
+        {!shouldShowParticipants && sourceType !== 'past' && (
           <View style={styles.section}>
-            <ActivityCalendar 
-              activityId={activity.id} 
-              onSlotSelect={(isBusiness || isJoined) ? undefined : (slot) => setSelectedSlot(slot)}
-              externalSelectedSlot={selectedSlot}
-              mode="select"
-              readOnly={isBusiness || isJoined}
-              userJoinedSlotId={isJoined ? selectedSlot?.id : undefined}
-            />
-          </View>
-
-          {/* Description */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>À propos</Text>
-            <Text style={styles.description}>{activity.description}</Text>
-          </View>
-
-          {/* Inclus */}
-          {activity.includes.length > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Ce qui est inclus</Text>
-              {activity.includes.map((item: string, index: number) => (
-                <View key={index} style={styles.listItem}>
-                  <IconSymbol name="checkmark.circle.fill" size={20} color="#10b981" />
-                  <Text style={styles.listItemText}>{item}</Text>
-                </View>
-              ))}
+            <View style={styles.participantsHiddenInfo}>
+              <IconSymbol name="eye.slash" size={24} color={colors.textSecondary} />
+              <Text style={styles.participantsHiddenText}>
+                Les participants seront visibles une fois l'activité terminée
+              </Text>
             </View>
-          )}
+          </View>
+        )}
 
-          {/* Règles */}
-          {activity.rules.length > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Informations importantes</Text>
-              {activity.rules.map((rule: string, index: number) => (
-                <View key={index} style={styles.listItem}>
-                  <IconSymbol name="info.circle.fill" size={20} color={colors.primary} />
-                  <Text style={styles.listItemText}>{rule}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* Participants */}
-<View style={styles.section}>
-  <Text style={styles.sectionTitle}>Participants ({activity.participants})</Text>
-  {activity.participants === 0 ? (
-    <View style={styles.emptyParticipants}>
-      <IconSymbol name="person.2" size={48} color={colors.textSecondary} />
-      <Text style={styles.emptyParticipantsText}>
-        {isBusiness ? 'Aucun participant inscrit' : 'Soyez le premier à rejoindre !'}
-      </Text>
-    </View>
-  ) : participantsList.length > 0 ? (
-    <View style={styles.participantsList}>
-      {participantsList.map((participant) => (
-        <TouchableOpacity
-          key={participant.id}
-          style={styles.participantItem}
-          onPress={() => router.push(`/user-profile?id=${participant.id}`)}
-        >
-          <Image
-            source={{ uri: participant.avatar || 'https://via.placeholder.com/44' }}
-            style={styles.participantAvatar}
-          />
-          <Text style={styles.participantName}>{participant.name}</Text>
-          <IconSymbol name="chevron.right" size={16} color={colors.textSecondary} />
-        </TouchableOpacity>
-      ))}
-    </View>
-  ) : (
-    <View style={styles.participantsInfo}>
-      <IconSymbol name="person.2.fill" size={24} color={colors.primary} />
-      <Text style={styles.participantsText}>
-        {activity.participants} {activity.participants === 1 ? 'personne inscrite' : 'personnes inscrites'}
-      </Text>
-    </View>
-  )}
-</View>
+        <View style={{ height: 120 }} />
       </ScrollView>
 
       {/* Footer - Différent selon le type de compte */}
-      {!isHost && (
+      {!isHost && !isActivityPast && (
         <View style={styles.footer}>
           {isBusiness ? (
-            // Footer pour les entreprises - Mode observation
             <View style={styles.businessFooter}>
               <View style={styles.businessFooterInfo}>
                 <IconSymbol name="eye.fill" size={20} color={colors.primary} />
@@ -723,7 +708,6 @@ if (participantCount > 0) {
               </Text>
             </View>
           ) : (
-            // Footer normal pour les utilisateurs
             <>
               <View style={styles.footerInfo}>
                 <Text style={styles.footerPrice}>{activity.price}</Text>
@@ -761,7 +745,17 @@ if (participantCount > 0) {
         </View>
       )}
 
-      {/* Footer pour l'hôte entreprise - Gérer l'activité */}
+      {/* Footer pour activité passée */}
+      {isActivityPast && (
+        <View style={styles.footer}>
+          <View style={styles.pastActivityFooter}>
+            <IconSymbol name="clock.badge.checkmark" size={24} color={colors.textSecondary} />
+            <Text style={styles.pastActivityText}>Cette activité est terminée</Text>
+          </View>
+        </View>
+      )}
+
+      {/* Footer pour l'hôte entreprise */}
       {isHost && isBusiness && (
         <View style={styles.footer}>
           <TouchableOpacity
@@ -841,71 +835,39 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 100,
+    height: 160,
+    justifyContent: 'flex-end',
+    padding: 20,
   },
-  competitorBadge: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#FF9500',
+  categoryBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.primary,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 6,
     borderRadius: 20,
+    marginBottom: 8,
   },
-  competitorBadgeText: {
+  categoryBadgeText: {
     fontSize: 12,
     fontWeight: '600',
     color: colors.background,
   },
-  content: {
-    paddingHorizontal: 20,
-    marginTop: -20,
-  },
-  titleSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-  },
-  titleContainer: {
-    flex: 1,
-    marginRight: 12,
-  },
-  title: {
-    fontSize: 24,
+  heroTitle: {
+    fontSize: 26,
     fontWeight: '700',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  categoryBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  categoryText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.primary,
+    color: '#fff',
   },
   hostSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 16,
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   hostAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: colors.border,
   },
   hostInfo: {
@@ -922,39 +884,25 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text,
   },
-  hostLabel: {
-    fontSize: 13,
+  hostType: {
+    fontSize: 14,
     color: colors.textSecondary,
     marginTop: 2,
   },
-  proBadge: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-    marginRight: 8,
-  },
-  proBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.background,
-  },
   detailsCard: {
+    margin: 16,
+    padding: 16,
     backgroundColor: colors.card,
     borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
+    gap: 16,
   },
   detailRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    gap: 12,
   },
   detailContent: {
     flex: 1,
-    marginLeft: 14,
   },
   detailLabel: {
     fontSize: 12,
@@ -975,6 +923,7 @@ const styles = StyleSheet.create({
     color: colors.error,
   },
   section: {
+    paddingHorizontal: 16,
     marginBottom: 20,
   },
   sectionTitle: {
@@ -986,54 +935,84 @@ const styles = StyleSheet.create({
   description: {
     fontSize: 15,
     color: colors.text,
-    lineHeight: 24,
+    lineHeight: 22,
   },
   listItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    gap: 12,
+    gap: 10,
+    marginBottom: 10,
   },
   listItemText: {
-    flex: 1,
     fontSize: 15,
     color: colors.text,
+    flex: 1,
   },
   emptyParticipants: {
     alignItems: 'center',
-    paddingVertical: 24,
-    backgroundColor: colors.card,
-    borderRadius: 16,
+    padding: 24,
+    gap: 8,
   },
   emptyParticipantsText: {
     fontSize: 14,
     color: colors.textSecondary,
-    marginTop: 8,
+    textAlign: 'center',
+  },
+  participantsList: {
+    gap: 8,
+  },
+  participantItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    padding: 12,
+    borderRadius: 12,
+    gap: 12,
+  },
+  participantAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.border,
+  },
+  participantName: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '500',
+    color: colors.text,
+  },
+  participantsHiddenInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.card,
+    padding: 20,
+    borderRadius: 12,
+    gap: 12,
+  },
+  participantsHiddenText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    flex: 1,
   },
   participantsInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: colors.card,
-    borderRadius: 16,
     padding: 16,
+    backgroundColor: colors.card,
+    borderRadius: 12,
   },
   participantsText: {
     fontSize: 15,
     color: colors.text,
   },
   footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.card,
     paddingHorizontal: 20,
     paddingVertical: 16,
-    paddingBottom: 32,
+    backgroundColor: colors.background,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
@@ -1084,29 +1063,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 20,
   },
-  participantsList: {
-  gap: 8,
-},
-participantItem: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  backgroundColor: colors.card,
-  padding: 12,
-  borderRadius: 12,
-  gap: 12,
-},
-participantAvatar: {
-  width: 44,
-  height: 44,
-  borderRadius: 22,
-  backgroundColor: colors.border,
-},
-participantName: {
-  flex: 1,
-  fontSize: 16,
-  fontWeight: '500',
-  color: colors.text,
-},
   businessFooterText: {
     fontSize: 15,
     fontWeight: '600',
@@ -1116,6 +1072,18 @@ participantName: {
     fontSize: 12,
     color: colors.textSecondary,
     marginTop: 8,
+  },
+  pastActivityFooter: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  pastActivityText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: colors.textSecondary,
   },
   manageButton: {
     flex: 1,

@@ -71,8 +71,8 @@ export default function CategoryActivitiesScreen() {
   };
 
   const handleActivityPress = (activityId: string) => {
-    router.push(`/activity-detail?id=${activityId}`);
-  };
+  router.push(`/activity-detail?id=${activityId}&source=browse`);
+};
 
   // Filtrage des activités selon la recherche
   const filteredActivities = activities.filter((activity: Activity) => {
