@@ -1,5 +1,5 @@
 // app/user-profile.tsx
-// Page de profil d'un autre utilisateur avec détection entreprise
+// Page de profil d'un autre utilisateur avec détection entreprise et intention
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -20,6 +20,7 @@ import { colors } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
 import { blockService } from '@/services/block.service';
 import { useAuth } from '@/contexts/AuthContext';
+import { UserIntention, getIntentionInfo } from '@/lib/database.types';
 
 interface UserProfile {
   id: string;
@@ -28,6 +29,7 @@ interface UserProfile {
   bio?: string;
   city?: string;
   interests: string[];
+  intention: UserIntention;  // ✅ NOUVEAU
   is_friend: boolean;
   request_sent: boolean;
   activities_joined: number;
@@ -73,10 +75,10 @@ export default function UserProfileScreen() {
         return;
       }
 
-      // Récupérer le profil utilisateur complet
+      // Récupérer le profil utilisateur complet (avec intention)
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
-        .select('full_name, avatar_url, bio, city, interests, account_type')
+        .select('full_name, avatar_url, bio, city, interests, account_type, intention')
         .eq('id', targetId)
         .single();
 
@@ -133,6 +135,7 @@ export default function UserProfileScreen() {
         bio: profileData.bio || undefined,
         city: profileData.city || undefined,
         interests: profileData.interests || [],
+        intention: profileData.intention || null,  // ✅ NOUVEAU
         is_friend: isFriend,
         request_sent: alreadyRequested,
         activities_joined: joinedCount ?? 0,
@@ -206,7 +209,7 @@ export default function UserProfileScreen() {
     try {
       await blockService.unblockUser(profile.id);
       setIsBlocked(false);
-      Alert.alert('Utilisateur débloqué');
+      Alert.alert('Utilisateur débloqué', 'Vous pouvez à nouveau interagir avec cet utilisateur.');
     } catch (error) {
       Alert.alert('Erreur', 'Impossible de débloquer cet utilisateur');
     }
@@ -217,73 +220,28 @@ export default function UserProfileScreen() {
 
     try {
       const { data: userData } = await supabase.auth.getUser();
-      if (!userData?.user) return;
+      if (!userData?.user) throw new Error('Non connecté');
 
-      // Chercher une conversation existante
-      const { data: existingConv } = await supabase
-        .from('conversation_participants')
-        .select('conversation_id')
-        .eq('user_id', userData.user.id);
+      // Vérifier si une conversation existe déjà
+      const { data: existingConv } = await supabase.rpc('get_or_create_conversation', {
+        p_other_user_id: profile.id
+      });
 
       if (existingConv) {
-        for (const conv of existingConv) {
-          const { data: otherParticipant } = await supabase
-            .from('conversation_participants')
-            .select('user_id')
-            .eq('conversation_id', conv.conversation_id)
-            .eq('user_id', profile.id)
-            .maybeSingle();
-
-          if (otherParticipant) {
-            // Vérifier que c'est une conversation 1-1
-            const { count } = await supabase
-              .from('conversation_participants')
-              .select('*', { count: 'exact', head: true })
-              .eq('conversation_id', conv.conversation_id);
-
-            const { data: convData } = await supabase
-              .from('conversations')
-              .select('is_group')
-              .eq('id', conv.conversation_id)
-              .single();
-
-            if (count === 2 && !convData?.is_group) {
-              router.push(`/chat-detail?id=${conv.conversation_id}`);
-              return;
-            }
-          }
-        }
+        router.push(`/conversation?id=${existingConv}`);
       }
-
-      // Créer une nouvelle conversation
-      const { data: newConv, error: convError } = await supabase
-        .from('conversations')
-        .insert({ is_group: false })
-        .select()
-        .single();
-
-      if (convError) throw convError;
-
-      await supabase.from('conversation_participants').insert([
-        { conversation_id: newConv.id, user_id: userData.user.id },
-        { conversation_id: newConv.id, user_id: profile.id },
-      ]);
-
-      router.push(`/chat-detail?id=${newConv.id}`);
     } catch (error) {
-      console.error('Erreur création conversation:', error);
+      console.error('Erreur conversation:', error);
       Alert.alert('Erreur', 'Impossible de démarrer la conversation');
     }
   };
 
+  // ✅ NOUVEAU: Fonction pour obtenir les infos d'intention
+  const intentionInfo = profile?.intention ? getIntentionInfo(profile.intention) : null;
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <IconSymbol name="chevron.left" size={24} color={colors.text} />
-          </TouchableOpacity>
-        </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
@@ -294,14 +252,11 @@ export default function UserProfileScreen() {
   if (!profile) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <IconSymbol name="chevron.left" size={24} color={colors.text} />
-          </TouchableOpacity>
-        </View>
         <View style={styles.errorContainer}>
-          <IconSymbol name="person.crop.circle.badge.exclamationmark" size={64} color={colors.textSecondary} />
           <Text style={styles.errorText}>Profil introuvable</Text>
+          <TouchableOpacity style={styles.backButtonLarge} onPress={() => router.back()}>
+            <Text style={styles.backButtonText}>Retour</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
@@ -311,11 +266,14 @@ export default function UserProfileScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <IconSymbol name="chevron.left" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Profil</Text>
-        <TouchableOpacity onPress={() => setShowOptionsModal(true)} style={styles.optionsButton}>
+        <TouchableOpacity
+          style={styles.optionsButton}
+          onPress={() => setShowOptionsModal(true)}
+        >
           <IconSymbol name="ellipsis" size={24} color={colors.text} />
         </TouchableOpacity>
       </View>
@@ -325,10 +283,10 @@ export default function UserProfileScreen() {
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header du profil */}
+        {/* Avatar et nom */}
         <View style={styles.profileHeader}>
           <Image
-            source={{ uri: profile.avatar_url || 'https://via.placeholder.com/100' }}
+            source={{ uri: profile.avatar_url || 'https://via.placeholder.com/120' }}
             style={styles.avatar}
           />
           <Text style={styles.name}>{profile.full_name}</Text>
@@ -338,15 +296,28 @@ export default function UserProfileScreen() {
               <Text style={styles.city}>{profile.city}</Text>
             </View>
           )}
-
-          {/* Badge ami - seulement visible pour les utilisateurs */}
-          {!isCurrentUserBusiness && profile.is_friend && (
+          {profile.is_friend && (
             <View style={styles.friendBadge}>
-              <IconSymbol name="checkmark.circle.fill" size={16} color={colors.primary} />
+              <IconSymbol name="checkmark" size={14} color={colors.primary} />
               <Text style={styles.friendBadgeText}>Ami</Text>
             </View>
           )}
         </View>
+
+        {/* ✅ NOUVEAU: Affichage de l'intention */}
+        {intentionInfo && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Recherche</Text>
+            <View style={[styles.intentionCard, { borderColor: intentionInfo.color }]}>
+              <View style={[styles.intentionIcon, { backgroundColor: intentionInfo.color + '20' }]}>
+                <IconSymbol name={intentionInfo.icon as any} size={22} color={intentionInfo.color} />
+              </View>
+              <Text style={[styles.intentionText, { color: intentionInfo.color }]}>
+                {intentionInfo.label}
+              </Text>
+            </View>
+          </View>
+        )}
 
         {/* Bio */}
         {profile.bio && (
@@ -458,10 +429,8 @@ export default function UserProfileScreen() {
         >
           <View style={styles.modalContent}>
             <TouchableOpacity style={styles.modalOption} onPress={handleBlockUser}>
-              <IconSymbol name="hand.raised.fill" size={22} color={colors.error} />
-              <Text style={[styles.modalOptionText, { color: colors.error }]}>
-                Bloquer cet utilisateur
-              </Text>
+              <IconSymbol name="hand.raised.fill" size={22} color="#EF4444" />
+              <Text style={[styles.modalOptionText, { color: '#EF4444' }]}>Bloquer</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.modalOption}
@@ -482,26 +451,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  optionsButton: {
-    padding: 8,
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -511,16 +460,56 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
   },
   errorText: {
-    fontSize: 16,
+    fontSize: 18,
     color: colors.textSecondary,
-    marginTop: 12,
+    marginBottom: 20,
+  },
+  backButtonLarge: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  backButtonText: {
+    color: colors.background,
+    fontWeight: '600',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.card,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  optionsButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.card,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   scrollView: {
     flex: 1,
   },
   contentContainer: {
+    paddingHorizontal: 20,
     paddingBottom: 40,
   },
   profileHeader: {
@@ -528,55 +517,56 @@ const styles = StyleSheet.create({
     paddingVertical: 24,
   },
   avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
     backgroundColor: colors.border,
+    marginBottom: 16,
+    borderWidth: 4,
+    borderColor: colors.primary,
   },
   name: {
     fontSize: 24,
     fontWeight: '700',
     color: colors.text,
-    marginTop: 12,
+    marginBottom: 8,
   },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 6,
-    gap: 4,
+    gap: 6,
   },
   city: {
-    fontSize: 14,
+    fontSize: 15,
     color: colors.textSecondary,
   },
   friendBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    marginTop: 12,
     backgroundColor: colors.primary + '20',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
-    marginTop: 12,
   },
   friendBadgeText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
     color: colors.primary,
   },
   section: {
-    paddingHorizontal: 20,
-    marginTop: 16,
+    marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
     color: colors.text,
     marginBottom: 12,
   },
   card: {
     backgroundColor: colors.card,
-    borderRadius: 16,
+    borderRadius: 12,
     padding: 16,
   },
   bio: {
@@ -584,20 +574,42 @@ const styles = StyleSheet.create({
     color: colors.text,
     lineHeight: 22,
   },
+  // ✅ NOUVEAU: Styles pour l'intention
+  intentionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 2,
+    gap: 12,
+  },
+  intentionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  intentionText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
   interestsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
   },
   interestBadge: {
-    backgroundColor: colors.card,
+    backgroundColor: colors.primary + '20',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
   },
   interestText: {
     fontSize: 14,
-    color: colors.text,
+    fontWeight: '500',
+    color: colors.primary,
   },
   statsContainer: {
     flexDirection: 'row',
@@ -606,7 +618,7 @@ const styles = StyleSheet.create({
   statCard: {
     flex: 1,
     backgroundColor: colors.card,
-    borderRadius: 16,
+    borderRadius: 12,
     padding: 16,
     alignItems: 'center',
   },
@@ -614,17 +626,16 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     color: colors.text,
+    marginBottom: 4,
   },
   statLabel: {
     fontSize: 13,
     color: colors.textSecondary,
-    marginTop: 4,
   },
   actionButtons: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    marginTop: 24,
     gap: 12,
+    marginTop: 8,
   },
   messageButton: {
     flex: 1,
@@ -691,7 +702,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    marginHorizontal: 20,
     marginTop: 24,
     padding: 16,
     backgroundColor: colors.primary + '15',

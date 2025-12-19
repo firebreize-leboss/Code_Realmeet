@@ -1,3 +1,6 @@
+// app/edit-profile.tsx
+// Écran d'édition de profil avec intention
+
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -14,10 +17,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { InterestSelector } from '@/components/InterestSelector';
+import { IntentionSelector } from '@/components/IntentionSelector';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { useAuth } from '@/contexts/AuthContext';
 import { userService } from '@/services/user.service';
 import { storageService } from '@/services/storage.service';
+import { UserIntention } from '@/lib/database.types';
 
 export default function EditProfileScreen() {
   const { user, profile, refreshProfile } = useAuth();
@@ -29,6 +34,7 @@ export default function EditProfileScreen() {
   const [city, setCity] = useState('');
   const [phone, setPhone] = useState('');
   const [interests, setInterests] = useState<string[]>([]);
+  const [intention, setIntention] = useState<UserIntention>(null);  // ✅ NOUVEAU
   const [profileImage, setProfileImage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -38,6 +44,7 @@ export default function EditProfileScreen() {
       setCity(profile.city || '');
       setPhone(profile.phone || '');
       setInterests(profile.interests || []);
+      setIntention(profile.intention || null);  // ✅ NOUVEAU
       setProfileImage(profile.avatar_url);
     }
   }, [profile]);
@@ -71,6 +78,7 @@ export default function EditProfileScreen() {
         city: city.trim() || null,
         phone: phone.trim() || null,
         interests: interests.length > 0 ? interests : null,
+        intention: intention,  // ✅ NOUVEAU
         avatar_url: avatarUrl,
       });
 
@@ -78,7 +86,7 @@ export default function EditProfileScreen() {
         await refreshProfile();
         Alert.alert('Succès', 'Profil mis à jour !');
 
-        // ⛔ FIX navigation : timeout obligatoire pour Expo Router
+        // FIX navigation: timeout obligatoire pour Expo Router
         setTimeout(() => {
           router.back();
         }, 150);
@@ -108,7 +116,7 @@ export default function EditProfileScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <IconSymbol name="chevron.left" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Edit Profile</Text>
+        <Text style={styles.headerTitle}>Modifier le profil</Text>
         <View style={styles.placeholder} />
       </View>
 
@@ -180,7 +188,7 @@ export default function EditProfileScreen() {
             <View style={styles.inputContainer}>
               <IconSymbol name="phone.fill" size={20} color={colors.textSecondary} />
               <TextInput
-                style={styles.input}
+                style={styles.inputInside}
                 placeholder="+33 6 12 34 56 78"
                 placeholderTextColor={colors.textSecondary}
                 value={phone}
@@ -188,6 +196,15 @@ export default function EditProfileScreen() {
                 keyboardType="phone-pad"
               />
             </View>
+          </View>
+
+          {/* ✅ NOUVEAU: INTENTION */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Je recherche sur RealMeet</Text>
+            <IntentionSelector
+              selectedIntention={intention}
+              onIntentionChange={setIntention}
+            />
           </View>
 
           {/* INTERESTS */}
@@ -220,10 +237,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 12,
   },
   backButton: {
-    padding: 8,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.card,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerTitle: {
     fontSize: 20,
@@ -242,25 +264,24 @@ const styles = StyleSheet.create({
   },
   avatarSection: {
     alignItems: 'center',
-    marginVertical: 24,
+    paddingVertical: 24,
   },
   avatar: {
     width: 120,
     height: 120,
     borderRadius: 60,
-    borderWidth: 3,
-    borderColor: colors.primary,
+    backgroundColor: colors.border,
+    marginBottom: 16,
   },
   changePhotoButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 12,
-    gap: 6,
+    gap: 8,
   },
   changePhotoText: {
-    fontSize: 14,
+    fontSize: 15,
     color: colors.primary,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   form: {
     gap: 20,
@@ -269,45 +290,43 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 16,
+    fontWeight: '600',
     color: colors.text,
-    marginBottom: 4,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.cardBackground,
+    backgroundColor: colors.card,
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: colors.border,
     gap: 12,
   },
   inputInside: {
     flex: 1,
     fontSize: 16,
     color: colors.text,
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: colors.text,
-  },
-  textArea: {
-    minHeight: 100,
-    paddingVertical: 14,
-    alignItems: 'flex-start',
+    paddingVertical: 12,
   },
   textInput: {
     fontSize: 16,
-    color: colors.text, // ✅ COULEUR BLANCHE POUR LE TEXTE
+    color: colors.text,
+    paddingHorizontal: 16,
+  },
+  textArea: {
+    height: 100,
+    alignItems: 'flex-start',
+    paddingVertical: 12,
   },
   saveButton: {
     backgroundColor: colors.primary,
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
-    marginTop: 24,
+    marginTop: 32,
   },
   saveButtonText: {
     fontSize: 16,

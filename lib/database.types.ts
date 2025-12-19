@@ -1,5 +1,5 @@
 // lib/database.types.ts
-// Types mis à jour avec support des comptes entreprise
+// Types mis à jour avec support des comptes entreprise et intention
 
 export type Json =
   | string
@@ -8,6 +8,9 @@ export type Json =
   | null
   | { [key: string]: Json | undefined }
   | Json[]
+
+// Type pour l'intention utilisateur
+export type UserIntention = 'amicaux' | 'rencontres' | 'reseau' | 'decouverte' | null;
 
 export interface Database {
   public: {
@@ -23,6 +26,7 @@ export interface Database {
           date_of_birth: string | null
           phone: string | null
           interests: string[] | null
+          intention: UserIntention  // ✅ NOUVEAU
           created_at: string
           updated_at: string
           // Business fields
@@ -53,6 +57,7 @@ export interface Database {
           date_of_birth?: string | null
           phone?: string | null
           interests?: string[] | null
+          intention?: UserIntention  // ✅ NOUVEAU
           created_at?: string
           updated_at?: string
           // Business fields
@@ -83,6 +88,7 @@ export interface Database {
           date_of_birth?: string | null
           phone?: string | null
           interests?: string[] | null
+          intention?: UserIntention  // ✅ NOUVEAU
           created_at?: string
           updated_at?: string
           // Business fields
@@ -416,4 +422,21 @@ export interface BusinessDashboardData {
     prix: number
     date: string
   }>
+}
+
+// ✅ NOUVEAU: Constantes pour les intentions
+export const INTENTION_OPTIONS = [
+  { value: 'amicaux', label: 'Rencontres amicales', icon: 'person.2.fill', color: '#10B981' },
+  { value: 'rencontres', label: 'Rencontres amoureuses', icon: 'heart.fill', color: '#EC4899' },
+  { value: 'reseau', label: 'Réseautage pro', icon: 'briefcase.fill', color: '#3B82F6' },
+  { value: 'decouverte', label: 'Découverte & activités', icon: 'star.fill', color: '#F59E0B' },
+] as const;
+
+export function getIntentionLabel(intention: UserIntention): string {
+  const option = INTENTION_OPTIONS.find(o => o.value === intention);
+  return option?.label || 'Non renseigné';
+}
+
+export function getIntentionInfo(intention: UserIntention) {
+  return INTENTION_OPTIONS.find(o => o.value === intention) || null;
 }

@@ -1,49 +1,49 @@
+// app/auth/signup-individual.tsx
+// Écran d'inscription individuel avec sélection d'intention
+
 import React, { useState } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
-  ScrollView,
   TextInput,
   TouchableOpacity,
+  StyleSheet,
+  ScrollView,
   Image,
   Alert,
-  Platform,
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { router } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
+import { InterestSelector } from '@/components/InterestSelector';
+import { IntentionSelector } from '@/components/IntentionSelector';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { authService } from '@/services/auth.service';
-import { storageService } from '@/services/storage.service';
 import { userService } from '@/services/user.service';
-import { InterestSelector } from '@/components/InterestSelector';
+import { storageService } from '@/services/storage.service';
+import { UserIntention } from '@/lib/database.types';
 
 export default function SignupIndividualScreen() {
-  const router = useRouter();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [birthDate, setBirthDate] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [city, setCity] = useState('');
+  const [bio, setBio] = useState('');
+  const [interests, setInterests] = useState<string[]>([]);
+  const [intention, setIntention] = useState<UserIntention>(null);  // ✅ NOUVEAU
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [birthDate, setBirthDate] = useState('');
-  const [city, setCity] = useState('');
-  const [phone, setPhone] = useState('');
-  const [bio, setBio] = useState('');
-  const [interest, setInterest] = useState('');
-  const [interests, setInterests] = useState<string[]>([]);
-  const [profileImage, setProfileImage] = useState('');
+  const [profileImage, setProfileImage] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Formatter la date automatiquement
   const handleDateChange = (text: string) => {
-    // Supprimer tout sauf les chiffres
-    const cleaned = text.replace(/[^\d]/g, '');
-    
-    // Formatter en JJ/MM/AAAA
+    // Auto-format: DD/MM/YYYY
+    const cleaned = text.replace(/\D/g, '');
     let formatted = '';
     if (cleaned.length > 0) {
       formatted = cleaned.substring(0, 2);
@@ -54,26 +54,19 @@ export default function SignupIndividualScreen() {
         formatted += '/' + cleaned.substring(4, 8);
       }
     }
-    
     setBirthDate(formatted);
   };
 
-  // Ajouter un centre d'intérêt
-  const handleAddInterest = () => {
-    if (interest.trim() && !interests.includes(interest.trim())) {
-      setInterests([...interests, interest.trim()]);
-      setInterest('');
-    }
-  };
-
-  // Supprimer un centre d'intérêt
-  const handleRemoveInterest = (indexToRemove: number) => {
-    setInterests(interests.filter((_, index) => index !== indexToRemove));
-  };
-
   const handleSignup = async () => {
+    // Validation des champs obligatoires
     if (!firstName || !lastName || !email || !password || !confirmPassword || !birthDate || !city) {
       Alert.alert('Erreur', 'Veuillez remplir tous les champs obligatoires');
+      return;
+    }
+
+    // ✅ NOUVEAU: Validation de l'intention
+    if (!intention) {
+      Alert.alert('Erreur', 'Veuillez indiquer ce que vous recherchez sur RealMeet');
       return;
     }
 
@@ -121,7 +114,7 @@ export default function SignupIndividualScreen() {
         password,
         username,
         full_name: `${firstName} ${lastName}`,
-        avatar_url: null, // On l'ajoutera après
+        avatar_url: null,
         city,
         date_of_birth: birthDate,
         phone,
@@ -139,10 +132,7 @@ export default function SignupIndividualScreen() {
       let avatarUrl = null;
       if (profileImage) {
         console.log('🔵 Début upload avatar...');
-        const uploadResult = await storageService.uploadAvatar(
-          profileImage,
-          userId
-        );
+        const uploadResult = await storageService.uploadAvatar(profileImage, userId);
         if (uploadResult.success) {
           avatarUrl = uploadResult.url;
           console.log('✅ Avatar uploadé:', avatarUrl);
@@ -152,11 +142,12 @@ export default function SignupIndividualScreen() {
         }
       }
 
-      // 4. Mettre à jour le profil avec l'avatar, bio et interests
+      // 4. Mettre à jour le profil avec l'avatar, bio, interests ET intention
       const updateResult = await userService.updateProfile(userId, {
         avatar_url: avatarUrl,
         bio: bio || null,
         interests: interests.length > 0 ? interests : null,
+        intention: intention,  // ✅ NOUVEAU
       });
 
       if (!updateResult.success) {
@@ -164,7 +155,6 @@ export default function SignupIndividualScreen() {
       }
 
       // 5. La connexion est automatique grâce à Supabase !
-      // On redirige directement
       Alert.alert(
         'Bienvenue !', 
         'Votre compte a été créé avec succès !', 
@@ -332,6 +322,16 @@ export default function SignupIndividualScreen() {
             </View>
           </View>
 
+          {/* ✅ NOUVEAU: Intention - OBLIGATOIRE */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Je recherche sur RealMeet *</Text>
+            <IntentionSelector
+              selectedIntention={intention}
+              onIntentionChange={setIntention}
+              required
+            />
+          </View>
+
           {/* Bio */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Bio</Text>
@@ -346,7 +346,8 @@ export default function SignupIndividualScreen() {
               textAlignVertical="top"
             />
             <Text style={styles.helperText}>Optionnel - Décrivez-vous en quelques mots</Text>
-          </View>       
+          </View>
+
           {/* Centres d'intérêt */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Centres d'intérêt</Text>
@@ -378,9 +379,7 @@ export default function SignupIndividualScreen() {
                 />
               </TouchableOpacity>
             </View>
-            <Text style={styles.helperText}>
-              Minimum 6 caractères
-            </Text>
+            <Text style={styles.helperText}>Minimum 6 caractères</Text>
           </View>
 
           {/* Confirmation mot de passe */}
@@ -559,26 +558,6 @@ const styles = StyleSheet.create({
   },
   halfWidth: {
     flex: 1,
-  },
-  interestsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 8,
-  },
-  interestBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.primary + '20',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    gap: 8,
-  },
-  interestText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.primary,
   },
   termsSection: {
     marginTop: 8,
