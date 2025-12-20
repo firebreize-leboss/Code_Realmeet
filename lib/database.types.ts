@@ -1,5 +1,5 @@
 // lib/database.types.ts
-// Types mis à jour avec support des comptes entreprise, intention et personality_tags
+// Types mis à jour avec support des comptes entreprise, intention, personality_tags et slot_groups
 
 export type Json =
   | string
@@ -30,7 +30,6 @@ export interface Database {
           personality_tags: string[] | null
           created_at: string
           updated_at: string
-          // Business fields
           account_type: 'user' | 'business'
           business_name: string | null
           business_description: string | null
@@ -62,7 +61,6 @@ export interface Database {
           personality_tags?: string[] | null
           created_at?: string
           updated_at?: string
-          // Business fields
           account_type?: 'user' | 'business'
           business_name?: string | null
           business_description?: string | null
@@ -94,7 +92,6 @@ export interface Database {
           personality_tags?: string[] | null
           created_at?: string
           updated_at?: string
-          // Business fields
           account_type?: 'user' | 'business'
           business_name?: string | null
           business_description?: string | null
@@ -111,6 +108,314 @@ export interface Database {
           business_verified?: boolean
           business_rating?: number
           business_review_count?: number
+        }
+      }
+      activities: {
+        Row: {
+          id: string
+          host_id: string
+          nom: string
+          titre: string | null
+          description: string | null
+          categorie: string
+          categorie2: string | null
+          image_url: string | null
+          date: string | null
+          time_start: string | null
+          time_end: string | null
+          dates_supplementaires: string | null
+          adresse: string | null
+          ville: string | null
+          code_postal: string | null
+          latitude: number | null
+          longitude: number | null
+          prix: number | null
+          max_participants: number
+          participants: number
+          inclusions: string[] | null
+          regles: string[] | null
+          status: 'active' | 'paused' | 'ended' | 'draft'
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          host_id: string
+          nom: string
+          titre?: string | null
+          description?: string | null
+          categorie: string
+          categorie2?: string | null
+          image_url?: string | null
+          date?: string | null
+          time_start?: string | null
+          time_end?: string | null
+          dates_supplementaires?: string | null
+          adresse?: string | null
+          ville?: string | null
+          code_postal?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          prix?: number | null
+          max_participants?: number
+          participants?: number
+          inclusions?: string[] | null
+          regles?: string[] | null
+          status?: 'active' | 'paused' | 'ended' | 'draft'
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          host_id?: string
+          nom?: string
+          titre?: string | null
+          description?: string | null
+          categorie?: string
+          categorie2?: string | null
+          image_url?: string | null
+          date?: string | null
+          time_start?: string | null
+          time_end?: string | null
+          dates_supplementaires?: string | null
+          adresse?: string | null
+          ville?: string | null
+          code_postal?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          prix?: number | null
+          max_participants?: number
+          participants?: number
+          inclusions?: string[] | null
+          regles?: string[] | null
+          status?: 'active' | 'paused' | 'ended' | 'draft'
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      activity_slots: {
+        Row: {
+          id: string
+          activity_id: string
+          date: string
+          time: string
+          time_start: string | null
+          time_end: string | null
+          duration: number | null
+          created_by: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          activity_id: string
+          date: string
+          time: string
+          time_start?: string | null
+          time_end?: string | null
+          duration?: number | null
+          created_by: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          activity_id?: string
+          date?: string
+          time?: string
+          time_start?: string | null
+          time_end?: string | null
+          duration?: number | null
+          created_by?: string
+          created_at?: string
+        }
+      }
+      slot_participants: {
+        Row: {
+          id: string
+          slot_id: string
+          activity_id: string
+          user_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          slot_id: string
+          activity_id: string
+          user_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          slot_id?: string
+          activity_id?: string
+          user_id?: string
+          created_at?: string
+        }
+      }
+      slot_groups: {
+        Row: {
+          slot_id: string
+          user_id: string
+          group_index: number
+          created_at: string
+        }
+        Insert: {
+          slot_id: string
+          user_id: string
+          group_index: number
+          created_at?: string
+        }
+        Update: {
+          slot_id?: string
+          user_id?: string
+          group_index?: number
+          created_at?: string
+        }
+      }
+      conversations: {
+        Row: {
+          id: string
+          slot_id: string | null
+          name: string | null
+          image_url: string | null
+          is_group: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          slot_id?: string | null
+          name?: string | null
+          image_url?: string | null
+          is_group?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          slot_id?: string | null
+          name?: string | null
+          image_url?: string | null
+          is_group?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      conversation_participants: {
+        Row: {
+          id: string
+          conversation_id: string
+          user_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          conversation_id: string
+          user_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          conversation_id?: string
+          user_id?: string
+          created_at?: string
+        }
+      }
+      messages: {
+        Row: {
+          id: string
+          conversation_id: string
+          sender_id: string
+          content: string | null
+          message_type: 'text' | 'image' | 'voice' | 'system'
+          media_url: string | null
+          media_duration: number | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          conversation_id: string
+          sender_id: string
+          content?: string | null
+          message_type?: 'text' | 'image' | 'voice' | 'system'
+          media_url?: string | null
+          media_duration?: number | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          conversation_id?: string
+          sender_id?: string
+          content?: string | null
+          message_type?: 'text' | 'image' | 'voice' | 'system'
+          media_url?: string | null
+          media_duration?: number | null
+          created_at?: string
+        }
+      }
+      friendships: {
+        Row: {
+          id: string
+          user_id: string
+          friend_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          friend_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          friend_id?: string
+          created_at?: string
+        }
+      }
+      friend_requests: {
+        Row: {
+          id: string
+          sender_id: string
+          receiver_id: string
+          status: 'pending' | 'accepted' | 'rejected'
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          sender_id: string
+          receiver_id: string
+          status?: 'pending' | 'accepted' | 'rejected'
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          sender_id?: string
+          receiver_id?: string
+          status?: 'pending' | 'accepted' | 'rejected'
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      blocked_users: {
+        Row: {
+          id: string
+          blocker_id: string
+          blocked_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          blocker_id: string
+          blocked_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          blocker_id?: string
+          blocked_id?: string
+          created_at?: string
         }
       }
       business_stats: {
@@ -177,193 +482,6 @@ export interface Database {
           created_at?: string
         }
       }
-      activities: {
-        Row: {
-          id: string
-          host_id: string
-          nom: string
-          titre: string | null
-          description: string
-          categorie: string
-          categorie2: string | null
-          date: string
-          time_start: string
-          time_end: string | null
-          adresse: string
-          ville: string
-          code_postal: string | null
-          max_participants: number
-          participants: number
-          image_url: string
-          latitude: number
-          longitude: number
-          prix: number | null
-          prix_devise: string
-          inclusions: string[] | null
-          regles: string[] | null
-          dates_supplementaires: string | null
-          host_type: string
-          status: string
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          host_id: string
-          nom: string
-          titre?: string | null
-          description: string
-          categorie: string
-          categorie2?: string | null
-          date: string
-          time_start: string
-          time_end?: string | null
-          adresse: string
-          ville: string
-          code_postal?: string | null
-          max_participants: number
-          participants?: number
-          image_url?: string
-          latitude?: number
-          longitude?: number
-          prix?: number | null
-          prix_devise?: string
-          inclusions?: string[] | null
-          regles?: string[] | null
-          dates_supplementaires?: string | null
-          host_type?: string
-          status?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          host_id?: string
-          nom?: string
-          titre?: string | null
-          description?: string
-          categorie?: string
-          categorie2?: string | null
-          date?: string
-          time_start?: string
-          time_end?: string | null
-          adresse?: string
-          ville?: string
-          code_postal?: string | null
-          max_participants?: number
-          participants?: number
-          image_url?: string
-          latitude?: number
-          longitude?: number
-          prix?: number | null
-          prix_devise?: string
-          inclusions?: string[] | null
-          regles?: string[] | null
-          dates_supplementaires?: string | null
-          host_type?: string
-          status?: string
-          created_at?: string
-          updated_at?: string
-        }
-      }
-      friend_requests: {
-        Row: {
-          id: string
-          sender_id: string
-          receiver_id: string
-          status: 'pending' | 'accepted' | 'rejected'
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          sender_id: string
-          receiver_id: string
-          status?: 'pending' | 'accepted' | 'rejected'
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          sender_id?: string
-          receiver_id?: string
-          status?: 'pending' | 'accepted' | 'rejected'
-          created_at?: string
-          updated_at?: string
-        }
-      }
-      friendships: {
-        Row: {
-          id: string
-          user_id: string
-          friend_id: string
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          friend_id: string
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          friend_id?: string
-          created_at?: string
-        }
-      }
-      conversations: {
-        Row: {
-          id: string
-          created_at: string
-          updated_at: string
-          last_message_at: string | null
-        }
-        Insert: {
-          id?: string
-          created_at?: string
-          updated_at?: string
-          last_message_at?: string | null
-        }
-        Update: {
-          id?: string
-          created_at?: string
-          updated_at?: string
-          last_message_at?: string | null
-        }
-      }
-      messages: {
-        Row: {
-          id: string
-          conversation_id: string
-          sender_id: string
-          content: string | null
-          message_type: 'text' | 'image' | 'voice'
-          media_url: string | null
-          media_duration: number | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          conversation_id: string
-          sender_id: string
-          content?: string | null
-          message_type?: 'text' | 'image' | 'voice'
-          media_url?: string | null
-          media_duration?: number | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          conversation_id?: string
-          sender_id?: string
-          content?: string | null
-          message_type?: 'text' | 'image' | 'voice'
-          media_url?: string | null
-          media_duration?: number | null
-          created_at?: string
-        }
-      }
     }
     Functions: {
       get_business_dashboard: {
@@ -382,6 +500,19 @@ export type ProfileUpdate = Database['public']['Tables']['profiles']['Update']
 export type Activity = Database['public']['Tables']['activities']['Row']
 export type ActivityInsert = Database['public']['Tables']['activities']['Insert']
 export type ActivityUpdate = Database['public']['Tables']['activities']['Update']
+
+export type ActivitySlot = Database['public']['Tables']['activity_slots']['Row']
+export type ActivitySlotInsert = Database['public']['Tables']['activity_slots']['Insert']
+
+export type SlotParticipant = Database['public']['Tables']['slot_participants']['Row']
+export type SlotParticipantInsert = Database['public']['Tables']['slot_participants']['Insert']
+
+export type SlotGroup = Database['public']['Tables']['slot_groups']['Row']
+export type SlotGroupInsert = Database['public']['Tables']['slot_groups']['Insert']
+export type SlotGroupUpdate = Database['public']['Tables']['slot_groups']['Update']
+
+export type Conversation = Database['public']['Tables']['conversations']['Row']
+export type Message = Database['public']['Tables']['messages']['Row']
 
 export type BusinessStats = Database['public']['Tables']['business_stats']['Row']
 export type ActivityRevenue = Database['public']['Tables']['activity_revenue']['Row']
@@ -425,6 +556,21 @@ export interface BusinessDashboardData {
     prix: number
     date: string
   }>
+}
+
+// Slot Groups types
+export interface SlotGroupMember {
+  user_id: string
+  group_index: number
+  full_name: string
+  avatar_url: string | null
+  intention?: UserIntention
+  personality_tags?: string[]
+}
+
+export interface ComposedGroup {
+  groupIndex: number
+  members: SlotGroupMember[]
 }
 
 // Constantes pour les intentions

@@ -1,5 +1,6 @@
 // app/manage-activity.tsx
 // Page de gestion d'une activité pour les entreprises
+// MODIFIÉ: Ajout de la composition intelligente des groupes
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -12,6 +13,7 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -20,10 +22,9 @@ import { colors } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
 import ActivityCalendar from '@/components/ActivityCalendar';
-import { Modal } from 'react-native';
+import SlotGroupsView from '@/components/SlotGroupsView';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
 
 interface ActivityStats {
   id: string;
@@ -49,6 +50,7 @@ interface SlotStats {
   maxParticipants: number;
   hasGroup: boolean;
   groupId?: string;
+  hasSlotGroups?: boolean;
 }
 
 interface Participant {
@@ -57,6 +59,7 @@ interface Participant {
   avatar: string;
   joinedAt: string;
   slotDate: string;
+  slotId?: string;
 }
 
 export default function ManageActivityScreen() {
@@ -68,6 +71,8 @@ export default function ManageActivityScreen() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'participants' | 'slots'>('overview');
   const [showSlotModal, setShowSlotModal] = useState(false);
+  const [showGroupsModal, setShowGroupsModal] = useState(false);
+  const [selectedSlotForGroups, setSelectedSlotForGroups] = useState<SlotStats | null>(null);
 
   useEffect(() => {
     loadActivityData();
@@ -77,7 +82,6 @@ export default function ManageActivityScreen() {
     try {
       const activityId = id as string;
 
-      // Charger les détails de l'activité
       const { data: activityData, error: activityError } = await supabase
         .from('activities')
         .select('*')
@@ -86,14 +90,12 @@ export default function ManageActivityScreen() {
 
       if (activityError) throw activityError;
 
-      // Charger les créneaux
       const { data: slotsData } = await supabase
         .from('activity_slots')
         .select('*')
         .eq('activity_id', activityId)
         .order('date', { ascending: true });
 
-      // Charger les participants via slot_participants
       const { data: participantsData } = await supabase
         .from('slot_participants')
         .select(`
@@ -111,16 +113,22 @@ export default function ManageActivityScreen() {
         `)
         .eq('activity_id', activityId);
 
-      // Charger les conversations de groupe
       const slotIds = slotsData?.map(s => s.id) || [];
+      
       const { data: conversations } = await supabase
         .from('conversations')
         .select('id, slot_id')
-        .in('slot_id', slotIds);
+        .in('slot_id', slotIds.length > 0 ? slotIds : ['00000000-0000-0000-0000-000000000000']);
 
       const convMap = new Map(conversations?.map(c => [c.slot_id, c.id]) || []);
 
-      // Construire les stats des créneaux
+      const { data: slotGroupsData } = await supabase
+        .from('slot_groups')
+        .select('slot_id')
+        .in('slot_id', slotIds.length > 0 ? slotIds : ['00000000-0000-0000-0000-000000000000']);
+      
+      const slotsWithGroups = new Set(slotGroupsData?.map(sg => sg.slot_id) || []);
+
       const slots: SlotStats[] = (slotsData || []).map(slot => {
         const slotParticipants = participantsData?.filter(p => p.slot_id === slot.id) || [];
         return {
@@ -130,19 +138,17 @@ export default function ManageActivityScreen() {
             day: 'numeric', 
             month: 'short' 
           }),
-          timeStart: slot.time_start?.slice(0, 5) || '',
+          timeStart: slot.time_start?.slice(0, 5) || slot.time?.slice(0, 5) || '',
           timeEnd: slot.time_end?.slice(0, 5) || '',
           participants: slotParticipants.length,
           maxParticipants: activityData.max_participants,
           hasGroup: convMap.has(slot.id),
           groupId: convMap.get(slot.id),
+          hasSlotGroups: slotsWithGroups.has(slot.id),
         };
       });
 
-      // Calculer le total des participants
       const totalParticipants = participantsData?.length || 0;
-
-      // Calculer le revenu total
       const totalRevenue = totalParticipants * (activityData.prix || 0);
 
       setActivity({
@@ -153,14 +159,13 @@ export default function ManageActivityScreen() {
         totalParticipants,
         maxParticipants: activityData.max_participants,
         totalRevenue,
-        averageRating: 0, // À implémenter avec un système d'avis
+        averageRating: 0,
         reviewCount: 0,
         status: activityData.status || 'active',
         createdAt: activityData.created_at,
         slots,
       });
 
-      // Formater les participants
       const formattedParticipants: Participant[] = (participantsData || []).map((p: any) => ({
         id: p.user_id,
         name: p.profiles?.full_name || 'Participant',
@@ -169,6 +174,7 @@ export default function ManageActivityScreen() {
         slotDate: p.activity_slots?.date 
           ? new Date(p.activity_slots.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
           : '',
+        slotId: p.slot_id,
       }));
 
       setParticipants(formattedParticipants);
@@ -182,6 +188,11 @@ export default function ManageActivityScreen() {
 
   const handleViewGroup = (groupId: string, slotDate: string) => {
     router.push(`/business-group-view?id=${groupId}&name=${encodeURIComponent(`${activity?.title} - ${slotDate}`)}`);
+  };
+
+  const handleManageGroups = (slot: SlotStats) => {
+    setSelectedSlotForGroups(slot);
+    setShowGroupsModal(true);
   };
 
   const handleEditActivity = () => {
@@ -229,6 +240,10 @@ export default function ManageActivityScreen() {
     }
   };
 
+  const handleViewParticipant = (participantId: string) => {
+    router.push(`/user-profile?id=${participantId}`);
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -258,7 +273,6 @@ export default function ManageActivityScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.headerButton} onPress={() => router.back()}>
           <IconSymbol name="chevron.left" size={24} color={colors.text} />
@@ -270,7 +284,6 @@ export default function ManageActivityScreen() {
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Hero Section */}
         <View style={styles.heroSection}>
           <Image source={{ uri: activity.image || 'https://via.placeholder.com/400' }} style={styles.heroImage} />
           <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} style={styles.heroGradient} />
@@ -289,7 +302,6 @@ export default function ManageActivityScreen() {
           </View>
         </View>
 
-        {/* Stats Cards */}
         <View style={styles.statsGrid}>
           <View style={styles.statCard}>
             <IconSymbol name="person.2.fill" size={24} color={colors.primary} />
@@ -320,7 +332,6 @@ export default function ManageActivityScreen() {
           </View>
         </View>
 
-        {/* Tabs */}
         <View style={styles.tabsContainer}>
           <TouchableOpacity
             style={[styles.tab, activeTab === 'overview' && styles.tabActive]}
@@ -342,11 +353,9 @@ export default function ManageActivityScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Tab Content */}
         <View style={styles.tabContent}>
           {activeTab === 'overview' && (
             <View>
-              {/* Actions rapides */}
               <Text style={styles.sectionTitle}>Actions rapides</Text>
               
               <TouchableOpacity style={styles.actionCard} onPress={handleEditActivity}>
@@ -360,10 +369,7 @@ export default function ManageActivityScreen() {
                 <IconSymbol name="chevron.right" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
 
-              <TouchableOpacity 
-                style={styles.actionCard} 
-                onPress={() => setShowSlotModal(true)}
-              >
+              <TouchableOpacity style={styles.actionCard} onPress={() => setShowSlotModal(true)}>
                 <View style={[styles.actionIcon, { backgroundColor: '#10b981' + '20' }]}>
                   <IconSymbol name="plus.circle.fill" size={20} color="#10b981" />
                 </View>
@@ -408,10 +414,7 @@ export default function ManageActivityScreen() {
                 <View style={styles.emptySlots}>
                   <IconSymbol name="calendar.badge.exclamationmark" size={48} color={colors.textSecondary} />
                   <Text style={styles.emptyText}>Aucun créneau</Text>
-                  <TouchableOpacity 
-                    style={styles.addSlotButton}
-                    onPress={() => setShowSlotModal(true)}
-                  >
+                  <TouchableOpacity style={styles.addSlotButton} onPress={() => setShowSlotModal(true)}>
                     <Text style={styles.addSlotButtonText}>Ajouter un créneau</Text>
                   </TouchableOpacity>
                 </View>
@@ -420,7 +423,9 @@ export default function ManageActivityScreen() {
                   <View key={slot.id} style={styles.slotCard}>
                     <View style={styles.slotInfo}>
                       <Text style={styles.slotDate}>{slot.date}</Text>
-                      <Text style={styles.slotTime}>{slot.timeStart} - {slot.timeEnd}</Text>
+                      <Text style={styles.slotTime}>
+                        {slot.timeStart}{slot.timeEnd ? ` - ${slot.timeEnd}` : ''}
+                      </Text>
                       <View style={styles.slotParticipants}>
                         <IconSymbol name="person.2.fill" size={14} color={colors.primary} />
                         <Text style={styles.slotParticipantsText}>
@@ -429,15 +434,39 @@ export default function ManageActivityScreen() {
                       </View>
                     </View>
                     
-                    {slot.hasGroup && slot.groupId && (
-                      <TouchableOpacity 
-                        style={styles.viewGroupButton}
-                        onPress={() => handleViewGroup(slot.groupId!, slot.date)}
-                      >
-                        <IconSymbol name="eye.fill" size={16} color={colors.primary} />
-                        <Text style={styles.viewGroupText}>Voir le groupe</Text>
-                      </TouchableOpacity>
-                    )}
+                    <View style={styles.slotActions}>
+                      {slot.participants >= 2 && (
+                        <TouchableOpacity 
+                          style={[
+                            styles.composeGroupButton,
+                            slot.hasSlotGroups && styles.composeGroupButtonActive
+                          ]}
+                          onPress={() => handleManageGroups(slot)}
+                        >
+                          <IconSymbol 
+                            name="person.3.fill" 
+                            size={16} 
+                            color={slot.hasSlotGroups ? colors.background : colors.primary} 
+                          />
+                          <Text style={[
+                            styles.composeGroupText,
+                            slot.hasSlotGroups && styles.composeGroupTextActive
+                          ]}>
+                            {slot.hasSlotGroups ? 'Groupes' : 'Composer'}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                      
+                      {slot.hasGroup && slot.groupId && (
+                        <TouchableOpacity 
+                          style={styles.viewGroupButton}
+                          onPress={() => handleViewGroup(slot.groupId!, slot.date)}
+                        >
+                          <IconSymbol name="bubble.left.and.bubble.right.fill" size={16} color={colors.primary} />
+                          <Text style={styles.viewGroupText}>Chat</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
                   </View>
                 ))
               )}
@@ -450,20 +479,20 @@ export default function ManageActivityScreen() {
               
               {participants.length === 0 ? (
                 <View style={styles.emptyParticipants}>
-                  <IconSymbol name="person.2" size={48} color={colors.textSecondary} />
+                  <IconSymbol name="person.crop.circle.badge.questionmark" size={48} color={colors.textSecondary} />
                   <Text style={styles.emptyText}>Aucun participant</Text>
-                  <Text style={styles.emptySubtext}>Les participants apparaîtront ici</Text>
+                  <Text style={styles.emptySubtext}>Les participants apparaîtront ici une fois inscrits</Text>
                 </View>
               ) : (
                 participants.map(participant => (
                   <TouchableOpacity 
                     key={participant.id} 
                     style={styles.participantCard}
-                    onPress={() => router.push(`/user-profile?id=${participant.id}`)}
+                    onPress={() => handleViewParticipant(participant.id)}
                   >
-                    <Image 
-                      source={{ uri: participant.avatar || 'https://via.placeholder.com/44' }} 
-                      style={styles.participantAvatar} 
+                    <Image
+                      source={{ uri: participant.avatar || 'https://via.placeholder.com/44' }}
+                      style={styles.participantAvatar}
                     />
                     <View style={styles.participantInfo}>
                       <Text style={styles.participantName}>{participant.name}</Text>
@@ -479,39 +508,65 @@ export default function ManageActivityScreen() {
           )}
         </View>
 
-        {/* Bottom spacing */}
         <View style={{ height: 40 }} />
       </ScrollView>
 
+      <Modal
+        visible={showSlotModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowSlotModal(false)}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalSlotHeader}>
+            <TouchableOpacity onPress={() => setShowSlotModal(false)}>
+              <Text style={styles.modalCancelText}>Annuler</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalSlotTitle}>Ajouter un créneau</Text>
+            <TouchableOpacity onPress={() => setShowSlotModal(false)}>
+              <Text style={styles.modalSlotDone}>Terminé</Text>
+            </TouchableOpacity>
+          </View>
+          
+          <ActivityCalendar
+            mode="edit"
+            activityId={activity?.id}
+            onSlotsChange={() => {
+              loadActivityData();
+            }}
+          />
+        </SafeAreaView>
+      </Modal>
 
-      {/* Modal Calendrier pour ajouter des créneaux */}
-<Modal
-  visible={showSlotModal}
-  animationType="slide"
-  presentationStyle="pageSheet"
-  onRequestClose={() => setShowSlotModal(false)}
->
-  <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-    <View style={styles.modalSlotHeader}>
-      <TouchableOpacity onPress={() => setShowSlotModal(false)}>
-        <IconSymbol name="xmark" size={24} color={colors.text} />
-      </TouchableOpacity>
-      <Text style={styles.modalSlotTitle}>Gérer les créneaux</Text>
-      <TouchableOpacity onPress={() => {
-        setShowSlotModal(false);
-        loadActivityData(); // Recharger les données
-      }}>
-        <Text style={styles.modalSlotDone}>Terminé</Text>
-      </TouchableOpacity>
-    </View>
-    <ScrollView style={{ flex: 1, padding: 20 }}>
-      <ActivityCalendar
-        activityId={activity?.id}
-        mode="edit"
-      />
-    </ScrollView>
-  </SafeAreaView>
-</Modal>
+      <Modal
+        visible={showGroupsModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowGroupsModal(false)}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalSlotHeader}>
+            <TouchableOpacity onPress={() => setShowGroupsModal(false)}>
+              <Text style={styles.modalCancelText}>Fermer</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalSlotTitle}>Composition des groupes</Text>
+            <View style={{ width: 60 }} />
+          </View>
+          
+          {selectedSlotForGroups && (
+            <View style={styles.groupsModalContent}>
+              <SlotGroupsView
+                slotId={selectedSlotForGroups.id}
+                slotDate={selectedSlotForGroups.date}
+                participantCount={selectedSlotForGroups.participants}
+                onGroupsGenerated={() => {
+                  loadActivityData();
+                }}
+              />
+            </View>
+          )}
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -581,6 +636,7 @@ const styles = StyleSheet.create({
   heroImage: {
     width: '100%',
     height: '100%',
+    backgroundColor: colors.border,
   },
   heroGradient: {
     ...StyleSheet.absoluteFillObject,
@@ -594,12 +650,12 @@ const styles = StyleSheet.create({
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    alignSelf: 'flex-start',
     backgroundColor: 'rgba(0,0,0,0.5)',
     paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-    alignSelf: 'flex-start',
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 6,
     marginBottom: 8,
   },
   statusDot: {
@@ -610,16 +666,16 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 12,
     fontWeight: '600',
-    color: colors.text,
+    color: '#fff',
   },
   heroTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '700',
-    color: colors.text,
+    color: '#fff',
   },
   heroCategory: {
     fontSize: 14,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.8)',
     marginTop: 4,
   },
   statsGrid: {
@@ -743,6 +799,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
     marginTop: 4,
+    textAlign: 'center',
   },
   addSlotButton: {
     backgroundColor: colors.primary,
@@ -789,6 +846,31 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: colors.primary,
   },
+  slotActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  composeGroupButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.primary + '20',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  composeGroupButtonActive: {
+    backgroundColor: colors.primary,
+  },
+  composeGroupText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  composeGroupTextActive: {
+    color: colors.background,
+  },
   viewGroupButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -830,27 +912,39 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text,
   },
-  modalSlotHeader: {
-  flexDirection: 'row',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  padding: 20,
-  borderBottomWidth: 1,
-  borderBottomColor: colors.border,
-},
-modalSlotTitle: {
-  fontSize: 18,
-  fontWeight: '700',
-  color: colors.text,
-},
-modalSlotDone: {
-  fontSize: 16,
-  fontWeight: '600',
-  color: colors.primary,
-},
   participantMeta: {
     fontSize: 12,
     color: colors.textSecondary,
     marginTop: 2,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  modalSlotHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  modalSlotTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  modalSlotDone: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  modalCancelText: {
+    fontSize: 16,
+    color: colors.textSecondary,
+  },
+  groupsModalContent: {
+    flex: 1,
+    padding: 20,
   },
 });
