@@ -1,5 +1,5 @@
 // app/user-profile.tsx
-// Page de profil d'un autre utilisateur avec détection entreprise et intention
+// Page de profil d'un autre utilisateur avec intention et personality_tags
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
+import { PersonalityTagsBadges } from '@/components/PersonalityTagsBadges';
 import { colors } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
 import { blockService } from '@/services/block.service';
@@ -29,7 +30,8 @@ interface UserProfile {
   bio?: string;
   city?: string;
   interests: string[];
-  intention: UserIntention;  // ✅ NOUVEAU
+  intention: UserIntention;
+  personality_tags: string[];
   is_friend: boolean;
   request_sent: boolean;
   activities_joined: number;
@@ -50,6 +52,9 @@ export default function UserProfileScreen() {
 
   // Vérifier si l'utilisateur actuel est une entreprise
   const isCurrentUserBusiness = currentUserProfile?.account_type === 'business';
+
+  // Récupérer les infos de l'intention
+  const intentionInfo = profile?.intention ? getIntentionInfo(profile.intention) : null;
 
   useEffect(() => {
     loadProfile();
@@ -75,10 +80,10 @@ export default function UserProfileScreen() {
         return;
       }
 
-      // Récupérer le profil utilisateur complet (avec intention)
+      // Récupérer le profil utilisateur complet
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
-        .select('full_name, avatar_url, bio, city, interests, account_type, intention')
+        .select('full_name, avatar_url, bio, city, interests, intention, personality_tags, account_type')
         .eq('id', targetId)
         .single();
 
@@ -130,12 +135,13 @@ export default function UserProfileScreen() {
 
       const userProfile: UserProfile = {
         id: targetId,
-        full_name: profileData.full_name,
+        full_name: profileData.full_name || 'Utilisateur',
         avatar_url: profileData.avatar_url || undefined,
         bio: profileData.bio || undefined,
         city: profileData.city || undefined,
         interests: profileData.interests || [],
-        intention: profileData.intention || null,  // ✅ NOUVEAU
+        intention: profileData.intention || null,
+        personality_tags: profileData.personality_tags || [],
         is_friend: isFriend,
         request_sent: alreadyRequested,
         activities_joined: joinedCount ?? 0,
@@ -144,23 +150,24 @@ export default function UserProfileScreen() {
       };
 
       setProfile(userProfile);
-    } catch (error) {
-      console.error('Erreur chargement profil:', error);
+    } catch (error: any) {
+      console.error('Error loading profile:', error);
+      Alert.alert('Erreur', error.message || 'Impossible de charger le profil');
     } finally {
       setLoading(false);
     }
   };
 
   const handleSendFriendRequest = async () => {
-    if (!profile || isCurrentUserBusiness) return;
-
+    if (!profile) return;
     setSendingRequest(true);
+
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData?.user) throw new Error('Non connecté');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Non connecté');
 
       const { error } = await supabase.from('friend_requests').insert({
-        sender_id: userData.user.id,
+        sender_id: user.id,
         receiver_id: profile.id,
         status: 'pending',
       });
@@ -169,33 +176,39 @@ export default function UserProfileScreen() {
 
       setProfile(prev => prev ? { ...prev, request_sent: true } : null);
       Alert.alert('Succès', 'Demande d\'ami envoyée !');
-    } catch (error) {
-      console.error('Erreur envoi demande:', error);
-      Alert.alert('Erreur', 'Impossible d\'envoyer la demande');
+    } catch (error: any) {
+      console.error('Error sending friend request:', error);
+      Alert.alert('Erreur', error.message || 'Impossible d\'envoyer la demande');
     } finally {
       setSendingRequest(false);
     }
   };
 
+  const handleStartConversation = () => {
+    if (profile) {
+      router.push(`/chat?recipientId=${profile.id}`);
+    }
+  };
+
   const handleBlockUser = async () => {
     if (!profile) return;
+    setShowOptionsModal(false);
 
     Alert.alert(
       'Bloquer cet utilisateur ?',
-      'Vous ne pourrez plus voir ses messages ni interagir avec lui.',
+      'Vous ne pourrez plus voir ses messages ni ses activités.',
       [
         { text: 'Annuler', style: 'cancel' },
         {
           text: 'Bloquer',
           style: 'destructive',
           onPress: async () => {
-            try {
-              await blockService.blockUser(profile.id);
+            const result = await blockService.blockUser(profile.id);
+            if (result.success) {
               setIsBlocked(true);
-              setShowOptionsModal(false);
-              Alert.alert('Utilisateur bloqué', 'Cet utilisateur a été bloqué.');
-            } catch (error) {
-              Alert.alert('Erreur', 'Impossible de bloquer cet utilisateur');
+              Alert.alert('Succès', 'Utilisateur bloqué');
+            } else {
+              Alert.alert('Erreur', result.error || 'Impossible de bloquer');
             }
           },
         },
@@ -206,38 +219,14 @@ export default function UserProfileScreen() {
   const handleUnblockUser = async () => {
     if (!profile) return;
 
-    try {
-      await blockService.unblockUser(profile.id);
+    const result = await blockService.unblockUser(profile.id);
+    if (result.success) {
       setIsBlocked(false);
-      Alert.alert('Utilisateur débloqué', 'Vous pouvez à nouveau interagir avec cet utilisateur.');
-    } catch (error) {
-      Alert.alert('Erreur', 'Impossible de débloquer cet utilisateur');
+      Alert.alert('Succès', 'Utilisateur débloqué');
+    } else {
+      Alert.alert('Erreur', result.error || 'Impossible de débloquer');
     }
   };
-
-  const handleStartConversation = async () => {
-    if (!profile || isCurrentUserBusiness) return;
-
-    try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData?.user) throw new Error('Non connecté');
-
-      // Vérifier si une conversation existe déjà
-      const { data: existingConv } = await supabase.rpc('get_or_create_conversation', {
-        p_other_user_id: profile.id
-      });
-
-      if (existingConv) {
-        router.push(`/conversation?id=${existingConv}`);
-      }
-    } catch (error) {
-      console.error('Erreur conversation:', error);
-      Alert.alert('Erreur', 'Impossible de démarrer la conversation');
-    }
-  };
-
-  // ✅ NOUVEAU: Fonction pour obtenir les infos d'intention
-  const intentionInfo = profile?.intention ? getIntentionInfo(profile.intention) : null;
 
   if (loading) {
     return (
@@ -266,14 +255,11 @@ export default function UserProfileScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <IconSymbol name="chevron.left" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Profil</Text>
-        <TouchableOpacity
-          style={styles.optionsButton}
-          onPress={() => setShowOptionsModal(true)}
-        >
+        <TouchableOpacity onPress={() => setShowOptionsModal(true)} style={styles.optionsButton}>
           <IconSymbol name="ellipsis" size={24} color={colors.text} />
         </TouchableOpacity>
       </View>
@@ -283,7 +269,7 @@ export default function UserProfileScreen() {
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
-        {/* Avatar et nom */}
+        {/* Profile Header */}
         <View style={styles.profileHeader}>
           <Image
             source={{ uri: profile.avatar_url || 'https://via.placeholder.com/120' }}
@@ -304,7 +290,7 @@ export default function UserProfileScreen() {
           )}
         </View>
 
-        {/* ✅ NOUVEAU: Affichage de l'intention */}
+        {/* Intention */}
         {intentionInfo && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Recherche</Text>
@@ -326,6 +312,14 @@ export default function UserProfileScreen() {
             <View style={styles.card}>
               <Text style={styles.bio}>{profile.bio}</Text>
             </View>
+          </View>
+        )}
+
+        {/* Personality Tags */}
+        {profile.personality_tags.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Personnalité</Text>
+            <PersonalityTagsBadges tags={profile.personality_tags} />
           </View>
         )}
 
@@ -574,7 +568,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     lineHeight: 22,
   },
-  // ✅ NOUVEAU: Styles pour l'intention
   intentionCard: {
     flexDirection: 'row',
     alignItems: 'center',

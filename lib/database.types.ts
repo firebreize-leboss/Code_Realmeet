@@ -1,5 +1,5 @@
 // lib/database.types.ts
-// Types mis à jour avec support des comptes entreprise et intention
+// Types mis à jour avec support des comptes entreprise, intention et personality_tags
 
 export type Json =
   | string
@@ -26,7 +26,8 @@ export interface Database {
           date_of_birth: string | null
           phone: string | null
           interests: string[] | null
-          intention: UserIntention  // ✅ NOUVEAU
+          intention: UserIntention
+          personality_tags: string[] | null
           created_at: string
           updated_at: string
           // Business fields
@@ -57,7 +58,8 @@ export interface Database {
           date_of_birth?: string | null
           phone?: string | null
           interests?: string[] | null
-          intention?: UserIntention  // ✅ NOUVEAU
+          intention?: UserIntention
+          personality_tags?: string[] | null
           created_at?: string
           updated_at?: string
           // Business fields
@@ -88,7 +90,8 @@ export interface Database {
           date_of_birth?: string | null
           phone?: string | null
           interests?: string[] | null
-          intention?: UserIntention  // ✅ NOUVEAU
+          intention?: UserIntention
+          personality_tags?: string[] | null
           created_at?: string
           updated_at?: string
           // Business fields
@@ -424,7 +427,7 @@ export interface BusinessDashboardData {
   }>
 }
 
-// ✅ NOUVEAU: Constantes pour les intentions
+// Constantes pour les intentions
 export const INTENTION_OPTIONS = [
   { value: 'amicaux', label: 'Rencontres amicales', icon: 'person.2.fill', color: '#10B981' },
   { value: 'rencontres', label: 'Rencontres amoureuses', icon: 'heart.fill', color: '#EC4899' },

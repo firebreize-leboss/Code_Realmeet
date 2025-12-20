@@ -1,5 +1,5 @@
 // app/edit-profile.tsx
-// Écran d'édition de profil avec intention
+// Écran d'édition de profil avec intention et personality_tags
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -18,6 +18,7 @@ import { router } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { InterestSelector } from '@/components/InterestSelector';
 import { IntentionSelector } from '@/components/IntentionSelector';
+import { PersonalityTagsSelector } from '@/components/PersonalityTagsSelector';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { useAuth } from '@/contexts/AuthContext';
 import { userService } from '@/services/user.service';
@@ -34,7 +35,8 @@ export default function EditProfileScreen() {
   const [city, setCity] = useState('');
   const [phone, setPhone] = useState('');
   const [interests, setInterests] = useState<string[]>([]);
-  const [intention, setIntention] = useState<UserIntention>(null);  // ✅ NOUVEAU
+  const [intention, setIntention] = useState<UserIntention>(null);
+  const [personalityTags, setPersonalityTags] = useState<string[]>([]);
   const [profileImage, setProfileImage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -44,7 +46,8 @@ export default function EditProfileScreen() {
       setCity(profile.city || '');
       setPhone(profile.phone || '');
       setInterests(profile.interests || []);
-      setIntention(profile.intention || null);  // ✅ NOUVEAU
+      setIntention(profile.intention || null);
+      setPersonalityTags(profile.personality_tags || []);
       setProfileImage(profile.avatar_url);
     }
   }, [profile]);
@@ -78,24 +81,21 @@ export default function EditProfileScreen() {
         city: city.trim() || null,
         phone: phone.trim() || null,
         interests: interests.length > 0 ? interests : null,
-        intention: intention,  // ✅ NOUVEAU
+        intention: intention,
+        personality_tags: personalityTags.length > 0 ? personalityTags : null,
         avatar_url: avatarUrl,
       });
 
       if (result.success) {
         await refreshProfile();
-        Alert.alert('Succès', 'Profil mis à jour !');
-
-        // FIX navigation: timeout obligatoire pour Expo Router
-        setTimeout(() => {
-          router.back();
-        }, 150);
-
+        Alert.alert('Succès', 'Profil mis à jour !', [
+          { text: 'OK', onPress: () => router.back() }
+        ]);
       } else {
-        Alert.alert('Erreur', result.error);
+        Alert.alert('Erreur', result.error || 'Erreur lors de la mise à jour');
       }
     } catch (error: any) {
-      Alert.alert('Erreur', error.message);
+      Alert.alert('Erreur', error.message || 'Une erreur est survenue');
     } finally {
       setLoading(false);
     }
@@ -113,7 +113,7 @@ export default function EditProfileScreen() {
   return (
     <SafeAreaView style={commonStyles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <IconSymbol name="chevron.left" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Modifier le profil</Text>
@@ -124,14 +124,18 @@ export default function EditProfileScreen() {
         style={styles.scrollView}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
+        {/* Avatar */}
         <View style={styles.avatarSection}>
-          <Image
-            source={{ uri: profileImage || 'https://via.placeholder.com/120' }}
-            style={styles.avatar}
-          />
-          <TouchableOpacity style={styles.changePhotoButton} onPress={handleImagePick}>
-            <IconSymbol name="camera.fill" size={20} color={colors.primary} />
+          <TouchableOpacity onPress={handleImagePick}>
+            <Image
+              source={{ uri: profileImage || 'https://via.placeholder.com/120' }}
+              style={styles.avatar}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleImagePick} style={styles.changePhotoButton}>
+            <IconSymbol name="camera.fill" size={18} color={colors.primary} />
             <Text style={styles.changePhotoText}>Changer la photo</Text>
           </TouchableOpacity>
         </View>
@@ -198,12 +202,22 @@ export default function EditProfileScreen() {
             </View>
           </View>
 
-          {/* ✅ NOUVEAU: INTENTION */}
+          {/* INTENTION */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Je recherche sur RealMeet</Text>
             <IntentionSelector
               selectedIntention={intention}
               onIntentionChange={setIntention}
+            />
+          </View>
+
+          {/* PERSONALITY TAGS */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Personnalité</Text>
+            <PersonalityTagsSelector
+              selectedTags={personalityTags}
+              onTagsChange={setPersonalityTags}
+              maxSelection={5}
             />
           </View>
 
