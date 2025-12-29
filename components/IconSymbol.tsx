@@ -46,6 +46,11 @@ const MAPPING = {
   "bell.slash": "notifications-off",
   "heart.fill": "favorite",
   "heart": "favorite-border",
+  "person.badge.plus": "person-add",
+  "person.2.slash": "person-off",
+  "eye.slash": "visibility-off",
+  "clock": "schedule",
+  "figure.run": "directions-run",
 
   // Actions & Controls
   "plus": "add",
