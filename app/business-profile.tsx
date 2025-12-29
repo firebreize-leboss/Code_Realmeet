@@ -20,6 +20,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
+import ReviewsCarousel from '@/components/ReviewsCarousel';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const COVER_HEIGHT = 180;
@@ -296,6 +297,14 @@ export default function BusinessPublicProfileScreen() {
               {business.business_rating?.toFixed(1) || '0.0'} ({business.business_review_count || 0} avis)
             </Text>
           </View>
+
+          {/* Carrousel d'avis */}
+          {business.business_review_count > 0 && (
+            <ReviewsCarousel 
+              businessId={business.id}
+              onPressReview={(activityId) => router.push(`/activity-detail?id=${activityId}`)}
+            />
+          )}
 
           {/* Quick Stats */}
           <View style={styles.statsRow}>

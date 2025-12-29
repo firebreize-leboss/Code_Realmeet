@@ -1,5 +1,5 @@
 // lib/database.types.ts
-// Types mis à jour avec support des comptes entreprise, intention, personality_tags et slot_groups
+// Types mis à jour avec support des comptes entreprise, intention, personality_tags, slot_groups et reviews
 
 export type Json =
   | string
@@ -81,7 +81,6 @@ export interface Database {
           business_review_count?: number
           expo_push_token?: string | null
           notifications_enabled?: boolean
-          
         }
         Update: {
           id?: string
@@ -357,6 +356,29 @@ export interface Database {
           created_at?: string
         }
       }
+      friend_requests: {
+        Row: {
+          id: string
+          sender_id: string
+          receiver_id: string
+          status: 'pending' | 'accepted' | 'rejected'
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          sender_id: string
+          receiver_id: string
+          status?: 'pending' | 'accepted' | 'rejected'
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          sender_id?: string
+          receiver_id?: string
+          status?: 'pending' | 'accepted' | 'rejected'
+          created_at?: string
+        }
+      }
       friendships: {
         Row: {
           id: string
@@ -377,32 +399,6 @@ export interface Database {
           created_at?: string
         }
       }
-      friend_requests: {
-        Row: {
-          id: string
-          sender_id: string
-          receiver_id: string
-          status: 'pending' | 'accepted' | 'rejected'
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          sender_id: string
-          receiver_id: string
-          status?: 'pending' | 'accepted' | 'rejected'
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          sender_id?: string
-          receiver_id?: string
-          status?: 'pending' | 'accepted' | 'rejected'
-          created_at?: string
-          updated_at?: string
-        }
-      }
       blocked_users: {
         Row: {
           id: string
@@ -420,6 +416,38 @@ export interface Database {
           id?: string
           blocker_id?: string
           blocked_id?: string
+          created_at?: string
+        }
+      }
+      reports: {
+        Row: {
+          id: string
+          reported_by: string
+          target_type: 'profile' | 'message' | 'activity'
+          target_id: string
+          reason: string
+          description: string | null
+          status: 'pending' | 'reviewed' | 'resolved'
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          reported_by: string
+          target_type: 'profile' | 'message' | 'activity'
+          target_id: string
+          reason: string
+          description?: string | null
+          status?: 'pending' | 'reviewed' | 'resolved'
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          reported_by?: string
+          target_type?: 'profile' | 'message' | 'activity'
+          target_id?: string
+          reason?: string
+          description?: string | null
+          status?: 'pending' | 'reviewed' | 'resolved'
           created_at?: string
         }
       }
@@ -466,7 +494,28 @@ export interface Database {
           payment_status: 'pending' | 'completed' | 'refunded' | 'cancelled'
           created_at: string
         }
-        reviews: {
+        Insert: {
+          id?: string
+          activity_id: string
+          business_id: string
+          participant_id?: string | null
+          amount: number
+          currency?: string
+          payment_status?: 'pending' | 'completed' | 'refunded' | 'cancelled'
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          activity_id?: string
+          business_id?: string
+          participant_id?: string | null
+          amount?: number
+          currency?: string
+          payment_status?: 'pending' | 'completed' | 'refunded' | 'cancelled'
+          created_at?: string
+        }
+      }
+      reviews: {
         Row: {
           id: string
           activity_id: string
@@ -492,31 +541,14 @@ export interface Database {
           created_at?: string
         }
       }
-        Insert: {
-          id?: string
-          activity_id: string
-          business_id: string
-          participant_id?: string | null
-          amount: number
-          currency?: string
-          payment_status?: 'pending' | 'completed' | 'refunded' | 'cancelled'
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          activity_id?: string
-          business_id?: string
-          participant_id?: string | null
-          amount?: number
-          currency?: string
-          payment_status?: 'pending' | 'completed' | 'refunded' | 'cancelled'
-          created_at?: string
-        }
-      }
     }
     Functions: {
       get_business_dashboard: {
         Args: { p_business_id: string }
+        Returns: Json
+      }
+      submit_review: {
+        Args: { p_activity_id: string; p_rating: number; p_comment?: string }
         Returns: Json
       }
     }
@@ -547,8 +579,10 @@ export type Message = Database['public']['Tables']['messages']['Row']
 
 export type BusinessStats = Database['public']['Tables']['business_stats']['Row']
 export type ActivityRevenue = Database['public']['Tables']['activity_revenue']['Row']
+
 export type Review = Database['public']['Tables']['reviews']['Row']
 export type ReviewInsert = Database['public']['Tables']['reviews']['Insert']
+
 // Business-specific types
 export interface BusinessHours {
   [day: string]: {
@@ -620,11 +654,4 @@ export function getIntentionLabel(intention: UserIntention): string {
 
 export function getIntentionInfo(intention: UserIntention) {
   return INTENTION_OPTIONS.find(o => o.value === intention) || null;
-
-  
-
-  submit_review: {
-        Args: { p_activity_id: string; p_rating: number; p_comment?: string }
-        Returns: Json
-      }
 }

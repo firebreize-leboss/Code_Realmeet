@@ -81,6 +81,7 @@ export default function ActivityDetailScreen() {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [hasAlreadyReviewed, setHasAlreadyReviewed] = useState(false);
   const [canReview, setCanReview] = useState(false);
+  const [activityRating, setActivityRating] = useState<{ average: number; count: number } | null>(null);
 
 
   useEffect(() => {
@@ -209,17 +210,45 @@ export default function ActivityDetailScreen() {
           includes: activityData.inclusions || [],
           rules: activityData.regles || [],
         });
-        // Vérifier si l'activité est passée
-const checkIfPast = () => {
-  if (selectedSlot) {
-    const slotDateTime = new Date(`${selectedSlot.date}T${selectedSlot.time}`);
-    return slotDateTime < new Date();
-  }
-  return false;
-};
-setIsActivityPast(checkIfPast());
-// Vérifier éligibilité pour laisser un avis
-        if (userId && checkIfPast() && !isBusiness) {
+
+        // Charger la note moyenne de l'activité
+        const { data: reviewsData } = await supabase
+          .from('reviews')
+          .select('rating')
+          .eq('activity_id', activityId);
+
+        if (reviewsData && reviewsData.length > 0) {
+          const avgRating = reviewsData.reduce((sum, r) => sum + r.rating, 0) / reviewsData.length;
+          setActivityRating({
+            average: Math.round(avgRating * 10) / 10,
+            count: reviewsData.length,
+          });
+        }
+        // Vérifier si l'activité est passée (utiliser passedSlotId ou le slot récupéré)
+        let activityIsPast = false;
+        let userSlotDate: string | null = null;
+        let userSlotTime: string | null = null;
+
+        // Si on a un slotId passé en paramètre (venant de l'onglet "past")
+        if (passedSlotId) {
+          const { data: slotInfo } = await supabase
+            .from('activity_slots')
+            .select('date, time')
+            .eq('id', passedSlotId)
+            .single();
+          
+          if (slotInfo) {
+            userSlotDate = slotInfo.date;
+            userSlotTime = slotInfo.time?.slice(0, 5) || '00:00';
+            const slotDateTime = new Date(`${slotInfo.date}T${slotInfo.time || '00:00'}`);
+            activityIsPast = slotDateTime < new Date();
+          }
+        }
+
+        setIsActivityPast(activityIsPast);
+
+        // Vérifier éligibilité pour laisser un avis
+        if (userId && activityIsPast && !isBusiness && activityData.host_id !== userId) {
           // Vérifier si l'utilisateur a déjà laissé un avis
           const { data: existingReview } = await supabase
             .from('reviews')
@@ -607,6 +636,18 @@ if (shouldShowParticipants) {
             <View style={styles.titleContainer}>
               <Text style={styles.title}>{activity.title}</Text>
               <Text style={styles.subtitle}>{activity.host.type}</Text>
+              {/* Note de l'activité */}
+              {activityRating && activityRating.count > 0 && (
+                <View style={styles.activityRatingRow}>
+                  <IconSymbol name="star.fill" size={16} color="#FFD700" />
+                  <Text style={styles.activityRatingText}>
+                    {activityRating.average.toFixed(1)}
+                  </Text>
+                  <Text style={styles.activityRatingCount}>
+                    ({activityRating.count} avis)
+                  </Text>
+                </View>
+              )}
             </View>
             <View style={[styles.categoryBadge, { backgroundColor: `${colors.primary}20` }]}>
               <Text style={styles.categoryText}>{activity.category}</Text>
@@ -741,9 +782,15 @@ if (shouldShowParticipants) {
         ))}
       </View>
     )}
+  </View>
+)}
 
-    {/* Bouton Noter - uniquement si activité passée et éligible */}
-    {canReview && !isBusiness && !isHost && (
+{/* Section Review - Affichée pour toute activité passée */}
+{isActivityPast && !isHost && !isBusiness && (
+  <View style={styles.section}>
+    <Text style={styles.sectionTitle}>Votre avis</Text>
+    
+    {canReview ? (
       <TouchableOpacity
         style={styles.reviewButton}
         onPress={() => setShowReviewModal(true)}
@@ -751,14 +798,12 @@ if (shouldShowParticipants) {
         <IconSymbol name="star.fill" size={20} color={colors.background} />
         <Text style={styles.reviewButtonText}>Noter cette activité</Text>
       </TouchableOpacity>
-    )}
-
-    {hasAlreadyReviewed && (
+    ) : hasAlreadyReviewed ? (
       <View style={styles.alreadyReviewedBadge}>
         <IconSymbol name="checkmark.circle.fill" size={16} color={colors.primary} />
         <Text style={styles.alreadyReviewedText}>Vous avez déjà noté cette activité</Text>
       </View>
-    )}
+    ) : null}
   </View>
 )}
 
@@ -1006,6 +1051,21 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 14,
+    color: colors.textSecondary,
+  },
+  activityRatingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 8,
+  },
+  activityRatingText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  activityRatingCount: {
+    fontSize: 13,
     color: colors.textSecondary,
   },
   categoryBadge: {
