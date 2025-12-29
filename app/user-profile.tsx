@@ -1,5 +1,5 @@
 // app/user-profile.tsx
-// Page de profil d'un autre utilisateur avec intention et personality_tags
+// Page de profil d'un autre utilisateur avec intention, personality_tags et signalement
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { PersonalityTagsBadges } from '@/components/PersonalityTagsBadges';
+import ReportModal from '@/components/ReportModal';
 import { colors } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
 import { blockService } from '@/services/block.service';
@@ -47,6 +48,7 @@ export default function UserProfileScreen() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [showOptionsModal, setShowOptionsModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
   const [sendingRequest, setSendingRequest] = useState(false);
 
@@ -228,6 +230,15 @@ export default function UserProfileScreen() {
     }
   };
 
+  // Ouvrir la modal de signalement
+  const handleReportUser = () => {
+    setShowOptionsModal(false);
+    // Petit délai pour éviter le chevauchement des modals
+    setTimeout(() => {
+      setShowReportModal(true);
+    }, 300);
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
@@ -388,28 +399,18 @@ export default function UserProfileScreen() {
 
                 {/* Badge demande envoyée */}
                 {profile.request_sent && (
-                  <View style={styles.requestSentBadge}>
-                    <IconSymbol name="clock" size={18} color={colors.textSecondary} />
-                    <Text style={styles.requestSentText}>Demande envoyée</Text>
+                  <View style={styles.pendingBadge}>
+                    <IconSymbol name="clock" size={16} color={colors.textSecondary} />
+                    <Text style={styles.pendingText}>Demande envoyée</Text>
                   </View>
                 )}
               </>
             )}
           </View>
         )}
-
-        {/* Message pour les entreprises */}
-        {isCurrentUserBusiness && (
-          <View style={styles.businessNotice}>
-            <IconSymbol name="info.circle.fill" size={20} color={colors.primary} />
-            <Text style={styles.businessNoticeText}>
-              En tant qu'entreprise, vous ne pouvez pas interagir directement avec les utilisateurs
-            </Text>
-          </View>
-        )}
       </ScrollView>
 
-      {/* Modal options */}
+      {/* Modal Options */}
       <Modal
         visible={showOptionsModal}
         transparent
@@ -422,20 +423,51 @@ export default function UserProfileScreen() {
           onPress={() => setShowOptionsModal(false)}
         >
           <View style={styles.modalContent}>
-            <TouchableOpacity style={styles.modalOption} onPress={handleBlockUser}>
-              <IconSymbol name="hand.raised.fill" size={22} color="#EF4444" />
-              <Text style={[styles.modalOptionText, { color: '#EF4444' }]}>Bloquer</Text>
+            <Text style={styles.modalTitle}>Options</Text>
+
+            {/* Option Signaler */}
+            <TouchableOpacity style={styles.modalOption} onPress={handleReportUser}>
+              <IconSymbol name="flag.fill" size={20} color={colors.error} />
+              <Text style={[styles.modalOptionText, { color: colors.error }]}>
+                Signaler cet utilisateur
+              </Text>
             </TouchableOpacity>
+
+            {/* Option Bloquer */}
+            {!isBlocked && (
+              <TouchableOpacity style={styles.modalOption} onPress={handleBlockUser}>
+                <IconSymbol name="hand.raised.fill" size={20} color={colors.textSecondary} />
+                <Text style={styles.modalOptionText}>Bloquer</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Option Débloquer */}
+            {isBlocked && (
+              <TouchableOpacity style={styles.modalOption} onPress={handleUnblockUser}>
+                <IconSymbol name="hand.raised.slash" size={20} color={colors.primary} />
+                <Text style={[styles.modalOptionText, { color: colors.primary }]}>Débloquer</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Bouton Annuler */}
             <TouchableOpacity
-              style={styles.modalOption}
+              style={[styles.modalOption, styles.cancelOption]}
               onPress={() => setShowOptionsModal(false)}
             >
-              <IconSymbol name="xmark" size={22} color={colors.textSecondary} />
-              <Text style={styles.modalOptionText}>Annuler</Text>
+              <Text style={styles.cancelText}>Annuler</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Modal Signalement */}
+      <ReportModal
+        visible={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        targetType="profile"
+        targetId={profile.id}
+        targetName={profile.full_name}
+      />
     </SafeAreaView>
   );
 }
@@ -454,18 +486,17 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    gap: 16,
   },
   errorText: {
     fontSize: 18,
-    color: colors.textSecondary,
-    marginBottom: 20,
+    color: colors.text,
   },
   backButtonLarge: {
     backgroundColor: colors.primary,
     paddingHorizontal: 24,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: 12,
   },
   backButtonText: {
     color: colors.background,
@@ -473,37 +504,26 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
     paddingVertical: 12,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.card,
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: 8,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '600',
     color: colors.text,
   },
   optionsButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.card,
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: 8,
   },
   scrollView: {
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 20,
     paddingBottom: 40,
   },
   profileHeader: {
@@ -514,10 +534,8 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: colors.border,
+    backgroundColor: colors.card,
     marginBottom: 16,
-    borderWidth: 4,
-    borderColor: colors.primary,
   },
   name: {
     fontSize: 24,
@@ -538,11 +556,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 12,
     backgroundColor: colors.primary + '20',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
+    marginTop: 12,
   },
   friendBadgeText: {
     fontSize: 14,
@@ -550,32 +568,23 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   section: {
+    paddingHorizontal: 20,
     marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '700',
     color: colors.text,
     marginBottom: 12,
-  },
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 16,
-  },
-  bio: {
-    fontSize: 15,
-    color: colors.text,
-    lineHeight: 22,
   },
   intentionCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 2,
-    gap: 12,
+    padding: 16,
+    borderRadius: 16,
+    gap: 14,
+    borderWidth: 1,
   },
   intentionIcon: {
     width: 44,
@@ -588,21 +597,32 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  card: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 16,
+  },
+  bio: {
+    fontSize: 15,
+    color: colors.text,
+    lineHeight: 22,
+  },
   interestsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
   },
   interestBadge: {
-    backgroundColor: colors.primary + '20',
+    backgroundColor: colors.card,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   interestText: {
     fontSize: 14,
-    fontWeight: '500',
-    color: colors.primary,
+    color: colors.text,
   },
   statsContainer: {
     flexDirection: 'row',
@@ -611,34 +631,34 @@ const styles = StyleSheet.create({
   statCard: {
     flex: 1,
     backgroundColor: colors.card,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     alignItems: 'center',
   },
   statValue: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '700',
-    color: colors.text,
-    marginBottom: 4,
+    color: colors.primary,
   },
   statLabel: {
-    fontSize: 13,
+    fontSize: 14,
     color: colors.textSecondary,
+    marginTop: 4,
   },
   actionButtons: {
     flexDirection: 'row',
+    paddingHorizontal: 20,
     gap: 12,
-    marginTop: 8,
   },
   messageButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
     backgroundColor: colors.primary,
-    paddingVertical: 14,
+    padding: 14,
     borderRadius: 12,
+    gap: 8,
   },
   messageButtonText: {
     fontSize: 16,
@@ -650,10 +670,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
     backgroundColor: colors.card,
-    paddingVertical: 14,
+    padding: 14,
     borderRadius: 12,
+    gap: 8,
     borderWidth: 1,
     borderColor: colors.primary,
   },
@@ -662,71 +682,73 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.primary,
   },
-  requestSentBadge: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: colors.card,
-    paddingVertical: 14,
-    borderRadius: 12,
-  },
-  requestSentText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
   unblockButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
     backgroundColor: colors.card,
-    paddingVertical: 14,
+    padding: 14,
     borderRadius: 12,
+    gap: 8,
   },
   unblockButtonText: {
     fontSize: 16,
     fontWeight: '600',
     color: colors.text,
   },
-  businessNotice: {
+  pendingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginTop: 24,
-    padding: 16,
-    backgroundColor: colors.primary + '15',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: colors.card,
     borderRadius: 12,
   },
-  businessNoticeText: {
-    flex: 1,
+  pendingText: {
     fontSize: 14,
-    color: colors.primary,
-    lineHeight: 20,
+    color: colors.textSecondary,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: colors.card,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingVertical: 20,
-    paddingBottom: 40,
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: 20,
   },
   modalOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    padding: 16,
+    gap: 14,
+    borderRadius: 12,
+    backgroundColor: colors.card,
+    marginBottom: 10,
   },
   modalOptionText: {
     fontSize: 16,
     color: colors.text,
+  },
+  cancelOption: {
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    marginTop: 10,
+  },
+  cancelText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textSecondary,
   },
 });

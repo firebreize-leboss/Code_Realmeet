@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -21,6 +22,7 @@ import { supabase } from '@/lib/supabase';
 import ActivityCalendar from '@/components/ActivityCalendar';
 import { useBusinessRestrictions } from '@/hooks/useBusinessRestrictions';
 import { LinearGradient } from 'expo-linear-gradient';
+import ReportModal from '@/components/ReportModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -72,6 +74,8 @@ export default function ActivityDetailScreen() {
   name: string;
   avatar: string;
   }>>([]);
+  const [showOptionsModal, setShowOptionsModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
   const [isActivityPast, setIsActivityPast] = useState(false);
 
   useEffect(() => {
@@ -504,6 +508,11 @@ if (shouldShowParticipants) {
     }
   };
 
+  const handleReportActivity = () => {
+    setShowOptionsModal(false);
+    setTimeout(() => setShowReportModal(true), 300);
+  };
+
   // Loading
   if (loading) {
     return (
@@ -542,8 +551,8 @@ if (shouldShowParticipants) {
         <TouchableOpacity style={styles.headerButton} onPress={() => router.back()}>
           <IconSymbol name="chevron.left" size={24} color={colors.text} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.headerButton}>
-          <IconSymbol name="square.and.arrow.up" size={24} color={colors.text} />
+        <TouchableOpacity style={styles.headerButton} onPress={() => setShowOptionsModal(true)}>
+          <IconSymbol name="ellipsis" size={24} color={colors.text} />
         </TouchableOpacity>
       </View>
 
@@ -785,6 +794,62 @@ if (shouldShowParticipants) {
           </TouchableOpacity>
         </View>
       )}
+    {/* Modal Options */}
+      <Modal
+        visible={showOptionsModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowOptionsModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowOptionsModal(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Options</Text>
+
+            {/* Partager */}
+            <TouchableOpacity
+              style={styles.modalOption}
+              onPress={() => {
+                setShowOptionsModal(false);
+                // TODO: Implémenter le partage
+              }}
+            >
+              <IconSymbol name="square.and.arrow.up" size={20} color={colors.text} />
+              <Text style={styles.modalOptionText}>Partager</Text>
+            </TouchableOpacity>
+
+            {/* Signaler - seulement si ce n'est pas notre activité */}
+            {!isHost && (
+              <TouchableOpacity style={styles.modalOption} onPress={handleReportActivity}>
+                <IconSymbol name="flag.fill" size={20} color={colors.error} />
+                <Text style={[styles.modalOptionText, { color: colors.error }]}>
+                  Signaler cette activité
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Annuler */}
+            <TouchableOpacity
+              style={[styles.modalOption, styles.cancelOption]}
+              onPress={() => setShowOptionsModal(false)}
+            >
+              <Text style={styles.cancelText}>Annuler</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Modal Signalement */}
+      <ReportModal
+        visible={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        targetType="activity"
+        targetId={activity?.id || ''}
+        targetName={activity?.title}
+      />
     </SafeAreaView>
   );
 }
@@ -1143,5 +1208,48 @@ participantName: {
     fontSize: 16,
     fontWeight: '600',
     color: colors.background,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: 40,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  modalOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: colors.card,
+    marginBottom: 10,
+  },
+  modalOptionText: {
+    fontSize: 16,
+    color: colors.text,
+  },
+  cancelOption: {
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    marginTop: 10,
+  },
+  cancelText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
 });

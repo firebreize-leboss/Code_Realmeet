@@ -28,6 +28,7 @@ import { Keyboard } from 'react-native';
 import { messageStorageService } from '@/services/message-storage.service';
 import { voiceMessageService } from '@/services/voice-message.service';
 import { blockService } from '@/services/block.service';
+import ReportModal from '@/components/ReportModal';
 
 type MessageType = 'text' | 'image' | 'voice' | 'system';
 
@@ -74,6 +75,10 @@ export default function ChatDetailScreen() {
   // États pour le modal et la sourdine
   const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+
+  // États pour le signalement
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportTargetMessageId, setReportTargetMessageId] = useState<string | null>(null);
 
   const [localMessages, setLocalMessages] = useState<Message[]>([]);
 
@@ -275,6 +280,37 @@ useEffect(() => {
     } catch (error) {
       console.error('Erreur toggle mute:', error);
       Alert.alert('Erreur', 'Impossible de modifier les notifications');
+    }
+  };
+
+  // Gestion du long press sur un message pour signaler
+  const handleMessageLongPress = (messageId: string, senderId: string) => {
+    if (senderId === currentUserId) return;
+
+    Alert.alert(
+      'Options du message',
+      'Que souhaitez-vous faire ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Signaler ce message',
+          style: 'destructive',
+          onPress: () => {
+            setReportTargetMessageId(messageId);
+            setShowReportModal(true);
+          },
+        },
+      ]
+    );
+  };
+
+  // Ouvrir le profil pour signaler l'utilisateur
+  const handleReportUser = () => {
+    setShowOptionsModal(false);
+    if (otherUserId) {
+      setTimeout(() => {
+        router.push(`/user-profile?id=${otherUserId}`);
+      }, 300);
     }
   };
 
@@ -481,8 +517,14 @@ useEffect(() => {
           <Image source={{ uri: msg.senderAvatar || 'https://via.placeholder.com/40' }} style={styles.messageAvatar} />
         )}
 
-        <View style={[styles.messageBubble, isOwnMessage && styles.ownMessageBubble]}>
-          {!isOwnMessage && <Text style={styles.senderName}>{msg.senderName}</Text>}
+        <TouchableOpacity
+          style={[styles.messageBubble, isOwnMessage && styles.ownMessageBubble]}
+          activeOpacity={0.8}
+          onLongPress={() => handleMessageLongPress(msg.id, msg.senderId)}
+          delayLongPress={500}
+          disabled={isOwnMessage}
+        >
+          {!isOwnMessage && isGroup && <Text style={styles.senderName}>{msg.senderName}</Text>}
 
           {msg.text && <Text style={[styles.messageText, isOwnMessage && styles.ownMessageText]}>{msg.text}</Text>}
 
@@ -527,7 +569,7 @@ useEffect(() => {
               </View>
             )}
           </View>
-        </View>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -663,6 +705,14 @@ useEffect(() => {
               <Text style={styles.modalOptionText}>{isMuted ? 'Réactiver les notifications' : 'Mettre en sourdine'}</Text>
             </TouchableOpacity>
 
+            {/* Option Signaler - seulement pour les conversations privées */}
+            {!isGroup && otherUserId && (
+              <TouchableOpacity style={styles.modalOption} onPress={handleReportUser}>
+                <IconSymbol name="flag.fill" size={20} color={colors.error} />
+                <Text style={[styles.modalOptionText, { color: colors.error }]}>Signaler cet utilisateur</Text>
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity style={styles.modalOption} onPress={() => setShowOptionsModal(false)}>
               <IconSymbol name="xmark" size={20} color={colors.textSecondary} />
               <Text style={styles.modalOptionText}>Annuler</Text>
@@ -670,6 +720,17 @@ useEffect(() => {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Modal Signalement de message */}
+      <ReportModal
+        visible={showReportModal}
+        onClose={() => {
+          setShowReportModal(false);
+          setReportTargetMessageId(null);
+        }}
+        targetType="message"
+        targetId={reportTargetMessageId || ''}
+      />
     </SafeAreaView>
   );
 }
