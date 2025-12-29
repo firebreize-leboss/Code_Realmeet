@@ -466,6 +466,32 @@ export interface Database {
           payment_status: 'pending' | 'completed' | 'refunded' | 'cancelled'
           created_at: string
         }
+        reviews: {
+        Row: {
+          id: string
+          activity_id: string
+          reviewer_id: string
+          rating: number
+          comment: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          activity_id: string
+          reviewer_id: string
+          rating: number
+          comment?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          activity_id?: string
+          reviewer_id?: string
+          rating?: number
+          comment?: string | null
+          created_at?: string
+        }
+      }
         Insert: {
           id?: string
           activity_id: string
@@ -521,7 +547,8 @@ export type Message = Database['public']['Tables']['messages']['Row']
 
 export type BusinessStats = Database['public']['Tables']['business_stats']['Row']
 export type ActivityRevenue = Database['public']['Tables']['activity_revenue']['Row']
-
+export type Review = Database['public']['Tables']['reviews']['Row']
+export type ReviewInsert = Database['public']['Tables']['reviews']['Insert']
 // Business-specific types
 export interface BusinessHours {
   [day: string]: {
@@ -593,4 +620,11 @@ export function getIntentionLabel(intention: UserIntention): string {
 
 export function getIntentionInfo(intention: UserIntention) {
   return INTENTION_OPTIONS.find(o => o.value === intention) || null;
+
+  
+
+  submit_review: {
+        Args: { p_activity_id: string; p_rating: number; p_comment?: string }
+        Returns: Json
+      }
 }

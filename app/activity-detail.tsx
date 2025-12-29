@@ -18,11 +18,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';  
 import ActivityCalendar from '@/components/ActivityCalendar';
 import { useBusinessRestrictions } from '@/hooks/useBusinessRestrictions';
 import { LinearGradient } from 'expo-linear-gradient';
 import ReportModal from '@/components/ReportModal';
+import LeaveReviewModal from '@/components/LeaveReviewModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -77,6 +78,10 @@ export default function ActivityDetailScreen() {
   const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [isActivityPast, setIsActivityPast] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [hasAlreadyReviewed, setHasAlreadyReviewed] = useState(false);
+  const [canReview, setCanReview] = useState(false);
+
 
   useEffect(() => {
     loadActivity();
@@ -213,6 +218,19 @@ const checkIfPast = () => {
   return false;
 };
 setIsActivityPast(checkIfPast());
+// Vérifier éligibilité pour laisser un avis
+        if (userId && checkIfPast() && !isBusiness) {
+          // Vérifier si l'utilisateur a déjà laissé un avis
+          const { data: existingReview } = await supabase
+            .from('reviews')
+            .select('id')
+            .eq('activity_id', activityId)
+            .eq('reviewer_id', userId)
+            .maybeSingle();
+
+          setHasAlreadyReviewed(!!existingReview);
+          setCanReview(!existingReview && activityData.host_id !== userId);
+        }
 
 // Si l'activité est passée ou si on veut afficher les participants
 if (shouldShowParticipants) {
@@ -723,6 +741,24 @@ if (shouldShowParticipants) {
         ))}
       </View>
     )}
+
+    {/* Bouton Noter - uniquement si activité passée et éligible */}
+    {canReview && !isBusiness && !isHost && (
+      <TouchableOpacity
+        style={styles.reviewButton}
+        onPress={() => setShowReviewModal(true)}
+      >
+        <IconSymbol name="star.fill" size={20} color={colors.background} />
+        <Text style={styles.reviewButtonText}>Noter cette activité</Text>
+      </TouchableOpacity>
+    )}
+
+    {hasAlreadyReviewed && (
+      <View style={styles.alreadyReviewedBadge}>
+        <IconSymbol name="checkmark.circle.fill" size={16} color={colors.primary} />
+        <Text style={styles.alreadyReviewedText}>Vous avez déjà noté cette activité</Text>
+      </View>
+    )}
   </View>
 )}
 
@@ -794,6 +830,17 @@ if (shouldShowParticipants) {
           </TouchableOpacity>
         </View>
       )}
+    {/* Modal Review */}
+      <LeaveReviewModal
+        visible={showReviewModal}
+        onClose={() => setShowReviewModal(false)}
+        activityId={activity?.id || ''}
+        activityTitle={activity?.title || ''}
+        onReviewSubmitted={() => {
+          setHasAlreadyReviewed(true);
+          setCanReview(false);
+        }}
+      />
     {/* Modal Options */}
       <Modal
         visible={showOptionsModal}
@@ -1147,6 +1194,38 @@ const styles = StyleSheet.create({
   },
   actionButtonTextDisabled: {
     color: colors.textSecondary,
+  },
+  reviewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    gap: 10,
+    marginTop: 16,
+  },
+  reviewButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.background,
+  },
+  alreadyReviewedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary + '15',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    gap: 8,
+    marginTop: 16,
+  },
+  alreadyReviewedText: {
+    fontSize: 14,
+    color: colors.primary,
+    fontWeight: '500',
   },
   businessFooter: {
     flex: 1,
