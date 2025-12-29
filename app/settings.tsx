@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,9 @@ import {
   Switch,
   Platform,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
+import { supabase } from '@/lib/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -19,6 +21,7 @@ import { notificationService } from '@/lib/notifications';
 export default function SettingsScreen() {
   const router = useRouter();
   const [notificationsEnabled, setNotificationsEnabled] = React.useState(true);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [locationEnabled, setLocationEnabled] = React.useState(true);
   // Charger l'état initial des notifications
   React.useEffect(() => {
@@ -126,7 +129,73 @@ export default function SettingsScreen() {
       />
     </View>
   );
+  const handleDeleteAccount = async () => {
+    Alert.alert(
+      'Supprimer mon compte',
+      'Êtes-vous sûr de vouloir supprimer définitivement votre compte ? Cette action est irréversible et toutes vos données seront supprimées.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: () => confirmDeleteAccount(),
+        },
+      ]
+    );
+  };
 
+  const confirmDeleteAccount = async () => {
+    Alert.alert(
+      'Confirmation finale',
+      'Dernière chance ! Voulez-vous vraiment supprimer votre compte et toutes vos données ?',
+      [
+        { text: 'Non, annuler', style: 'cancel' },
+        {
+          text: 'Oui, supprimer définitivement',
+          style: 'destructive',
+          onPress: executeDeleteAccount,
+        },
+      ]
+    );
+  };
+
+  const executeDeleteAccount = async () => {
+    setDeleteLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Non authentifié');
+      }
+
+      const response = await supabase.functions.invoke('delete-account', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      console.log('Delete account response:', response);
+
+      if (response.error) {
+        throw new Error(response.error.message || 'Erreur lors de la suppression');
+      }
+
+      if (response.data?.error) {
+        throw new Error(response.data.error + (response.data.details ? `: ${response.data.details}` : ''));
+      }
+      // Déconnexion et redirection
+      await authService.logoutUser();
+      Alert.alert(
+        'Compte supprimé',
+        'Votre compte a été supprimé avec succès.',
+        [{ text: 'OK', onPress: () => router.replace('/auth/account-type') }]
+      );
+    } catch (error: any) {
+      console.error('Erreur suppression compte:', error);
+      Alert.alert('Erreur', error.message || 'Impossible de supprimer le compte');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
   const handleLogout = async () => {
     const result = await authService.logoutUser();
     if (result.success) {
@@ -248,6 +317,18 @@ export default function SettingsScreen() {
         >
           <Text style={styles.logoutText}>Log Out</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.deleteAccountButton}
+          onPress={handleDeleteAccount}
+          disabled={deleteLoading}
+        >
+          {deleteLoading ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.deleteAccountText}>Supprimer mon compte</Text>
+          )}
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -344,5 +425,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: colors.text,
+  },
+  deleteAccountButton: {
+    backgroundColor: '#DC2626',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 12,
+    marginBottom: 40,
+  },
+  deleteAccountText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });
