@@ -14,11 +14,56 @@ import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { authService } from '@/services/auth.service';
+import { notificationService } from '@/lib/notifications';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const [notificationsEnabled, setNotificationsEnabled] = React.useState(true);
   const [locationEnabled, setLocationEnabled] = React.useState(true);
+  // Charger l'état initial des notifications
+  React.useEffect(() => {
+    const loadNotificationStatus = async () => {
+      const enabled = await notificationService.areNotificationsEnabled();
+      setNotificationsEnabled(enabled);
+      setNotificationsLoading(false);
+    };
+    loadNotificationStatus();
+  }, []);
+
+  // Handler pour le toggle notifications
+  const handleNotificationToggle = async (value: boolean) => {
+    setNotificationsLoading(true);
+    try {
+      // En mode dev, informer l'utilisateur
+      if (__DEV__) {
+        Alert.alert(
+          'Mode développement',
+          'Les notifications push ne sont pas disponibles avec Expo Go. Elles fonctionneront dans la version finale de l\'app.'
+        );
+        setNotificationsLoading(false);
+        return;
+      }
+      
+      const success = await notificationService.toggleNotifications(value);
+      if (success) {
+        setNotificationsEnabled(value);
+        Alert.alert(
+          'Succès',
+          value ? 'Notifications activées' : 'Notifications désactivées'
+        );
+      } else {
+        Alert.alert(
+          'Erreur',
+          'Impossible de modifier les notifications. Vérifiez les permissions dans les réglages de votre téléphone.'
+        );
+      }
+    } catch (error) {
+      console.error('Error toggling notifications:', error);
+      Alert.alert('Erreur', 'Une erreur est survenue');
+    } finally {
+      setNotificationsLoading(false);
+    }
+  };
 
   const SettingItem = ({
     icon,

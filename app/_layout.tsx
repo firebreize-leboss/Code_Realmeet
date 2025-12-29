@@ -7,6 +7,7 @@ import { SystemBars } from "react-native-edge-to-edge";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useColorScheme, Alert } from "react-native";
 import { useNetworkState } from "expo-network";
+
 import {
   DarkTheme,
   DefaultTheme,
@@ -18,6 +19,7 @@ import { StatusBar } from "expo-status-bar";
 import { Button } from "@/components/button";
 import { WidgetProvider } from "@/contexts/WidgetContext";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { notificationService } from "@/lib/notifications";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -38,6 +40,17 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
     }
   }, [loaded]);
+
+  // Initialisation des notifications push (seulement en production)
+  useEffect(() => {
+    if (!__DEV__) {
+      notificationService.initialize();
+      
+      return () => {
+        notificationService.cleanup();
+      };
+    }
+  }, []);
 
   React.useEffect(() => {
     if (

@@ -17,6 +17,9 @@
       "bundleIdentifier": "com.anonymous.Natively",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
+      },
+      "config": {
+        "usesNonExemptEncryption": false
       }
     },
     "android": {
@@ -26,7 +29,8 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.anonymous.Natively",
-      "softwareKeyboardLayoutMode": "resize"
+      "softwareKeyboardLayoutMode": "resize",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "favicon": "./assets/images/final_quest_240x240.png",
@@ -35,14 +39,26 @@
     "plugins": [
       "expo-font",
       "expo-router",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/natively-dark.png",
+          "color": "#000000",
+          "sounds": []
+        }
+      ]
     ],
     "scheme": "natively",
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
-      "router": {}
-    }
+      "router": {},
+      "eas": {
+        "projectId": "06abc2ef-75a1-4994-b48c-146eb6f5d87f"
+      }
+    },
+    "owner": "firebreize"
   }
 }

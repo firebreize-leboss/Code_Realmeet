@@ -46,6 +46,8 @@ export interface Database {
           business_verified: boolean
           business_rating: number
           business_review_count: number
+          expo_push_token: string | null
+          notifications_enabled: boolean
         }
         Insert: {
           id: string
@@ -77,6 +79,9 @@ export interface Database {
           business_verified?: boolean
           business_rating?: number
           business_review_count?: number
+          expo_push_token?: string | null
+          notifications_enabled?: boolean
+          
         }
         Update: {
           id?: string
