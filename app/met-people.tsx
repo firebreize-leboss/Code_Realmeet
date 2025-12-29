@@ -1,5 +1,5 @@
 // app/met-people.tsx
-// Écran "Rencontrés" - Liste des personnes croisées lors d'activités passées (7 jours)
+// Écran "Rencontrés" - Liste des personnes croisées lors d'activités TERMINÉES (7 derniers jours)
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -27,7 +27,7 @@ interface MetPerson {
   is_friend: boolean;
   request_sent: boolean;
   is_hidden: boolean;
-  activities: string[]; // Noms des activités partagées
+  activities: { name: string; date: string }[];
   last_activity_date: string;
 }
 
@@ -59,9 +59,11 @@ export default function MetPeopleScreen() {
       setCurrentUserId(userId);
 
       // Calculer la date limite (7 jours en arrière)
+      const now = new Date();
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
       const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
+      const todayStr = now.toISOString().split('T')[0];
 
       // Récupérer les créneaux auxquels l'utilisateur a participé dans les 7 derniers jours
       const { data: myParticipations } = await supabase
@@ -71,12 +73,13 @@ export default function MetPeopleScreen() {
           activity_id,
           activity_slots!inner (
             id,
-            date
+            date,
+            time
           )
         `)
         .eq('user_id', userId)
         .gte('activity_slots.date', sevenDaysAgoStr)
-        .lte('activity_slots.date', new Date().toISOString().split('T')[0]);
+        .lte('activity_slots.date', todayStr);
 
       if (!myParticipations || myParticipations.length === 0) {
         setPeople([]);
@@ -84,8 +87,32 @@ export default function MetPeopleScreen() {
         return;
       }
 
-      const slotIds = myParticipations.map(p => p.slot_id);
-      const activityIds = [...new Set(myParticipations.map(p => p.activity_id))];
+      // Filtrer uniquement les créneaux TERMINÉS (date+heure passée)
+      const pastSlotIds: string[] = [];
+      const slotActivityMap = new Map<string, string>(); // slot_id -> activity_id
+
+      myParticipations.forEach((p: any) => {
+        const slotDate = p.activity_slots?.date;
+        const slotTime = p.activity_slots?.time || '23:59';
+        
+        if (slotDate) {
+          const slotDateTime = new Date(`${slotDate}T${slotTime}`);
+          
+          // Seulement si le créneau est PASSÉ
+          if (slotDateTime < now) {
+            pastSlotIds.push(p.slot_id);
+            slotActivityMap.set(p.slot_id, p.activity_id);
+          }
+        }
+      });
+
+      if (pastSlotIds.length === 0) {
+        setPeople([]);
+        setLoading(false);
+        return;
+      }
+
+      const activityIds = [...new Set(Array.from(slotActivityMap.values()))];
 
       // Récupérer les noms des activités
       const { data: activitiesData } = await supabase
@@ -95,7 +122,7 @@ export default function MetPeopleScreen() {
 
       const activityNames = new Map(activitiesData?.map(a => [a.id, a.nom]) || []);
 
-      // Récupérer les autres participants de ces créneaux
+      // Récupérer les autres participants de ces créneaux PASSÉS uniquement
       const { data: otherParticipants } = await supabase
         .from('slot_participants')
         .select(`
@@ -103,7 +130,8 @@ export default function MetPeopleScreen() {
           activity_id,
           slot_id,
           activity_slots!inner (
-            date
+            date,
+            time
           ),
           profiles:user_id (
             id,
@@ -112,7 +140,7 @@ export default function MetPeopleScreen() {
             city
           )
         `)
-        .in('slot_id', slotIds)
+        .in('slot_id', pastSlotIds)
         .neq('user_id', userId);
 
       if (!otherParticipants || otherParticipants.length === 0) {
@@ -158,11 +186,23 @@ export default function MetPeopleScreen() {
 
         const activityName = activityNames.get(p.activity_id) || 'Activité';
         const activityDate = (p.activity_slots as any)?.date || '';
+        
+        // Formater la date pour l'affichage
+        const formattedDate = activityDate 
+          ? new Date(activityDate).toLocaleDateString('fr-FR', { 
+              day: 'numeric', 
+              month: 'short' 
+            })
+          : '';
 
         if (peopleMap.has(p.user_id)) {
           const existing = peopleMap.get(p.user_id)!;
-          if (!existing.activities.includes(activityName)) {
-            existing.activities.push(activityName);
+          // Vérifier si cette activité n'est pas déjà listée
+          const alreadyHasActivity = existing.activities.some(
+            a => a.name === activityName && a.date === formattedDate
+          );
+          if (!alreadyHasActivity) {
+            existing.activities.push({ name: activityName, date: formattedDate });
           }
           // Garder la date la plus récente
           if (activityDate > existing.last_activity_date) {
@@ -177,7 +217,7 @@ export default function MetPeopleScreen() {
             is_friend: friendIds.has(p.user_id),
             request_sent: pendingIds.has(p.user_id),
             is_hidden: false,
-            activities: [activityName],
+            activities: [{ name: activityName, date: formattedDate }],
             last_activity_date: activityDate,
           });
         }
@@ -277,7 +317,8 @@ export default function MetPeopleScreen() {
   const formatRelativeDate = (dateStr: string) => {
     const date = new Date(dateStr);
     const today = new Date();
-    const diffDays = Math.floor((today.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+    const diffTime = today.getTime() - date.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
     if (diffDays === 0) return "Aujourd'hui";
     if (diffDays === 1) return 'Hier';
@@ -299,16 +340,25 @@ export default function MetPeopleScreen() {
       <View style={styles.personInfo}>
         <Text style={styles.personName}>{item.full_name}</Text>
         
-        <View style={styles.activitiesRow}>
-          <IconSymbol name="figure.run" size={14} color={colors.primary} />
-          <Text style={styles.activitiesText} numberOfLines={1}>
-            {item.activities.slice(0, 2).join(', ')}
-            {item.activities.length > 2 && ` +${item.activities.length - 2}`}
-          </Text>
+        <View style={styles.activitiesContainer}>
+          {item.activities.slice(0, 2).map((activity, index) => (
+            <View key={index} style={styles.activityBadge}>
+              <IconSymbol name="figure.run" size={12} color={colors.primary} />
+              <Text style={styles.activityBadgeText} numberOfLines={1}>
+                {activity.name}
+              </Text>
+              <Text style={styles.activityDateText}>{activity.date}</Text>
+            </View>
+          ))}
+          {item.activities.length > 2 && (
+            <Text style={styles.moreActivities}>
+              +{item.activities.length - 2} autre{item.activities.length > 3 ? 's' : ''}
+            </Text>
+          )}
         </View>
         
         <Text style={styles.dateText}>
-          {formatRelativeDate(item.last_activity_date)}
+          Dernière rencontre : {formatRelativeDate(item.last_activity_date)}
         </Text>
       </View>
 
@@ -356,7 +406,7 @@ export default function MetPeopleScreen() {
       <IconSymbol name="person.2.slash" size={64} color={colors.textSecondary} />
       <Text style={styles.emptyTitle}>Aucune rencontre récente</Text>
       <Text style={styles.emptySubtitle}>
-        Les personnes avec qui vous avez participé à des activités ces 7 derniers jours apparaîtront ici
+        Les personnes avec qui vous avez participé à des activités terminées ces 7 derniers jours apparaîtront ici
       </Text>
       <TouchableOpacity
         style={styles.browseButton}
@@ -379,7 +429,7 @@ export default function MetPeopleScreen() {
 
       <View style={styles.infoBar}>
         <IconSymbol name="clock" size={16} color={colors.textSecondary} />
-        <Text style={styles.infoText}>Personnes croisées ces 7 derniers jours</Text>
+        <Text style={styles.infoText}>Activités terminées ces 7 derniers jours</Text>
       </View>
 
       {loading ? (
@@ -475,29 +525,48 @@ const styles = StyleSheet.create({
   },
   personInfo: {
     flex: 1,
-    gap: 4,
+    gap: 6,
   },
   personName: {
     fontSize: 16,
     fontWeight: '600',
     color: colors.text,
   },
-  activitiesRow: {
+  activitiesContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 6,
   },
-  activitiesText: {
-    fontSize: 13,
+  activityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.primary + '15',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  activityBadgeText: {
+    fontSize: 11,
     color: colors.primary,
-    flex: 1,
+    fontWeight: '500',
+    maxWidth: 80,
+  },
+  activityDateText: {
+    fontSize: 10,
+    color: colors.primary + '80',
+  },
+  moreActivities: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    alignSelf: 'center',
   },
   dateText: {
     fontSize: 12,
     color: colors.textSecondary,
   },
   actions: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
     gap: 8,
   },

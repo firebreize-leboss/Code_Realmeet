@@ -234,6 +234,8 @@ const MAPPING = {
   "doc.on.clipboard": "content-paste",
   "doc.on.clipboard.fill": "content-paste",
 
+  "person.2.wave.2": "people",
+  
   // Success
   "checkmark.seal.fill": "verified",
   "checkmark.seal": "verified",
