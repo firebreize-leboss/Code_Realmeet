@@ -159,7 +159,6 @@ export default function BrowseScreen() {
     try {
       const result = await activityService.getActivities();
       if (result.success && result.data) {
-  setActivities(result.data);
 
   // Charge la date la plus récente dispo (activity_slots) pour chaque activité
   const ids = result.data.map(a => a.id);
@@ -175,13 +174,17 @@ export default function BrowseScreen() {
   const map: Record<string, string | null> = {};
   ids.forEach(id => (map[id] = null)); // par défaut : aucune date
   (slots || []).forEach(s => {
-    // comme c'est trié DESC, on garde la 1ère rencontrée = la plus récente
+    // comme c'est trié ASC, on garde la 1ère rencontrée = la plus proche
     if (map[s.activity_id] == null) map[s.activity_id] = s.date;
   });
   setLatestSlotDateByActivity(map);
 
-  if (viewMode === 'maps' && result.data.length > 0) {
-    setTimeout(() => sendActivitiesToMap(result.data, map), 1000);
+  // ✅ Filtrer : garder uniquement les activités qui ont au moins un créneau futur
+  const activitiesWithSlots = result.data.filter((a: Activity) => map[a.id] !== null);
+  setActivities(activitiesWithSlots);
+
+  if (viewMode === 'maps' && activitiesWithSlots.length > 0) {
+    setTimeout(() => sendActivitiesToMap(activitiesWithSlots, map), 1000);
   }
 }
 
