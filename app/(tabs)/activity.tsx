@@ -18,6 +18,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 
 type TabType = 'ongoing' | 'past';
+type BusinessTabType = 'created' | 'live';
 
 interface Activity {
   id: string;
@@ -31,12 +32,18 @@ interface Activity {
   max_participants?: number;
   status?: string;
   user_slot_id?: string;
+  // Nouveau pour entreprises
+  hasLiveSlots?: boolean; // A des créneaux futurs
+  isPublished?: boolean; // status === 'active'
 }
 
 export default function ActivityScreen() {
   const router = useRouter();
   const { profile } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('ongoing');
+  const [businessTab, setBusinessTab] = useState<BusinessTabType>('live');
+  const [createdActivities, setCreatedActivities] = useState<Activity[]>([]);
+  const [liveActivities, setLiveActivities] = useState<Activity[]>([]);
   const [ongoingActivities, setOngoingActivities] = useState<Activity[]>([]);
   const [pastActivities, setPastActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,7 +60,7 @@ export default function ActivityScreen() {
     }, [isBusiness])
   );
 
-  // ✅ Charger les activités CRÉÉES par l'entreprise
+// ✅ Charger les activités CRÉÉES par l'entreprise
   const loadBusinessActivities = async () => {
     try {
       setLoading(true);
@@ -65,12 +72,12 @@ export default function ActivityScreen() {
         return;
       }
 
-      // Récupérer les activités créées par l'entreprise
+      // Récupérer toutes les activités créées par l'entreprise
       const { data: activities, error } = await supabase
         .from('activities')
         .select('id, nom, image_url, adresse, ville, date, time_start, participants, max_participants, status')
         .eq('host_id', currentUser.id)
-        .order('date', { ascending: false });
+        .order('created_at', { ascending: false });
 
       if (error) {
         console.error('Erreur chargement activités business:', error);
@@ -79,39 +86,134 @@ export default function ActivityScreen() {
       }
 
       const now = new Date();
-      const ongoing: Activity[] = [];
-      const past: Activity[] = [];
+      const todayStr = now.toISOString().split('T')[0];
 
-      (activities || []).forEach(activity => {
-        const activityDateTime = activity.date
-          ? `${activity.date}T${activity.time_start || '00:00'}`
-          : now.toISOString();
+      // Pour chaque activité, vérifier si elle a des créneaux futurs
+      const activitiesWithSlotInfo = await Promise.all(
+        (activities || []).map(async (activity) => {
+          // Compter les créneaux futurs
+          const { count: futureSlotsCount } = await supabase
+            .from('activity_slots')
+            .select('*', { count: 'exact', head: true })
+            .eq('activity_id', activity.id)
+            .gte('date', todayStr);
 
-        const activityWithDateTime = {
-          ...activity,
-          date_heure: activityDateTime,
-          user_slot_id: undefined,
-        };
+          const hasLiveSlots = (futureSlotsCount || 0) > 0;
+          const isPublished = activity.status === 'active';
 
-        const activityDate = new Date(activityDateTime);
-        if (activityDate >= now) {
-          ongoing.push(activityWithDateTime);
-        } else {
-          past.push(activityWithDateTime);
-        }
-      });
+          return {
+            ...activity,
+            date_heure: activity.date ? `${activity.date}T${activity.time_start || '00:00'}` : now.toISOString(),
+            hasLiveSlots,
+            isPublished,
+          };
+        })
+      );
 
-      // Trier par date
-      ongoing.sort((a, b) => new Date(a.date_heure).getTime() - new Date(b.date_heure).getTime());
-      past.sort((a, b) => new Date(b.date_heure).getTime() - new Date(a.date_heure).getTime());
+      // Toutes les activités créées
+      setCreatedActivities(activitiesWithSlotInfo);
 
-      setOngoingActivities(ongoing);
-      setPastActivities(past);
+      // Activités "en cours" = publiées ET ayant des créneaux futurs
+      const live = activitiesWithSlotInfo.filter(a => a.isPublished && a.hasLiveSlots);
+      setLiveActivities(live);
+
+      // Pour compatibilité avec l'ancien code (utilisateurs)
+      setOngoingActivities(live);
+      setPastActivities([]);
     } catch (error) {
       console.error('Erreur chargement activités business:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Publier une activité (passer de draft à active)
+  const handlePublishActivity = async (activityId: string) => {
+    try {
+      const { error } = await supabase
+        .from('activities')
+        .update({ status: 'active' })
+        .eq('id', activityId);
+
+      if (error) throw error;
+
+      Alert.alert('Succès', 'Activité publiée !');
+      loadBusinessActivities();
+    } catch (error) {
+      console.error('Erreur publication:', error);
+      Alert.alert('Erreur', 'Impossible de publier l\'activité');
+    }
+  };
+
+  const renderBusinessActivityItem = (activity: Activity) => {
+    const isLive = activity.isPublished && activity.hasLiveSlots;
+
+    return (
+      <TouchableOpacity
+        key={activity.id}
+        style={styles.activityItem}
+        onPress={() => router.push(`/manage-activity?id=${activity.id}`)}
+        activeOpacity={0.8}
+      >
+        <Image
+          source={{ uri: activity.image_url || 'https://via.placeholder.com/80' }}
+          style={styles.activityImage}
+        />
+        <View style={styles.activityInfo}>
+          <View style={styles.activityTitleRow}>
+            <Text style={styles.activityTitle} numberOfLines={2}>
+              {activity.nom}
+            </Text>
+            {/* Badge "En ligne" si publiée et a des créneaux */}
+            {isLive && (
+              <View style={styles.liveBadge}>
+                <View style={styles.liveDot} />
+                <Text style={styles.liveBadgeText}>En ligne</Text>
+              </View>
+            )}
+            {/* Badge "Brouillon" si pas publiée */}
+            {!activity.isPublished && (
+              <View style={styles.draftBadge}>
+                <Text style={styles.draftBadgeText}>Brouillon</Text>
+              </View>
+            )}
+          </View>
+          
+          <View style={styles.activityMeta}>
+            <View style={styles.metaItem}>
+              <IconSymbol name="location.fill" size={14} color={colors.textSecondary} />
+              <Text style={styles.metaText} numberOfLines={1}>
+                {activity.ville}
+              </Text>
+            </View>
+          </View>
+          
+          {activity.participants !== undefined && (
+            <View style={styles.metaItem}>
+              <IconSymbol name="person.2.fill" size={14} color={colors.primary} />
+              <Text style={[styles.metaText, { color: colors.primary }]}>
+                {activity.participants}/{activity.max_participants} inscrits
+              </Text>
+            </View>
+          )}
+
+          {/* Bouton Publier si brouillon */}
+          {!activity.isPublished && businessTab === 'created' && (
+            <TouchableOpacity
+              style={styles.publishButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                handlePublishActivity(activity.id);
+              }}
+            >
+              <IconSymbol name="paperplane.fill" size={14} color={colors.background} />
+              <Text style={styles.publishButtonText}>Publier</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        <IconSymbol name="chevron.right" size={20} color={colors.textSecondary} />
+      </TouchableOpacity>
+    );
   };
 
   // ✅ Charger les activités auxquelles l'utilisateur PARTICIPE
@@ -315,20 +417,112 @@ export default function ActivityScreen() {
     </View>
   );
 
+  // ============================================
+  // RENDU ENTREPRISE
+  // ============================================
+  if (isBusiness) {
+    return (
+      <SafeAreaView style={commonStyles.container} edges={['top']}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Mes activités</Text>
+        </View>
+
+        <View style={styles.tabContainer}>
+          <TouchableOpacity
+            style={[styles.tab, businessTab === 'live' && styles.tabActive]}
+            onPress={() => setBusinessTab('live')}
+          >
+            <Text style={[styles.tabText, businessTab === 'live' && styles.tabTextActive]}>
+              En cours
+            </Text>
+            {liveActivities.length > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{liveActivities.length}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, businessTab === 'created' && styles.tabActive]}
+            onPress={() => setBusinessTab('created')}
+          >
+            <Text style={[styles.tabText, businessTab === 'created' && styles.tabTextActive]}>
+              Créées
+            </Text>
+            {createdActivities.length > 0 && (
+              <View style={[styles.badge, businessTab !== 'created' && styles.badgeInactive]}>
+                <Text style={styles.badgeText}>{createdActivities.length}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+          </View>
+        ) : (
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={[
+              styles.contentContainer,
+              Platform.OS !== 'ios' && styles.contentContainerWithTabBar,
+            ]}
+            showsVerticalScrollIndicator={false}
+          >
+            {businessTab === 'live' ? (
+              liveActivities.length > 0 ? (
+                liveActivities.map(renderBusinessActivityItem)
+              ) : (
+                <View style={styles.emptyContainer}>
+                  <IconSymbol name="calendar" size={64} color={colors.textSecondary} />
+                  <Text style={styles.emptyTitle}>Aucune activité en cours</Text>
+                  <Text style={styles.emptyText}>
+                    Publiez une activité avec des créneaux futurs pour la voir ici
+                  </Text>
+                </View>
+              )
+            ) : (
+              <>
+                {/* Bouton créer une activité */}
+                <TouchableOpacity
+                  style={styles.createActivityCard}
+                  onPress={() => router.push('/create-activity')}
+                >
+                  <View style={styles.createActivityIcon}>
+                    <IconSymbol name="plus" size={32} color={colors.primary} />
+                  </View>
+                  <Text style={styles.createActivityText}>Créer une nouvelle activité</Text>
+                  <Text style={styles.createActivitySubtext}>
+                    Ajoutez des créneaux puis publiez-la
+                  </Text>
+                </TouchableOpacity>
+
+                {createdActivities.length > 0 ? (
+                  createdActivities.map(renderBusinessActivityItem)
+                ) : (
+                  <View style={styles.emptyContainer}>
+                    <IconSymbol name="folder" size={64} color={colors.textSecondary} />
+                    <Text style={styles.emptyTitle}>Aucune activité créée</Text>
+                    <Text style={styles.emptyText}>
+                      Créez votre première activité pour commencer
+                    </Text>
+                  </View>
+                )}
+              </>
+            )}
+          </ScrollView>
+        )}
+      </SafeAreaView>
+    );
+  }
+
+  // ============================================
+  // RENDU UTILISATEUR
+  // ============================================
   return (
     <SafeAreaView style={commonStyles.container} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>
-          {isBusiness ? 'Mes activités' : 'My Activities'}
-        </Text>
-        {isBusiness && (
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => router.push('/create-activity')}
-          >
-            <IconSymbol name="plus" size={24} color={colors.primary} />
-          </TouchableOpacity>
-        )}
+        <Text style={styles.headerTitle}>My Activities</Text>
       </View>
 
       <View style={styles.tabContainer}>
@@ -337,7 +531,7 @@ export default function ActivityScreen() {
           onPress={() => setActiveTab('ongoing')}
         >
           <Text style={[styles.tabText, activeTab === 'ongoing' && styles.tabTextActive]}>
-            {isBusiness ? 'À venir' : 'Ongoing'}
+            Ongoing
           </Text>
           {ongoingActivities.length > 0 && (
             <View style={styles.badge}>
@@ -350,7 +544,7 @@ export default function ActivityScreen() {
           onPress={() => setActiveTab('past')}
         >
           <Text style={[styles.tabText, activeTab === 'past' && styles.tabTextActive]}>
-            {isBusiness ? 'Passées' : 'Past'}
+            Past
           </Text>
         </TouchableOpacity>
       </View>
@@ -374,10 +568,12 @@ export default function ActivityScreen() {
             ) : (
               renderEmptyState()
             )
-          ) : pastActivities.length > 0 ? (
-            pastActivities.map(renderActivityItem)
           ) : (
-            renderEmptyState()
+            pastActivities.length > 0 ? (
+              pastActivities.map(renderActivityItem)
+            ) : (
+              renderEmptyState()
+            )
           )}
         </ScrollView>
       )}
@@ -478,6 +674,92 @@ const styles = StyleSheet.create({
   activityInfo: {
     flex: 1,
     gap: 4,
+  },
+  activityTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 4,
+  },
+  liveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#10b981' + '20',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    gap: 4,
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10b981',
+  },
+  liveBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#10b981',
+  },
+  draftBadge: {
+    backgroundColor: '#f59e0b' + '20',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  draftBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#f59e0b',
+  },
+  publishButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 6,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  publishButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.background,
+  },
+  createActivityCard: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: colors.primary + '30',
+    borderStyle: 'dashed',
+  },
+  createActivityIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  createActivityText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  createActivitySubtext: {
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  badgeInactive: {
+    backgroundColor: colors.textSecondary,
   },
   activityTitle: {
     fontSize: 16,
