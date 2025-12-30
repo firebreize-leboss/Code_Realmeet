@@ -174,7 +174,9 @@ export default function UserProfileScreen() {
         status: 'pending',
       });
 
-      if (error) throw error;
+      if (error && !error.message.toLowerCase().includes('duplicate')) {
+        throw error;
+      }
 
       setProfile(prev => prev ? { ...prev, request_sent: true } : null);
       Alert.alert('Succès', 'Demande d\'ami envoyée !');

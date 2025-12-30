@@ -685,14 +685,19 @@ if (shouldShowParticipants) {
               </View>
             </View>
 
-            <View style={styles.detailRow}>
+<TouchableOpacity 
+              style={styles.detailRow}
+              onPress={() => router.push(`/(tabs)/browse?viewMode=maps&selectedActivityId=${activity.id}`)}
+              activeOpacity={0.7}
+            >
               <IconSymbol name="location.fill" size={20} color={colors.primary} />
               <View style={styles.detailContent}>
                 <Text style={styles.detailLabel}>Lieu</Text>
                 <Text style={styles.detailValue}>{activity.location}</Text>
                 <Text style={styles.detailSubvalue}>{activity.city}</Text>
               </View>
-            </View>
+              <IconSymbol name="map.fill" size={20} color={colors.primary} />
+            </TouchableOpacity>
 
             <View style={styles.detailRow}>
               <IconSymbol name="person.2.fill" size={20} color={colors.primary} />
@@ -811,7 +816,7 @@ if (shouldShowParticipants) {
       </ScrollView>
 
       {/* Footer - Différent selon le type de compte */}
-      {!isHost && (
+      {!isHost && !isActivityPast && (
         <View style={styles.footer}>
           {isBusiness ? (
             // Footer pour les entreprises - Mode observation
