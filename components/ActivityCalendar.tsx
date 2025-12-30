@@ -66,6 +66,14 @@ interface ActivityCalendarProps {
 const dayNames = ['LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM', 'DIM'];
 const monthNames = ['jan', 'fév', 'mar', 'avr', 'mai', 'juin', 'juil', 'août', 'sep', 'oct', 'nov', 'déc'];
 
+// Helper pour formater une date en YYYY-MM-DD sans décalage UTC
+const formatDateLocal = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export default function ActivityCalendar({
   activityId,
   onSlotSelect,
@@ -129,7 +137,7 @@ export default function ActivityCalendar({
     for (let i = 0; i < 7; i++) {
       const date = new Date(monday);
       date.setDate(monday.getDate() + i);
-      const dateStr = date.toISOString().split('T')[0];
+      const dateStr = formatDateLocal(date);
 
       days.push({
         date,
@@ -235,7 +243,7 @@ export default function ActivityCalendar({
     const load = async () => {
       try {
         setLoading(true);
-        const todayStr = new Date().toISOString().split('T')[0];
+        const todayStr = formatDateLocal(new Date());
 
         if (mode === 'edit') {
           const days = buildWeekDays(weekOffset);
@@ -455,7 +463,7 @@ export default function ActivityCalendar({
     }
 
     const formattedTime = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-    const dateStr = selectedDate.toISOString().split('T')[0];
+    const dateStr = formatDateLocal(selectedDate);
     const duration = parseInt(newDuration, 10);
 
     // Création sans activityId -> pendingSlots
