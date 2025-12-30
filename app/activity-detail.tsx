@@ -731,6 +731,7 @@ if (shouldShowParticipants) {
                 </View>
               </View>
             )}
+            </View>
 
           {/* Calendrier de sélection - Masqué pour les activités passées */}
           {!isActivityPast && (

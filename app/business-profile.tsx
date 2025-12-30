@@ -300,10 +300,14 @@ export default function BusinessPublicProfileScreen() {
 
           {/* Carrousel d'avis */}
           {business.business_review_count > 0 && (
-            <ReviewsCarousel 
-              businessId={business.id}
-              onPressReview={(activityId) => router.push(`/activity-detail?id=${activityId}`)}
-            />
+            <TouchableOpacity
+              onPress={() => router.push(`/business-reviews?id=${business.id}&name=${encodeURIComponent(business.business_name || '')}`)}
+              activeOpacity={0.9}
+            >
+              <ReviewsCarousel 
+                businessId={business.id}
+              />
+            </TouchableOpacity>
           )}
 
           {/* Quick Stats */}

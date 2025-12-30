@@ -142,15 +142,6 @@ export default function ReviewsCarousel({ businessId, onPressReview }: ReviewsCa
     }, AUTO_SCROLL_INTERVAL);
   };
 
-  const handlePress = () => {
-    if (reviews[currentIndex]) {
-      if (onPressReview) {
-        onPressReview(reviews[currentIndex].activity_id);
-      } else {
-        router.push(`/activity-detail?id=${reviews[currentIndex].activity_id}`);
-      }
-    }
-  };
 
   const renderStars = (rating: number) => {
     const stars = [];
@@ -187,11 +178,7 @@ export default function ReviewsCarousel({ businessId, onPressReview }: ReviewsCa
   const currentReview = reviews[currentIndex];
 
   return (
-    <TouchableOpacity
-      style={styles.container}
-      onPress={handlePress}
-      activeOpacity={0.9}
-    >
+    <View style={styles.container}>
       <Animated.View style={[styles.card, { opacity: fadeAnim }]}>
         {/* Header avec étoiles */}
         <View style={styles.header}>
@@ -239,7 +226,7 @@ export default function ReviewsCarousel({ businessId, onPressReview }: ReviewsCa
           <IconSymbol name="chevron.right" size={14} color={colors.primary} />
         </View>
       </Animated.View>
-    </TouchableOpacity>
+    </View>
   );
 }
 
