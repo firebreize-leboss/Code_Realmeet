@@ -353,16 +353,20 @@ export default function UserProfileScreen() {
         {/* Statistiques */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Activités</Text>
-          <View style={styles.statsContainer}>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{profile.activities_joined}</Text>
-              <Text style={styles.statLabel}>Participations</Text>
+          <TouchableOpacity 
+            style={styles.activitiesCard}
+            onPress={() => router.push(`/user-activities?id=${profile.id}&name=${encodeURIComponent(profile.full_name)}`)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.activitiesCardContent}>
+              <IconSymbol name="figure.run" size={24} color={colors.primary} />
+              <View style={styles.activitiesCardText}>
+                <Text style={styles.activitiesCardValue}>{profile.activities_joined}</Text>
+                <Text style={styles.activitiesCardLabel}>Activités rejointes</Text>
+              </View>
             </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{profile.activities_hosted}</Text>
-              <Text style={styles.statLabel}>Organisées</Text>
-            </View>
-          </View>
+            <IconSymbol name="chevron.right" size={20} color={colors.textSecondary} />
+          </TouchableOpacity>
         </View>
 
         {/* Boutons d'action - seulement pour les utilisateurs, pas les entreprises */}
@@ -729,6 +733,31 @@ const styles = StyleSheet.create({
     color: colors.text,
     textAlign: 'center',
     marginBottom: 20,
+  },
+  activitiesCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 16,
+  },
+  activitiesCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  activitiesCardText: {
+    gap: 2,
+  },
+  activitiesCardValue: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  activitiesCardLabel: {
+    fontSize: 14,
+    color: colors.textSecondary,
   },
   modalOption: {
     flexDirection: 'row',

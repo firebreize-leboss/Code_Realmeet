@@ -21,6 +21,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { PersonalityTagsBadges } from '@/components/PersonalityTagsBadges'; // NOUVEAU
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
+import { getIntentionInfo } from '@/lib/database.types';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -295,6 +296,24 @@ export default function ProfileScreen() {
           </View>
         )}
 
+        {/* Section Intention */}
+        {profile.intention && (() => {
+          const intentionInfo = getIntentionInfo(profile.intention);
+          return intentionInfo ? (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Recherche</Text>
+              <View style={[styles.intentionCard, { borderColor: intentionInfo.color }]}>
+                <View style={[styles.intentionIcon, { backgroundColor: intentionInfo.color + '20' }]}>
+                  <IconSymbol name={intentionInfo.icon as any} size={22} color={intentionInfo.color} />
+                </View>
+                <Text style={[styles.intentionText, { color: intentionInfo.color }]}>
+                  {intentionInfo.label}
+                </Text>
+              </View>
+            </View>
+          ) : null;
+        })()}
+
         {profile.interests && profile.interests.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Interests</Text>
@@ -309,22 +328,26 @@ export default function ProfileScreen() {
         )}
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Stats</Text>
+          <Text style={styles.sectionTitle}>Activités</Text>
           {loadingStats ? (
             <View style={styles.statsLoading}>
               <ActivityIndicator size="small" color={colors.primary} />
             </View>
           ) : (
-            <View style={styles.statsContainer}>
-              <View style={styles.statCard}>
-                <Text style={styles.statValue}>{activitiesJoined}</Text>
-                <Text style={styles.statLabel}>Activities Joined</Text>
+            <TouchableOpacity 
+              style={styles.activitiesCard}
+              onPress={() => router.push('/my-participated-activities')}
+              activeOpacity={0.7}
+            >
+              <View style={styles.activitiesCardContent}>
+                <IconSymbol name="figure.run" size={24} color={colors.primary} />
+                <View style={styles.activitiesCardText}>
+                  <Text style={styles.activitiesCardValue}>{activitiesJoined}</Text>
+                  <Text style={styles.activitiesCardLabel}>Activités rejointes</Text>
+                </View>
               </View>
-              <View style={styles.statCard}>
-                <Text style={styles.statValue}>{activitiesHosted}</Text>
-                <Text style={styles.statLabel}>Activities Hosted</Text>
-              </View>
-            </View>
+              <IconSymbol name="chevron.right" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
           )}
         </View>
 
@@ -821,6 +844,31 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingTop: 8,
   },
+  activitiesCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 16,
+  },
+  activitiesCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  activitiesCardText: {
+    gap: 2,
+  },
+  activitiesCardValue: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  activitiesCardLabel: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
   businessName: {
     fontSize: 20,
     fontWeight: '700',
@@ -965,6 +1013,26 @@ const styles = StyleSheet.create({
   },
   linkText: {
     color: colors.primary,
+  },
+  intentionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    padding: 16,
+    borderRadius: 16,
+    gap: 14,
+    borderWidth: 1,
+  },
+  intentionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  intentionText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
   emptyText: {
     fontSize: 14,
