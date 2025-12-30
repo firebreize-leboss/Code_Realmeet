@@ -81,6 +81,7 @@ export default function ActivityDetailScreen() {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [hasAlreadyReviewed, setHasAlreadyReviewed] = useState(false);
   const [canReview, setCanReview] = useState(false);
+  const [pastSlotInfo, setPastSlotInfo] = useState<{ date: string; time: string } | null>(null);
   const [activityRating, setActivityRating] = useState<{ average: number; count: number } | null>(null);
 
 
@@ -242,6 +243,17 @@ export default function ActivityDetailScreen() {
             userSlotTime = slotInfo.time?.slice(0, 5) || '00:00';
             const slotDateTime = new Date(`${slotInfo.date}T${slotInfo.time || '00:00'}`);
             activityIsPast = slotDateTime < new Date();
+            
+            // Stocker les infos du créneau pour l'affichage
+            setPastSlotInfo({
+              date: new Date(slotInfo.date).toLocaleDateString('fr-FR', {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+              }),
+              time: userSlotTime,
+            });
           }
         }
 
@@ -630,6 +642,14 @@ if (shouldShowParticipants) {
           )}
         </View>
 
+        {/* Badge activité terminée */}
+        {isActivityPast && (
+          <View style={styles.pastActivityBanner}>
+            <IconSymbol name="checkmark.circle.fill" size={20} color="#10b981" />
+            <Text style={styles.pastActivityBannerText}>Activité terminée</Text>
+          </View>
+        )}
+
         <View style={styles.content}>
           {/* Titre et catégorie */}
           <View style={styles.titleSection}>
@@ -699,29 +719,49 @@ if (shouldShowParticipants) {
               <IconSymbol name="map.fill" size={20} color={colors.primary} />
             </TouchableOpacity>
 
-            <View style={styles.detailRow}>
-              <IconSymbol name="person.2.fill" size={20} color={colors.primary} />
-              <View style={styles.detailContent}>
-                <Text style={styles.detailLabel}>Places</Text>
-                <Text style={[styles.detailValue, isFull && styles.fullText]}>
-                  {activity.participants}/{activity.capacity} 
-                  {isFull ? ' (Complet)' : ` (${activity.placesRestantes} restantes)`}
-                </Text>
+            {!isActivityPast && (
+              <View style={styles.detailRow}>
+                <IconSymbol name="person.2.fill" size={20} color={colors.primary} />
+                <View style={styles.detailContent}>
+                  <Text style={styles.detailLabel}>Places</Text>
+                  <Text style={[styles.detailValue, isFull && styles.fullText]}>
+                    {activity.participants}/{activity.capacity} 
+                    {isFull ? ' (Complet)' : ` (${activity.placesRestantes} restantes)`}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+          {/* Calendrier de sélection - Masqué pour les activités passées */}
+          {!isActivityPast && (
+            <View style={styles.section}>
+              <ActivityCalendar 
+                activityId={activity.id} 
+                onSlotSelect={(isBusiness || isJoined) ? undefined : (slot) => setSelectedSlot(slot)}
+                externalSelectedSlot={selectedSlot}
+                mode="select"
+                readOnly={isBusiness || isJoined}
+                userJoinedSlotId={isJoined ? selectedSlot?.id : undefined}
+              />
+            </View>
+          )}
+
+          {/* Info créneau pour activité passée */}
+          {isActivityPast && pastSlotInfo && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Votre participation</Text>
+              <View style={styles.pastSlotCard}>
+                <View style={styles.pastSlotRow}>
+                  <IconSymbol name="calendar" size={20} color={colors.primary} />
+                  <Text style={styles.pastSlotText}>{pastSlotInfo.date}</Text>
+                </View>
+                <View style={styles.pastSlotRow}>
+                  <IconSymbol name="clock.fill" size={20} color={colors.primary} />
+                  <Text style={styles.pastSlotText}>à {pastSlotInfo.time}</Text>
+                </View>
               </View>
             </View>
-          </View>
-
-          {/* Calendrier de sélection */}
-          <View style={styles.section}>
-            <ActivityCalendar 
-              activityId={activity.id} 
-              onSlotSelect={(isBusiness || isJoined) ? undefined : (slot) => setSelectedSlot(slot)}
-              externalSelectedSlot={selectedSlot}
-              mode="select"
-              readOnly={isBusiness || isJoined}
-              userJoinedSlotId={isJoined ? selectedSlot?.id : undefined}
-            />
-          </View>
+          )}
 
           {/* Description */}
           <View style={styles.section}>
@@ -729,8 +769,8 @@ if (shouldShowParticipants) {
             <Text style={styles.description}>{activity.description}</Text>
           </View>
 
-          {/* Inclus */}
-          {activity.includes.length > 0 && (
+          {/* Inclus - Masqué pour activités passées */}
+          {!isActivityPast && activity.includes.length > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Ce qui est inclus</Text>
               {activity.includes.map((item: string, index: number) => (
@@ -742,8 +782,8 @@ if (shouldShowParticipants) {
             </View>
           )}
 
-          {/* Règles */}
-          {activity.rules.length > 0 && (
+          {/* Règles - Masqué pour activités passées */}
+          {!isActivityPast && activity.rules.length > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Informations importantes</Text>
               {activity.rules.map((rule: string, index: number) => (
@@ -1033,6 +1073,39 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: colors.background,
+  },
+  pastActivityBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#10b981' + '20',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    marginHorizontal: 20,
+    marginTop: 16,
+    borderRadius: 12,
+    gap: 8,
+  },
+  pastActivityBannerText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#10b981',
+  },
+  pastSlotCard: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 16,
+    gap: 12,
+  },
+  pastSlotRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  pastSlotText: {
+    fontSize: 16,
+    color: colors.text,
+    fontWeight: '500',
   },
   content: {
     paddingHorizontal: 20,
