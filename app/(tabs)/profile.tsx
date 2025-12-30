@@ -403,12 +403,6 @@ function BusinessProfileView({
         </View>
         <View style={styles.headerActions}>
           <TouchableOpacity
-            style={styles.createButton}
-            onPress={() => router.push('/create-activity')}
-          >
-            <IconSymbol name="plus" size={20} color={colors.background} />
-          </TouchableOpacity>
-          <TouchableOpacity
             onPress={() => router.push('/settings')}
             style={styles.settingsButton}
           >
@@ -448,12 +442,16 @@ function BusinessProfileView({
                 </View>
               )}
               {profile.business_rating !== undefined && profile.business_rating > 0 && (
-                <View style={styles.ratingRow}>
+                <TouchableOpacity 
+                  style={styles.ratingRow}
+                  onPress={() => router.push(`/business-reviews?id=${profile.id}&name=${encodeURIComponent(profile.business_name || '')}`)}
+                >
                   <IconSymbol name="star.fill" size={16} color="#F59E0B" />
                   <Text style={styles.ratingText}>
                     {profile.business_rating.toFixed(1)} ({profile.business_review_count} avis)
                   </Text>
-                </View>
+                  <IconSymbol name="chevron.right" size={14} color={colors.textSecondary} />
+                </TouchableOpacity>
               )}
             </View>
           </View>
@@ -471,9 +469,9 @@ function BusinessProfileView({
           <View style={[styles.quickStatCard, { backgroundColor: '#6366F120' }]}>
             <IconSymbol name="calendar" size={24} color="#6366F1" />
             <Text style={styles.quickStatValue}>
-              {dashboardData?.active_activities || 0}
+              {dashboardData?.total_activities || 0}
             </Text>
-            <Text style={styles.quickStatLabel}>Activités actives</Text>
+            <Text style={styles.quickStatLabel}>Activités créées</Text>
           </View>
           <View style={[styles.quickStatCard, { backgroundColor: '#10B98120' }]}>
             <IconSymbol name="person.2.fill" size={24} color="#10B981" />
@@ -482,13 +480,16 @@ function BusinessProfileView({
             </Text>
             <Text style={styles.quickStatLabel}>Participants</Text>
           </View>
-          <View style={[styles.quickStatCard, { backgroundColor: '#F59E0B20' }]}>
-            <IconSymbol name="star.fill" size={24} color="#F59E0B" />
+          <TouchableOpacity 
+            style={[styles.quickStatCard, { backgroundColor: '#F59E0B20' }]}
+            onPress={() => router.push(`/business-reviews?id=${profile.id}&name=${encodeURIComponent(profile.business_name || '')}`)}
+          >
+            <IconSymbol name="message.fill" size={24} color="#F59E0B" />
             <Text style={styles.quickStatValue}>
-              {dashboardData?.avg_rating?.toFixed(1) || '0.0'}
+              {dashboardData?.review_count || 0}
             </Text>
-            <Text style={styles.quickStatLabel}>Note moyenne</Text>
-          </View>
+            <Text style={styles.quickStatLabel}>Avis reçus</Text>
+          </TouchableOpacity>
           <View style={[styles.quickStatCard, { backgroundColor: '#EC489920' }]}>
             <IconSymbol name="dollarsign.circle.fill" size={24} color="#EC4899" />
             <Text style={styles.quickStatValue}>
