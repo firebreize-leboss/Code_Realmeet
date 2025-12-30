@@ -52,6 +52,7 @@ export default function ChatDetailScreen() {
   const [convName, setConvName] = useState('Conversation');
   const [convImage, setConvImage] = useState('');
   const [isGroup, setIsGroup] = useState(false);
+  const [activityId, setActivityId] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserName, setCurrentUserName] = useState('Moi');
   const [currentUserAvatar, setCurrentUserAvatar] = useState('');
@@ -138,8 +139,23 @@ export default function ChatDetailScreen() {
             .single();
 
           if (convData) {
-            const isGroupConv = convData.is_group === true || !!convData.name;
+            const isGroupConv = convData.is_group === true || !convData.name;
             setIsGroup(isGroupConv);
+
+            // Récupérer l'activity_id pour les groupes d'activité
+            if (convData.slot_id) {
+              const { data: slotData } = await supabase
+                .from('activity_slots')
+                .select('activity_id')
+                .eq('id', convData.slot_id)
+                .single();
+              
+              if (slotData?.activity_id) {
+                setActivityId(slotData.activity_id);
+              }
+            } else if (convData.activity_id) {
+              setActivityId(convData.activity_id);
+            }
             
             setConversationStatus({
               isClosed: convData.is_closed || false,
@@ -609,6 +625,16 @@ useEffect(() => {
 </TouchableOpacity>
 
 
+        {/* Bouton Voir l'activité pour les groupes d'activité */}
+        {isGroup && activityId && (
+          <TouchableOpacity 
+            style={styles.viewActivityButton} 
+            onPress={() => router.push(`/activity-detail?id=${activityId}`)}
+          >
+            <IconSymbol name="calendar" size={20} color={colors.primary} />
+          </TouchableOpacity>
+        )}
+
         <TouchableOpacity style={styles.moreButton} onPress={() => setShowOptionsModal(true)}>
           <IconSymbol name="ellipsis" size={24} color={colors.text} />
         </TouchableOpacity>
@@ -805,6 +831,15 @@ headerTitleContainer: {
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  viewActivityButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.primary + '15',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
   },
   messagesContainer: {
     flex: 1,
