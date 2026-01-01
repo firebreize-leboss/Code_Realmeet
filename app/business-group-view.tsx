@@ -10,6 +10,9 @@ import {
   Image,
   TouchableOpacity,
   ActivityIndicator,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -27,6 +30,7 @@ interface Message {
   mediaUrl?: string;
   timestamp: string;
   fullDate: string;
+  isAdminMessage: boolean;
 }
 
 interface Participant {
@@ -39,11 +43,22 @@ export default function BusinessGroupViewScreen() {
   const router = useRouter();
   const { id: conversationId, name: activityName } = useLocalSearchParams();
   const flatListRef = useRef<FlatList>(null);
+  const [showParticipants, setShowParticipants] = useState(false);
+  const [messageText, setMessageText] = useState('');
+  const [sending, setSending] = useState(false);
+  const [businessId, setBusinessId] = useState<string | null>(null);
+  const [activityHostId, setActivityHostId] = useState<string | null>(null);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showParticipants, setShowParticipants] = useState(false);
+  const loadGroupData = async () => {
+    try {
+      // Récupérer l'ID de l'entreprise connectée
+      const { data: userData } = await supabase.auth.getUser();
+      if (userData?.user) {
+        setBusinessId(userData.user.id);
+      }
 
   useEffect(() => {
     if (conversationId) {
@@ -67,6 +82,33 @@ export default function BusinessGroupViewScreen() {
         },
         async (payload: any) => {
           console.log('📩 Nouveau message reçu:', payload.new);
+
+          // Récupérer le host de l'activité pour ce groupe
+      const { data: convData } = await supabase
+        .from('conversations')
+        .select('slot_id')
+        .eq('id', conversationId)
+        .single();
+
+      if (convData?.slot_id) {
+        const { data: slotData } = await supabase
+          .from('activity_slots')
+          .select('activity_id')
+          .eq('id', convData.slot_id)
+          .single();
+
+        if (slotData?.activity_id) {
+          const { data: activityData } = await supabase
+            .from('activities')
+            .select('host_id')
+            .eq('id', slotData.activity_id)
+            .single();
+
+          if (activityData?.host_id) {
+            setActivityHostId(activityData.host_id);
+          }
+        }
+      }
           
           const { data: profile } = await supabase
             .from('profiles')
@@ -87,6 +129,7 @@ export default function BusinessGroupViewScreen() {
               minute: '2-digit',
             }),
             fullDate: new Date(payload.new.created_at).toLocaleDateString('fr-FR'),
+            isAdminMessage: payload.new.is_admin_message || false,
           };
 
           setMessages(prev => [...prev, newMsg]);
@@ -143,6 +186,7 @@ export default function BusinessGroupViewScreen() {
           content,
           message_type,
           media_url,
+          is_admin_message,
           created_at
         `)
         .eq('conversation_id', conversationId)
@@ -188,6 +232,7 @@ export default function BusinessGroupViewScreen() {
               minute: '2-digit',
             }),
             fullDate: new Date(msg.created_at).toLocaleDateString('fr-FR'),
+            isAdminMessage: msg.is_admin_message || false,
           };
         });
 
@@ -203,15 +248,43 @@ export default function BusinessGroupViewScreen() {
       setLoading(false);
     }
   };
+  // Vérifier si l'entreprise est le host de cette activité
+  const isActivityHost = businessId && activityHostId && businessId === activityHostId;
+
+  const handleSendAdminMessage = async () => {
+    if (!messageText.trim() || sending || !isActivityHost) return;
+
+    setSending(true);
+    try {
+      const { error } = await supabase.from('messages').insert({
+        conversation_id: conversationId as string,
+        sender_id: businessId,
+        content: messageText.trim(),
+        message_type: 'text',
+        is_admin_message: true,
+      });
+
+      if (error) throw error;
+      setMessageText('');
+    } catch (error) {
+      console.error('Erreur envoi message:', error);
+    } finally {
+      setSending(false);
+    }
+  };
 
   const renderParticipant = ({ item }: { item: Participant }) => (
-    <View style={styles.participantItem}>
+    <TouchableOpacity 
+      style={styles.participantItem}
+      onPress={() => router.push(`/user-profile?id=${item.id}`)}
+      activeOpacity={0.7}
+    >
       <Image
         source={{ uri: item.avatar || 'https://via.placeholder.com/40' }}
         style={styles.participantAvatar}
       />
       <Text style={styles.participantName} numberOfLines={1}>{item.name}</Text>
-    </View>
+    </TouchableOpacity>
   );
 
   const renderMessage = ({ item, index }: { item: Message; index: number }) => {
@@ -235,8 +308,20 @@ export default function BusinessGroupViewScreen() {
               source={{ uri: item.senderAvatar || 'https://via.placeholder.com/36' }}
               style={styles.messageAvatar}
             />
-            <View style={styles.messageBubble}>
-              <Text style={styles.senderName}>{item.senderName}</Text>
+            <View style={[
+            styles.messageBubble,
+            item.isAdminMessage && styles.adminMessageBubble
+          ]}>
+              <View style={styles.senderRow}>
+                <Text style={[styles.senderName, item.isAdminMessage && styles.adminSenderName]}>
+                  {item.senderName}
+                </Text>
+                {item.isAdminMessage && (
+                  <View style={styles.adminBadge}>
+                    <Text style={styles.adminBadgeText}>Admin</Text>
+                  </View>
+                )}
+              </View>
               
               {item.type === 'image' && item.mediaUrl ? (
                 <Image source={{ uri: item.mediaUrl }} style={styles.messageImage} />
@@ -246,7 +331,10 @@ export default function BusinessGroupViewScreen() {
                   <Text style={styles.voiceText}>Message vocal</Text>
                 </View>
               ) : (
-                <Text style={styles.messageText}>{item.content}</Text>
+                <Text style={[
+                  styles.messageText,
+                  item.isAdminMessage && styles.adminMessageText
+                ]}>{item.content}</Text>
               )}
               
               <Text style={styles.messageTime}>{item.timestamp}</Text>
@@ -291,11 +379,7 @@ export default function BusinessGroupViewScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Badge lecture seule */}
-      <View style={styles.readOnlyBanner}>
-        <IconSymbol name="eye.fill" size={14} color={colors.background} />
-        <Text style={styles.readOnlyText}>Mode observation - Vous ne pouvez pas envoyer de messages</Text>
-      </View>
+      
 
       {/* Liste des participants (toggle) */}
       {showParticipants && (
@@ -339,13 +423,46 @@ export default function BusinessGroupViewScreen() {
         }
       />
 
-      {/* Footer informatif */}
-      <View style={styles.footer}>
-        <IconSymbol name="lock.fill" size={16} color={colors.textSecondary} />
-        <Text style={styles.footerText}>
-          Les messages des participants sont visibles mais vous ne pouvez pas interagir
-        </Text>
-      </View>
+      {/* Zone de saisie pour les messages admin */}
+      {isActivityHost ? (
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        >
+          <View style={styles.inputContainer}>
+            <View style={styles.adminInputWrapper}>
+              <IconSymbol name="shield.fill" size={16} color={colors.primary} />
+              <TextInput
+                style={styles.textInput}
+                placeholder="Message admin (visible par tous)..."
+                placeholderTextColor={colors.textSecondary}
+                value={messageText}
+                onChangeText={setMessageText}
+                multiline
+                maxLength={1000}
+              />
+              <TouchableOpacity
+                style={[styles.sendButton, (!messageText.trim() || sending) && styles.sendButtonDisabled]}
+                onPress={handleSendAdminMessage}
+                disabled={!messageText.trim() || sending}
+              >
+                {sending ? (
+                  <ActivityIndicator size="small" color={colors.background} />
+                ) : (
+                  <IconSymbol name="arrow.up.circle.fill" size={32} color={colors.primary} />
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      ) : (
+        <View style={styles.footer}>
+          <IconSymbol name="info.circle.fill" size={16} color={colors.textSecondary} />
+          <Text style={styles.footerText}>
+            Vous ne pouvez pas envoyer de messages dans ce groupe
+          </Text>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -547,5 +664,66 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     flex: 1,
+  },
+  senderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  adminMessageBubble: {
+    backgroundColor: colors.primary + '15',
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary,
+  },
+  adminSenderName: {
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  adminBadge: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  adminBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.background,
+  },
+  adminMessageText: {
+    fontWeight: '600',
+  },
+  inputContainer: {
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingBottom: Platform.OS === 'ios' ? 12 : 16,
+  },
+  adminInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.primary + '30',
+    paddingLeft: 12,
+    paddingRight: 4,
+    gap: 8,
+  },
+  textInput: {
+    flex: 1,
+    fontSize: 15,
+    color: colors.text,
+    maxHeight: 100,
+    paddingVertical: 10,
+  },
+  sendButton: {
+    padding: 4,
+  },
+  sendButtonDisabled: {
+    opacity: 0.5,
   },
 });

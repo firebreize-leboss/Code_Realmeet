@@ -38,9 +38,7 @@ export default function BusinessGroupsScreen() {
   const [groups, setGroups] = useState<ActivityGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'ongoing' | 'finished'>('ongoing');
-
   const loadGroups = async () => {
     try {
       const { data: userData } = await supabase.auth.getUser();
