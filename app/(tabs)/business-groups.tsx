@@ -29,6 +29,8 @@ interface ActivityGroup {
   maxParticipants: number;
   lastMessage: string;
   lastMessageTime: string;
+  slotDateTime: Date; // Pour le tri
+  isOngoing: boolean; // true si activité pas encore terminée
 }
 
 export default function BusinessGroupsScreen() {
@@ -36,6 +38,8 @@ export default function BusinessGroupsScreen() {
   const [groups, setGroups] = useState<ActivityGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState<'ongoing' | 'finished'>('ongoing');
 
   const loadGroups = async () => {
     try {
@@ -105,6 +109,9 @@ export default function BusinessGroupsScreen() {
 
         const activity = activities.find(a => a.id === slot.activity_id);
         if (!activity) continue;
+        // Calculer si l'activité est en cours ou terminée
+        const slotDateTime = new Date(`${slot.date}T${slot.time || '23:59'}`);
+        const isOngoing = slotDateTime >= new Date();
 
         // Compter les participants de la conversation
         const { count: participantCount } = await supabase
@@ -149,16 +156,18 @@ export default function BusinessGroupsScreen() {
         };
 
         groupsData.push({
-          id: slot.id,
+          id: conv.id,
           conversationId: conv.id,
           activityName: activity.nom,
-          activityImage: activity.image_url || conv.image_url || '',
-          slotDate: formatDate(slot.date),
-          slotTime: slot.time?.slice(0, 5) || '',
+          activityImage: activity.image_url,
+          slotDate: new Date(slot.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+          slotTime: slot.time,
           participantCount: participantCount || 0,
           maxParticipants: activity.max_participants,
-          lastMessage: lastMessageText,
+          lastMessage: lastMsg?.content || 'Aucun message',
           lastMessageTime: lastMsg ? formatTime(lastMsg.created_at) : '',
+          slotDateTime,
+          isOngoing,
         });
       }
 
@@ -218,8 +227,12 @@ export default function BusinessGroupsScreen() {
         </View>
       </View>
 
-      <View style={styles.viewIndicator}>
-        <IconSymbol name="eye.fill" size={16} color={colors.textSecondary} />
+      <View style={[styles.viewIndicator, !item.isOngoing && styles.viewIndicatorClosed]}>
+        <IconSymbol 
+          name={item.isOngoing ? "message.fill" : "lock.fill"} 
+          size={16} 
+          color={item.isOngoing ? colors.primary : colors.textSecondary} 
+        />
       </View>
     </TouchableOpacity>
   );
@@ -239,17 +252,36 @@ export default function BusinessGroupsScreen() {
     <SafeAreaView style={commonStyles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Groupes d'activités</Text>
-        <View style={styles.headerBadge}>
-          <IconSymbol name="eye.fill" size={14} color={colors.background} />
-          <Text style={styles.headerBadgeText}>Lecture seule</Text>
-        </View>
       </View>
 
-      <View style={styles.infoBar}>
-        <IconSymbol name="info.circle.fill" size={16} color={colors.primary} />
-        <Text style={styles.infoText}>
-          Visualisez les échanges entre participants sans pouvoir intervenir
-        </Text>
+      {/* Tabs En cours / Terminées */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'ongoing' && styles.tabActive]}
+          onPress={() => setActiveTab('ongoing')}
+        >
+          <Text style={[styles.tabText, activeTab === 'ongoing' && styles.tabTextActive]}>
+            En cours
+          </Text>
+          <View style={[styles.tabBadge, activeTab === 'ongoing' && styles.tabBadgeActive]}>
+            <Text style={[styles.tabBadgeText, activeTab === 'ongoing' && styles.tabBadgeTextActive]}>
+              {groups.filter(g => g.isOngoing).length}
+            </Text>
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'finished' && styles.tabActive]}
+          onPress={() => setActiveTab('finished')}
+        >
+          <Text style={[styles.tabText, activeTab === 'finished' && styles.tabTextActive]}>
+            Terminées
+          </Text>
+          <View style={[styles.tabBadge, activeTab === 'finished' && styles.tabBadgeActive]}>
+            <Text style={[styles.tabBadgeText, activeTab === 'finished' && styles.tabBadgeTextActive]}>
+              {groups.filter(g => !g.isOngoing).length}
+            </Text>
+          </View>
+        </TouchableOpacity>
       </View>
 
       {groups.length === 0 ? (
@@ -269,7 +301,7 @@ export default function BusinessGroupsScreen() {
         </View>
       ) : (
         <FlatList
-          data={groups}
+          data={groups.filter(g => activeTab === 'ongoing' ? g.isOngoing : !g.isOngoing)}
           renderItem={renderGroupItem}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.listContent}
@@ -439,5 +471,52 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: colors.background,
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    gap: 12,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+    gap: 8,
+  },
+  tabActive: {
+    backgroundColor: colors.primary,
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  tabTextActive: {
+    color: colors.background,
+  },
+  tabBadge: {
+    backgroundColor: colors.border,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  tabBadgeActive: {
+    backgroundColor: 'rgba(255,255,255,0.3)',
+  },
+  tabBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  tabBadgeTextActive: {
+    color: colors.background,
+  },
+  viewIndicatorClosed: {
+    opacity: 0.5,
   },
 });

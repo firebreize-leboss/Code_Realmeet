@@ -333,7 +333,9 @@ export interface Database {
           message_type: 'text' | 'image' | 'voice' | 'system'
           media_url: string | null
           media_duration: number | null
+          is_admin_message: boolean
           created_at: string
+          
         }
         Insert: {
           id?: string
@@ -343,6 +345,7 @@ export interface Database {
           message_type?: 'text' | 'image' | 'voice' | 'system'
           media_url?: string | null
           media_duration?: number | null
+          is_admin_message?: boolean
           created_at?: string
         }
         Update: {
@@ -353,7 +356,9 @@ export interface Database {
           message_type?: 'text' | 'image' | 'voice' | 'system'
           media_url?: string | null
           media_duration?: number | null
+          is_admin_message?: boolean
           created_at?: string
+
         }
       }
       friend_requests: {
