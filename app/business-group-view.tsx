@@ -1,5 +1,5 @@
 // app/business-group-view.tsx
-// Vue lecture seule d'un groupe pour l'entreprise
+// Vue d'un groupe pour l'entreprise avec possibilité d'envoyer des messages admin
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -43,22 +43,15 @@ export default function BusinessGroupViewScreen() {
   const router = useRouter();
   const { id: conversationId, name: activityName } = useLocalSearchParams();
   const flatListRef = useRef<FlatList>(null);
+  
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [participants, setParticipants] = useState<Participant[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showParticipants, setShowParticipants] = useState(false);
   const [messageText, setMessageText] = useState('');
   const [sending, setSending] = useState(false);
   const [businessId, setBusinessId] = useState<string | null>(null);
   const [activityHostId, setActivityHostId] = useState<string | null>(null);
-
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [participants, setParticipants] = useState<Participant[]>([]);
-  const [loading, setLoading] = useState(true);
-  const loadGroupData = async () => {
-    try {
-      // Récupérer l'ID de l'entreprise connectée
-      const { data: userData } = await supabase.auth.getUser();
-      if (userData?.user) {
-        setBusinessId(userData.user.id);
-      }
 
   useEffect(() => {
     if (conversationId) {
@@ -66,7 +59,7 @@ export default function BusinessGroupViewScreen() {
     }
   }, [conversationId]);
 
-  // Souscrire aux nouveaux messages (lecture seule)
+  // Souscrire aux nouveaux messages
   useEffect(() => {
     if (!conversationId) return;
 
@@ -82,33 +75,6 @@ export default function BusinessGroupViewScreen() {
         },
         async (payload: any) => {
           console.log('📩 Nouveau message reçu:', payload.new);
-
-          // Récupérer le host de l'activité pour ce groupe
-      const { data: convData } = await supabase
-        .from('conversations')
-        .select('slot_id')
-        .eq('id', conversationId)
-        .single();
-
-      if (convData?.slot_id) {
-        const { data: slotData } = await supabase
-          .from('activity_slots')
-          .select('activity_id')
-          .eq('id', convData.slot_id)
-          .single();
-
-        if (slotData?.activity_id) {
-          const { data: activityData } = await supabase
-            .from('activities')
-            .select('host_id')
-            .eq('id', slotData.activity_id)
-            .single();
-
-          if (activityData?.host_id) {
-            setActivityHostId(activityData.host_id);
-          }
-        }
-      }
           
           const { data: profile } = await supabase
             .from('profiles')
@@ -147,6 +113,39 @@ export default function BusinessGroupViewScreen() {
       setLoading(true);
       console.log('🔍 Chargement du groupe, conversationId:', conversationId);
 
+      // Récupérer l'ID de l'entreprise connectée
+      const { data: userData } = await supabase.auth.getUser();
+      if (userData?.user) {
+        setBusinessId(userData.user.id);
+      }
+
+      // Récupérer le host de l'activité pour ce groupe
+      const { data: convData } = await supabase
+        .from('conversations')
+        .select('slot_id')
+        .eq('id', conversationId)
+        .single();
+
+      if (convData?.slot_id) {
+        const { data: slotData } = await supabase
+          .from('activity_slots')
+          .select('activity_id')
+          .eq('id', convData.slot_id)
+          .single();
+
+        if (slotData?.activity_id) {
+          const { data: activityData } = await supabase
+            .from('activities')
+            .select('host_id')
+            .eq('id', slotData.activity_id)
+            .single();
+
+          if (activityData?.host_id) {
+            setActivityHostId(activityData.host_id);
+          }
+        }
+      }
+
       // Charger les participants
       const { data: participantsData, error: partError } = await supabase
         .from('conversation_participants')
@@ -168,7 +167,7 @@ export default function BusinessGroupViewScreen() {
 
       if (participantsData) {
         const formattedParticipants = participantsData
-          .filter((p: any) => p.profiles) // Filtrer les profils null
+          .filter((p: any) => p.profiles)
           .map((p: any) => ({
             id: p.profiles.id,
             name: p.profiles.full_name || 'Participant',
@@ -196,24 +195,16 @@ export default function BusinessGroupViewScreen() {
       if (msgError) {
         console.error('❌ Erreur chargement messages:', msgError);
       } else {
-        console.log('✅ Messages chargés:', messagesData?.length, messagesData);
+        console.log('✅ Messages chargés:', messagesData?.length);
       }
 
       if (messagesData && messagesData.length > 0) {
-        // Récupérer les profils des expéditeurs
         const senderIds = [...new Set(messagesData.map(m => m.sender_id))];
-        console.log('👤 Sender IDs:', senderIds);
         
-        const { data: profiles, error: profileError } = await supabase
+        const { data: profiles } = await supabase
           .from('profiles')
           .select('id, full_name, avatar_url')
           .in('id', senderIds);
-
-        if (profileError) {
-          console.error('❌ Erreur chargement profils:', profileError);
-        } else {
-          console.log('✅ Profils chargés:', profiles?.length);
-        }
 
         const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
 
@@ -236,10 +227,8 @@ export default function BusinessGroupViewScreen() {
           };
         });
 
-        console.log('📝 Messages formatés:', formattedMessages.length);
         setMessages(formattedMessages);
       } else {
-        console.log('⚠️ Aucun message trouvé pour cette conversation');
         setMessages([]);
       }
     } catch (error) {
@@ -248,6 +237,7 @@ export default function BusinessGroupViewScreen() {
       setLoading(false);
     }
   };
+
   // Vérifier si l'entreprise est le host de cette activité
   const isActivityHost = businessId && activityHostId && businessId === activityHostId;
 
@@ -309,9 +299,9 @@ export default function BusinessGroupViewScreen() {
               style={styles.messageAvatar}
             />
             <View style={[
-            styles.messageBubble,
-            item.isAdminMessage && styles.adminMessageBubble
-          ]}>
+              styles.messageBubble,
+              item.isAdminMessage && styles.adminMessageBubble
+            ]}>
               <View style={styles.senderRow}>
                 <Text style={[styles.senderName, item.isAdminMessage && styles.adminSenderName]}>
                   {item.senderName}
@@ -357,7 +347,7 @@ export default function BusinessGroupViewScreen() {
   }
 
   return (
-    <SafeAreaView style={commonStyles.container} edges={['top']}>
+    <SafeAreaView style={commonStyles.container} edges={['top', 'bottom']}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -378,8 +368,6 @@ export default function BusinessGroupViewScreen() {
           <IconSymbol name="person.2.fill" size={20} color={colors.text} />
         </TouchableOpacity>
       </View>
-
-      
 
       {/* Liste des participants (toggle) */}
       {showParticipants && (
@@ -505,20 +493,6 @@ const styles = StyleSheet.create({
   participantsButton: {
     padding: 8,
   },
-  readOnlyBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primary,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    gap: 8,
-  },
-  readOnlyText: {
-    fontSize: 12,
-    color: colors.background,
-    fontWeight: '500',
-  },
   participantsPanel: {
     backgroundColor: colors.surface,
     paddingVertical: 12,
@@ -599,11 +573,39 @@ const styles = StyleSheet.create({
     padding: 12,
     maxWidth: '85%',
   },
+  senderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
   senderName: {
     fontSize: 13,
     fontWeight: '600',
     color: colors.primary,
-    marginBottom: 4,
+  },
+  adminMessageBubble: {
+    backgroundColor: colors.primary + '15',
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary,
+  },
+  adminSenderName: {
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  adminBadge: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  adminBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.background,
+  },
+  adminMessageText: {
+    fontWeight: '600',
   },
   messageText: {
     fontSize: 15,
@@ -652,7 +654,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
+    paddingVertical: 16,
     paddingHorizontal: 20,
     backgroundColor: colors.surface,
     borderTopWidth: 1,
@@ -665,42 +667,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     flex: 1,
   },
-  senderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
-  },
-  adminMessageBubble: {
-    backgroundColor: colors.primary + '15',
-    borderLeftWidth: 3,
-    borderLeftColor: colors.primary,
-  },
-  adminSenderName: {
-    color: colors.primary,
-    fontWeight: '700',
-  },
-  adminBadge: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  adminBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: colors.background,
-  },
-  adminMessageText: {
-    fontWeight: '600',
-  },
   inputContainer: {
     backgroundColor: colors.surface,
     borderTopWidth: 1,
     borderTopColor: colors.border,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    paddingBottom: Platform.OS === 'ios' ? 12 : 16,
+    paddingBottom: Platform.OS === 'ios' ? 12 : 20,
   },
   adminInputWrapper: {
     flexDirection: 'row',
