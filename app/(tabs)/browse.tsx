@@ -75,6 +75,7 @@ export default function BrowseScreen() {
   const [selectedActivity, setSelectedActivity] = useState<SelectedActivity | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [latestSlotDateByActivity, setLatestSlotDateByActivity] = useState<Record<string, string | null>>({});
+  const [slotCountByActivity, setSlotCountByActivity] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
@@ -172,12 +173,17 @@ export default function BrowseScreen() {
     .order('date', { ascending: true });
 
   const map: Record<string, string | null> = {};
-  ids.forEach(id => (map[id] = null)); // par défaut : aucune date
+  const slotCountMap: Record<string, number> = {};
+  ids.forEach(id => {
+    map[id] = null;
+    slotCountMap[id] = 0;
+  });
   (slots || []).forEach(s => {
-    // comme c'est trié ASC, on garde la 1ère rencontrée = la plus proche
     if (map[s.activity_id] == null) map[s.activity_id] = s.date;
+    slotCountMap[s.activity_id] = (slotCountMap[s.activity_id] || 0) + 1;
   });
   setLatestSlotDateByActivity(map);
+  setSlotCountByActivity(slotCountMap);
 
   // ✅ Filtrer : garder uniquement les activités qui ont au moins un créneau futur
   const activitiesWithSlots = result.data.filter((a: Activity) => map[a.id] !== null);
@@ -445,19 +451,14 @@ export default function BrowseScreen() {
             
             <View style={styles.activityMeta}>
               <View style={styles.metaRow}>
-                <IconSymbol name="calendar" size={14} color="#FFFFFF" />
-                <Text style={styles.metaText}>{formattedDate}</Text>
-              </View>
-              
-              <View style={styles.metaRow}>
                 <IconSymbol name="location.fill" size={14} color="#FFFFFF" />
                 <Text style={styles.metaText} numberOfLines={1}>{activity.ville}</Text>
               </View>
               
               <View style={styles.metaRow}>
-                <IconSymbol name="person.2.fill" size={14} color="#FFFFFF" />
+                <IconSymbol name="calendar.badge.clock" size={14} color="#FFFFFF" />
                 <Text style={styles.metaText}>
-                  {activity.participants || 0}/{activity.max_participants}
+                  {slotCountByActivity[activity.id] || 0} créneau{(slotCountByActivity[activity.id] || 0) > 1 ? 'x' : ''} dispo
                 </Text>
               </View>
             </View>

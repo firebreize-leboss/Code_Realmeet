@@ -61,6 +61,7 @@ interface ActivityCalendarProps {
   pendingSlots?: PendingSlot[];
   readOnly?: boolean;
   userJoinedSlotId?: string;
+  maxParticipants?: number;
 }
 
 const dayNames = ['LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM', 'DIM'];
@@ -83,6 +84,7 @@ export default function ActivityCalendar({
   pendingSlots = [],
   readOnly = false,
   userJoinedSlotId,
+  maxParticipants,
 }: ActivityCalendarProps) {
   // Entreprise (edit) : navigation semaine -> weekOffset
   const [weekOffset, setWeekOffset] = useState(0);
@@ -647,6 +649,11 @@ export default function ActivityCalendar({
                   <Text style={styles.slotParticipantText}>{slot.participantCount}</Text>
                 </View>
               )}
+              {isSelected && maxParticipants && (maxParticipants - (slot.participantCount || 0)) <= 2 && (maxParticipants - (slot.participantCount || 0)) > 0 && (
+                <Text style={styles.slotRemainingText}>
+                  {maxParticipants - (slot.participantCount || 0)} place{(maxParticipants - (slot.participantCount || 0)) > 1 ? 's' : ''} restante{(maxParticipants - (slot.participantCount || 0)) > 1 ? 's' : ''}
+                </Text>
+              )}
 
               {mode === 'edit' && (
                 <TouchableOpacity
@@ -1012,6 +1019,12 @@ const styles = StyleSheet.create({
     color: colors.background,
     fontSize: 10,
     fontWeight: '700',
+  },
+  slotRemainingText: {
+    fontSize: 10,
+    color: '#EF4444',
+    fontWeight: '600',
+    marginTop: 4,
   },
 
   modalOverlay: {

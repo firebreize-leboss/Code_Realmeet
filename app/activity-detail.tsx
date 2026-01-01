@@ -697,13 +697,7 @@ if (shouldShowParticipants) {
             <IconSymbol name="chevron.right" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
 
-            <View style={styles.detailRow}>
-              <IconSymbol name="clock" size={20} color={colors.primary} />
-              <View style={styles.detailContent}>
-                <Text style={styles.detailLabel}>Horaire</Text>
-                <Text style={styles.detailValue}>{activity.time}</Text>
-              </View>
-            </View>
+            
 
 <TouchableOpacity 
               style={styles.detailRow}
@@ -719,18 +713,7 @@ if (shouldShowParticipants) {
               <IconSymbol name="map.fill" size={20} color={colors.primary} />
             </TouchableOpacity>
 
-            {!isActivityPast && (
-              <View style={styles.detailRow}>
-                <IconSymbol name="person.2.fill" size={20} color={colors.primary} />
-                <View style={styles.detailContent}>
-                  <Text style={styles.detailLabel}>Places</Text>
-                  <Text style={[styles.detailValue, isFull && styles.fullText]}>
-                    {activity.participants}/{activity.capacity} 
-                    {isFull ? ' (Complet)' : ` (${activity.placesRestantes} restantes)`}
-                  </Text>
-                </View>
-              </View>
-            )}
+            
             </View>
 
           {/* Calendrier de sélection - Masqué pour les activités passées */}
@@ -743,6 +726,7 @@ if (shouldShowParticipants) {
                 mode="select"
                 readOnly={isBusiness || isJoined}
                 userJoinedSlotId={isJoined ? selectedSlot?.id : undefined}
+                maxParticipants={activity.capacity}
               />
             </View>
           )}
