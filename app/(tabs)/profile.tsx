@@ -159,8 +159,50 @@ export default function ProfileScreen() {
         .select('id, participants, prix')
         .eq('host_id', businessId);
 
-      const totalParticipants = activities?.reduce((sum, a) => sum + (a.participants || 0), 0) || 0;
-      const totalRevenue = activities?.reduce((sum, a) => sum + ((a.participants || 0) * (a.prix || 0)), 0) || 0;
+      // Compter les participants des créneaux TERMINÉS uniquement
+      const now = new Date();
+      const todayStr = now.toISOString().split('T')[0];
+      const nowTime = now.toTimeString().slice(0, 5);
+      
+      const activityIdsForStats = activities?.map(a => a.id) || [];
+      let totalParticipants = 0;
+      let totalRevenue = 0;
+      
+      if (activityIdsForStats.length > 0) {
+        // Récupérer les créneaux passés
+        const { data: pastSlots } = await supabase
+          .from('activity_slots')
+          .select('id, activity_id')
+          .in('activity_id', activityIdsForStats)
+          .or(`date.lt.${todayStr},and(date.eq.${todayStr},time.lt.${nowTime})`);
+        
+        const pastSlotIds = pastSlots?.map(s => s.id) || [];
+        
+        if (pastSlotIds.length > 0) {
+          // Compter les participants de ces créneaux
+          const { count } = await supabase
+            .from('slot_participants')
+            .select('*', { count: 'exact', head: true })
+            .in('slot_id', pastSlotIds);
+          
+          totalParticipants = count || 0;
+          
+          // Calculer les revenus basés sur les créneaux terminés
+          const slotActivityMap = new Map(pastSlots?.map(s => [s.id, s.activity_id]) || []);
+          const activityPrices = new Map(activities?.map(a => [a.id, a.prix || 0]) || []);
+          
+          const { data: participantsData } = await supabase
+            .from('slot_participants')
+            .select('slot_id')
+            .in('slot_id', pastSlotIds);
+          
+          totalRevenue = (participantsData || []).reduce((sum, p) => {
+            const activityId = slotActivityMap.get(p.slot_id);
+            const price = activityId ? activityPrices.get(activityId) || 0 : 0;
+            return sum + price;
+          }, 0);
+        }
+      }
 
       // Top activités
       const { data: topActivities } = await supabase
@@ -170,13 +212,30 @@ export default function ProfileScreen() {
         .order('participants', { ascending: false })
         .limit(5);
 
+      // Récupérer le vrai nombre d'avis depuis la table reviews
+      const activityIds = activities?.map(a => a.id) || [];
+      let reviewCount = 0;
+      let avgRating = 0;
+      
+      if (activityIds.length > 0) {
+        const { data: reviewsData } = await supabase
+          .from('reviews')
+          .select('rating')
+          .in('activity_id', activityIds);
+        
+        reviewCount = reviewsData?.length || 0;
+        if (reviewCount > 0) {
+          avgRating = reviewsData!.reduce((sum, r) => sum + r.rating, 0) / reviewCount;
+        }
+      }
+
       setDashboardData({
         total_activities: totalActivities || 0,
         active_activities: activeActivities || 0,
         total_participants: totalParticipants,
         total_revenue: totalRevenue,
-        avg_rating: profile?.business_rating || 0,
-        review_count: profile?.business_review_count || 0,
+        avg_rating: avgRating,
+        review_count: reviewCount,
         monthly_stats: [],
         top_activities: topActivities || [],
       });

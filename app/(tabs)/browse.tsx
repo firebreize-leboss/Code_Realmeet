@@ -66,6 +66,30 @@ interface UserLocation {
   latitude: number;
   longitude: number;
 }
+useEffect(() => {
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        setUserLocation({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        });
+      }
+    })();
+  }, []);
+
+  // AJOUTER ICI - Mettre à jour le marker utilisateur quand la localisation change
+  useEffect(() => {
+    if (userLocation && webViewRef.current && viewMode === 'maps') {
+      webViewRef.current.postMessage(JSON.stringify({
+        type: 'updateUserLocation',
+        userLocation,
+      }));
+    }
+  }, [userLocation, viewMode]);
 
 export default function BrowseScreen() {
   const router = useRouter();
@@ -341,6 +365,15 @@ export default function BrowseScreen() {
     function handleMessage(event) {
       try {
         const data = JSON.parse(event.data);
+        if (data.type === 'updateUserLocation') {
+          if (userMarker) userMarker.remove();
+          const userEl = document.createElement('div');
+          userEl.className = 'user-marker';
+          userMarker = new maplibregl.Marker({ element: userEl })
+            .setLngLat([data.userLocation.longitude, data.userLocation.latitude])
+            .addTo(map);
+        }
+        
         if (data.type === 'loadActivities') {
           const activities = data.activities || [];
           Object.values(markers).forEach(m => m.remove());

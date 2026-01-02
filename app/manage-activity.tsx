@@ -76,7 +76,15 @@ export default function ManageActivityScreen() {
 
   useEffect(() => {
     loadActivityData();
+    setActivity({
+      id: activityData.id,
+      title: activityData.nom || activityData.titre,
+      // ...
+      status: activityData.status || 'active',  // <-- Vérifie que c'est bien lu ici
+    });
   }, [id]);
+}
+
 
   const loadActivityData = async () => {
     try {
@@ -210,10 +218,14 @@ export default function ManageActivityScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await supabase
+              const { error } = await supabase
                 .from('activities')
                 .update({ status: 'paused' })
-                .eq('id', activity?.id);
+                .eq('id', activity?.id)
+                .select()
+                .single();
+              
+              if (error) throw error;
               
               setActivity(prev => prev ? { ...prev, status: 'paused' } : null);
               Alert.alert('Succès', 'Activité mise en pause');
@@ -228,15 +240,51 @@ export default function ManageActivityScreen() {
 
   const handleReactivateActivity = async () => {
     try {
-      await supabase
+      const { error } = await supabase
         .from('activities')
         .update({ status: 'active' })
-        .eq('id', activity?.id);
+        .eq('id', activity?.id)
+        .select()
+        .single();
+      
+      if (error) throw error;
       
       setActivity(prev => prev ? { ...prev, status: 'active' } : null);
       Alert.alert('Succès', 'Activité réactivée');
     } catch (error) {
       Alert.alert('Erreur', 'Impossible de réactiver');
+    }
+  };
+  const handlePublishActivity = async () => {
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    
+    const { count } = await supabase
+      .from('activity_slots')
+      .select('*', { count: 'exact', head: true })
+      .eq('activity_id', activity?.id)
+      .gte('date', todayStr);
+    
+    if (!count || count === 0) {
+      Alert.alert(
+        'Impossible de publier',
+        'Vous devez ajouter au moins un créneau horaire postérieur à maintenant pour publier cette activité.'
+      );
+      return;
+    }
+    
+    try {
+      const { error } = await supabase
+        .from('activities')
+        .update({ status: 'active' })
+        .eq('id', activity?.id);
+      
+      if (error) throw error;
+      
+      setActivity(prev => prev ? { ...prev, status: 'active' } : null);
+      Alert.alert('Succès', 'Votre activité est maintenant publiée !');
+    } catch (error) {
+      Alert.alert('Erreur', 'Impossible de publier l\'activité');
     }
   };
 
@@ -269,117 +317,161 @@ export default function ManageActivityScreen() {
     );
   }
 
-  const fillPercentage = (activity.totalParticipants / activity.maxParticipants) * 100;
+  // ⚠️ Le fichier que tu as envoyé commence ici (il manque probablement le haut du composant : imports, handlers, styles, etc.)
+// Je garde exactement ton contenu, je corrige la syntaxe JSX, et je conserve les lignes cassées en commentaires. :contentReference[oaicite:1]{index=1}
 
-  return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.headerButton} onPress={() => router.back()}>
-          <IconSymbol name="chevron.left" size={24} color={colors.text} />
+const fillPercentage = (activity.totalParticipants / activity.maxParticipants) * 100;
+
+return (
+  <SafeAreaView style={styles.container} edges={['top']}>
+    <View style={styles.header}>
+      <TouchableOpacity style={styles.headerButton} onPress={() => router.back()}>
+        <IconSymbol name="chevron.left" size={24} color={colors.text} />
+      </TouchableOpacity>
+      <Text style={styles.headerTitle}>Gestion</Text>
+      <TouchableOpacity style={styles.headerButton} onPress={handleEditActivity}>
+        <IconSymbol name="pencil" size={20} color={colors.text} />
+      </TouchableOpacity>
+    </View>
+
+    <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      <View style={styles.heroSection}>
+        <Image source={{ uri: activity.image || 'https://via.placeholder.com/400' }} style={styles.heroImage} />
+        <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} style={styles.heroGradient} />
+        <View style={styles.heroContent}>
+          <View style={styles.statusBadge}>
+            <View style={[
+              styles.statusDot,
+              { backgroundColor: activity.status === 'active' ? '#10b981' : activity.status === 'paused' ? '#f59e0b' : colors.textSecondary }
+            ]} />
+            <Text style={styles.statusText}>
+              {activity.status === 'active' ? 'Active' : activity.status === 'paused' ? 'En pause' : 'Terminée'}
+            </Text>
+          </View>
+          <Text style={styles.heroTitle}>{activity.title}</Text>
+          <Text style={styles.heroCategory}>{activity.category}</Text>
+        </View>
+      </View>
+
+      <View style={styles.statsGrid}>
+        <View style={styles.statCard}>
+          <IconSymbol name="person.2.fill" size={24} color={colors.primary} />
+          <Text style={styles.statValue}>{activity.totalParticipants}</Text>
+          <Text style={styles.statLabel}>Participants</Text>
+          <View style={styles.progressBar}>
+            <View style={[styles.progressFill, { width: `${Math.min(fillPercentage, 100)}%` }]} />
+          </View>
+          <Text style={styles.statSubtext}>{activity.totalParticipants}/{activity.maxParticipants} places</Text>
+        </View>
+
+        <View style={styles.statCard}>
+          <IconSymbol name="eurosign.circle.fill" size={24} color="#10b981" />
+          <Text style={styles.statValue}>{activity.totalRevenue}€</Text>
+          <Text style={styles.statLabel}>Revenus</Text>
+        </View>
+
+        <View style={styles.statCard}>
+          <IconSymbol name="calendar" size={24} color="#f59e0b" />
+          <Text style={styles.statValue}>{activity.slots.length}</Text>
+          <Text style={styles.statLabel}>Créneaux</Text>
+        </View>
+
+        <View style={styles.statCard}>
+          <IconSymbol name="star.fill" size={24} color="#eab308" />
+          <Text style={styles.statValue}>{activity.averageRating.toFixed(1)}</Text>
+          <Text style={styles.statLabel}>{activity.reviewCount} avis</Text>
+        </View>
+      </View>
+
+      <View style={styles.tabsContainer}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'overview' && styles.tabActive]}
+          onPress={() => setActiveTab('overview')}
+        >
+          <Text style={[styles.tabText, activeTab === 'overview' && styles.tabTextActive]}>Vue d'ensemble</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Gestion</Text>
-        <TouchableOpacity style={styles.headerButton} onPress={handleEditActivity}>
-          <IconSymbol name="pencil" size={20} color={colors.text} />
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'slots' && styles.tabActive]}
+          onPress={() => setActiveTab('slots')}
+        >
+          <Text style={[styles.tabText, activeTab === 'slots' && styles.tabTextActive]}>Créneaux</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'participants' && styles.tabActive]}
+          onPress={() => setActiveTab('participants')}
+        >
+          <Text style={[styles.tabText, activeTab === 'participants' && styles.tabTextActive]}>Participants</Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        <View style={styles.heroSection}>
-          <Image source={{ uri: activity.image || 'https://via.placeholder.com/400' }} style={styles.heroImage} />
-          <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} style={styles.heroGradient} />
-          <View style={styles.heroContent}>
-            <View style={styles.statusBadge}>
-              <View style={[
-                styles.statusDot, 
-                { backgroundColor: activity.status === 'active' ? '#10b981' : activity.status === 'paused' ? '#f59e0b' : colors.textSecondary }
-              ]} />
-              <Text style={styles.statusText}>
-                {activity.status === 'active' ? 'Active' : activity.status === 'paused' ? 'En pause' : 'Terminée'}
-              </Text>
-            </View>
-            <Text style={styles.heroTitle}>{activity.title}</Text>
-            <Text style={styles.heroCategory}>{activity.category}</Text>
-          </View>
-        </View>
+      <View style={styles.tabContent}>
+        {activeTab === 'overview' && (
+          <View>
+            <Text style={styles.sectionTitle}>Actions rapides</Text>
+            
+            <TouchableOpacity style={styles.actionCard} onPress={handleEditActivity}>
+              <View style={[styles.actionIcon, { backgroundColor: colors.primary + '20' }]}>
+                <IconSymbol name="pencil" size={20} color={colors.primary} />
+              </View>
+              <View style={styles.actionContent}>
+                <Text style={styles.actionTitle}>Modifier l'activité</Text>
+                <Text style={styles.actionSubtitle}>Éditer les informations</Text>
+              </View>
+              <IconSymbol name="chevron.right" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
 
-        <View style={styles.statsGrid}>
-          <View style={styles.statCard}>
-            <IconSymbol name="person.2.fill" size={24} color={colors.primary} />
-            <Text style={styles.statValue}>{activity.totalParticipants}</Text>
-            <Text style={styles.statLabel}>Participants</Text>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: `${Math.min(fillPercentage, 100)}%` }]} />
-            </View>
-            <Text style={styles.statSubtext}>{activity.totalParticipants}/{activity.maxParticipants} places</Text>
-          </View>
+            <TouchableOpacity style={styles.actionCard} onPress={() => setShowSlotModal(true)}>
+              <View style={[styles.actionIcon, { backgroundColor: '#10b981' + '20' }]}>
+                <IconSymbol name="plus.circle.fill" size={20} color="#10b981" />
+              </View>
+              <View style={styles.actionContent}>
+                <Text style={styles.actionTitle}>Ajouter un créneau</Text>
+                <Text style={styles.actionSubtitle}>Nouvelle date disponible</Text>
+              </View>
+              <IconSymbol name="chevron.right" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
 
-          <View style={styles.statCard}>
-            <IconSymbol name="eurosign.circle.fill" size={24} color="#10b981" />
-            <Text style={styles.statValue}>{activity.totalRevenue}€</Text>
-            <Text style={styles.statLabel}>Revenus</Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <IconSymbol name="calendar" size={24} color="#f59e0b" />
-            <Text style={styles.statValue}>{activity.slots.length}</Text>
-            <Text style={styles.statLabel}>Créneaux</Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <IconSymbol name="star.fill" size={24} color="#eab308" />
-            <Text style={styles.statValue}>{activity.averageRating.toFixed(1)}</Text>
-            <Text style={styles.statLabel}>{activity.reviewCount} avis</Text>
-          </View>
-        </View>
-
-        <View style={styles.tabsContainer}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'overview' && styles.tabActive]}
-            onPress={() => setActiveTab('overview')}
-          >
-            <Text style={[styles.tabText, activeTab === 'overview' && styles.tabTextActive]}>Vue d'ensemble</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'slots' && styles.tabActive]}
-            onPress={() => setActiveTab('slots')}
-          >
-            <Text style={[styles.tabText, activeTab === 'slots' && styles.tabTextActive]}>Créneaux</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'participants' && styles.tabActive]}
-            onPress={() => setActiveTab('participants')}
-          >
-            <Text style={[styles.tabText, activeTab === 'participants' && styles.tabTextActive]}>Participants</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.tabContent}>
-          {activeTab === 'overview' && (
-            <View>
-              <Text style={styles.sectionTitle}>Actions rapides</Text>
-              
-              <TouchableOpacity style={styles.actionCard} onPress={handleEditActivity}>
-                <View style={[styles.actionIcon, { backgroundColor: colors.primary + '20' }]}>
-                  <IconSymbol name="pencil" size={20} color={colors.primary} />
-                </View>
-                <View style={styles.actionContent}>
-                  <Text style={styles.actionTitle}>Modifier l'activité</Text>
-                  <Text style={styles.actionSubtitle}>Éditer les informations</Text>
-                </View>
-                <IconSymbol name="chevron.right" size={20} color={colors.textSecondary} />
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.actionCard} onPress={() => setShowSlotModal(true)}>
+            {activity.status === 'draft' && (
+              <TouchableOpacity style={styles.actionCard} onPress={handlePublishActivity}>
                 <View style={[styles.actionIcon, { backgroundColor: '#10b981' + '20' }]}>
-                  <IconSymbol name="plus.circle.fill" size={20} color="#10b981" />
+                  <IconSymbol name="paperplane.fill" size={20} color="#10b981" />
                 </View>
                 <View style={styles.actionContent}>
-                  <Text style={styles.actionTitle}>Ajouter un créneau</Text>
-                  <Text style={styles.actionSubtitle}>Nouvelle date disponible</Text>
+                  <Text style={styles.actionTitle}>Publier</Text>
+                  <Text style={styles.actionSubtitle}>Rendre visible aux utilisateurs</Text>
                 </View>
                 <IconSymbol name="chevron.right" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
+            )}
 
+            {/* ✅ Bloc corrigé (Pause / Réactiver) */}
+            {activity.status === 'active' ? (
+              <TouchableOpacity style={styles.actionCard} onPress={handlePauseActivity}>
+                <View style={[styles.actionIcon, { backgroundColor: '#f59e0b' + '20' }]}>
+                  <IconSymbol name="pause.circle.fill" size={20} color="#f59e0b" />
+                </View>
+                <View style={styles.actionContent}>
+                  <Text style={styles.actionTitle}>Mettre en pause</Text>
+                  <Text style={styles.actionSubtitle}>Suspendre les inscriptions</Text>
+                </View>
+                <IconSymbol name="chevron.right" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            ) : activity.status === 'paused' ? (
+              <TouchableOpacity style={styles.actionCard} onPress={handleReactivateActivity}>
+                <View style={[styles.actionIcon, { backgroundColor: '#10b981' + '20' }]}>
+                  <IconSymbol name="play.circle.fill" size={20} color="#10b981" />
+                </View>
+                <View style={styles.actionContent}>
+                  <Text style={styles.actionTitle}>Réactiver</Text>
+                  <Text style={styles.actionSubtitle}>Reprendre les inscriptions</Text>
+                </View>
+                <IconSymbol name="chevron.right" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+            ) : null}
+
+            {/* ❗️Tes lignes originales cassées (conservées, pas supprimées) */}
+            {/*
+              {activity.status === 'active' ? (
               {activity.status === 'active' ? (
                 <TouchableOpacity style={styles.actionCard} onPress={handlePauseActivity}>
                   <View style={[styles.actionIcon, { backgroundColor: '#f59e0b' + '20' }]}>
@@ -403,81 +495,114 @@ export default function ManageActivityScreen() {
                   <IconSymbol name="chevron.right" size={20} color={colors.textSecondary} />
                 </TouchableOpacity>
               )}
-            </View>
-          )}
+            */}
+          </View>
+        )}
 
-          {activeTab === 'slots' && (
-            <View>
-              <Text style={styles.sectionTitle}>Créneaux ({activity.slots.length})</Text>
-              
-              {activity.slots.length === 0 ? (
-                <View style={styles.emptySlots}>
-                  <IconSymbol name="calendar.badge.exclamationmark" size={48} color={colors.textSecondary} />
-                  <Text style={styles.emptyText}>Aucun créneau</Text>
-                  <TouchableOpacity style={styles.addSlotButton} onPress={() => setShowSlotModal(true)}>
-                    <Text style={styles.addSlotButtonText}>Ajouter un créneau</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                activity.slots.map(slot => (
-                  <View key={slot.id} style={styles.slotCard}>
-                    <View style={styles.slotInfo}>
-                      <Text style={styles.slotDate}>{slot.date}</Text>
-                      <Text style={styles.slotTime}>
-                        {slot.timeStart}{slot.timeEnd ? ` - ${slot.timeEnd}` : ''}
+        {activeTab === 'slots' && (
+          <View>
+            <Text style={styles.sectionTitle}>Créneaux ({activity.slots.length})</Text>
+            
+            {activity.slots.length === 0 ? (
+              <View style={styles.emptySlots}>
+                <IconSymbol name="calendar.badge.exclamationmark" size={48} color={colors.textSecondary} />
+                <Text style={styles.emptyText}>Aucun créneau</Text>
+                <TouchableOpacity style={styles.addSlotButton} onPress={() => setShowSlotModal(true)}>
+                  <Text style={styles.addSlotButtonText}>Ajouter un créneau</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              activity.slots.map(slot => (
+                <View key={slot.id} style={styles.slotCard}>
+                  <View style={styles.slotInfo}>
+                    <Text style={styles.slotDate}>{slot.date}</Text>
+                    <Text style={styles.slotTime}>
+                      {slot.timeStart}{slot.timeEnd ? ` - ${slot.timeEnd}` : ''}
+                    </Text>
+                    <View style={styles.slotParticipants}>
+                      <IconSymbol name="person.2.fill" size={14} color={colors.primary} />
+                      <Text style={styles.slotParticipantsText}>
+                        {slot.participants}/{slot.maxParticipants}
                       </Text>
-                      <View style={styles.slotParticipants}>
-                        <IconSymbol name="person.2.fill" size={14} color={colors.primary} />
-                        <Text style={styles.slotParticipantsText}>
-                          {slot.participants}/{slot.maxParticipants}
-                        </Text>
-                      </View>
-                    </View>
-                    
-                    <View style={styles.slotActions}>
-                      {slot.participants >= 2 && (
-                        <TouchableOpacity 
-                          style={[
-                            styles.composeGroupButton,
-                            slot.hasSlotGroups && styles.composeGroupButtonActive
-                          ]}
-                          onPress={() => handleManageGroups(slot)}
-                        >
-                          <IconSymbol 
-                            name="person.3.fill" 
-                            size={16} 
-                            color={slot.hasSlotGroups ? colors.background : colors.primary} 
-                          />
-                          <Text style={[
-                            styles.composeGroupText,
-                            slot.hasSlotGroups && styles.composeGroupTextActive
-                          ]}>
-                            {slot.hasSlotGroups ? 'Groupes' : 'Composer'}
-                          </Text>
-                        </TouchableOpacity>
-                      )}
-                      
-                      {slot.hasGroup && slot.groupId && (
-                        <TouchableOpacity 
-                          style={styles.viewGroupButton}
-                          onPress={() => handleViewGroup(slot.groupId!, slot.date)}
-                        >
-                          <IconSymbol name="bubble.left.and.bubble.right.fill" size={16} color={colors.primary} />
-                          <Text style={styles.viewGroupText}>Chat</Text>
-                        </TouchableOpacity>
-                      )}
                     </View>
                   </View>
-                ))
-              )}
-            </View>
-          )}
+                  
+                  <View style={styles.slotActions}>
+                    {slot.participants >= 2 && (
+                      <TouchableOpacity 
+                        style={[
+                          styles.composeGroupButton,
+                          slot.hasSlotGroups && styles.composeGroupButtonActive
+                        ]}
+                        onPress={() => handleManageGroups(slot)}
+                      >
+                        <IconSymbol 
+                          name="person.3.fill" 
+                          size={16} 
+                          color={slot.hasSlotGroups ? colors.background : colors.primary} 
+                        />
+                        <Text style={[
+                          styles.composeGroupText,
+                          slot.hasSlotGroups && styles.composeGroupTextActive
+                        ]}>
+                          {slot.hasSlotGroups ? 'Groupes' : 'Composer'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                    
+                    {slot.hasGroup && slot.groupId && (
+                      <TouchableOpacity 
+                        style={styles.viewGroupButton}
+                        onPress={() => handleViewGroup(slot.groupId!, slot.date)}
+                      >
+                        <IconSymbol name="bubble.left.and.bubble.right.fill" size={16} color={colors.primary} />
+                        <Text style={styles.viewGroupText}>Chat</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              ))
+            )}
+          </View>
+        )}
 
-          {activeTab === 'participants' && (
-            <View>
-              <Text style={styles.sectionTitle}>Participants ({participants.length})</Text>
-              
-              {participants.length === 0 ? (
+        {/* ✅ Participants : on garde TON premier bloc, et on commente le bloc dupliqué cassé */}
+        {activeTab === 'participants' && (
+          <View>
+            <Text style={styles.sectionTitle}>Participants ({participants.length})</Text>
+            
+            {participants.length === 0 ? (
+              <View style={styles.emptyState}>
+                <IconSymbol name="person.2" size={48} color={colors.textSecondary} />
+                <Text style={styles.emptyStateText}>Aucun participant pour le moment</Text>
+              </View>
+            ) : (
+              participants.map((participant) => (
+                <TouchableOpacity
+                  key={participant.id}
+                  style={styles.participantItem}
+                  onPress={() => router.push(`/user-profile?id=${participant.id}`)}
+                >
+                  <Image
+                    source={{ uri: participant.avatar || 'https://via.placeholder.com/50' }}
+                    style={styles.participantAvatar}
+                  />
+                  <View style={styles.participantInfo}>
+                    <Text style={styles.participantName}>{participant.name}</Text>
+                    <Text style={styles.participantMeta}>
+                      Inscrit le {participant.joinedAt} • {participant.slotDate}
+                    </Text>
+                  </View>
+                  <IconSymbol name="chevron.right" size={20} color={colors.textSecondary} />
+                </TouchableOpacity>
+              ))
+            )}
+          </View>
+        )}
+
+        {/* ❗️Ton bloc dupliqué/orphelin (conservé, pas supprimé) */}
+        {/*
+          )} (
                 <View style={styles.emptyParticipants}>
                   <IconSymbol name="person.crop.circle.badge.questionmark" size={48} color={colors.textSecondary} />
                   <Text style={styles.emptyText}>Aucun participant</Text>
@@ -506,70 +631,78 @@ export default function ManageActivityScreen() {
               )}
             </View>
           )}
+        */}
+      </View>
+
+      <View style={{ height: 40 }} />
+    </ScrollView>
+
+    <Modal
+      visible={showSlotModal}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={() => setShowSlotModal(false)}
+    >
+      <SafeAreaView style={styles.modalContainer}>
+        <View style={styles.modalSlotHeader}>
+          <TouchableOpacity onPress={() => setShowSlotModal(false)}>
+            <Text style={styles.modalCancelText}>Annuler</Text>
+          </TouchableOpacity>
+          <Text style={styles.modalSlotTitle}>Ajouter un créneau</Text>
+          <TouchableOpacity onPress={() => setShowSlotModal(false)}>
+            <Text style={styles.modalSlotDone}>Terminé</Text>
+          </TouchableOpacity>
         </View>
+        
+        <ActivityCalendar
+          mode="edit"
+          activityId={activity?.id}
+          onSlotsChange={() => {
+            loadActivityData();
+          }}
+        />
+      </SafeAreaView>
+    </Modal>
 
-        <View style={{ height: 40 }} />
-      </ScrollView>
-
-      <Modal
-        visible={showSlotModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowSlotModal(false)}
-      >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalSlotHeader}>
-            <TouchableOpacity onPress={() => setShowSlotModal(false)}>
-              <Text style={styles.modalCancelText}>Annuler</Text>
-            </TouchableOpacity>
-            <Text style={styles.modalSlotTitle}>Ajouter un créneau</Text>
-            <TouchableOpacity onPress={() => setShowSlotModal(false)}>
-              <Text style={styles.modalSlotDone}>Terminé</Text>
-            </TouchableOpacity>
+    <Modal
+      visible={showGroupsModal}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={() => setShowGroupsModal(false)}
+    >
+      <SafeAreaView style={styles.modalContainer}>
+        <View style={styles.modalSlotHeader}>
+          <TouchableOpacity onPress={() => setShowGroupsModal(false)}>
+            <Text style={styles.modalCancelText}>Fermer</Text>
+          </TouchableOpacity>
+          <Text style={styles.modalSlotTitle}>Composition des groupes</Text>
+          <View style={{ width: 60 }} />
+        </View>
+        
+        {selectedSlotForGroups && (
+          <View style={styles.groupsModalContent}>
+            <SlotGroupsView
+              slotId={selectedSlotForGroups.id}
+              slotDate={selectedSlotForGroups.date}
+              participantCount={selectedSlotForGroups.participants}
+              onGroupsGenerated={() => {
+                loadActivityData();
+              }}
+            />
           </View>
-          
-          <ActivityCalendar
-            mode="edit"
-            activityId={activity?.id}
-            onSlotsChange={() => {
-              loadActivityData();
-            }}
-          />
-        </SafeAreaView>
-      </Modal>
+        )}
+      </SafeAreaView>
+    </Modal>
+  </SafeAreaView>
+);
 
-      <Modal
-        visible={showGroupsModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowGroupsModal(false)}
-      >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalSlotHeader}>
-            <TouchableOpacity onPress={() => setShowGroupsModal(false)}>
-              <Text style={styles.modalCancelText}>Fermer</Text>
-            </TouchableOpacity>
-            <Text style={styles.modalSlotTitle}>Composition des groupes</Text>
-            <View style={{ width: 60 }} />
-          </View>
-          
-          {selectedSlotForGroups && (
-            <View style={styles.groupsModalContent}>
-              <SlotGroupsView
-                slotId={selectedSlotForGroups.id}
-                slotDate={selectedSlotForGroups.date}
-                participantCount={selectedSlotForGroups.participants}
-                onGroupsGenerated={() => {
-                  loadActivityData();
-                }}
-              />
-            </View>
-          )}
-        </SafeAreaView>
-      </Modal>
-    </SafeAreaView>
+// ⚠️ Ton fichier original se terminait par :
+/*
   );
 }
+*/
+
+
 
 const styles = StyleSheet.create({
   container: {
@@ -946,5 +1079,41 @@ const styles = StyleSheet.create({
   groupsModalContent: {
     flex: 1,
     padding: 20,
+  },
+  participantItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  participantAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
+  },
+  participantInfo: {
+    flex: 1,
+  },
+  participantName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  participantMeta: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  emptyState: {
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: colors.textSecondary,
+    marginTop: 12,
   },
 });

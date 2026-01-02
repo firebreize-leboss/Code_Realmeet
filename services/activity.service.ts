@@ -21,6 +21,7 @@ export interface CreateActivityData {
   inclusions?: string[];
   regles?: string[];
   dates_supplementaires?: string;
+  status?: 'active' | 'draft';
 }
 
 class ActivityService {
@@ -60,7 +61,7 @@ class ActivityService {
           regles: activityData.regles,
           dates_supplementaires: activityData.dates_supplementaires,
           host_type: 'Particulier',
-          status: 'active',
+          status: activityData.status || 'active',
         })
         .select()
         .single();

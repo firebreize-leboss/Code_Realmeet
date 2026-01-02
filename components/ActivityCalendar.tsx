@@ -50,6 +50,7 @@ interface PendingSlot {
   date: string;
   time: string;
   duration: number;
+  max_participants?: number;
 }
 
 interface ActivityCalendarProps {
@@ -101,6 +102,7 @@ export default function ActivityCalendar({
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [newTime, setNewTime] = useState('');
   const [newDuration, setNewDuration] = useState('60');
+  const [newMaxParticipants, setNewMaxParticipants] = useState('10');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [addingSlot, setAddingSlot] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<SelectedSlot | null>(null);
@@ -444,6 +446,7 @@ export default function ActivityCalendar({
     setSelectedDate(date);
     setNewTime('');
     setNewDuration('60');
+    setNewMaxParticipants('10');
     setShowTimeModal(true);
   };
 
@@ -475,7 +478,8 @@ export default function ActivityCalendar({
         Alert.alert('Créneau existant', 'Ce créneau existe déjà.');
         return;
       }
-      onSlotsChange?.([...pendingSlots, { date: dateStr, time: formattedTime, duration }]);
+      const maxParts = parseInt(newMaxParticipants, 10) || 10;
+      onSlotsChange?.([...pendingSlots, { date: dateStr, time: formattedTime, duration, max_participants: maxParts }]);
       setShowTimeModal(false);
       return;
     }
@@ -491,6 +495,7 @@ export default function ActivityCalendar({
           date: dateStr,
           time: formattedTime,
           duration,
+          max_participants: parseInt(newMaxParticipants, 10) || 10,
           created_by: currentUserId,
         })
         .select('id')
@@ -801,6 +806,17 @@ export default function ActivityCalendar({
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Durée</Text>
               <View style={styles.durationGrid}>
+                <View style={{ marginTop: 16 }}>
+              <Text style={styles.inputLabel}>Places max pour ce créneau</Text>
+              <TextInput
+                style={[styles.timeInput, { marginTop: 8 }]}
+                placeholder="10"
+                placeholderTextColor={colors.textSecondary}
+                value={newMaxParticipants}
+                onChangeText={setNewMaxParticipants}
+                keyboardType="number-pad"
+              />
+            </View>
                 {durationOptions.map(option => (
                   <TouchableOpacity
                     key={option.value}

@@ -118,11 +118,11 @@ export default function CreateActivityScreen() {
       return;
     }
 
-    // Vérifier qu'il y a au moins un créneau
-if (pendingSlots.length === 0) {
-  Alert.alert('Erreur', 'Veuillez ajouter au moins un créneau dans le calendrier');
-  return;
-}
+    // Entreprise : vérifier qu'il y a au moins un créneau
+    if (isBusiness && pendingSlots.length === 0) {
+      Alert.alert('Erreur', 'Veuillez ajouter au moins un créneau dans le calendrier');
+      return;
+    }
 
     if (!addressSelected || !latitude || !longitude) {
       Alert.alert('Erreur', 'Veuillez sélectionner une adresse dans la liste');
@@ -169,11 +169,14 @@ if (pendingSlots.length === 0) {
         adresse: adresse.trim(),
         ville: ville.trim(),
         code_postal: codePostal.trim() || undefined,
-        max_participants: parseInt(maxParticipants),
+        max_participants: isBusiness 
+          ? pendingSlots.reduce((sum, s) => sum + (s.max_participants || 10), 0)
+          : parseInt(maxParticipants),
         image_url: uploadedImageUrl || imageUrl.trim() || undefined,
         latitude: latitude,
         longitude: longitude,
         prix: prix.trim() ? parseFloat(prix) : undefined,
+        status: isBusiness ? 'draft' : 'active',
       });
 
       if (result.success) {
@@ -184,6 +187,7 @@ if (pendingSlots.length === 0) {
       date: slot.date,
       time: slot.time,
       duration: slot.duration,
+      max_participants: slot.max_participants || 10,
       created_by: result.data.host_id,
     }));
 
@@ -364,17 +368,30 @@ if (pendingSlots.length === 0) {
 
           {/* Participants et Prix */}
           <View style={styles.row}>
-            <View style={[styles.inputGroup, styles.halfWidth]}>
-              <Text style={styles.label}>Max participants *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="10"
-                placeholderTextColor={colors.textSecondary}
-                value={maxParticipants}
-                onChangeText={setMaxParticipants}
-                keyboardType="number-pad"
-              />
-            </View>
+            {isBusiness ? (
+              <View style={[styles.inputGroup, styles.halfWidth]}>
+                <Text style={styles.label}>Places totales</Text>
+                <View style={[styles.input, { justifyContent: 'center' }]}>
+                  <Text style={{ color: pendingSlots.length > 0 ? colors.text : colors.textSecondary }}>
+                    {pendingSlots.length > 0 
+                      ? pendingSlots.reduce((sum, s) => sum + (s.max_participants || 10), 0)
+                      : 'Ajoutez des créneaux'}
+                  </Text>
+                </View>
+              </View>
+            ) : (
+              <View style={[styles.inputGroup, styles.halfWidth]}>
+                <Text style={styles.label}>Max participants *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="10"
+                  placeholderTextColor={colors.textSecondary}
+                  value={maxParticipants}
+                  onChangeText={setMaxParticipants}
+                  keyboardType="number-pad"
+                />
+              </View>
+            )}
 
             <View style={[styles.inputGroup, styles.halfWidth]}>
               <Text style={styles.label}>Prix (€, optionnel)</Text>
