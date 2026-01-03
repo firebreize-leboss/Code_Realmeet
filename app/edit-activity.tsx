@@ -496,20 +496,7 @@ export default function EditActivityScreen() {
           </View>
         </View>
         
-        {/* Gestion des créneaux */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Créneaux disponibles</Text>
-          <Text style={styles.helperText}>
-            Appuyez sur + pour ajouter un créneau, ou sur × pour supprimer
-          </Text>
-          <View style={{ marginTop: 12 }}>
-            <ActivityCalendar
-              activityId={activityId}
-              mode="edit"
-            />
-          </View>
-        </View>
-
+        
         {/* Bouton de sauvegarde */}
         <TouchableOpacity
           style={[styles.saveButton, (saving || uploadingImage) && styles.saveButtonDisabled]}

@@ -28,6 +28,7 @@ interface TimeSlot {
   createdBy: string;
   date: string; // "YYYY-MM-DD"
   participantCount?: number;
+  maxParticipants?: number;
 }
 
 interface DaySlots {
@@ -258,7 +259,7 @@ export default function ActivityCalendar({
 
           const { data, error } = await supabase
             .from('activity_slots')
-            .select('id, date, time, duration, created_by')
+            .select('id, date, time, duration, created_by, max_participants')
             .eq('activity_id', activityId)
             .gte('date', todayStr)
             .gte('date', startStr)
@@ -293,6 +294,7 @@ export default function ActivityCalendar({
               createdBy: slot.created_by,
               date: slot.date,
               participantCount: countBySlotId[slot.id] || 0,
+              maxParticipants: slot.max_participants || maxParticipants,
             }));
             return { ...day, slots: daySlots };
           });
@@ -301,7 +303,7 @@ export default function ActivityCalendar({
         } else {
           const { data, error } = await supabase
             .from('activity_slots')
-            .select('id, date, time, duration, created_by')
+            .select('id, date, time, duration, created_by, max_participants')
             .eq('activity_id', activityId)
             .gte('date', todayStr)
             .order('date', { ascending: true })
@@ -334,6 +336,7 @@ export default function ActivityCalendar({
                       createdBy: slot.created_by,
                       date: slot.date,
                       participantCount: count || 0,
+                      maxParticipants: slot.max_participants || maxParticipants,
                     };
                   })
                 );
@@ -648,10 +651,15 @@ export default function ActivityCalendar({
                 {formatDuration(slot.duration)}
               </Text>
 
-              {slot.participantCount !== undefined && slot.participantCount > 0 && (
-                <View style={styles.slotParticipantBadge}>
-                  <IconSymbol name="person.fill" size={10} color={colors.background} />
-                  <Text style={styles.slotParticipantText}>{slot.participantCount}</Text>
+              {(slot.participantCount !== undefined || slot.maxParticipants !== undefined) && (
+                <View style={[
+                  styles.slotParticipantBadge,
+                  slot.participantCount === slot.maxParticipants && styles.slotParticipantBadgeFull
+                ]}>
+                  <IconSymbol name="person.2.fill" size={10} color={colors.background} />
+                  <Text style={styles.slotParticipantText}>
+                    {slot.participantCount || 0}/{slot.maxParticipants || maxParticipants || '?'}
+                  </Text>
                 </View>
               )}
               {isSelected && maxParticipants && (maxParticipants - (slot.participantCount || 0)) <= 2 && (maxParticipants - (slot.participantCount || 0)) > 0 && (
@@ -1030,6 +1038,9 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 10,
     marginLeft: 'auto',
+  },
+  slotParticipantBadgeFull: {
+    backgroundColor: '#EF4444',
   },
   slotParticipantText: {
     color: colors.background,

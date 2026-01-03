@@ -209,17 +209,27 @@ export default function ManageActivityScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              const { error } = await supabase
+              console.log('Tentative de pause pour activité:', activity?.id);
+              
+              const { data, error } = await supabase
                 .from('activities')
                 .update({ status: 'paused' })
-                .eq('id', activity?.id);
+                .eq('id', activity?.id)
+                .select()
+                .single();
               
-              if (error) throw error;
+              console.log('Résultat:', { data, error });
+              
+              if (error) {
+                console.error('Erreur Supabase:', error);
+                throw error;
+              }
               
               setActivity(prev => prev ? { ...prev, status: 'paused' } : null);
               Alert.alert('Succès', 'Activité mise en pause');
-            } catch (error) {
-              Alert.alert('Erreur', 'Impossible de mettre en pause');
+            } catch (error: any) {
+              console.error('Erreur complète:', error);
+              Alert.alert('Erreur', error.message || 'Impossible de mettre en pause');
             }
           }
         },
@@ -431,69 +441,73 @@ export default function ManageActivityScreen() {
             </View>
           )}
 
-          {activeTab === 'slots' && (
+         {activeTab === 'slots' && (
             <View>
-              <Text style={styles.sectionTitle}>Créneaux ({activity.slots.length})</Text>
+              <Text style={styles.sectionTitle}>Gérer les créneaux</Text>
+              <Text style={styles.slotsHelper}>
+                Appuyez sur une date pour ajouter un créneau, ou maintenez appuyé sur un créneau pour le supprimer.
+              </Text>
               
-              {activity.slots.length === 0 ? (
-                <View style={styles.emptySlots}>
-                  <IconSymbol name="calendar.badge.exclamationmark" size={48} color={colors.textSecondary} />
-                  <Text style={styles.emptyText}>Aucun créneau</Text>
-                  <TouchableOpacity style={styles.addSlotButton} onPress={() => setShowSlotModal(true)}>
-                    <Text style={styles.addSlotButtonText}>Ajouter un créneau</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                activity.slots.map(slot => (
-                  <View key={slot.id} style={styles.slotCard}>
-                    <View style={styles.slotInfo}>
-                      <Text style={styles.slotDate}>{slot.date}</Text>
-                      <Text style={styles.slotTime}>
-                        {slot.timeStart}{slot.timeEnd ? ` - ${slot.timeEnd}` : ''}
-                      </Text>
-                      <View style={styles.slotParticipants}>
-                        <IconSymbol name="person.2.fill" size={14} color={colors.primary} />
-                        <Text style={styles.slotParticipantsText}>
-                          {slot.participants}/{slot.maxParticipants}
+              <ActivityCalendar
+                activityId={activity.id}
+                mode="edit"
+              />
+
+              {/* Liste des créneaux avec infos participants */}
+              {activity.slots.length > 0 && (
+                <View style={styles.slotsListSection}>
+                  <Text style={styles.slotsListTitle}>Détails des créneaux ({activity.slots.length})</Text>
+                  {activity.slots.map(slot => (
+                    <View key={slot.id} style={styles.slotCard}>
+                      <View style={styles.slotInfo}>
+                        <Text style={styles.slotDate}>{slot.date}</Text>
+                        <Text style={styles.slotTime}>
+                          {slot.timeStart}{slot.timeEnd ? ` - ${slot.timeEnd}` : ''}
                         </Text>
+                        <View style={styles.slotParticipants}>
+                          <IconSymbol name="person.2.fill" size={14} color={colors.primary} />
+                          <Text style={styles.slotParticipantsText}>
+                            {slot.participants}/{slot.maxParticipants}
+                          </Text>
+                        </View>
+                      </View>
+                      
+                      <View style={styles.slotActions}>
+                        {slot.participants >= 2 && (
+                          <TouchableOpacity 
+                            style={[
+                              styles.composeGroupButton,
+                              slot.hasSlotGroups && styles.composeGroupButtonActive
+                            ]}
+                            onPress={() => handleManageGroups(slot)}
+                          >
+                            <IconSymbol 
+                              name="person.3.fill" 
+                              size={16} 
+                              color={slot.hasSlotGroups ? colors.background : colors.primary} 
+                            />
+                            <Text style={[
+                              styles.composeGroupText,
+                              slot.hasSlotGroups && styles.composeGroupTextActive
+                            ]}>
+                              {slot.hasSlotGroups ? 'Groupes' : 'Composer'}
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                        
+                        {slot.hasGroup && slot.groupId && (
+                          <TouchableOpacity 
+                            style={styles.viewGroupButton}
+                            onPress={() => handleViewGroup(slot.groupId!, slot.date)}
+                          >
+                            <IconSymbol name="bubble.left.and.bubble.right.fill" size={16} color={colors.primary} />
+                            <Text style={styles.viewGroupText}>Chat</Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
                     </View>
-                    
-                    <View style={styles.slotActions}>
-                      {slot.participants >= 2 && (
-                        <TouchableOpacity 
-                          style={[
-                            styles.composeGroupButton,
-                            slot.hasSlotGroups && styles.composeGroupButtonActive
-                          ]}
-                          onPress={() => handleManageGroups(slot)}
-                        >
-                          <IconSymbol 
-                            name="person.3.fill" 
-                            size={16} 
-                            color={slot.hasSlotGroups ? colors.background : colors.primary} 
-                          />
-                          <Text style={[
-                            styles.composeGroupText,
-                            slot.hasSlotGroups && styles.composeGroupTextActive
-                          ]}>
-                            {slot.hasSlotGroups ? 'Groupes' : 'Composer'}
-                          </Text>
-                        </TouchableOpacity>
-                      )}
-                      
-                      {slot.hasGroup && slot.groupId && (
-                        <TouchableOpacity 
-                          style={styles.viewGroupButton}
-                          onPress={() => handleViewGroup(slot.groupId!, slot.date)}
-                        >
-                          <IconSymbol name="bubble.left.and.bubble.right.fill" size={16} color={colors.primary} />
-                          <Text style={styles.viewGroupText}>Chat</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  </View>
-                ))
+                  ))}
+                </View>
               )}
             </View>
           )}
@@ -533,29 +547,7 @@ export default function ManageActivityScreen() {
         </View>
       </ScrollView>
 
-      {/* Modal pour ajouter un créneau */}
-      <Modal
-        visible={showSlotModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowSlotModal(false)}
-      >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowSlotModal(false)}>
-              <IconSymbol name="xmark" size={24} color={colors.text} />
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>Ajouter un créneau</Text>
-            <View style={{ width: 24 }} />
-          </View>
-          <View style={styles.modalContent}>
-            <ActivityCalendar
-              activityId={activity.id}
-              mode="edit"
-            />
-          </View>
-        </SafeAreaView>
-      </Modal>
+      
 
       {/* Modal pour gérer les groupes */}
       <Modal
@@ -958,5 +950,20 @@ const styles = StyleSheet.create({
   modalContent: {
     flex: 1,
     padding: 16,
+  },
+  slotsHelper: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  slotsListSection: {
+    marginTop: 24,
+  },
+  slotsListTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 12,
   },
 });
