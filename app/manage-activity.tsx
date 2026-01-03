@@ -95,7 +95,7 @@ export default function ManageActivityScreen() {
         .eq('activity_id', activityId)
         .order('date', { ascending: true });
 
-      const { data: participantsData } = await supabase
+      const { data: participantsData, error: participantsError } = await supabase
         .from('slot_participants')
         .select(`
           id,
@@ -111,6 +111,8 @@ export default function ManageActivityScreen() {
           )
         `)
         .eq('activity_id', activityId);
+
+      console.log('Participants chargés:', participantsData?.length, participantsError);
 
       const slotIds = slotsData?.map(s => s.id) || [];
       
@@ -176,6 +178,7 @@ export default function ManageActivityScreen() {
         slotId: p.slot_id,
       }));
 
+      console.log('Participants formatés:', formattedParticipants.length, formattedParticipants);
       setParticipants(formattedParticipants);
     } catch (error) {
       console.error('Erreur chargement activité:', error);
@@ -353,10 +356,7 @@ export default function ManageActivityScreen() {
             <IconSymbol name="person.2.fill" size={24} color={colors.primary} />
             <Text style={styles.statValue}>{activity.totalParticipants}</Text>
             <Text style={styles.statLabel}>Participants</Text>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: `${Math.min(fillPercentage, 100)}%` }]} />
-            </View>
-            <Text style={styles.statSubtext}>{activity.totalParticipants}/{activity.maxParticipants} places</Text>
+            <Text style={styles.statSubtext}>inscrits au total</Text>
           </View>
 
           <View style={styles.statCard}>

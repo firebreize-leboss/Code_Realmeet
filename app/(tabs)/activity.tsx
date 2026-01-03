@@ -145,6 +145,36 @@ export default function ActivityScreen() {
       Alert.alert('Erreur', 'Impossible de publier l\'activité');
     }
   };
+  // Mettre en pause une activité
+  const handlePauseActivity = async (activityId: string) => {
+    Alert.alert(
+      'Mettre en pause',
+      'Les utilisateurs ne pourront plus s\'inscrire. Continuer ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Mettre en pause',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from('activities')
+                .update({ status: 'paused' })
+                .eq('id', activityId);
+
+              if (error) throw error;
+
+              Alert.alert('Succès', 'Activité mise en pause');
+              loadBusinessActivities();
+            } catch (error) {
+              console.error('Erreur pause:', error);
+              Alert.alert('Erreur', 'Impossible de mettre en pause');
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const renderBusinessActivityItem = (activity: Activity) => {
     const isLive = activity.isPublished && activity.hasLiveSlots;
@@ -198,7 +228,7 @@ export default function ActivityScreen() {
             </View>
           )}
 
-          {/* Bouton Publier si brouillon */}
+          {/* Bouton Publier si brouillon (onglet Créées) */}
           {!activity.isPublished && businessTab === 'created' && (
             <TouchableOpacity
               style={styles.publishButton}
@@ -209,6 +239,20 @@ export default function ActivityScreen() {
             >
               <IconSymbol name="paperplane.fill" size={14} color={colors.background} />
               <Text style={styles.publishButtonText}>Publier</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Bouton Mettre en pause si en ligne (onglet En cours) */}
+          {activity.isPublished && businessTab === 'live' && (
+            <TouchableOpacity
+              style={styles.pauseButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                handlePauseActivity(activity.id);
+              }}
+            >
+              <IconSymbol name="pause.circle.fill" size={14} color={colors.background} />
+              <Text style={styles.pauseButtonText}>Mettre en pause</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -811,6 +855,22 @@ const styles = StyleSheet.create({
   },
   createButtonText: {
     fontSize: 16,
+    fontWeight: '600',
+    color: colors.background,
+  },
+  pauseButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f59e0b',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 6,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  pauseButtonText: {
+    fontSize: 13,
     fontWeight: '600',
     color: colors.background,
   },
