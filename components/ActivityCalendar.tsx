@@ -29,6 +29,7 @@ interface TimeSlot {
   date: string; // "YYYY-MM-DD"
   participantCount?: number;
   maxParticipants?: number;
+  registrationClosed?: boolean;
 }
 
 interface DaySlots {
@@ -45,6 +46,7 @@ interface SelectedSlot {
   date: string;
   time: string;
   duration?: number;
+  registrationClosed?: boolean;
 }
 
 interface PendingSlot {
@@ -104,6 +106,8 @@ export default function ActivityCalendar({
   const [newTime, setNewTime] = useState('');
   const [newDuration, setNewDuration] = useState('60');
   const [newMaxParticipants, setNewMaxParticipants] = useState('10');
+  const [newMaxGroups, setNewMaxGroups] = useState('1');
+  const [newParticipantsPerGroup, setNewParticipantsPerGroup] = useState('');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [addingSlot, setAddingSlot] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<SelectedSlot | null>(null);
@@ -450,6 +454,8 @@ export default function ActivityCalendar({
     setNewTime('');
     setNewDuration('60');
     setNewMaxParticipants('10');
+    setNewMaxGroups('1');
+    setNewParticipantsPerGroup('');
     setShowTimeModal(true);
   };
 
@@ -491,6 +497,11 @@ export default function ActivityCalendar({
     try {
       setAddingSlot(true);
 
+      const maxGroups = parseInt(newMaxGroups, 10) || 1;
+      const participantsPerGroup = newParticipantsPerGroup
+        ? parseInt(newParticipantsPerGroup, 10)
+        : null;
+
       const { data: inserted, error } = await supabase
         .from('activity_slots')
         .insert({
@@ -499,6 +510,8 @@ export default function ActivityCalendar({
           time: formattedTime,
           duration,
           max_participants: parseInt(newMaxParticipants, 10) || 10,
+          max_groups: maxGroups,
+          participants_per_group: participantsPerGroup,
           created_by: currentUserId,
         })
         .select('id')
@@ -551,6 +564,7 @@ export default function ActivityCalendar({
         date: slot.date,
         time: slot.time,
         duration: slot.duration,
+        registrationClosed: slot.registrationClosed,
       };
       setSelectedSlot(newSelection);
       onSlotSelect?.(newSelection);
@@ -788,72 +802,109 @@ export default function ActivityCalendar({
               </TouchableOpacity>
             </View>
 
-            {selectedDate && (
-              <Text style={styles.modalDate}>
-                {selectedDate.toLocaleDateString('fr-FR', {
-                  weekday: 'long',
-                  day: 'numeric',
-                  month: 'long',
-                })}
-              </Text>
-            )}
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Heure de début</Text>
-              <TextInput
-                style={styles.timeInput}
-                placeholder="14:30 ou 14h30"
-                placeholderTextColor={colors.textSecondary}
-                value={newTime}
-                onChangeText={setNewTime}
-                keyboardType="numbers-and-punctuation"
-                autoFocus
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Durée</Text>
-              <View style={styles.durationGrid}>
-                <View style={{ marginTop: 16 }}>
-              <Text style={styles.inputLabel}>Places max pour ce créneau</Text>
-              <TextInput
-                style={[styles.timeInput, { marginTop: 8 }]}
-                placeholder="10"
-                placeholderTextColor={colors.textSecondary}
-                value={newMaxParticipants}
-                onChangeText={setNewMaxParticipants}
-                keyboardType="number-pad"
-              />
-            </View>
-                {durationOptions.map(option => (
-                  <TouchableOpacity
-                    key={option.value}
-                    style={[
-                      styles.durationOption,
-                      parseInt(newDuration, 10) === option.value && styles.durationOptionSelected,
-                    ]}
-                    onPress={() => setNewDuration(option.value.toString())}
-                  >
-                    <Text
-                      style={[
-                        styles.durationOptionText,
-                        parseInt(newDuration, 10) === option.value && styles.durationOptionTextSelected,
-                      ]}
-                    >
-                      {option.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={[styles.confirmButton, addingSlot && styles.confirmButtonDisabled]}
-              onPress={handleConfirmAddSlot}
-              disabled={addingSlot}
+            <ScrollView
+              style={styles.modalScrollView}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
             >
-              {addingSlot ? <ActivityIndicator color={colors.background} /> : <Text style={styles.confirmButtonText}>Ajouter le créneau</Text>}
-            </TouchableOpacity>
+              {selectedDate && (
+                <Text style={styles.modalDate}>
+                  {selectedDate.toLocaleDateString('fr-FR', {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long',
+                  })}
+                </Text>
+              )}
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Heure de début</Text>
+                <TextInput
+                  style={styles.timeInput}
+                  placeholder="14:30 ou 14h30"
+                  placeholderTextColor={colors.textSecondary}
+                  value={newTime}
+                  onChangeText={setNewTime}
+                  keyboardType="numbers-and-punctuation"
+                  autoFocus
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Durée</Text>
+                <View style={styles.durationGrid}>
+                  {durationOptions.map(option => (
+                    <TouchableOpacity
+                      key={option.value}
+                      style={[
+                        styles.durationOption,
+                        parseInt(newDuration, 10) === option.value && styles.durationOptionSelected,
+                      ]}
+                      onPress={() => setNewDuration(option.value.toString())}
+                    >
+                      <Text
+                        style={[
+                          styles.durationOptionText,
+                          parseInt(newDuration, 10) === option.value && styles.durationOptionTextSelected,
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Places max pour ce créneau</Text>
+                <TextInput
+                  style={styles.timeInput}
+                  placeholder="10"
+                  placeholderTextColor={colors.textSecondary}
+                  value={newMaxParticipants}
+                  onChangeText={setNewMaxParticipants}
+                  keyboardType="number-pad"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Nombre de groupes simultanés</Text>
+                <Text style={styles.inputHint}>
+                  Ex: 3 groupes de 5 personnes = 3 sessions en parallèle
+                </Text>
+                <TextInput
+                  style={styles.timeInput}
+                  placeholder="1"
+                  placeholderTextColor={colors.textSecondary}
+                  value={newMaxGroups}
+                  onChangeText={setNewMaxGroups}
+                  keyboardType="number-pad"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Participants par groupe (optionnel)</Text>
+                <Text style={styles.inputHint}>
+                  Laisser vide pour distribution automatique
+                </Text>
+                <TextInput
+                  style={styles.timeInput}
+                  placeholder="Auto"
+                  placeholderTextColor={colors.textSecondary}
+                  value={newParticipantsPerGroup}
+                  onChangeText={setNewParticipantsPerGroup}
+                  keyboardType="number-pad"
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.confirmButton, addingSlot && styles.confirmButtonDisabled]}
+                onPress={handleConfirmAddSlot}
+                disabled={addingSlot}
+              >
+                {addingSlot ? <ActivityIndicator color={colors.background} /> : <Text style={styles.confirmButtonText}>Ajouter le créneau</Text>}
+              </TouchableOpacity>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -1067,6 +1118,10 @@ const styles = StyleSheet.create({
     padding: 24,
     width: '100%',
     maxWidth: 360,
+    maxHeight: '80%',
+  },
+  modalScrollView: {
+    maxHeight: 500,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1093,6 +1148,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text,
     marginBottom: 8,
+  },
+  inputHint: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: 8,
+    fontStyle: 'italic',
   },
   timeInput: {
     backgroundColor: colors.card,

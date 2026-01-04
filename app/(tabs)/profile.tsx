@@ -341,7 +341,7 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>About</Text>
+          <Text style={styles.sectionTitle}>Bio</Text>
           <View style={styles.card}>
             <Text style={styles.bio}>{profile.bio || 'Aucune bio renseignée'}</Text>
           </View>
@@ -399,7 +399,7 @@ export default function ProfileScreen() {
               activeOpacity={0.7}
             >
               <View style={styles.activitiesCardContent}>
-                <IconSymbol name="figure.run" size={24} color={colors.primary} />
+                <IconSymbol name="calendar" size={24} color={colors.primary} />
                 <View style={styles.activitiesCardText}>
                   <Text style={styles.activitiesCardValue}>{activitiesJoined}</Text>
                   <Text style={styles.activitiesCardLabel}>Activités rejointes</Text>
@@ -610,10 +610,10 @@ function BusinessProfileView({
           )}
         </View>
 
-        {/* About Section */}
+        {/* Bio Section */}
         {profile.business_description && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>À propos</Text>
+            <Text style={styles.sectionTitle}>Bio</Text>
             <View style={styles.card}>
               <Text style={styles.businessDescription}>{profile.business_description}</Text>
             </View>

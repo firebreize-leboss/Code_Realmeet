@@ -69,7 +69,7 @@ export default function ActivityDetailScreen() {
   const [isJoined, setIsJoined] = useState(false);
   const [joiningInProgress, setJoiningInProgress] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [selectedSlot, setSelectedSlot] = useState<{id: string; date: string; time: string} | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<{id: string; date: string; time: string; duration?: number; registrationClosed?: boolean} | null>(null);
   const [participantsList, setParticipantsList] = useState<Array<{
   id: string;
   name: string;
@@ -361,46 +361,8 @@ if (shouldShowParticipants) {
             `${userProfile?.full_name || 'Un utilisateur'} a rejoint le groupe`
           );
         }
-      } else {
-        // Créer une nouvelle conversation si >= 2 participants
-        const { count } = await supabase
-          .from('slot_participants')
-          .select('*', { count: 'exact', head: true })
-          .eq('slot_id', slotId);
-
-        if (count && count >= 2) {
-          const { data: newConv, error: convError } = await supabase
-            .from('conversations')
-            .insert({
-              slot_id: slotId,
-              name: groupName,
-              image_url: activityImage,
-              is_group: true,
-            })
-            .select()
-            .single();
-
-          if (convError) throw convError;
-
-          const { data: allParticipants } = await supabase
-            .from('slot_participants')
-            .select('user_id')
-            .eq('slot_id', slotId);
-
-          if (allParticipants && newConv) {
-            const participantsToInsert = allParticipants.map(p => ({
-              conversation_id: newConv.id,
-              user_id: p.user_id,
-            }));
-
-            await supabase
-              .from('conversation_participants')
-              .insert(participantsToInsert);
-
-            await sendSystemMessage(newConv.id, `Groupe créé pour "${groupName}"`);
-          }
-        }
       }
+      // Automatic group creation removed - now handled by Supabase
     } catch (error) {
       console.error('Erreur gestion groupe créneau:', error);
     }
@@ -503,6 +465,15 @@ if (shouldShowParticipants) {
         // === REJOINDRE ===
         if (!selectedSlot) return;
 
+        // Vérifier si les inscriptions sont fermées pour ce créneau
+        if (selectedSlot.registrationClosed) {
+          Alert.alert(
+            'Inscriptions fermées',
+            'Les inscriptions pour ce créneau sont fermées. Les groupes ont été formés.'
+          );
+          return;
+        }
+
         if (activity.placesRestantes <= 0) {
           Alert.alert('Complet', 'Cette activité est complète.');
           return;
@@ -531,13 +502,8 @@ if (shouldShowParticipants) {
           .update({ participants: newCount })
           .eq('id', activity.id);
 
-        await handleSlotGroup(
-          selectedSlot.id,
-          activity.title,
-          activity.image,
-          selectedSlot.date,
-          selectedSlot.time
-        );
+        // Group creation is now handled automatically by Supabase
+        // No need to call handleSlotGroup anymore
 
         setIsJoined(true);
         setActivity({
@@ -546,7 +512,7 @@ if (shouldShowParticipants) {
           placesRestantes: activity.capacity - newCount,
         });
 
-        Alert.alert('Succès', 'Vous avez rejoint cette activité ! 🎉');
+        Alert.alert('Succès', 'Vous avez rejoint l\'activité ! Un groupe se créra 24 h avant le début de l\'activité.');
       }
     } catch (error: any) {
       console.error('Erreur inscription/désinscription:', error);
@@ -632,7 +598,7 @@ if (shouldShowParticipants) {
             colors={['transparent', 'rgba(0,0,0,0.6)']}
             style={styles.heroGradient}
           />
-          
+
           {/* Badge concurrent pour les entreprises */}
           {isCompetitorActivity && (
             <View style={styles.competitorBadge}>
@@ -650,7 +616,7 @@ if (shouldShowParticipants) {
           </View>
         )}
 
-        <View style={styles.content}>
+        <View style={[styles.content, isActivityPast && styles.contentPast]}>
           {/* Titre et catégorie */}
           <View style={styles.titleSection}>
             <View style={styles.titleContainer}>
@@ -731,22 +697,6 @@ if (shouldShowParticipants) {
             </View>
           )}
 
-          {/* Info créneau pour activité passée */}
-          {isActivityPast && pastSlotInfo && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Votre participation</Text>
-              <View style={styles.pastSlotCard}>
-                <View style={styles.pastSlotRow}>
-                  <IconSymbol name="calendar" size={20} color={colors.primary} />
-                  <Text style={styles.pastSlotText}>{pastSlotInfo.date}</Text>
-                </View>
-                <View style={styles.pastSlotRow}>
-                  <IconSymbol name="clock.fill" size={20} color={colors.primary} />
-                  <Text style={styles.pastSlotText}>à {pastSlotInfo.time}</Text>
-                </View>
-              </View>
-            </View>
-          )}
 
           {/* Description */}
           <View style={styles.section}>
@@ -1064,11 +1014,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#10b981' + '20',
-    paddingVertical: 12,
+    paddingVertical: 14,
     paddingHorizontal: 20,
-    marginHorizontal: 20,
-    marginTop: 16,
-    borderRadius: 12,
+    marginHorizontal: 0,
+    marginTop: 0,
+    marginBottom: 0,
     gap: 8,
   },
   pastActivityBannerText: {
@@ -1093,8 +1043,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   content: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
     marginTop: -20,
+  },
+  contentPast: {
+    marginTop: 16,
   },
   titleSection: {
     flexDirection: 'row',

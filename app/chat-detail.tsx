@@ -146,17 +146,41 @@ export default function ChatDetailScreen() {
             if (convData.slot_id) {
               const { data: slotData } = await supabase
                 .from('activity_slots')
-                .select('activity_id')
+                .select('activity_id, date, time, duration')
                 .eq('id', convData.slot_id)
                 .single();
-              
+
               if (slotData?.activity_id) {
                 setActivityId(slotData.activity_id);
+              }
+
+              // Vérifier si le créneau est passé et fermer le groupe automatiquement
+              if (slotData && !convData.is_closed) {
+                const slotDateTime = new Date(`${slotData.date}T${slotData.time || '00:00'}`);
+                const slotDuration = slotData.duration || 60; // durée en minutes
+                const slotEndTime = new Date(slotDateTime.getTime() + slotDuration * 60000);
+                const now = new Date();
+
+                if (now > slotEndTime) {
+                  // Le créneau est passé, fermer la conversation
+                  await supabase
+                    .from('conversations')
+                    .update({
+                      is_closed: true,
+                      closed_reason: 'Le créneau de cette activité est terminé',
+                      closed_at: new Date().toISOString(),
+                    })
+                    .eq('id', conversationId);
+
+                  convData.is_closed = true;
+                  convData.closed_reason = 'Le créneau de cette activité est terminé';
+                  convData.closed_at = new Date().toISOString();
+                }
               }
             } else if (convData.activity_id) {
               setActivityId(convData.activity_id);
             }
-            
+
             setConversationStatus({
               isClosed: convData.is_closed || false,
               closedReason: convData.closed_reason,

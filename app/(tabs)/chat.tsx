@@ -214,14 +214,6 @@ useEffect(() => {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Messages</Text>
         <View style={styles.headerButtons}>
-          {/* Bouton personnes rencontrées */}
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => router.push('/met-people')}
-          >
-            <IconSymbol name="person.2.wave.2" size={22} color={colors.text} />
-          </TouchableOpacity>
-
           {/* Bouton demandes d'amitié */}
           <TouchableOpacity
             style={styles.headerButton}

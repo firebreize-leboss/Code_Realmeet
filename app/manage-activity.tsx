@@ -21,7 +21,7 @@ import { colors } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
 import ActivityCalendar from '@/components/ActivityCalendar';
-import SlotGroupsView from '@/components/SlotGroupsView';
+import SlotGroupsDisplay from '@/components/SlotGroupsDisplay';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -54,6 +54,7 @@ interface SlotStats {
 
 interface Participant {
   id: string;
+  userId: string; // Ajout de l'userId pour pouvoir naviguer vers le profil
   name: string;
   avatar: string;
   joinedAt: string;
@@ -95,6 +96,8 @@ export default function ManageActivityScreen() {
         .eq('activity_id', activityId)
         .order('date', { ascending: true });
 
+      const slotIds = slotsData?.map(s => s.id) || [];
+
       const { data: participantsData, error: participantsError } = await supabase
         .from('slot_participants')
         .select(`
@@ -110,11 +113,9 @@ export default function ManageActivityScreen() {
             date
           )
         `)
-        .eq('activity_id', activityId);
+        .in('slot_id', slotIds.length > 0 ? slotIds : ['00000000-0000-0000-0000-000000000000']);
 
       console.log('Participants chargés:', participantsData?.length, participantsError);
-
-      const slotIds = slotsData?.map(s => s.id) || [];
       
       const { data: conversations } = await supabase
         .from('conversations')
@@ -168,11 +169,12 @@ export default function ManageActivityScreen() {
       });
 
       const formattedParticipants: Participant[] = (participantsData || []).map((p: any) => ({
-        id: p.user_id,
+        id: p.id, // Utiliser l'ID de l'inscription, pas l'user_id, pour permettre plusieurs entrées du même utilisateur
+        userId: p.user_id, // Garder l'userId pour naviguer vers le profil
         name: p.profiles?.full_name || 'Participant',
         avatar: p.profiles?.avatar_url || '',
         joinedAt: new Date(p.created_at).toLocaleDateString('fr-FR'),
-        slotDate: p.activity_slots?.date 
+        slotDate: p.activity_slots?.date
           ? new Date(p.activity_slots.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
           : '',
         slotId: p.slot_id,
@@ -526,7 +528,7 @@ export default function ManageActivityScreen() {
                   <TouchableOpacity
                     key={participant.id}
                     style={styles.participantItem}
-                    onPress={() => handleViewParticipant(participant.id)}
+                    onPress={() => handleViewParticipant(participant.userId)}
                   >
                     <Image
                       source={{ uri: participant.avatar || 'https://via.placeholder.com/50' }}
@@ -564,11 +566,11 @@ export default function ManageActivityScreen() {
             <Text style={styles.modalTitle}>Composition des groupes</Text>
             <View style={{ width: 24 }} />
           </View>
-          {selectedSlotForGroups && (
-            <SlotGroupsView
+          {selectedSlotForGroups && activity && (
+            <SlotGroupsDisplay
               slotId={selectedSlotForGroups.id}
               activityId={activity.id}
-              onClose={() => setShowGroupsModal(false)}
+              isHost={true}
             />
           )}
         </SafeAreaView>

@@ -89,7 +89,7 @@ export default function ActivityScreen() {
       const now = new Date();
       const todayStr = now.toISOString().split('T')[0];
 
-      // Pour chaque activité, vérifier si elle a des créneaux futurs
+      // Pour chaque activité, vérifier si elle a des créneaux futurs et compter les participants
       const activitiesWithSlotInfo = await Promise.all(
         (activities || []).map(async (activity) => {
           // Compter les créneaux futurs
@@ -99,6 +99,12 @@ export default function ActivityScreen() {
             .eq('activity_id', activity.id)
             .gte('date', todayStr);
 
+          // Compter le nombre TOTAL de participants inscrits (tous créneaux confondus)
+          const { count: participantsCount } = await supabase
+            .from('slot_participants')
+            .select('*', { count: 'exact', head: true })
+            .eq('activity_id', activity.id);
+
           const hasLiveSlots = (futureSlotsCount || 0) > 0;
           const isPublished = activity.status === 'active';
 
@@ -107,16 +113,18 @@ export default function ActivityScreen() {
             date_heure: activity.date ? `${activity.date}T${activity.time_start || '00:00'}` : now.toISOString(),
             hasLiveSlots,
             isPublished,
+            participants: participantsCount || 0, // Nombre réel de participants inscrits
           };
         })
       );
 
-      // Toutes les activités créées
-      setCreatedActivities(activitiesWithSlotInfo);
-
       // Activités "en cours" = publiées ET ayant des créneaux futurs
       const live = activitiesWithSlotInfo.filter(a => a.isPublished && a.hasLiveSlots);
       setLiveActivities(live);
+
+      // Activités "créées" = TOUTES SAUF celles qui sont en ligne
+      const created = activitiesWithSlotInfo.filter(a => !(a.isPublished && a.hasLiveSlots));
+      setCreatedActivities(created);
 
       // Pour compatibilité avec l'ancien code (utilisateurs)
       setOngoingActivities(live);
@@ -131,6 +139,24 @@ export default function ActivityScreen() {
   // Publier une activité (passer de draft à active)
   const handlePublishActivity = async (activityId: string) => {
     try {
+      // Vérifier qu'il y a au moins un créneau futur
+      const now = new Date();
+      const todayStr = now.toISOString().split('T')[0];
+
+      const { count } = await supabase
+        .from('activity_slots')
+        .select('*', { count: 'exact', head: true })
+        .eq('activity_id', activityId)
+        .gte('date', todayStr);
+
+      if (!count || count === 0) {
+        Alert.alert(
+          'Impossible de publier',
+          'Vous devez ajouter au moins un créneau horaire futur pour publier cette activité. Accédez à l\'activité pour ajouter des créneaux.'
+        );
+        return;
+      }
+
       const { error } = await supabase
         .from('activities')
         .update({ status: 'active' })
@@ -230,16 +256,27 @@ export default function ActivityScreen() {
 
           {/* Bouton Publier si brouillon (onglet Créées) */}
           {!activity.isPublished && businessTab === 'created' && (
-            <TouchableOpacity
-              style={styles.publishButton}
-              onPress={(e) => {
-                e.stopPropagation();
-                handlePublishActivity(activity.id);
-              }}
-            >
-              <IconSymbol name="paperplane.fill" size={14} color={colors.background} />
-              <Text style={styles.publishButtonText}>Publier</Text>
-            </TouchableOpacity>
+            <>
+              {activity.hasLiveSlots ? (
+                <TouchableOpacity
+                  style={styles.publishButton}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handlePublishActivity(activity.id);
+                  }}
+                >
+                  <IconSymbol name="paperplane.fill" size={14} color={colors.background} />
+                  <Text style={styles.publishButtonText}>Publier</Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.noSlotsMessage}>
+                  <IconSymbol name="exclamationmark.triangle.fill" size={12} color="#f59e0b" />
+                  <Text style={styles.noSlotsMessageText}>
+                    Ajoutez des créneaux pour publier
+                  </Text>
+                </View>
+              )}
+            </>
           )}
 
           {/* Bouton Mettre en pause si en ligne (onglet En cours) */}
@@ -773,6 +810,22 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: colors.background,
+  },
+  noSlotsMessage: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f59e0b' + '20',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    gap: 6,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  noSlotsMessageText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#f59e0b',
   },
   createActivityCard: {
     backgroundColor: colors.card,

@@ -7,14 +7,21 @@ import { Platform } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from './supabase';
 
-// Configuration du handler de notifications
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+// Configuration du handler de notifications (désactivé en dev car Expo Go ne supporte plus les push)
+// Wrappé dans un try/catch pour éviter les erreurs avec Expo Go SDK 53
+try {
+  if (!__DEV__ && Notifications?.setNotificationHandler) {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+      }),
+    });
+  }
+} catch (error) {
+  console.log('⚠️ Notifications handler not available (expected in Expo Go)');
+}
 
 export interface PushNotificationData {
   type: 'message' | 'friend_request' | 'activity';

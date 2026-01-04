@@ -314,7 +314,7 @@ export default function BrowseScreen() {
       width: 40px; height: 40px; background: #ef4444;
       border: 4px solid white; border-radius: 50%; cursor: pointer;
       box-shadow: 0 4px 12px rgba(239, 68, 68, 0.5);
-      transition: all 0.3s ease;
+      transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
     }
     .custom-marker:hover { transform: scale(1.2); }
     .custom-marker.selected {
