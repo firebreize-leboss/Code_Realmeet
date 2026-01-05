@@ -112,7 +112,14 @@ export default function ActivityCalendar({
   const [addingSlot, setAddingSlot] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<SelectedSlot | null>(null);
 
-  const durationOptions = [
+  
+ 
+
+  // ✅ Places restantes simulées par créneau (démarre à 2 au 1er clic, puis -1 à chaque nouveau clic)
+  const [slotRemainingById, setSlotRemainingById] = useState<Record<string, number>>({});
+  
+    
+    const durationOptions = [
     { label: '30 min', value: 30 },
     { label: '1h', value: 60 },
     { label: '1h30', value: 90 },
@@ -558,7 +565,14 @@ export default function ActivityCalendar({
     if (selectedSlot?.id === slot.id) {
       setSelectedSlot(null);
       onSlotSelect?.(null);
-    } else {
+       } else {
+      // ✅ 1er clic sur ce créneau => 2 places restantes, puis -1 à chaque nouvelle sélection
+      setSlotRemainingById(prev => {
+        const current = prev[slot.id];
+        const next = current === undefined ? 2 : Math.max(0, current - 1);
+        return { ...prev, [slot.id]: next };
+      });
+
       const newSelection: SelectedSlot = {
         id: slot.id,
         date: slot.date,
@@ -569,7 +583,7 @@ export default function ActivityCalendar({
       setSelectedSlot(newSelection);
       onSlotSelect?.(newSelection);
     }
-  };
+
 
   const handleDeleteSlot = async (slot: TimeSlot) => {
     if (mode !== 'edit') return;
@@ -621,8 +635,16 @@ export default function ActivityCalendar({
 
       <View style={styles.slotsContainer}>
         {day.slots.map(slot => {
+          
           const isUserJoined = userJoinedSlotId === slot.id;
           const isSelected = selectedSlot?.id === slot.id;
+          const slotMax = slot.maxParticipants || maxParticipants;
+          const remaining =
+            slotRemainingById[slot.id] !== undefined
+              ? slotRemainingById[slot.id]
+              : slotMax
+                ? slotMax - (slot.participantCount || 0)
+                : undefined;
 
           return (
             <TouchableOpacity
@@ -676,11 +698,13 @@ export default function ActivityCalendar({
                   </Text>
                 </View>
               )}
-              {isSelected && maxParticipants && (maxParticipants - (slot.participantCount || 0)) <= 2 && (maxParticipants - (slot.participantCount || 0)) > 0 && (
+                            {isSelected && remaining !== undefined && remaining > 0 && remaining <= 2 && (
                 <Text style={styles.slotRemainingText}>
-                  {maxParticipants - (slot.participantCount || 0)} place{(maxParticipants - (slot.participantCount || 0)) > 1 ? 's' : ''} restante{(maxParticipants - (slot.participantCount || 0)) > 1 ? 's' : ''}
+                  {remaining} place{remaining > 1 ? 's' : ''} restante{remaining > 1 ? 's' : ''}
                 </Text>
               )}
+
+            
 
               {mode === 'edit' && (
                 <TouchableOpacity
