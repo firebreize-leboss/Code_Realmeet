@@ -583,7 +583,7 @@ export default function ActivityCalendar({
       setSelectedSlot(newSelection);
       onSlotSelect?.(newSelection);
     }
-
+  };
 
   const handleDeleteSlot = async (slot: TimeSlot) => {
     if (mode !== 'edit') return;

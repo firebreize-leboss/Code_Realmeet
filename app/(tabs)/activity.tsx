@@ -93,20 +93,33 @@ export default function ActivityScreen() {
       // Pour chaque activité, vérifier si elle a des créneaux futurs et compter les participants
       const activitiesWithSlotInfo = await Promise.all(
         (activities || []).map(async (activity) => {
-          // Compter les créneaux futurs
-          const { count: futureSlotsCount } = await supabase
+          // Récupérer uniquement les créneaux FUTURS (comme dans ActivityCalendar)
+          const { data: futureSlots } = await supabase
             .from('activity_slots')
-            .select('*', { count: 'exact', head: true })
+            .select('id, max_participants')
             .eq('activity_id', activity.id)
             .gte('date', todayStr);
 
-          // Compter le nombre TOTAL de participants inscrits (tous créneaux confondus)
-          const { count: participantsCount } = await supabase
-            .from('slot_participants')
-            .select('*', { count: 'exact', head: true })
-            .eq('activity_id', activity.id);
+          const futureSlotIds = (futureSlots || []).map(s => s.id);
+          const futureSlotsCount = futureSlotIds.length;
 
-          const hasLiveSlots = (futureSlotsCount || 0) > 0;
+          // Calculer le max_participants TOTAL (somme des créneaux FUTURS uniquement)
+          const totalMaxParticipants = (futureSlots || []).reduce(
+            (sum, slot) => sum + (slot.max_participants || 10),
+            0
+          );
+
+          // Compter les participants inscrits sur les créneaux FUTURS uniquement
+          let participantsCount = 0;
+          if (futureSlotIds.length > 0) {
+            const { count } = await supabase
+              .from('slot_participants')
+              .select('*', { count: 'exact', head: true })
+              .in('slot_id', futureSlotIds);
+            participantsCount = count || 0;
+          }
+
+          const hasLiveSlots = futureSlotsCount > 0;
           const isPublished = activity.status === 'active';
 
           return {
@@ -114,7 +127,8 @@ export default function ActivityScreen() {
             date_heure: activity.date ? `${activity.date}T${activity.time_start || '00:00'}` : now.toISOString(),
             hasLiveSlots,
             isPublished,
-            participants: participantsCount || 0, // Nombre réel de participants inscrits
+            participants: participantsCount, // Participants sur créneaux futurs uniquement
+            max_participants: totalMaxParticipants > 0 ? totalMaxParticipants : activity.max_participants, // Max des créneaux futurs
           };
         })
       );
