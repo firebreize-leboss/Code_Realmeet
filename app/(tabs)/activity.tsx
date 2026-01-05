@@ -16,6 +16,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
+import { intelligentGroupsService } from '@/services/intelligent-groups.service';
 import { useAuth } from '@/contexts/AuthContext';
 
 type TabType = 'ongoing' | 'past';
@@ -392,6 +393,32 @@ export default function ActivityScreen() {
 
       setOngoingActivities(ongoing);
       setPastActivities(past);
+
+      // Vérifier si des groupes doivent être formés (backup du cron)
+      for (const activity of ongoing) {
+        if (activity.user_slot_id) {
+          try {
+            const { data: slotData } = await supabase
+              .from('activity_slots')
+              .select('groups_formed, activity_id')
+              .eq('id', activity.user_slot_id)
+              .single();
+            
+            if (slotData && !slotData.groups_formed) {
+              const formed = await intelligentGroupsService.checkAndFormGroupsIfNeeded(
+                activity.user_slot_id, 
+                slotData.activity_id
+              );
+              if (formed) {
+                console.log(`Groupes formés pour le créneau ${activity.user_slot_id}`);
+              }
+            }
+          } catch (err) {
+            console.error('Erreur vérification groupes:', err);
+          }
+        }
+      }
+
     } catch (error) {
       console.error('Erreur chargement activités utilisateur:', error);
     } finally {

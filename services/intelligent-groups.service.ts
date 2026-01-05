@@ -377,7 +377,28 @@ export async function shouldFormGroups(slotId: string): Promise<boolean> {
   }
 }
 
+/**
+ * Vérifie et forme les groupes pour un créneau si c'est le moment (J-1)
+ */
+export async function checkAndFormGroupsIfNeeded(slotId: string, activityId: string): Promise<boolean> {
+  try {
+    const shouldForm = await shouldFormGroups(slotId);
+    
+    if (shouldForm) {
+      console.log(`Formation automatique des groupes pour le créneau ${slotId}`);
+      await formIntelligentGroups(slotId, activityId);
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('Erreur checkAndFormGroupsIfNeeded:', error);
+    return false;
+  }
+}
+
 export const intelligentGroupsService = {
   formIntelligentGroups,
   shouldFormGroups,
+  checkAndFormGroupsIfNeeded,
 };

@@ -511,6 +511,19 @@ if (shouldShowParticipants) {
           participants: newCount,
           placesRestantes: activity.capacity - newCount,
         });
+        // Vérifier immédiatement si on doit former les groupes
+        try {
+          const { intelligentGroupsService } = await import('@/services/intelligent-groups.service');
+          const formed = await intelligentGroupsService.checkAndFormGroupsIfNeeded(
+            selectedSlot.id,
+            activity.id
+          );
+          if (formed) {
+            console.log('Groupes formés immédiatement après inscription');
+          }
+        } catch (err) {
+          console.error('Erreur formation groupes:', err);
+        }
 
         Alert.alert('Succès', 'Vous avez rejoint l\'activité ! Un groupe se créra 24 h avant le début de l\'activité.');
       }
