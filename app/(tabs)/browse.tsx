@@ -17,7 +17,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
-import { colors, commonStyles } from '@/styles/commonStyles';
+import { colors, commonStyles, borderRadius, spacing, shadows, typography } from '@/styles/commonStyles';
 import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
 import { WebView } from 'react-native-webview';
 import { activityService } from '@/services/activity.service';

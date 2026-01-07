@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
-import { colors, commonStyles } from '@/styles/commonStyles';
+import { colors, commonStyles, borderRadius, spacing, shadows, typography } from '@/styles/commonStyles';
 import { PREDEFINED_CATEGORIES } from '@/constants/categories';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
@@ -84,75 +84,84 @@ export default function CategoryScreen() {
 
 const styles = StyleSheet.create({
   header: {
-    paddingHorizontal: 20,
-    paddingVertical: 15,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.lg,
+    backgroundColor: colors.backgroundAlt,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: colors.borderLight,
   },
   headerTitle: {
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: typography.xxxl,
+    fontWeight: typography.bold,
     color: colors.text,
+    letterSpacing: -0.5,
   },
   scrollView: {
     flex: 1,
   },
   contentContainer: {
-    padding: 20,
+    padding: spacing.lg,
     paddingBottom: 100,
   },
   contentContainerWithTabBar: {
     paddingBottom: 120,
   },
   grid: {
-  flexDirection: 'row',
-  flexWrap: 'wrap',
-  marginHorizontal: -7.5,
-},
-categoryWrapper: {
-  width: '50%',
-  paddingHorizontal: 7.5,
-  marginBottom: 15,
-},
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -spacing.sm,
+  },
+  categoryWrapper: {
+    width: '50%',
+    paddingHorizontal: spacing.sm,
+    marginBottom: spacing.lg,
+  },
   categoryCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    padding: 20,
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 140,
     borderWidth: 2,
     borderColor: 'transparent',
+    ...shadows.md,
   },
   categoryCardSelected: {
     borderColor: colors.primary,
-    backgroundColor: colors.primary + '10',
+    backgroundColor: colors.primary + '08',
+    ...shadows.lg,
   },
   iconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 70,
+    height: 70,
+    borderRadius: borderRadius.full,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: spacing.md,
   },
   categoryName: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: typography.sm,
+    fontWeight: typography.semibold,
     color: colors.text,
     textAlign: 'center',
+    lineHeight: typography.sm * 1.4,
   },
   infoCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    padding: 15,
-    borderRadius: 12,
-    marginTop: 20,
-    gap: 12,
+    backgroundColor: colors.backgroundAccent,
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    marginTop: spacing.xxl,
+    gap: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
   },
   infoText: {
     flex: 1,
-    fontSize: 14,
+    fontSize: typography.sm,
     color: colors.textSecondary,
-    lineHeight: 20,
+    lineHeight: typography.sm * 1.5,
   },
 });

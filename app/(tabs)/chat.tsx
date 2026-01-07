@@ -154,7 +154,31 @@ const loadActivityContacts = async () => {
       return;
     }
 
-    const slotIds = myParticipations.map(p => p.slot_id);
+    const activityIds = [...new Set(myParticipations.map(p => p.activity_id))];
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    // Récupérer les activités qui ont encore des créneaux futurs
+    const { data: futureSlots } = await supabase
+      .from('activity_slots')
+      .select('activity_id')
+      .in('activity_id', activityIds)
+      .gte('date', todayStr);
+
+    if (!futureSlots || futureSlots.length === 0) {
+      setActivityContacts([]);
+      return;
+    }
+
+    // Garder uniquement les activités avec créneaux futurs
+    const validActivityIds = [...new Set(futureSlots.map(s => s.activity_id))];
+    const validSlotIds = myParticipations
+      .filter(p => validActivityIds.includes(p.activity_id))
+      .map(p => p.slot_id);
+
+    if (validSlotIds.length === 0) {
+      setActivityContacts([]);
+      return;
+    }
 
     // Récupérer les autres participants de ces mêmes créneaux
     const { data: otherParticipants } = await supabase
@@ -167,7 +191,7 @@ const loadActivityContacts = async () => {
           avatar_url
         )
       `)
-      .in('slot_id', slotIds)
+      .in('slot_id', validSlotIds)
       .neq('user_id', userData.user.id);
 
     if (!otherParticipants) {
@@ -218,7 +242,7 @@ useEffect(() => {
   );
 
   return (
-    <SafeAreaView style={commonStyles.container} edges={['top','bottom']}>
+    <SafeAreaView style={[commonStyles.container, { backgroundColor: '#F5EDE4' }]} edges={['top','bottom']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Messages</Text>
         <View style={styles.headerButtons}>
@@ -280,8 +304,8 @@ useEffect(() => {
         >
           <IconSymbol
             name="clock.fill"
-            size={14}
-            color={activeFilter === 'past' ? colors.background : colors.textSecondary}
+            size={16}
+            color={activeFilter === 'past' ? '#FFFFFF' : '#666666'}
           />
           <Text style={[styles.filterText, activeFilter === 'past' && styles.filterTextActive]}>
             Terminées
@@ -301,8 +325,8 @@ useEffect(() => {
         >
           <IconSymbol
             name="message.fill"
-            size={14}
-            color={activeFilter === 'private' ? colors.background : colors.textSecondary}
+            size={16}
+            color={activeFilter === 'private' ? '#FFFFFF' : '#666666'}
           />
           <Text style={[styles.filterText, activeFilter === 'private' && styles.filterTextActive]}>
             Privés
@@ -509,72 +533,86 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 16,
+    backgroundColor: '#F5EDE4',
   },
   filterBar: {
     flexDirection: 'row',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingVertical: 16,
+    gap: 10,
+    backgroundColor: '#F5EDE4',
+    borderBottomWidth: 2,
+    borderBottomColor: '#E8DCC8',
   },
   filterButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    backgroundColor: colors.card,
-    gap: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    gap: 7,
+    borderWidth: 2,
+    borderColor: '#E8DCC8',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   filterButtonActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: '#FF6B9D',
+    borderColor: '#FF6B9D',
+    shadowColor: '#FF6B9D',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   filterDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: '#10b981',
-    opacity: 0.5,
   },
   filterDotActive: {
-    opacity: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#FFFFFF',
   },
   filterText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#666666',
+    letterSpacing: 0.2,
   },
   filterTextActive: {
-    color: colors.background,
+    color: '#FFFFFF',
   },
   filterBadge: {
-    backgroundColor: colors.border,
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
+    backgroundColor: '#FF6B9D',
+    borderRadius: 12,
+    minWidth: 22,
+    height: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 6,
+    paddingHorizontal: 7,
   },
   filterBadgeActive: {
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: '#FFFFFF',
   },
   filterBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   filterBadgeTextActive: {
-    color: colors.background,
+    color: '#FF6B9D',
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: '700',
-    color: colors.text,
+    color: '#2D2D2D',
   },
   headerButtons: {
     flexDirection: 'row',
@@ -586,41 +624,51 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.card,
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#E8DCC8',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
   badge: {
     position: 'absolute',
-    top: 2,
-    right: 2,
-    backgroundColor: colors.error,
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
+    top: -2,
+    right: -2,
+    backgroundColor: '#FF4757',
+    borderRadius: 12,
+    minWidth: 22,
+    height: 22,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 6,
     borderWidth: 2,
-    borderColor: colors.background,
+    borderColor: '#F5EDE4',
   },
   badgeText: {
     fontSize: 11,
-    fontWeight: '700',
-    color: colors.text,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   scrollView: {
     flex: 1,
+    backgroundColor: '#F5EDE4',
   },
   searchContainer: {
   flexDirection: 'row',
   alignItems: 'center',
-  backgroundColor: colors.card,
+  backgroundColor: '#FFFFFF',
   marginHorizontal: 20,
   marginVertical: 12,
   paddingHorizontal: 16,
   borderRadius: 12,
   gap: 12,
+  borderWidth: 2,
+  borderColor: '#E8DCC8',
 },
 searchInput: {
   flex: 1,
@@ -631,17 +679,20 @@ searchInput: {
 infoBar: {
   flexDirection: 'row',
   alignItems: 'center',
-  backgroundColor: colors.primary + '15',
+  backgroundColor: '#E3F2FD',
   marginHorizontal: 20,
   marginBottom: 12,
-  padding: 12,
-  borderRadius: 10,
-  gap: 8,
+  padding: 14,
+  borderRadius: 12,
+  gap: 10,
+  borderLeftWidth: 4,
+  borderLeftColor: '#2196F3',
 },
 infoBarText: {
   flex: 1,
-  fontSize: 12,
-  color: colors.primary,
+  fontSize: 13,
+  color: '#1976D2',
+  fontWeight: '600',
 },
   contentContainer: {
     paddingBottom: 20,
@@ -673,11 +724,19 @@ infoBarText: {
   chatItem: {
     flexDirection: 'row',
     paddingHorizontal: 20,
-    paddingVertical: 12,
-    gap: 12,
-    backgroundColor: colors.background,
+    paddingVertical: 14,
+    gap: 14,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: '#E8DCC8',
+    marginHorizontal: 12,
+    marginVertical: 4,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   chatItemPast: {
     opacity: 0.75,
@@ -692,14 +751,19 @@ infoBarText: {
     position: 'absolute',
     top: 0,
     left: 0,
-    backgroundColor: colors.textSecondary,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    backgroundColor: '#9E9E9E',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.background,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
   },
   chatImageContainer: {
     position: 'relative',
@@ -714,14 +778,19 @@ infoBarText: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    backgroundColor: colors.primary,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    backgroundColor: '#FF6B9D',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.background,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
   },
   chatInfo: {
     flex: 1,
@@ -755,54 +824,66 @@ infoBarText: {
     lineHeight: 20,
   },
   unreadBadge: {
-    backgroundColor: colors.primary,
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
+    backgroundColor: '#FF6B9D',
+    borderRadius: 12,
+    minWidth: 24,
+    height: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
+    shadowColor: '#FF6B9D',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 4,
   },
   unreadText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.background,
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 80,
     paddingHorizontal: 40,
+    backgroundColor: '#F5EDE4',
   },
   emptyText: {
     fontSize: 20,
-    fontWeight: '600',
-    color: colors.text,
+    fontWeight: '700',
+    color: '#2D2D2D',
     marginTop: 16,
     marginBottom: 8,
   },
   emptySubtext: {
     fontSize: 16,
-    color: colors.textSecondary,
+    color: '#666666',
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: 24,
   },
   startChatButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 20,
+    backgroundColor: '#FF6B9D',
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    borderRadius: 24,
+    shadowColor: '#FF6B9D',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   startChatButtonText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: colors.background,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
   // Styles du modal de nouvelle conversation
   modalContainer: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#F5EDE4',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -810,21 +891,24 @@ infoBarText: {
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    backgroundColor: '#F5EDE4',
+    borderBottomWidth: 2,
+    borderBottomColor: '#E8DCC8',
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: colors.text,
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#2D2D2D',
   },
   closeButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.card,
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#E8DCC8',
   },
   friendsList: {
     paddingHorizontal: 20,
@@ -833,11 +917,18 @@ infoBarText: {
   friendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
     marginBottom: 12,
-    gap: 12,
+    gap: 14,
+    borderWidth: 2,
+    borderColor: '#E8DCC8',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   friendAvatarContainer: {
     position: 'relative',
@@ -852,12 +943,17 @@ infoBarText: {
     position: 'absolute',
     bottom: 4,
     right: 4,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: colors.success,
-    borderWidth: 2,
-    borderColor: colors.background,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#4CAF50',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    shadowColor: '#4CAF50',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 3,
+    elevation: 3,
   },
   friendInfo: {
     flex: 1,

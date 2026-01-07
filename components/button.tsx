@@ -5,12 +5,12 @@ import {
   StyleSheet,
   Text,
   TextStyle,
-  useColorScheme,
   ViewStyle,
+  Platform,
 } from "react-native";
-import { appleBlue, zincColors } from "@/constants/Colors";
+import { colors, borderRadius, spacing, typography, shadows } from "@/styles/commonStyles";
 
-type ButtonVariant = "filled" | "outline" | "ghost";
+type ButtonVariant = "filled" | "outline" | "ghost" | "secondary";
 type ButtonSize = "sm" | "md" | "lg";
 
 interface ButtonProps {
@@ -34,38 +34,63 @@ export const Button: React.FC<ButtonProps> = ({
   style,
   textStyle,
 }) => {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
-
   const sizeStyles: Record<
     ButtonSize,
-    { height: number; fontSize: number; padding: number }
+    { height: number; fontSize: number; padding: number; borderRadius: number }
   > = {
-    sm: { height: 36, fontSize: 14, padding: 12 },
-    md: { height: 44, fontSize: 16, padding: 16 },
-    lg: { height: 55, fontSize: 18, padding: 20 },
+    sm: {
+      height: 40,
+      fontSize: typography.sm,
+      padding: spacing.md,
+      borderRadius: borderRadius.md,
+    },
+    md: {
+      height: 50,
+      fontSize: typography.base,
+      padding: spacing.lg,
+      borderRadius: borderRadius.lg,
+    },
+    lg: {
+      height: 56,
+      fontSize: typography.lg,
+      padding: spacing.xl,
+      borderRadius: borderRadius.lg,
+    },
   };
 
   const getVariantStyle = () => {
     const baseStyle: ViewStyle = {
-      borderRadius: 12,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
     };
 
+    if (disabled) {
+      return {
+        ...baseStyle,
+        backgroundColor: colors.borderLight,
+      };
+    }
+
     switch (variant) {
       case "filled":
         return {
           ...baseStyle,
-          backgroundColor: isDark ? zincColors[50] : zincColors[900],
+          backgroundColor: colors.primary,
+          ...shadows.sm,
+        };
+      case "secondary":
+        return {
+          ...baseStyle,
+          backgroundColor: colors.secondary,
+          ...shadows.sm,
         };
       case "outline":
         return {
           ...baseStyle,
           backgroundColor: "transparent",
-          borderWidth: 1,
-          borderColor: isDark ? zincColors[700] : zincColors[300],
+          borderWidth: 2,
+          borderColor: colors.primary,
         };
       case "ghost":
         return {
@@ -77,15 +102,17 @@ export const Button: React.FC<ButtonProps> = ({
 
   const getTextColor = () => {
     if (disabled) {
-      return isDark ? zincColors[500] : zincColors[400];
+      return colors.textSecondary;
     }
 
     switch (variant) {
       case "filled":
-        return isDark ? zincColors[900] : zincColors[50];
+      case "secondary":
+        return colors.textOnPrimary;
       case "outline":
+        return colors.primary;
       case "ghost":
-        return appleBlue;
+        return colors.text;
     }
   };
 
@@ -93,15 +120,20 @@ export const Button: React.FC<ButtonProps> = ({
     <Pressable
       onPress={onPress}
       disabled={disabled || loading}
-      style={[
+      style={({ pressed }) => [
         getVariantStyle(),
         {
           height: sizeStyles[size].height,
           paddingHorizontal: sizeStyles[size].padding,
-          opacity: disabled ? 0.5 : 1,
+          borderRadius: sizeStyles[size].borderRadius,
+          opacity: disabled ? 0.6 : pressed ? 0.8 : 1,
         },
         style,
       ]}
+      android_ripple={{
+        color: colors.primary + '30',
+        borderless: false,
+      }}
     >
       {loading ? (
         <ActivityIndicator color={getTextColor()} />
@@ -113,7 +145,7 @@ export const Button: React.FC<ButtonProps> = ({
               color: getTextColor(),
               textAlign: "center",
               marginBottom: 0,
-              fontWeight: "700",
+              fontWeight: typography.semibold,
             },
             textStyle,
           ])}

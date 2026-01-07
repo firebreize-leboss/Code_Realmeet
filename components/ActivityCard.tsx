@@ -12,9 +12,10 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
-import { colors } from '@/styles/commonStyles';
+import { colors, borderRadius, spacing, shadows, typography } from '@/styles/commonStyles';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useBusinessRestrictions } from '@/hooks/useBusinessRestrictions';
+import { PREDEFINED_CATEGORIES } from '@/constants/categories';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -77,6 +78,16 @@ export default function ActivityCard({
   const isFull = spotsLeft <= 0;
   const isAlmostFull = spotsLeft <= 3 && spotsLeft > 0;
 
+  // Get category color
+  const getCategoryColor = (categoryName: string) => {
+    const category = PREDEFINED_CATEGORIES.find(
+      cat => cat.name.toLowerCase() === categoryName.toLowerCase()
+    );
+    return category?.color || colors.primary;
+  };
+
+  const categoryColor = getCategoryColor(activity.categorie);
+
   // Variante compacte pour grille
   if (variant === 'compact') {
     return (
@@ -95,7 +106,7 @@ export default function ActivityCard({
         />
         
         {/* Badge catégorie */}
-        <View style={styles.compactBadge}>
+        <View style={[styles.compactBadge, { backgroundColor: categoryColor }]}>
           <Text style={styles.compactBadgeText}>{activity.categorie}</Text>
         </View>
 
@@ -150,8 +161,8 @@ export default function ActivityCard({
         
         <View style={styles.listContent}>
           <View style={styles.listHeader}>
-            <View style={styles.listCategoryBadge}>
-              <Text style={styles.listCategoryText}>{activity.categorie}</Text>
+            <View style={[styles.listCategoryBadge, { backgroundColor: categoryColor + '30' }]}>
+              <Text style={[styles.listCategoryText, { color: categoryColor }]}>{activity.categorie}</Text>
             </View>
             {isAlmostFull && (
               <View style={styles.urgentBadge}>
@@ -223,7 +234,7 @@ export default function ActivityCard({
 
       {/* Badges en haut */}
       <View style={styles.topBadges}>
-        <View style={styles.categoryBadge}>
+        <View style={[styles.categoryBadge, { backgroundColor: categoryColor }]}>
           <Text style={styles.categoryBadgeText}>{activity.categorie}</Text>
         </View>
         
@@ -300,201 +311,217 @@ export default function ActivityCard({
 }
 
 const styles = StyleSheet.create({
-  // Compact variant styles
+  // Compact variant styles - Modern light theme
   compactCard: {
     width: (SCREEN_WIDTH - 52) / 2,
-    height: 200,
-    borderRadius: 16,
+    height: 220,
+    borderRadius: borderRadius.lg,
     overflow: 'hidden',
     backgroundColor: colors.card,
+    ...shadows.md,
   },
   compactImage: {
     width: '100%',
-    height: '100%',
+    height: '60%',
   },
   compactGradient: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: '60%',
   },
   compactBadge: {
     position: 'absolute',
-    top: 10,
-    left: 10,
-    backgroundColor: colors.primary,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    top: spacing.sm,
+    left: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
   },
   compactBadgeText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: colors.background,
+    fontSize: typography.xs,
+    fontWeight: typography.semibold,
+    color: colors.textOnPrimary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   competitorBadge: {
     position: 'absolute',
-    top: 10,
-    right: 10,
+    top: spacing.sm,
+    right: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FF9500',
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 6,
+    gap: spacing.xs,
+    backgroundColor: colors.warning,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
   },
   competitorBadgeText: {
-    fontSize: 9,
-    fontWeight: '600',
-    color: colors.background,
+    fontSize: typography.xs - 1,
+    fontWeight: typography.semibold,
+    color: colors.textOnPrimary,
   },
   compactContent: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    padding: 12,
+    height: '40%',
+    padding: spacing.md,
+    backgroundColor: colors.card,
+    justifyContent: 'space-between',
   },
   compactTitle: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: typography.sm,
+    fontWeight: typography.semibold,
     color: colors.text,
+    marginBottom: spacing.xs,
   },
   compactMeta: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 6,
+    gap: spacing.md,
   },
   metaItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: spacing.xs,
   },
   metaText: {
-    fontSize: 11,
-    color: colors.text,
+    fontSize: typography.xs,
+    color: colors.textSecondary,
   },
   priceTag: {
     position: 'absolute',
-    top: 10,
-    right: 10,
+    bottom: spacing.sm,
+    right: spacing.sm,
     backgroundColor: colors.primary,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+    ...shadows.sm,
   },
   priceText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.background,
+    fontSize: typography.sm,
+    fontWeight: typography.bold,
+    color: colors.textOnPrimary,
   },
 
-  // List variant styles
+  // List variant styles - Modern light theme
   listCard: {
     flexDirection: 'row',
     backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 12,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    ...shadows.sm,
   },
   listImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 12,
-    backgroundColor: colors.border,
+    width: 90,
+    height: 90,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.borderLight,
   },
   listContent: {
     flex: 1,
-    marginLeft: 12,
-    justifyContent: 'center',
+    marginLeft: spacing.md,
+    justifyContent: 'space-between',
   },
   listHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: spacing.sm,
+    flexWrap: 'wrap',
   },
   listCategoryBadge: {
-    backgroundColor: colors.primary + '20',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
   },
   listCategoryText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: colors.primary,
+    fontSize: typography.xs,
+    fontWeight: typography.semibold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   urgentBadge: {
-    backgroundColor: colors.error + '20',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    backgroundColor: colors.errorLight + '40',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
   },
   urgentText: {
-    fontSize: 10,
-    fontWeight: '600',
+    fontSize: typography.xs - 1,
+    fontWeight: typography.semibold,
     color: colors.error,
+    textTransform: 'uppercase',
   },
   listTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: typography.base,
+    fontWeight: typography.semibold,
     color: colors.text,
-    marginTop: 4,
+    marginTop: spacing.xs,
   },
   listMeta: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 6,
+    gap: spacing.md,
+    marginTop: spacing.xs,
   },
   listMetaText: {
-    fontSize: 12,
+    fontSize: typography.sm,
     color: colors.textSecondary,
   },
   hostRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 6,
+    gap: spacing.sm,
+    marginTop: spacing.sm,
   },
   hostAvatar: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.border,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.borderLight,
   },
   hostName: {
-    fontSize: 12,
+    fontSize: typography.sm,
     color: colors.textSecondary,
   },
   listRight: {
     alignItems: 'flex-end',
-    justifyContent: 'center',
-    marginLeft: 8,
+    justifyContent: 'space-between',
+    marginLeft: spacing.sm,
   },
   participantsCircle: {
-    backgroundColor: colors.primary + '20',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
+    backgroundColor: colors.backgroundAccent,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
   },
   participantsText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: typography.sm,
+    fontWeight: typography.semibold,
     color: colors.primary,
   },
   listPrice: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: typography.lg,
+    fontWeight: typography.bold,
     color: colors.primary,
-    marginTop: 8,
+    marginTop: spacing.sm,
   },
 
-  // Full variant styles
+  // Full variant styles - Modern light theme with prominent image hero
   fullCard: {
-    width: SCREEN_WIDTH - 40,
-    height: 280,
-    borderRadius: 20,
+    width: SCREEN_WIDTH - 32,
+    height: 320,
+    borderRadius: borderRadius.xl,
     overflow: 'hidden',
     backgroundColor: colors.card,
-    marginBottom: 16,
+    marginBottom: spacing.lg,
+    ...shadows.lg,
   },
   fullImage: {
     width: '100%',
@@ -505,123 +532,139 @@ const styles = StyleSheet.create({
   },
   topBadges: {
     position: 'absolute',
-    top: 14,
-    left: 14,
-    right: 14,
+    top: spacing.lg,
+    left: spacing.lg,
+    right: spacing.lg,
     flexDirection: 'row',
-    gap: 8,
+    gap: spacing.sm,
+    flexWrap: 'wrap',
   },
   categoryBadge: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    ...shadows.sm,
   },
   categoryBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.background,
+    fontSize: typography.sm,
+    fontWeight: typography.semibold,
+    color: colors.textOnPrimary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   competitorBadgeLarge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#FF9500',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
+    gap: spacing.sm,
+    backgroundColor: colors.warning,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    ...shadows.sm,
   },
   competitorBadgeLargeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.background,
+    fontSize: typography.xs,
+    fontWeight: typography.semibold,
+    color: colors.textOnPrimary,
   },
   fullBadge: {
     backgroundColor: colors.error,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    ...shadows.sm,
   },
   fullBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.background,
+    fontSize: typography.sm,
+    fontWeight: typography.semibold,
+    color: colors.textOnPrimary,
+    textTransform: 'uppercase',
   },
   fullPriceTag: {
     position: 'absolute',
-    top: 14,
-    right: 14,
+    top: spacing.lg,
+    right: spacing.lg,
     backgroundColor: colors.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.lg,
+    ...shadows.md,
   },
   fullPriceText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.background,
+    fontSize: typography.lg,
+    fontWeight: typography.bold,
+    color: colors.textOnPrimary,
   },
   fullContent: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    padding: 16,
+    padding: spacing.lg,
+    backgroundColor: 'rgba(255, 255, 255, 0.98)', // Light semi-transparent background
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
   },
   fullTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: typography.xl,
+    fontWeight: typography.bold,
     color: colors.text,
+    marginBottom: spacing.sm,
   },
   fullMeta: {
     flexDirection: 'row',
-    gap: 16,
-    marginTop: 10,
+    gap: spacing.lg,
+    marginBottom: spacing.md,
+    flexWrap: 'wrap',
   },
   fullMetaItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: spacing.sm,
   },
   fullMetaText: {
-    fontSize: 13,
-    color: colors.text,
+    fontSize: typography.sm,
+    color: colors.textSecondary,
   },
   fullBottom: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 12,
+    marginTop: spacing.sm,
   },
   fullHostRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: spacing.sm,
   },
   fullHostAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.border,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.borderLight,
+    borderWidth: 2,
+    borderColor: colors.backgroundAlt,
   },
   fullHostName: {
-    fontSize: 13,
+    fontSize: typography.sm,
     color: colors.text,
-    fontWeight: '500',
+    fontWeight: typography.medium,
   },
   fullParticipants: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
+    gap: spacing.sm,
+    backgroundColor: colors.backgroundAccent,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
   },
   fullParticipantsText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.text,
+    fontSize: typography.sm,
+    fontWeight: typography.semibold,
+    color: colors.primary,
   },
   fullText: {
     color: colors.error,

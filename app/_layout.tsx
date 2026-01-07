@@ -68,38 +68,40 @@ export default function RootLayout() {
     return null;
   }
 
+  // Modern 2025 Light Theme - Vibrant & Friendly
   const CustomDefaultTheme: Theme = {
     ...DefaultTheme,
     dark: false,
     colors: {
-      primary: "rgb(0, 122, 255)", // System Blue
-      background: "rgb(242, 242, 247)", // Light mode background
-      card: "rgb(255, 255, 255)", // White cards/surfaces
-      text: "rgb(0, 0, 0)", // Black text for light mode
-      border: "rgb(216, 216, 220)", // Light gray for separators/borders
-      notification: "rgb(255, 59, 48)", // System Red
+      primary: "rgb(255, 107, 157)", // Vibrant coral-pink (#FF6B9D)
+      background: "rgb(250, 250, 250)", // Very light gray (#FAFAFA)
+      card: "rgb(255, 255, 255)", // Pure white for cards
+      text: "rgb(26, 26, 26)", // Very dark gray/almost black (#1A1A1A)
+      border: "rgb(224, 224, 224)", // Light border (#E0E0E0)
+      notification: "rgb(239, 83, 80)", // Modern red (#EF5350)
     },
   };
 
+  // Keep dark theme as fallback (but we're focusing on light mode)
   const CustomDarkTheme: Theme = {
     ...DarkTheme,
     colors: {
-      primary: "rgb(10, 132, 255)", // System Blue (Dark Mode)
-      background: "rgb(1, 1, 1)", // True black background for OLED displays
-      card: "rgb(28, 28, 30)", // Dark card/surface color
-      text: "rgb(255, 255, 255)", // White text for dark mode
-      border: "rgb(44, 44, 46)", // Dark gray for separators/borders
-      notification: "rgb(255, 69, 58)", // System Red (Dark Mode)
+      primary: "rgb(255, 107, 157)", // Same coral-pink for consistency
+      background: "rgb(250, 250, 250)", // Light theme background
+      card: "rgb(255, 255, 255)", // Light theme cards
+      text: "rgb(26, 26, 26)", // Dark text for light mode
+      border: "rgb(224, 224, 224)", // Light borders
+      notification: "rgb(239, 83, 80)", // Modern red
     },
   };
 
   return (
     <>
-      <StatusBar style="auto" animated />
+      <StatusBar style="dark" animated />
       <SafeAreaProvider>
         <AuthProvider>
           <ThemeProvider
-            value={colorScheme === "dark" ? CustomDarkTheme : CustomDefaultTheme}
+            value={CustomDefaultTheme}
           >
             <SystemBars style="auto" />
             <GestureHandlerRootView style={{ flex: 1 }}>

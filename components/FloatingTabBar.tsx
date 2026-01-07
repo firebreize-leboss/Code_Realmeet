@@ -18,6 +18,7 @@ import Animated, {
   withSpring,
   interpolate,
 } from 'react-native-reanimated';
+import { colors, borderRadius, spacing, shadows } from '@/styles/commonStyles';
 
 
 
@@ -116,44 +117,32 @@ export default function FloatingTabBar({
     };
   });
 
-  // Dynamic styles based on theme
+  // Dynamic styles based on theme - Modern light theme
   const dynamicStyles = {
     blurContainer: {
       ...styles.blurContainer,
       ...Platform.select({
         ios: {
-          backgroundColor: theme.dark
-            ? 'rgba(28, 28, 30, 0.8)'
-            : 'rgba(255, 255, 255, 0.8)',
+          backgroundColor: 'rgba(255, 255, 255, 0.85)', // Clean white with slight transparency
         },
         android: {
-          backgroundColor: theme.dark
-            ? 'rgba(28, 28, 30, 0.95)'
-            : 'rgba(255, 255, 255, 0.95)',
-          elevation: 8,
+          backgroundColor: 'rgba(255, 255, 255, 0.98)', // Almost opaque white
+          elevation: 12, // More prominent shadow for Android
         },
         web: {
-          backgroundColor: theme.dark
-            ? 'rgba(28, 28, 30, 0.95)'
-            : 'rgba(255, 255, 255, 0.95)',
-          backdropFilter: 'blur(10px)',
-          boxShadow: theme.dark
-            ? '0 8px 32px rgba(0, 0, 0, 0.4)'
-            : '0 8px 32px rgba(0, 0, 0, 0.1)',
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          backdropFilter: 'blur(20px)', // Stronger blur for modern feel
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)', // Softer shadow
         },
       }),
     },
     background: {
       ...styles.background,
-      backgroundColor: theme.dark
-        ? (Platform.OS === 'ios' ? 'transparent' : 'rgba(28, 28, 30, 0.1)')
-        : (Platform.OS === 'ios' ? 'transparent' : 'rgba(255, 255, 255, 0.1)'),
+      backgroundColor: Platform.OS === 'ios' ? 'transparent' : 'rgba(255, 255, 255, 0.05)',
     },
     indicator: {
       ...styles.indicator,
-      backgroundColor: theme.dark
-        ? 'rgba(255, 255, 255, 0.08)' // Subtle white overlay in dark mode
-        : 'rgba(0, 0, 0, 0.04)', // Subtle black overlay in light mode
+      backgroundColor: colors.primary, // Vibrant coral-pink accent
       width: `${(100 / tabs.length) - 3}%`, // Dynamic width based on number of tabs
     },
   };
@@ -187,14 +176,17 @@ export default function FloatingTabBar({
                   <View style={styles.tabContent}>
                     <IconSymbol
                       name={tab.icon}
-                      size={22}
-                      color={isActive ? '#2ECC71' : '#A0A0A0'}
+                      size={24}
+                      color={isActive ? colors.textOnPrimary : colors.textSecondary}
                     />
                     <Text
                       style={[
                         styles.tabLabel,
-                        { color: '#A0A0A0' },
-                        isActive && { color: '#2ECC71', fontWeight: '600' },
+                        { color: colors.textSecondary },
+                        isActive && {
+                          color: colors.textOnPrimary,
+                          fontWeight: '600'
+                        },
                       ]}
                     >
                       {tab.label}
