@@ -1,9 +1,10 @@
 // app/(tabs)/_layout.tsx
 // Navigation conditionnelle selon le type de compte (user/business)
+// Avec guard d'authentification pour rediriger vers /auth/account-type si non connecté
 
 import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
 import { useAuth } from '@/contexts/AuthContext';
 import { colors } from '@/styles/commonStyles';
@@ -77,8 +78,19 @@ const businessTabs: TabBarItem[] = [
 ];
 
 export default function TabLayout() {
-  const { profile, loading } = useAuth();
+  const { user, profile, loading } = useAuth();
+  const router = useRouter();
   const [tabs, setTabs] = useState<TabBarItem[]>(userTabs);
+  const [isRedirecting, setIsRedirecting] = useState(false);
+
+  // Guard d'authentification: rediriger vers /auth/account-type si non connecté
+  useEffect(() => {
+    if (!loading && !user) {
+      setIsRedirecting(true);
+      // Utiliser replace pour empêcher le retour arrière vers l'app
+      router.replace('/auth/account-type');
+    }
+  }, [loading, user]);
 
   useEffect(() => {
     if (profile) {
@@ -89,8 +101,8 @@ export default function TabLayout() {
     }
   }, [profile?.account_type]);
 
-  // Écran de chargement pendant la vérification du type de compte
-  if (loading) {
+  // Écran de chargement pendant la vérification du type de compte ou redirection
+  if (loading || isRedirecting || !user) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
         <ActivityIndicator size="large" color={colors.primary} />

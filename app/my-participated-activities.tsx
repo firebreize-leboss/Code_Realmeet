@@ -24,6 +24,9 @@ interface Activity {
   date: string;
   ville: string;
   categorie: string;
+  slot_id?: string;
+  slot_date?: string;
+  isPast?: boolean;
 }
 
 export default function MyParticipatedActivitiesScreen() {
@@ -44,7 +47,7 @@ export default function MyParticipatedActivitiesScreen() {
 
       const { data: participations, error: partError } = await supabase
         .from('slot_participants')
-        .select('activity_id')
+        .select('activity_id, slot_id')
         .eq('user_id', userData.user.id);
 
       if (partError) throw partError;
@@ -65,7 +68,38 @@ export default function MyParticipatedActivitiesScreen() {
 
       if (actError) throw actError;
 
-      setActivities(activitiesData || []);
+      // Pour chaque activité, récupérer les infos du slot et déterminer si passée
+      const now = new Date();
+      const activitiesWithSlotInfo = await Promise.all(
+        (activitiesData || []).map(async (activity) => {
+          const participation = participations.find(p => p.activity_id === activity.id);
+          let slotDate: string | null = null;
+          let isPast = false;
+
+          if (participation?.slot_id) {
+            const { data: slotData } = await supabase
+              .from('activity_slots')
+              .select('date, time')
+              .eq('id', participation.slot_id)
+              .single();
+
+            if (slotData) {
+              slotDate = slotData.date;
+              const slotDateTime = new Date(`${slotData.date}T${slotData.time || '00:00'}`);
+              isPast = slotDateTime < now;
+            }
+          }
+
+          return {
+            ...activity,
+            slot_id: participation?.slot_id,
+            slot_date: slotDate || activity.date,
+            isPast,
+          };
+        })
+      );
+
+      setActivities(activitiesWithSlotInfo);
     } catch (error) {
       console.error('Erreur chargement activités:', error);
     } finally {
@@ -84,7 +118,15 @@ export default function MyParticipatedActivitiesScreen() {
   const renderActivity = ({ item }: { item: Activity }) => (
     <TouchableOpacity
       style={styles.activityCard}
-      onPress={() => router.push(`/activity-detail?id=${item.id}`)}
+      onPress={() => {
+        if (item.isPast && item.slot_id) {
+          // Activité passée -> rediriger vers la page avec notation et participants
+          router.push(`/activity-detail?id=${item.id}&from=past&slotId=${item.slot_id}`);
+        } else {
+          // Activité en cours -> rediriger normalement
+          router.push(`/activity-detail?id=${item.id}&from=myActivities`);
+        }
+      }}
       activeOpacity={0.7}
     >
       <Image
@@ -92,10 +134,23 @@ export default function MyParticipatedActivitiesScreen() {
         style={styles.activityImage}
       />
       <View style={styles.activityInfo}>
-        <Text style={styles.activityName} numberOfLines={2}>{item.nom}</Text>
+        <View style={styles.activityTitleRow}>
+          <Text style={styles.activityName} numberOfLines={2}>{item.nom}</Text>
+          {item.isPast ? (
+            <View style={styles.pastBadge}>
+              <IconSymbol name="checkmark.circle.fill" size={12} color="#10b981" />
+              <Text style={styles.pastBadgeText}>Terminée</Text>
+            </View>
+          ) : (
+            <View style={styles.ongoingBadge}>
+              <View style={styles.ongoingDot} />
+              <Text style={styles.ongoingBadgeText}>En cours</Text>
+            </View>
+          )}
+        </View>
         <View style={styles.activityMeta}>
           <IconSymbol name="calendar" size={14} color={colors.textSecondary} />
-          <Text style={styles.metaText}>{formatDate(item.date)}</Text>
+          <Text style={styles.metaText}>{formatDate(item.slot_date || item.date)}</Text>
         </View>
         <View style={styles.activityMeta}>
           <IconSymbol name="location.fill" size={14} color={colors.textSecondary} />
@@ -214,10 +269,51 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 4,
   },
+  activityTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
   activityName: {
     fontSize: 16,
     fontWeight: '600',
     color: colors.text,
+    flex: 1,
+  },
+  pastBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#10b981' + '20',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    gap: 4,
+  },
+  pastBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#10b981',
+  },
+  ongoingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary + '20',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    gap: 4,
+  },
+  ongoingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.primary,
+  },
+  ongoingBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: colors.primary,
   },
   activityMeta: {
     flexDirection: 'row',

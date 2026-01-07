@@ -651,9 +651,33 @@ useEffect(() => {
 
         {/* Bouton Voir l'activité pour les groupes d'activité */}
         {isGroup && activityId && (
-          <TouchableOpacity 
-            style={styles.viewActivityButton} 
-            onPress={() => router.push(`/activity-detail?id=${activityId}`)}
+          <TouchableOpacity
+            style={styles.viewActivityButton}
+            onPress={async () => {
+              try {
+                // Vérifier si l'activité existe toujours avant de naviguer
+                const { data: activityExists, error } = await supabase
+                  .from('activities')
+                  .select('id')
+                  .eq('id', activityId)
+                  .maybeSingle();
+
+                if (error || !activityExists) {
+                  Alert.alert(
+                    'Activité non disponible',
+                    'Cette activité n\'existe plus ou a été supprimée.'
+                  );
+                  return;
+                }
+
+                router.push(`/activity-detail?id=${activityId}`);
+              } catch (e) {
+                Alert.alert(
+                  'Erreur',
+                  'Impossible d\'accéder à cette activité.'
+                );
+              }
+            }}
           >
             <IconSymbol name="calendar" size={20} color={colors.primary} />
           </TouchableOpacity>

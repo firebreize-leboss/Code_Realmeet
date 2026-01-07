@@ -37,11 +37,19 @@ interface Conversation {
   lastMessageTime: string;
   isGroup: boolean;
   unreadCount?: number;
+  activityId?: string | null;
+  slotId?: string | null;
+  slotDate?: string | null;
+  isActivityGroup?: boolean;
+  isPastActivity?: boolean;
 }
+
+type ChatFilter = 'ongoing' | 'past' | 'private';
 
 export default function ChatScreen() {
   const router = useRouter();
   const [showFriendsModal, setShowFriendsModal] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<ChatFilter>('ongoing');
 
   // Obtenir les données via les hooks de messagerie
   const { pendingCount: pendingRequestsCount } = useFriendRequests();
@@ -247,6 +255,68 @@ useEffect(() => {
         </View>
       </View>
 
+      {/* Barre de filtres */}
+      <View style={styles.filterBar}>
+        <TouchableOpacity
+          style={[styles.filterButton, activeFilter === 'ongoing' && styles.filterButtonActive]}
+          onPress={() => setActiveFilter('ongoing')}
+        >
+          <View style={[styles.filterDot, activeFilter === 'ongoing' && styles.filterDotActive]} />
+          <Text style={[styles.filterText, activeFilter === 'ongoing' && styles.filterTextActive]}>
+            En cours
+          </Text>
+          {conversations.filter(c => c.isActivityGroup && !c.isPastActivity).length > 0 && (
+            <View style={[styles.filterBadge, activeFilter === 'ongoing' && styles.filterBadgeActive]}>
+              <Text style={[styles.filterBadgeText, activeFilter === 'ongoing' && styles.filterBadgeTextActive]}>
+                {conversations.filter(c => c.isActivityGroup && !c.isPastActivity).length}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.filterButton, activeFilter === 'past' && styles.filterButtonActive]}
+          onPress={() => setActiveFilter('past')}
+        >
+          <IconSymbol
+            name="clock.fill"
+            size={14}
+            color={activeFilter === 'past' ? colors.background : colors.textSecondary}
+          />
+          <Text style={[styles.filterText, activeFilter === 'past' && styles.filterTextActive]}>
+            Terminées
+          </Text>
+          {conversations.filter(c => c.isActivityGroup && c.isPastActivity).length > 0 && (
+            <View style={[styles.filterBadge, activeFilter === 'past' && styles.filterBadgeActive]}>
+              <Text style={[styles.filterBadgeText, activeFilter === 'past' && styles.filterBadgeTextActive]}>
+                {conversations.filter(c => c.isActivityGroup && c.isPastActivity).length}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.filterButton, activeFilter === 'private' && styles.filterButtonActive]}
+          onPress={() => setActiveFilter('private')}
+        >
+          <IconSymbol
+            name="message.fill"
+            size={14}
+            color={activeFilter === 'private' ? colors.background : colors.textSecondary}
+          />
+          <Text style={[styles.filterText, activeFilter === 'private' && styles.filterTextActive]}>
+            Privés
+          </Text>
+          {conversations.filter(c => !c.isGroup).length > 0 && (
+            <View style={[styles.filterBadge, activeFilter === 'private' && styles.filterBadgeActive]}>
+              <Text style={[styles.filterBadgeText, activeFilter === 'private' && styles.filterBadgeTextActive]}>
+                {conversations.filter(c => !c.isGroup).length}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
@@ -259,22 +329,98 @@ useEffect(() => {
           <View style={styles.emptyState}>
             <ActivityIndicator size="large" color={colors.primary} />
           </View>
-        ) : conversations.length > 0 ? (
-          conversations.map(renderChatItem)
         ) : (
-          <View style={styles.emptyState}>
-            <IconSymbol name="message.fill" size={64} color={colors.textSecondary} />
-            <Text style={styles.emptyText}>Aucune conversation</Text>
-            <Text style={styles.emptySubtext}>
-              Commencez une conversation avec vos amis
-            </Text>
-            <TouchableOpacity
-              style={styles.startChatButton}
-              onPress={() => setShowFriendsModal(true)}
-            >
-              <Text style={styles.startChatButtonText}>Nouvelle conversation</Text>
-            </TouchableOpacity>
-          </View>
+          <>
+            {/* Activités en cours */}
+            {activeFilter === 'ongoing' && (
+              conversations.filter(c => c.isActivityGroup && !c.isPastActivity).length > 0 ? (
+                <View style={styles.section}>
+                  {conversations.filter(c => c.isActivityGroup && !c.isPastActivity).map(renderChatItem)}
+                </View>
+              ) : (
+                <View style={styles.emptyState}>
+                  <IconSymbol name="calendar" size={64} color={colors.textSecondary} />
+                  <Text style={styles.emptyText}>Aucune activité en cours</Text>
+                  <Text style={styles.emptySubtext}>
+                    Rejoignez une activité pour voir vos groupes ici
+                  </Text>
+                </View>
+              )
+            )}
+
+            {/* Activités terminées */}
+            {activeFilter === 'past' && (
+              conversations.filter(c => c.isActivityGroup && c.isPastActivity).length > 0 ? (
+                <View style={styles.section}>
+                  {conversations.filter(c => c.isActivityGroup && c.isPastActivity).map((chat) => (
+                    <TouchableOpacity
+                      key={chat.id}
+                      style={[styles.chatItem, styles.chatItemPast]}
+                      onPress={() => router.push(`/chat-detail?id=${chat.id}`)}
+                      activeOpacity={0.8}
+                    >
+                      <View style={styles.chatImageContainer}>
+                        <Image
+                          source={{ uri: chat.image || 'https://via.placeholder.com/56' }}
+                          style={[styles.chatImage, styles.chatImagePast]}
+                        />
+                        <View style={styles.groupBadge}>
+                          <IconSymbol name="person.2.fill" size={12} color={colors.background} />
+                        </View>
+                        <View style={styles.pastLockBadge}>
+                          <IconSymbol name="lock.fill" size={10} color={colors.background} />
+                        </View>
+                      </View>
+                      <View style={styles.chatInfo}>
+                        <View style={styles.chatHeader}>
+                          <Text style={[styles.chatName, styles.chatNamePast]} numberOfLines={1}>
+                            {chat.name}
+                          </Text>
+                          <Text style={styles.chatTime}>{chat.lastMessageTime}</Text>
+                        </View>
+                        <View style={styles.lastMessageRow}>
+                          <Text style={styles.lastMessage} numberOfLines={1}>
+                            {chat.lastMessage || 'Groupe fermé'}
+                          </Text>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.emptyState}>
+                  <IconSymbol name="clock.fill" size={64} color={colors.textSecondary} />
+                  <Text style={styles.emptyText}>Aucune activité passée</Text>
+                  <Text style={styles.emptySubtext}>
+                    Vos activités terminées apparaîtront ici
+                  </Text>
+                </View>
+              )
+            )}
+
+            {/* Messages privés */}
+            {activeFilter === 'private' && (
+              conversations.filter(c => !c.isGroup).length > 0 ? (
+                <View style={styles.section}>
+                  {conversations.filter(c => !c.isGroup).map(renderChatItem)}
+                </View>
+              ) : (
+                <View style={styles.emptyState}>
+                  <IconSymbol name="message.fill" size={64} color={colors.textSecondary} />
+                  <Text style={styles.emptyText}>Aucune conversation</Text>
+                  <Text style={styles.emptySubtext}>
+                    Commencez une conversation avec vos amis
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.startChatButton}
+                    onPress={() => setShowFriendsModal(true)}
+                  >
+                    <Text style={styles.startChatButtonText}>Nouvelle conversation</Text>
+                  </TouchableOpacity>
+                </View>
+              )
+            )}
+          </>
         )}
       </ScrollView>
 
@@ -364,6 +510,67 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
   },
+  filterBar: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  filterButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    backgroundColor: colors.card,
+    gap: 6,
+  },
+  filterButtonActive: {
+    backgroundColor: colors.primary,
+  },
+  filterDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10b981',
+    opacity: 0.5,
+  },
+  filterDotActive: {
+    opacity: 1,
+    backgroundColor: colors.background,
+  },
+  filterText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  filterTextActive: {
+    color: colors.background,
+  },
+  filterBadge: {
+    backgroundColor: colors.border,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+  },
+  filterBadgeActive: {
+    backgroundColor: 'rgba(255,255,255,0.3)',
+  },
+  filterBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+  filterBadgeTextActive: {
+    color: colors.background,
+  },
   headerTitle: {
     fontSize: 28,
     fontWeight: '700',
@@ -442,6 +649,27 @@ infoBarText: {
   contentContainerWithTabBar: {
     paddingBottom: 100,
   },
+  section: {
+    marginBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  sectionLiveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10b981',
+  },
   chatItem: {
     flexDirection: 'row',
     paddingHorizontal: 20,
@@ -450,6 +678,28 @@ infoBarText: {
     backgroundColor: colors.background,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+  },
+  chatItemPast: {
+    opacity: 0.75,
+  },
+  chatImagePast: {
+    opacity: 0.7,
+  },
+  chatNamePast: {
+    color: colors.textSecondary,
+  },
+  pastLockBadge: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    backgroundColor: colors.textSecondary,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.background,
   },
   chatImageContainer: {
     position: 'relative',

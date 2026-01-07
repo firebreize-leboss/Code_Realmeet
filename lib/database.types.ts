@@ -141,6 +141,7 @@ export interface Database {
           status: 'active' | 'paused' | 'ended' | 'draft'
           created_at: string
           updated_at: string
+          deleted_at: string | null
         }
         Insert: {
           id?: string
@@ -168,6 +169,7 @@ export interface Database {
           status?: 'active' | 'paused' | 'ended' | 'draft'
           created_at?: string
           updated_at?: string
+          deleted_at?: string | null
         }
         Update: {
           id?: string
@@ -195,6 +197,7 @@ export interface Database {
           status?: 'active' | 'paused' | 'ended' | 'draft'
           created_at?: string
           updated_at?: string
+          deleted_at?: string | null
         }
       }
       activity_slots: {
@@ -206,6 +209,7 @@ export interface Database {
           time_start: string | null
           time_end: string | null
           duration: number | null
+          max_participants: number | null
           created_by: string
           created_at: string
         }
@@ -217,6 +221,7 @@ export interface Database {
           time_start?: string | null
           time_end?: string | null
           duration?: number | null
+          max_participants?: number | null
           created_by: string
           created_at?: string
         }
@@ -228,6 +233,7 @@ export interface Database {
           time_start?: string | null
           time_end?: string | null
           duration?: number | null
+          max_participants?: number | null
           created_by?: string
           created_at?: string
         }

@@ -115,8 +115,6 @@ export default function ActivityCalendar({
   
  
 
-  // ✅ Places restantes simulées par créneau (démarre à 2 au 1er clic, puis -1 à chaque nouveau clic)
-  const [slotRemainingById, setSlotRemainingById] = useState<Record<string, number>>({});
   
     
     const durationOptions = [
@@ -565,14 +563,7 @@ export default function ActivityCalendar({
     if (selectedSlot?.id === slot.id) {
       setSelectedSlot(null);
       onSlotSelect?.(null);
-       } else {
-      // ✅ 1er clic sur ce créneau => 2 places restantes, puis -1 à chaque nouvelle sélection
-      setSlotRemainingById(prev => {
-        const current = prev[slot.id];
-        const next = current === undefined ? 2 : Math.max(0, current - 1);
-        return { ...prev, [slot.id]: next };
-      });
-
+    } else {
       const newSelection: SelectedSlot = {
         id: slot.id,
         date: slot.date,
@@ -638,13 +629,6 @@ export default function ActivityCalendar({
           
           const isUserJoined = userJoinedSlotId === slot.id;
           const isSelected = selectedSlot?.id === slot.id;
-          const slotMax = slot.maxParticipants || maxParticipants;
-          const remaining =
-            slotRemainingById[slot.id] !== undefined
-              ? slotRemainingById[slot.id]
-              : slotMax
-                ? slotMax - (slot.participantCount || 0)
-                : undefined;
 
           return (
             <TouchableOpacity
@@ -697,11 +681,6 @@ export default function ActivityCalendar({
                     {slot.participantCount || 0}/{slot.maxParticipants || maxParticipants || '?'}
                   </Text>
                 </View>
-              )}
-                            {isSelected && remaining !== undefined && remaining > 0 && remaining <= 2 && (
-                <Text style={styles.slotRemainingText}>
-                  {remaining} place{remaining > 1 ? 's' : ''} restante{remaining > 1 ? 's' : ''}
-                </Text>
               )}
 
             
@@ -1121,12 +1100,6 @@ const styles = StyleSheet.create({
     color: colors.background,
     fontSize: 10,
     fontWeight: '700',
-  },
-  slotRemainingText: {
-    fontSize: 10,
-    color: '#EF4444',
-    fontWeight: '600',
-    marginTop: 4,
   },
 
   modalOverlay: {

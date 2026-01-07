@@ -25,7 +25,6 @@ import { storageService } from '@/services/storage.service';
 import { PREDEFINED_CATEGORIES } from '@/constants/categories';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 import { DateTimeRangePicker } from '@/components/DateTimePicker';
-import ActivityCalendar from '@/components/ActivityCalendar';
 
 export default function EditActivityScreen() {
   const router = useRouter();

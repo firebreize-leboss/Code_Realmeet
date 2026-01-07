@@ -12,6 +12,7 @@ import {
   PanResponder,
   ActivityIndicator,
   RefreshControl,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -25,11 +26,33 @@ import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomTabBarHeightContext } from '@react-navigation/bottom-tabs';
+import { PREDEFINED_CATEGORIES } from '@/constants/categories';
 
 
 const PROTOMAPS_KEY = process.env.EXPO_PUBLIC_PROTOMAPS_KEY || '';
 
 type ViewMode = 'liste' | 'maps';
+
+// Options de filtrage
+interface FilterOptions {
+  maxDistance: number | null; // en km, null = pas de limite
+  maxPrice: number | null; // en euros, null = pas de limite
+  minPrice: number | null; // en euros, null = pas de minimum
+  dateFrom: string | null; // format YYYY-MM-DD
+  dateTo: string | null; // format YYYY-MM-DD
+  minRemainingPlaces: number | null; // places restantes minimum
+  categories: string[]; // catégories sélectionnées (vide = toutes)
+}
+
+const DEFAULT_FILTERS: FilterOptions = {
+  maxDistance: null,
+  maxPrice: null,
+  minPrice: null,
+  dateFrom: null,
+  dateTo: null,
+  minRemainingPlaces: null,
+  categories: [],
+};
 
 interface Activity {
   id: string;
@@ -37,6 +60,7 @@ interface Activity {
   titre?: string;
   description: string;
   categorie: string;
+  categorie2?: string;
   image_url?: string;
   date: string;
   time_start: string;
@@ -47,6 +71,7 @@ interface Activity {
   participants: number;
   max_participants: number;
   host_id: string;
+  prix?: number;
 }
 
 interface SelectedActivity {
@@ -68,6 +93,19 @@ interface UserLocation {
 }
 
 
+// Fonction pour calculer la distance entre deux points GPS (formule Haversine)
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; // Rayon de la Terre en km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 export default function BrowseScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -87,6 +125,25 @@ export default function BrowseScreen() {
   const [detailFooterHeight, setDetailFooterHeight] = useState(0);
   const insets = useSafeAreaInsets();
   const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
+
+  // États pour les filtres
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState<FilterOptions>(DEFAULT_FILTERS);
+  const [tempFilters, setTempFilters] = useState<FilterOptions>(DEFAULT_FILTERS);
+
+  // Données de places restantes par activité (total des places de tous les slots - places prises)
+  const [remainingPlacesByActivity, setRemainingPlacesByActivity] = useState<Record<string, number>>({});
+
+  // Compteur de filtres actifs
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (filters.maxDistance !== null) count++;
+    if (filters.maxPrice !== null || filters.minPrice !== null) count++;
+    if (filters.dateFrom !== null || filters.dateTo !== null) count++;
+    if (filters.minRemainingPlaces !== null) count++;
+    if (filters.categories.length > 0) count++;
+    return count;
+  }, [filters]);
 
 
   useEffect(() => {
@@ -171,38 +228,71 @@ export default function BrowseScreen() {
       const result = await activityService.getActivities();
       if (result.success && result.data) {
 
-  // Charge la date la plus récente dispo (activity_slots) pour chaque activité
-  const ids = result.data.map(a => a.id);
-  const todayStr = new Date().toISOString().split('T')[0];
+        // Charge la date la plus récente dispo (activity_slots) pour chaque activité
+        const ids = result.data.map(a => a.id);
+        const todayStr = new Date().toISOString().split('T')[0];
 
-  const { data: slots } = await supabase
-    .from('activity_slots')
-    .select('activity_id, date')
-    .in('activity_id', ids)
-    .gte('date', todayStr)
-    .order('date', { ascending: true });
+        // Récupérer les slots futurs avec leurs IDs et leur capacité individuelle
+        const { data: slots } = await supabase
+          .from('activity_slots')
+          .select('id, activity_id, date, max_participants')
+          .in('activity_id', ids)
+          .gte('date', todayStr)
+          .order('date', { ascending: true });
 
-  const map: Record<string, string | null> = {};
-  const slotCountMap: Record<string, number> = {};
-  ids.forEach(id => {
-    map[id] = null;
-    slotCountMap[id] = 0;
-  });
-  (slots || []).forEach(s => {
-    if (map[s.activity_id] == null) map[s.activity_id] = s.date;
-    slotCountMap[s.activity_id] = (slotCountMap[s.activity_id] || 0) + 1;
-  });
-  setLatestSlotDateByActivity(map);
-  setSlotCountByActivity(slotCountMap);
+        const slotIds = (slots || []).map(s => s.id);
 
-  // ✅ Filtrer : garder uniquement les activités qui ont au moins un créneau futur
-  const activitiesWithSlots = result.data.filter((a: Activity) => map[a.id] !== null);
-  setActivities(activitiesWithSlots);
+        // Récupérer le nombre de participants par slot
+        const { data: slotParticipants } = await supabase
+          .from('slot_participants')
+          .select('slot_id, activity_id')
+          .in('slot_id', slotIds.length > 0 ? slotIds : ['__none__']);
 
-  if (viewMode === 'maps' && activitiesWithSlots.length > 0) {
-    setTimeout(() => sendActivitiesToMap(activitiesWithSlots, map), 1000);
-  }
-}
+        // Calculer les participants par slot (pour calculer les places restantes par slot)
+        const participantsBySlot: Record<string, number> = {};
+        (slotParticipants || []).forEach(sp => {
+          participantsBySlot[sp.slot_id] = (participantsBySlot[sp.slot_id] || 0) + 1;
+        });
+
+        // Calculer les places totales et restantes par activité
+        // en sommant la capacité de chaque créneau moins ses inscrits
+        const map: Record<string, string | null> = {};
+        const slotCountMap: Record<string, number> = {};
+        const remainingMap: Record<string, number> = {};
+
+        ids.forEach(id => {
+          map[id] = null;
+          slotCountMap[id] = 0;
+          remainingMap[id] = 0;
+        });
+
+        // Pour chaque slot, calculer les places restantes et les ajouter au total de l'activité
+        (slots || []).forEach(s => {
+          if (map[s.activity_id] == null) map[s.activity_id] = s.date;
+          slotCountMap[s.activity_id] = (slotCountMap[s.activity_id] || 0) + 1;
+
+          // Capacité de ce créneau (fallback sur 10 si non défini)
+          const slotCapacity = s.max_participants || 10;
+          // Nombre de participants inscrits à ce créneau
+          const slotParticipantCount = participantsBySlot[s.id] || 0;
+          // Places restantes pour ce créneau
+          const slotRemaining = Math.max(0, slotCapacity - slotParticipantCount);
+          // Ajouter au total de l'activité
+          remainingMap[s.activity_id] = (remainingMap[s.activity_id] || 0) + slotRemaining;
+        });
+
+        setLatestSlotDateByActivity(map);
+        setSlotCountByActivity(slotCountMap);
+        setRemainingPlacesByActivity(remainingMap);
+
+        // Filtrer : garder uniquement les activités qui ont au moins un créneau futur
+        const activitiesWithSlots = result.data.filter((a: Activity) => map[a.id] !== null);
+        setActivities(activitiesWithSlots);
+
+        if (viewMode === 'maps' && activitiesWithSlots.length > 0) {
+          setTimeout(() => sendActivitiesToMap(activitiesWithSlots, map), 1000);
+        }
+      }
 
     } catch (error) {
       console.error('Erreur chargement activités:', error);
@@ -264,11 +354,68 @@ export default function BrowseScreen() {
     }
   };
 
-  const filteredActivities = activities.filter(activity =>
-    activity.nom.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    activity.categorie.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    activity.ville?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Fonction de filtrage réutilisable
+  const applyFilters = (activitiesToFilter: Activity[], filtersToApply: FilterOptions) => {
+    return activitiesToFilter.filter(activity => {
+      // Filtre de recherche textuelle
+      const matchesSearch = searchQuery === '' ||
+        activity.nom.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        activity.categorie.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        activity.ville?.toLowerCase().includes(searchQuery.toLowerCase());
+
+      if (!matchesSearch) return false;
+
+      // Filtre par catégorie
+      if (filtersToApply.categories.length > 0) {
+        const activityCategories = [activity.categorie, activity.categorie2].filter(Boolean);
+        const matchesCategory = filtersToApply.categories.some(cat =>
+          activityCategories.some(ac => ac?.toLowerCase() === cat.toLowerCase())
+        );
+        if (!matchesCategory) return false;
+      }
+
+      // Filtre par prix
+      const activityPrice = activity.prix ?? 0;
+      if (filtersToApply.minPrice !== null && activityPrice < filtersToApply.minPrice) return false;
+      if (filtersToApply.maxPrice !== null && activityPrice > filtersToApply.maxPrice) return false;
+
+      // Filtre par distance (nécessite la localisation de l'utilisateur)
+      if (filtersToApply.maxDistance !== null && userLocation && activity.latitude && activity.longitude) {
+        const distance = calculateDistance(
+          userLocation.latitude,
+          userLocation.longitude,
+          activity.latitude,
+          activity.longitude
+        );
+        if (distance > filtersToApply.maxDistance) return false;
+      }
+
+      // Filtre par date
+      const activityDate = latestSlotDateByActivity[activity.id];
+      if (activityDate) {
+        if (filtersToApply.dateFrom !== null && activityDate < filtersToApply.dateFrom) return false;
+        if (filtersToApply.dateTo !== null && activityDate > filtersToApply.dateTo) return false;
+      }
+
+      // Filtre par places restantes
+      if (filtersToApply.minRemainingPlaces !== null) {
+        const remaining = remainingPlacesByActivity[activity.id] ?? 0;
+        if (remaining < filtersToApply.minRemainingPlaces) return false;
+      }
+
+      return true;
+    });
+  };
+
+  // Logique de filtrage complète (avec les filtres appliqués)
+  const filteredActivities = useMemo(() => {
+    return applyFilters(activities, filters);
+  }, [activities, searchQuery, filters, userLocation, latestSlotDateByActivity, remainingPlacesByActivity]);
+
+  // Nombre de résultats en temps réel basé sur les filtres temporaires (pour le bouton Appliquer)
+  const previewResultsCount = useMemo(() => {
+    return applyFilters(activities, tempFilters).length;
+  }, [activities, searchQuery, tempFilters, userLocation, latestSlotDateByActivity, remainingPlacesByActivity]);
 
   const closeActivity = () => {
     setSelectedActivity(null);
@@ -598,15 +745,31 @@ export default function BrowseScreen() {
 
       {viewMode === 'liste' ? (
         <>
-          <View style={styles.searchContainer}>
-            <IconSymbol name="magnifyingglass" size={20} color={colors.textSecondary} />
-            <TextInput 
-              style={styles.searchInput} 
-              placeholder="Rechercher des activités..." 
-              placeholderTextColor={colors.textSecondary} 
-              value={searchQuery} 
-              onChangeText={setSearchQuery} 
-            />
+          <View style={styles.searchRow}>
+            <View style={styles.searchContainer}>
+              <IconSymbol name="magnifyingglass" size={20} color={colors.textSecondary} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Rechercher des activités..."
+                placeholderTextColor={colors.textSecondary}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+            </View>
+            <TouchableOpacity
+              style={[styles.filterButton, activeFiltersCount > 0 && styles.filterButtonActive]}
+              onPress={() => {
+                setTempFilters(filters);
+                setShowFilters(true);
+              }}
+            >
+              <IconSymbol name="line.3.horizontal.decrease.circle" size={22} color={activeFiltersCount > 0 ? colors.background : colors.textSecondary} />
+              {activeFiltersCount > 0 && (
+                <View style={styles.filterBadge}>
+                  <Text style={styles.filterBadgeText}>{activeFiltersCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
           </View>
           <ScrollView 
             style={styles.scrollView}
@@ -648,6 +811,266 @@ export default function BrowseScreen() {
           {renderSelectedActivity()}
         </View>
       )}
+
+      {/* Modal de filtres */}
+      <Modal
+        visible={showFilters}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowFilters(false)}
+      >
+        <View style={styles.filterModalOverlay}>
+          <View style={styles.filterModalContent}>
+            <View style={styles.filterModalHeader}>
+              <Text style={styles.filterModalTitle}>Filtres</Text>
+              <TouchableOpacity onPress={() => setShowFilters(false)}>
+                <IconSymbol name="xmark" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.filterScrollView} showsVerticalScrollIndicator={false}>
+              {/* Filtre par catégorie */}
+              <View style={styles.filterSection}>
+                <Text style={styles.filterSectionTitle}>Catégories</Text>
+                <View style={styles.categoryGrid}>
+                  {PREDEFINED_CATEGORIES.map((cat) => {
+                    const isSelected = tempFilters.categories.includes(cat.name);
+                    return (
+                      <TouchableOpacity
+                        key={cat.id}
+                        style={[styles.categoryChip, isSelected && { backgroundColor: cat.color }]}
+                        onPress={() => {
+                          setTempFilters(prev => ({
+                            ...prev,
+                            categories: isSelected
+                              ? prev.categories.filter(c => c !== cat.name)
+                              : [...prev.categories, cat.name]
+                          }));
+                        }}
+                      >
+                        <IconSymbol name={cat.icon} size={16} color={isSelected ? '#FFFFFF' : cat.color} />
+                        <Text style={[styles.categoryChipText, isSelected && { color: '#FFFFFF' }]}>
+                          {cat.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Filtre par distance */}
+              <View style={styles.filterSection}>
+                <Text style={styles.filterSectionTitle}>Distance maximum</Text>
+                <View style={styles.distanceOptions}>
+                  {[null, 5, 10, 20, 50].map((distance) => (
+                    <TouchableOpacity
+                      key={distance ?? 'all'}
+                      style={[
+                        styles.distanceChip,
+                        tempFilters.maxDistance === distance && styles.distanceChipActive
+                      ]}
+                      onPress={() => setTempFilters(prev => ({ ...prev, maxDistance: distance }))}
+                    >
+                      <Text style={[
+                        styles.distanceChipText,
+                        tempFilters.maxDistance === distance && styles.distanceChipTextActive
+                      ]}>
+                        {distance === null ? 'Tous' : `${distance} km`}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                {!userLocation && tempFilters.maxDistance !== null && (
+                  <Text style={styles.filterWarning}>
+                    Activez la localisation pour utiliser ce filtre
+                  </Text>
+                )}
+              </View>
+
+              {/* Filtre par prix */}
+              <View style={styles.filterSection}>
+                <Text style={styles.filterSectionTitle}>Prix</Text>
+                <View style={styles.priceRow}>
+                  <View style={styles.priceInputContainer}>
+                    <Text style={styles.priceLabel}>Min</Text>
+                    <TextInput
+                      style={styles.priceInput}
+                      placeholder="0"
+                      placeholderTextColor={colors.textSecondary}
+                      keyboardType="numeric"
+                      value={tempFilters.minPrice?.toString() ?? ''}
+                      onChangeText={(text) => {
+                        const num = parseInt(text, 10);
+                        setTempFilters(prev => ({
+                          ...prev,
+                          minPrice: isNaN(num) ? null : num
+                        }));
+                      }}
+                    />
+                    <Text style={styles.priceCurrency}>€</Text>
+                  </View>
+                  <Text style={styles.priceSeparator}>—</Text>
+                  <View style={styles.priceInputContainer}>
+                    <Text style={styles.priceLabel}>Max</Text>
+                    <TextInput
+                      style={styles.priceInput}
+                      placeholder="∞"
+                      placeholderTextColor={colors.textSecondary}
+                      keyboardType="numeric"
+                      value={tempFilters.maxPrice?.toString() ?? ''}
+                      onChangeText={(text) => {
+                        const num = parseInt(text, 10);
+                        setTempFilters(prev => ({
+                          ...prev,
+                          maxPrice: isNaN(num) ? null : num
+                        }));
+                      }}
+                    />
+                    <Text style={styles.priceCurrency}>€</Text>
+                  </View>
+                </View>
+                <View style={styles.quickPriceButtons}>
+                  <TouchableOpacity
+                    style={[styles.quickPriceBtn, tempFilters.maxPrice === 0 && styles.quickPriceBtnActive]}
+                    onPress={() => setTempFilters(prev => ({ ...prev, minPrice: null, maxPrice: 0 }))}
+                  >
+                    <Text style={[styles.quickPriceBtnText, tempFilters.maxPrice === 0 && styles.quickPriceBtnTextActive]}>Gratuit</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.quickPriceBtn, tempFilters.maxPrice === 20 && tempFilters.minPrice === null && styles.quickPriceBtnActive]}
+                    onPress={() => setTempFilters(prev => ({ ...prev, minPrice: null, maxPrice: 20 }))}
+                  >
+                    <Text style={[styles.quickPriceBtnText, tempFilters.maxPrice === 20 && tempFilters.minPrice === null && styles.quickPriceBtnTextActive]}>≤ 20€</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.quickPriceBtn, tempFilters.maxPrice === 50 && tempFilters.minPrice === null && styles.quickPriceBtnActive]}
+                    onPress={() => setTempFilters(prev => ({ ...prev, minPrice: null, maxPrice: 50 }))}
+                  >
+                    <Text style={[styles.quickPriceBtnText, tempFilters.maxPrice === 50 && tempFilters.minPrice === null && styles.quickPriceBtnTextActive]}>≤ 50€</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Filtre par date */}
+              <View style={styles.filterSection}>
+                <Text style={styles.filterSectionTitle}>Date de l'activité</Text>
+                <View style={styles.dateQuickButtons}>
+                  <TouchableOpacity
+                    style={[styles.dateQuickBtn, tempFilters.dateFrom === null && tempFilters.dateTo === null && styles.dateQuickBtnActive]}
+                    onPress={() => setTempFilters(prev => ({ ...prev, dateFrom: null, dateTo: null }))}
+                  >
+                    <Text style={[styles.dateQuickBtnText, tempFilters.dateFrom === null && tempFilters.dateTo === null && styles.dateQuickBtnTextActive]}>Toutes</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.dateQuickBtn, tempFilters.dateFrom === new Date().toISOString().split('T')[0] && tempFilters.dateTo === new Date().toISOString().split('T')[0] && styles.dateQuickBtnActive]}
+                    onPress={() => {
+                      const today = new Date().toISOString().split('T')[0];
+                      setTempFilters(prev => ({ ...prev, dateFrom: today, dateTo: today }));
+                    }}
+                  >
+                    <Text style={[styles.dateQuickBtnText, tempFilters.dateFrom === new Date().toISOString().split('T')[0] && tempFilters.dateTo === new Date().toISOString().split('T')[0] && styles.dateQuickBtnTextActive]}>Aujourd'hui</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.dateQuickBtn, (() => {
+                      const today = new Date();
+                      const weekEnd = new Date(today);
+                      weekEnd.setDate(today.getDate() + 7);
+                      return tempFilters.dateFrom === today.toISOString().split('T')[0] && tempFilters.dateTo === weekEnd.toISOString().split('T')[0];
+                    })() && styles.dateQuickBtnActive]}
+                    onPress={() => {
+                      const today = new Date();
+                      const weekEnd = new Date(today);
+                      weekEnd.setDate(today.getDate() + 7);
+                      setTempFilters(prev => ({
+                        ...prev,
+                        dateFrom: today.toISOString().split('T')[0],
+                        dateTo: weekEnd.toISOString().split('T')[0]
+                      }));
+                    }}
+                  >
+                    <Text style={[styles.dateQuickBtnText, (() => {
+                      const today = new Date();
+                      const weekEnd = new Date(today);
+                      weekEnd.setDate(today.getDate() + 7);
+                      return tempFilters.dateFrom === today.toISOString().split('T')[0] && tempFilters.dateTo === weekEnd.toISOString().split('T')[0];
+                    })() && styles.dateQuickBtnTextActive]}>7 jours</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.dateQuickBtn, (() => {
+                      const today = new Date();
+                      const monthEnd = new Date(today);
+                      monthEnd.setDate(today.getDate() + 30);
+                      return tempFilters.dateFrom === today.toISOString().split('T')[0] && tempFilters.dateTo === monthEnd.toISOString().split('T')[0];
+                    })() && styles.dateQuickBtnActive]}
+                    onPress={() => {
+                      const today = new Date();
+                      const monthEnd = new Date(today);
+                      monthEnd.setDate(today.getDate() + 30);
+                      setTempFilters(prev => ({
+                        ...prev,
+                        dateFrom: today.toISOString().split('T')[0],
+                        dateTo: monthEnd.toISOString().split('T')[0]
+                      }));
+                    }}
+                  >
+                    <Text style={[styles.dateQuickBtnText, (() => {
+                      const today = new Date();
+                      const monthEnd = new Date(today);
+                      monthEnd.setDate(today.getDate() + 30);
+                      return tempFilters.dateFrom === today.toISOString().split('T')[0] && tempFilters.dateTo === monthEnd.toISOString().split('T')[0];
+                    })() && styles.dateQuickBtnTextActive]}>30 jours</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Filtre par places restantes */}
+              <View style={styles.filterSection}>
+                <Text style={styles.filterSectionTitle}>Places restantes minimum</Text>
+                <View style={styles.placesOptions}>
+                  {[null, 1, 5, 10, 20].map((places) => (
+                    <TouchableOpacity
+                      key={places ?? 'all'}
+                      style={[
+                        styles.placesChip,
+                        tempFilters.minRemainingPlaces === places && styles.placesChipActive
+                      ]}
+                      onPress={() => setTempFilters(prev => ({ ...prev, minRemainingPlaces: places }))}
+                    >
+                      <Text style={[
+                        styles.placesChipText,
+                        tempFilters.minRemainingPlaces === places && styles.placesChipTextActive
+                      ]}>
+                        {places === null ? 'Tous' : `≥ ${places}`}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            </ScrollView>
+
+            {/* Boutons d'action */}
+            <View style={styles.filterActions}>
+              <TouchableOpacity
+                style={styles.resetButton}
+                onPress={() => setTempFilters(DEFAULT_FILTERS)}
+              >
+                <Text style={styles.resetButtonText}>Réinitialiser</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.applyButton}
+                onPress={() => {
+                  setFilters(tempFilters);
+                  setShowFilters(false);
+                }}
+              >
+                <Text style={styles.applyButtonText}>
+                  Appliquer ({previewResultsCount} résultat{previewResultsCount > 1 ? 's' : ''})
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -703,21 +1126,54 @@ const styles = StyleSheet.create({
     justifyContent: 'center', 
     alignItems: 'center' 
   },
-  searchContainer: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: colors.card, 
-    borderRadius: 12, 
-    marginHorizontal: 20, 
-    marginBottom: 16, 
-    paddingHorizontal: 16, 
-    gap: 12 
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 16,
+    gap: 10,
   },
-  searchInput: { 
-    flex: 1, 
-    paddingVertical: 14, 
-    fontSize: 16, 
-    color: colors.text 
+  searchContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    gap: 12
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: colors.text
+  },
+  filterButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: colors.card,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  filterButtonActive: {
+    backgroundColor: colors.primary,
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: colors.error,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  filterBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
   },
   scrollView: { 
     flex: 1 
@@ -982,15 +1438,240 @@ const styles = StyleSheet.create({
     fontWeight: '600', 
     color: '#FFFFFF' 
   },
-  closeButton: { 
-    position: 'absolute', 
-    top: 20, 
-    right: 20, 
-    width: 32, 
-    height: 32, 
-    borderRadius: 16, 
-    backgroundColor: colors.border, 
-    justifyContent: 'center', 
-    alignItems: 'center' 
+  closeButton: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.border,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+
+  // =====================================================
+  // STYLES POUR LE MODAL DE FILTRES
+  // =====================================================
+  filterModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  filterModalContent: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '90%',
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+  },
+  filterModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  filterModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  filterScrollView: {
+    maxHeight: 500,
+  },
+  filterSection: {
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  filterSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 16,
+  },
+  categoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  categoryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: colors.card,
+    gap: 8,
+  },
+  categoryChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  distanceOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  distanceChip: {
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: colors.card,
+  },
+  distanceChipActive: {
+    backgroundColor: colors.primary,
+  },
+  distanceChipText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  distanceChipTextActive: {
+    color: colors.background,
+  },
+  filterWarning: {
+    marginTop: 10,
+    fontSize: 12,
+    color: colors.accent,
+    fontStyle: 'italic',
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  priceInputContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    gap: 8,
+  },
+  priceLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  priceInput: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    paddingVertical: 10,
+    textAlign: 'center',
+  },
+  priceCurrency: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  priceSeparator: {
+    fontSize: 16,
+    color: colors.textSecondary,
+    marginHorizontal: 12,
+  },
+  quickPriceButtons: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  quickPriceBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: colors.card,
+    alignItems: 'center',
+  },
+  quickPriceBtnActive: {
+    backgroundColor: colors.primary,
+  },
+  quickPriceBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  quickPriceBtnTextActive: {
+    color: colors.background,
+  },
+  dateQuickButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  dateQuickBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: colors.card,
+  },
+  dateQuickBtnActive: {
+    backgroundColor: colors.primary,
+  },
+  dateQuickBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  dateQuickBtnTextActive: {
+    color: colors.background,
+  },
+  placesOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  placesChip: {
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: colors.card,
+  },
+  placesChipActive: {
+    backgroundColor: colors.primary,
+  },
+  placesChipText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  placesChipTextActive: {
+    color: colors.background,
+  },
+  filterActions: {
+    flexDirection: 'row',
+    padding: 20,
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  resetButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: colors.card,
+    alignItems: 'center',
+  },
+  resetButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  applyButton: {
+    flex: 2,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+  },
+  applyButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.background,
   },
 });

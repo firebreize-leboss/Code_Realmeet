@@ -55,7 +55,6 @@ export default function CreateActivityScreen() {
 
   const [loading, setLoading] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
-  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
 
   const [pendingSlots, setPendingSlots] = useState<{date: string; time: string; duration: number}[]>([]);
   const { profile } = useAuth();
@@ -129,7 +128,8 @@ export default function CreateActivityScreen() {
       return;
     }
 
-    if (!maxParticipants || parseInt(maxParticipants) <= 0) {
+    // Validation du nombre de participants (seulement pour les non-business)
+    if (!isBusiness && (!maxParticipants || parseInt(maxParticipants) <= 0)) {
       Alert.alert('Erreur', 'Nombre de participants invalide');
       return;
     }
@@ -138,13 +138,15 @@ export default function CreateActivityScreen() {
 
     try {
       // 1. Upload de l'image si sélectionnée
+      let finalImageUrl: string | undefined = imageUrl.trim() || undefined;
+
       if (imageUri) {
         setUploadingImage(true);
         const uploadResult = await storageService.uploadActivityImage(imageUri);
         setUploadingImage(false);
 
         if (uploadResult.success && uploadResult.url) {
-          setUploadedImageUrl(uploadResult.url);
+          finalImageUrl = uploadResult.url;
         } else {
           Alert.alert(
             'Avertissement',
@@ -155,7 +157,13 @@ export default function CreateActivityScreen() {
       }
 
       // 2. Créer l'activité
-      const firstSlot = pendingSlots.sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))[0];
+      // Pour les entreprises, utiliser le premier créneau. Pour les autres, utiliser la date du jour
+      const firstSlot = isBusiness && pendingSlots.length > 0
+        ? pendingSlots.sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))[0]
+        : null;
+
+      const today = new Date();
+      const defaultDate = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getDate().toString().padStart(2, '0')}`;
 
       const result = await activityService.createActivity({
         nom: nom.trim(),
@@ -163,16 +171,16 @@ export default function CreateActivityScreen() {
         description: description.trim(),
         categorie: categorie.trim(),
         categorie2: categorie2.trim() || undefined,
-        date: firstSlot.date,
-        time_start: firstSlot.time,
+        date: firstSlot ? firstSlot.date : defaultDate,
+        time_start: firstSlot ? firstSlot.time : '09:00',
         time_end: undefined, // Géré par les créneaux
         adresse: adresse.trim(),
         ville: ville.trim(),
         code_postal: codePostal.trim() || undefined,
-        max_participants: isBusiness 
+        max_participants: isBusiness
           ? pendingSlots.reduce((sum, s) => sum + (s.max_participants || 10), 0)
           : parseInt(maxParticipants),
-        image_url: uploadedImageUrl || imageUrl.trim() || undefined,
+        image_url: finalImageUrl,
         latitude: latitude,
         longitude: longitude,
         prix: prix.trim() ? parseFloat(prix) : undefined,

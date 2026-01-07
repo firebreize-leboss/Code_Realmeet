@@ -1,0 +1,194 @@
+--- prompt du 06/01/2026 ---
+
+MODIFICATIONS EFFECTUEES (Frontend uniquement - Aucun changement Supabase requis)
+
+1. Correction redirection activites terminees vers page de notation
+   - Fichier: app/my-participated-activities.tsx
+   - Les activites passees redirigent maintenant vers activity-detail avec les params from=past&slotId=xxx
+   - Utilise les tables existantes: slot_participants, activity_slots
+
+2. Separation des groupes de chat en 3 sections
+   - Fichier: app/(tabs)/chat.tsx
+   - Fichier: hooks/useMessaging.ts
+   - 3 sections: Messages prives, Activites en cours, Activites passees
+   - Utilise les tables existantes: conversations, activity_slots
+
+3. Suppression du texte "X places restantes"
+   - Fichier: components/ActivityCalendar.tsx
+   - Le texte rouge "2 places restantes" a ete supprime lors de la selection d'un creneau
+
+AUCUNE MODIFICATION SQL OU CRON NECESSAIRE
+Toutes les modifications sont cote frontend et utilisent les donnees existantes dans Supabase.
+
+------------------------------------------------
+
+--- prompt du 07/01/2026 15:30 ---
+
+MODIFICATIONS EFFECTUEES (Frontend uniquement - Aucun changement Supabase requis)
+
+1. Correction erreur acces activite depuis discussions terminees
+   - Fichier: app/chat-detail.tsx
+   - Ajout verification existence de l'activite avant navigation (maybeSingle au lieu de single)
+   - Message d'erreur explicite si l'activite n'existe plus
+   - Erreur corrigee: "Cannot coerce the result to a single JSON object"
+
+2. Correction compteur demandes d'amis non mis a jour en temps reel
+   - Fichier: hooks/useMessaging.ts
+   - Ajout subscriptions realtime sur UPDATE et DELETE de friend_requests
+   - Le compteur se met maintenant a jour automatiquement quand on accepte/refuse une demande
+
+3. Ajout bouton triple toggle pour categories de conversations
+   - Fichier: app/(tabs)/chat.tsx
+   - Remplacement des 3 sections par une barre de filtres avec 3 boutons toggle
+   - Filtres: "En cours" (activites actives), "Terminees" (activites passees), "Prives" (messages prives)
+   - Design moderne avec badges de compteur et indicateur visuel
+
+4. Correction erreur "nombre de participants invalide" lors creation activite
+   - Fichier: app/create-activity.tsx
+   - La validation du nombre de participants s'applique maintenant uniquement aux comptes non-business
+   - Correction de l'acces a firstSlot pour eviter les erreurs quand pendingSlots est vide
+
+AUCUNE MODIFICATION SQL OU CRON NECESSAIRE
+Toutes les modifications sont cote frontend et utilisent les donnees existantes dans Supabase.
+
+------------------------------------------------
+
+--- prompt du 07/01/2026 17:45 ---
+
+MODIFICATIONS EFFECTUEES (Frontend uniquement - Aucun changement Supabase requis)
+
+1. Correction navigation apres deconnexion (logout)
+   - Fichier: app/settings.tsx
+   - Probleme: Apres deconnexion, l'utilisateur pouvait revenir en arriere dans l'app
+   - Solution: Remplacement de router.push() par router.replace() dans handleLogout()
+   - router.replace() empeche le retour arriere en supprimant l'historique de navigation
+
+2. Correction upload d'image lors de la creation d'activite
+   - Fichier: app/create-activity.tsx
+   - Probleme: L'image selectionnee lors de la creation n'etait pas enregistree (il fallait modifier l'activite apres pour que ca fonctionne)
+   - Cause: La variable d'etat uploadedImageUrl etait mise a jour via setUploadedImageUrl() mais utilisee immediatement apres - or setState est asynchrone donc la valeur n'etait pas encore disponible
+   - Solution: Utilisation d'une variable locale finalImageUrl qui stocke directement le resultat de l'upload
+   - Suppression de la variable d'etat uploadedImageUrl devenue inutile
+
+AUCUNE MODIFICATION SQL OU CRON NECESSAIRE
+Toutes les modifications sont cote frontend et utilisent les donnees existantes dans Supabase.
+
+------------------------------------------------
+
+--- prompt du 07/01/2026 18:30 ---
+
+MODIFICATIONS EFFECTUEES (Frontend uniquement - Aucun changement Supabase requis)
+
+1. Guard d'authentification pour empecher l'acces a l'app apres deconnexion
+   - Fichier: app/(tabs)/_layout.tsx
+   - Ajout d'un useEffect qui detecte quand l'utilisateur n'est plus connecte (user === null)
+   - Redirection automatique vers /auth/account-type avec router.replace()
+   - Affichage d'un ecran de chargement pendant la redirection pour eviter le flash de contenu
+   - Cela empeche completement de revenir en arriere apres deconnexion
+
+2. Guard d'authentification sur la page index
+   - Fichier: app/index.tsx
+   - Verification de l'etat d'authentification au demarrage de l'app
+   - Si non connecte: redirection vers /auth/account-type
+   - Si connecte: redirection vers /(tabs)/browse
+   - Ecran de chargement pendant la verification
+
+3. Amelioration du processus de deconnexion
+   - Fichier: app/settings.tsx
+   - Utilisation de signOut() du AuthContext au lieu de authService.logoutUser() directement
+   - Cela garantit que l'etat global (user, profile) est reinitialise
+   - Ajout d'un indicateur de chargement sur le bouton de deconnexion
+   - Gestion des erreurs avec message explicite
+
+AUCUNE MODIFICATION SQL OU CRON NECESSAIRE
+Toutes les modifications sont cote frontend et utilisent le systeme d'authentification Supabase existant.
+
+------------------------------------------------
+
+--- prompt du 07/01/2026 20:00 ---
+
+MODIFICATIONS EFFECTUEES - SYSTEME DE FILTRAGE AVANCE POUR BROWSE.TSX
+
+1. Ajout de filtres multiples sur la page Decouvrir (browse.tsx)
+   - Fichiers modifies: app/(tabs)/browse.tsx
+
+   FILTRES IMPLEMENTES:
+   - Distance: 5km, 10km, 20km, 50km ou illimite (necessite geolocalisation)
+   - Prix: Min/Max en euros, boutons rapides (Gratuit, <=20€, <=50€)
+   - Date: Aujourd'hui, 7 jours, 30 jours ou toutes
+   - Places restantes: Minimum 1, 5, 10, 20 ou tous
+   - Categories: Selection multiple parmi les 8 categories (Bar, Sport, Culture, etc.)
+
+   FONCTIONNALITES:
+   - Modal de filtres avec interface intuitive
+   - Badge sur le bouton filtre indiquant le nombre de filtres actifs
+   - Bouton reinitialiser pour effacer tous les filtres
+   - Affichage du nombre de resultats en temps reel
+   - Calcul de distance via formule Haversine (GPS)
+
+   CALCUL DES PLACES RESTANTES:
+   Le systeme calcule les places ABSOLUES restantes:
+   - Total des places = nombre de slots futurs × max_participants par activite
+   - Places prises = nombre d'inscriptions dans slot_participants pour les slots futurs
+   - Places restantes = Total - Places prises
+
+   Requetes Supabase utilisees:
+   - activity_slots: SELECT id, activity_id, date WHERE date >= today
+   - slot_participants: SELECT slot_id, activity_id WHERE slot_id IN (slots futurs)
+
+AUCUNE MODIFICATION SQL OU CRON NECESSAIRE
+Le filtrage se fait entierement cote client avec les donnees existantes.
+Les tables utilisees sont deja en place: activities, activity_slots, slot_participants.
+
+------------------------------------------------
+
+--- prompt du 07/01/2026 21:00 ---
+
+CORRECTION DU FILTRE PLACES RESTANTES - CALCUL PAR CRENEAU
+
+PROBLEME:
+Le filtre "places restantes" calculait incorrectement les places disponibles.
+Exemple: Une activite avec 2 creneaux (3 places + 4 places) = 7 places max
+Mais le calcul precedent utilisait: nombre_de_creneaux × max_participants_de_l_activite
+Ce qui donnait des valeurs erronees.
+
+SOLUTION IMPLEMENTEE:
+- Fichier modifie: app/(tabs)/browse.tsx
+- Fichier modifie: lib/database.types.ts
+
+NOUVEAU CALCUL:
+Pour chaque activite, on calcule la somme des places restantes de CHAQUE creneau:
+  places_restantes_activite = SUM(
+    pour chaque creneau futur:
+      max(0, creneau.max_participants - nombre_inscrits_creneau)
+  )
+
+Requete Supabase modifiee:
+- activity_slots: SELECT id, activity_id, date, max_participants WHERE date >= today
+  (ajout du champ max_participants pour recuperer la capacite de chaque creneau)
+
+VERIFICATION REQUISE:
+La colonne max_participants doit exister dans la table activity_slots.
+Si elle n'existe pas, executez la migration SQL ci-dessous.
+
+--- SQL A EXECUTER SUR SUPABASE (uniquement si la colonne n'existe pas) ---
+
+-- Verifier si la colonne existe
+SELECT column_name
+FROM information_schema.columns
+WHERE table_name = 'activity_slots' AND column_name = 'max_participants';
+
+-- Si la colonne n'existe pas, l'ajouter:
+ALTER TABLE activity_slots
+ADD COLUMN IF NOT EXISTS max_participants INTEGER DEFAULT 10;
+
+-- Mettre a jour les creneaux existants sans valeur avec la valeur de l'activite parente:
+UPDATE activity_slots s
+SET max_participants = a.max_participants
+FROM activities a
+WHERE s.activity_id = a.id
+AND s.max_participants IS NULL;
+
+---------------------------------------------------------------------------------
+
+------------------------------------------------

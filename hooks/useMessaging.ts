@@ -158,6 +158,29 @@ export function useFriendRequests() {
           loadRequests();
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'friend_requests',
+        },
+        () => {
+          // Recharger quand une demande est acceptée/refusée
+          loadRequests();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'friend_requests',
+        },
+        () => {
+          loadRequests();
+        }
+      )
       .subscribe();
 
     return () => {
@@ -395,13 +418,42 @@ export function useConversations() {
           isGroup: isGroup,
           activityId: conv.activity_id || null,
           slotId: conv.slot_id || null,
+          isActivityGroup: isActivityGroup,
           participantCount: participants.length,
           updated_at: conv.updated_at,
           unreadCount: unreadCounts[conv.id] || 0,
         };
       }) || [];
 
-      setConversations(transformedConversations);
+      // Pour les groupes d'activité, déterminer si l'activité est passée
+      const now = new Date();
+      const conversationsWithPastInfo = await Promise.all(
+        transformedConversations.map(async (conv) => {
+          if (!conv.isActivityGroup || !conv.slotId) {
+            return { ...conv, isPastActivity: false };
+          }
+
+          // Récupérer la date du slot
+          const { data: slotData } = await supabase
+            .from('activity_slots')
+            .select('date, time')
+            .eq('id', conv.slotId)
+            .single();
+
+          if (slotData) {
+            const slotDateTime = new Date(`${slotData.date}T${slotData.time || '00:00'}`);
+            return {
+              ...conv,
+              slotDate: slotData.date,
+              isPastActivity: slotDateTime < now,
+            };
+          }
+
+          return { ...conv, isPastActivity: false };
+        })
+      );
+
+      setConversations(conversationsWithPastInfo);
     } catch (err) {
       console.error('Error loading conversations:', err);
       setError(err as Error);

@@ -17,12 +17,15 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { authService } from '@/services/auth.service';
 import { notificationService } from '@/lib/notifications';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const { signOut } = useAuth();
   const [notificationsEnabled, setNotificationsEnabled] = React.useState(true);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [locationEnabled, setLocationEnabled] = React.useState(true);
+  const [logoutLoading, setLogoutLoading] = useState(false);
   // Charger l'état initial des notifications
   React.useEffect(() => {
     const loadNotificationStatus = async () => {
@@ -197,11 +200,18 @@ export default function SettingsScreen() {
     }
   };
   const handleLogout = async () => {
-    const result = await authService.logoutUser();
-    if (result.success) {
-      router.push('/auth/account-type');
-    } else {
-      Alert.alert('Erreur', result.error);
+    setLogoutLoading(true);
+    try {
+      // Utiliser signOut du contexte pour réinitialiser l'état global
+      await signOut();
+      // Le guard dans (tabs)/_layout.tsx redirigera automatiquement vers /auth/account-type
+      // Mais on utilise aussi replace pour s'assurer que l'historique est nettoyé
+      router.replace('/auth/account-type');
+    } catch (error: any) {
+      console.error('Erreur déconnexion:', error);
+      Alert.alert('Erreur', 'Impossible de se déconnecter. Veuillez réessayer.');
+    } finally {
+      setLogoutLoading(false);
     }
   };
 
@@ -311,11 +321,16 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.logoutButton}
           onPress={handleLogout}
+          disabled={logoutLoading}
         >
-          <Text style={styles.logoutText}>Log Out</Text>
+          {logoutLoading ? (
+            <ActivityIndicator color={colors.text} />
+          ) : (
+            <Text style={styles.logoutText}>Log Out</Text>
+          )}
         </TouchableOpacity>
 
         <TouchableOpacity
