@@ -92,6 +92,8 @@ export default function ChatDetailScreen() {
 
   const [keyboardExtraOffset, setKeyboardExtraOffset] = useState(0);
 
+  const { refreshConversations } = useConversations();
+
   // ✅ NOUVEAU : Marquer la conversation comme lue quand on l'ouvre
   useEffect(() => {
     if (conversationId) {
@@ -200,6 +202,8 @@ export default function ChatDetailScreen() {
               if (myParticipant) {
                 setIsMuted(myParticipant.is_muted || false);
               }
+
+              
 
               const otherParticipant = participants?.find(
                 (p: any) => p.user_id !== currentUser.id
@@ -629,10 +633,12 @@ useEffect(() => {
   onPress={() => {
     if (isGroup) {
       router.push(`/group-info?id=${conversationId}`);
+    } else if (otherUserId) {
+      router.push(`/user-profile?id=${otherUserId}`);
     }
   }}
 >
-  {!!convImage && (
+  {convImage && (
     <Image
       source={{ uri: convImage }}
       style={styles.headerActivityImage}
@@ -640,11 +646,10 @@ useEffect(() => {
   )}
 
   <View style={styles.headerTitleContainer}>
-<Text style={styles.headerTitle} numberOfLines={1}>{convName}</Text>
-{isGroup && (
-  <Text style={styles.headerSubtitle}>Voir les infos du groupe</Text>
-)}
-
+    <Text style={styles.headerTitle} numberOfLines={1}>{convName}</Text>
+    {isGroup && (
+      <Text style={styles.headerSubtitle}>Groupe</Text>
+    )}
   </View>
 </TouchableOpacity>
 

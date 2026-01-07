@@ -19,6 +19,7 @@ import { StatusBar } from "expo-status-bar";
 import { Button } from "@/components/button";
 import { WidgetProvider } from "@/contexts/WidgetContext";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { DataCacheProvider } from "@/contexts/DataCacheContext";
 import { notificationService } from "@/lib/notifications";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -100,13 +101,14 @@ export default function RootLayout() {
       <StatusBar style="dark" animated />
       <SafeAreaProvider>
         <AuthProvider>
-          <ThemeProvider
-            value={CustomDefaultTheme}
-          >
-            <SystemBars style="auto" />
-            <GestureHandlerRootView style={{ flex: 1 }}>
-              <WidgetProvider>
-                <Stack>
+          <DataCacheProvider>
+            <ThemeProvider
+              value={CustomDefaultTheme}
+            >
+              <SystemBars style="auto" />
+              <GestureHandlerRootView style={{ flex: 1 }}>
+                <WidgetProvider>
+                  <Stack>
                   {/* Main app with tabs */}
                   <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
 
@@ -135,10 +137,11 @@ export default function RootLayout() {
                       headerShown: false,
                     }}
                   />
-                </Stack>
-              </WidgetProvider>
-            </GestureHandlerRootView>
-          </ThemeProvider>
+                  </Stack>
+                </WidgetProvider>
+              </GestureHandlerRootView>
+            </ThemeProvider>
+          </DataCacheProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </>

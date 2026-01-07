@@ -19,11 +19,11 @@ def main():
         sys.exit(1)
 
     prompt = """
-Les activités qui n'ont plus de créneau postérieur ne s'affiche bien pas sur browse, mais toujours sur les catégories. Appliques cette meme règle dans category
-Concentre toi sur chat.tsx et quand on aura trouvé une bonne DA, tu pourras l'étendre partout.
+erreur : RPC get_activities_with_slots error: {"code": "42804", "details": "Returned type numeric does not match expected type bigint in column 21.", "hint": null, "message": "structure of query does not match function result type"}
 pour chaque modification, corriges toi meme le fichier en question au
 bon endroit et de la bonne façon. Je veux qu'absolument tout soit 
 opérationnel quand tu as fini de tourner. 
+
 """
 
     result = subprocess.run(

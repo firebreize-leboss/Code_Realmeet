@@ -1,7 +1,7 @@
 // app/my-activities.tsx
 // Page de gestion des activités pour les entreprises
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
+import { useDataCache } from '@/contexts/DataCacheContext';
 
 type FilterType = 'all' | 'active' | 'past' | 'draft';
 
@@ -40,66 +41,39 @@ interface Activity {
 
 export default function MyActivitiesScreen() {
   const router = useRouter();
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { cache, refreshMyActivities } = useDataCache();
+  const activities = cache.myActivities;
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<FilterType>('all');
-  const [stats, setStats] = useState({
-    total: 0,
-    active: 0,
-    past: 0,
-    totalParticipants: 0,
-  });
 
-  const loadActivities = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+  // Calculer les stats à partir du cache
+  const stats = useMemo(() => {
+    const now = new Date();
+    const active = activities.filter(a =>
+      a.status === 'active' && new Date(a.date) >= now
+    ).length;
+    const past = activities.filter(a =>
+      new Date(a.date) < now
+    ).length;
+    const totalParticipants = activities.reduce(
+      (sum, a) => sum + (a.participants || 0), 0
+    );
 
-      const { data, error } = await supabase
-        .from('activities')
-        .select('*')
-        .eq('host_id', user.id)
-        .order('date', { ascending: false });
+    return {
+      total: activities.length,
+      active,
+      past,
+      totalParticipants,
+    };
+  }, [activities]);
 
-      if (error) throw error;
+  const loading = false; // Les données viennent du cache
 
-      const activitiesList = data || [];
-      setActivities(activitiesList);
-
-      const now = new Date();
-      const active = activitiesList.filter(a => 
-        a.status === 'active' && new Date(a.date) >= now
-      ).length;
-      const past = activitiesList.filter(a => 
-        new Date(a.date) < now
-      ).length;
-      const totalParticipants = activitiesList.reduce(
-        (sum, a) => sum + (a.participants || 0), 0
-      );
-
-      setStats({
-        total: activitiesList.length,
-        active,
-        past,
-        totalParticipants,
-      });
-    } catch (error) {
-      console.error('Error loading activities:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useFocusEffect(
-    useCallback(() => {
-      loadActivities();
-    }, [])
-  );
+  // Pas besoin de loadActivities, les données viennent du cache
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadActivities();
+    await refreshMyActivities();
     setRefreshing(false);
   };
 
@@ -121,7 +95,8 @@ export default function MyActivitiesScreen() {
 
               if (error) throw error;
 
-              setActivities(prev => prev.filter(a => a.id !== activityId));
+              // Rafraîchir le cache
+              await refreshMyActivities();
               Alert.alert('Succès', 'Activité supprimée');
             } catch (error) {
               console.error('Error deleting activity:', error);
@@ -150,9 +125,9 @@ export default function MyActivitiesScreen() {
 
       if (error) throw error;
 
-      Alert.alert('Succès', 'Activité dupliquée !', [
-        { text: 'OK', onPress: () => loadActivities() },
-      ]);
+      // Rafraîchir le cache
+      await refreshMyActivities();
+      Alert.alert('Succès', 'Activité dupliquée !');
     } catch (error) {
       console.error('Error duplicating activity:', error);
       Alert.alert('Erreur', 'Impossible de dupliquer l\'activité');

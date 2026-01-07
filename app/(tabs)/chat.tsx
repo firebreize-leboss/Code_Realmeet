@@ -17,9 +17,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
-import { useFriends, useFriendRequests, useConversations } from '@/hooks/useMessaging';
+import { useFriendRequests } from '@/hooks/useMessaging';
 import { useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { useDataCache } from '@/contexts/DataCacheContext';
 import { supabase } from "@/lib/supabase"; // adapte le chemin
 
 interface Friend {
@@ -51,52 +52,96 @@ export default function ChatScreen() {
   const [showFriendsModal, setShowFriendsModal] = useState(false);
   const [activeFilter, setActiveFilter] = useState<ChatFilter>('ongoing');
 
-  // Obtenir les données via les hooks de messagerie
+  // Obtenir les données via le cache global
+  const { cache, markConversationAsRead } = useDataCache();
   const { pendingCount: pendingRequestsCount } = useFriendRequests();
-  const { friends: friendData, loading: friendsLoading } = useFriends();
-  const { conversations, createConversation, refresh: refreshConversations, loading: convLoading } = useConversations();
   const { profile } = useAuth();
   const [activityContacts, setActivityContacts] = useState<Friend[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  // État local pour stocker la liste d'amis formatée
-  const [friends, setFriends] = useState<Friend[]>([]);
-useEffect(() => {
-  console.log('📦 friendData reçu:', JSON.stringify(friendData, null, 2));
-  
-  if (friendData) {
-    const formatted = (friendData as any[]).map(f => {
-      console.log('🔄 Formatting friend:', f);
-      return {
-        id: f.friend_id,
-        name: f.full_name || 'Inconnu',
-        avatar: f.avatar_url || '',
-        is_online: false,
-      };
-    });
-    console.log('✅ Friends formatted:', formatted);
-    setFriends(formatted);
-  } else {
-    setFriends([]);
-  }
-}, [friendData]);
+
+  // Utiliser les données du cache
+  const conversations = cache.conversations;
+  const friends = cache.friends.map(f => ({
+    id: f.friend_id,
+    name: f.full_name || 'Inconnu',
+    avatar: f.avatar_url || '',
+    is_online: false,
+  }));
+  const convLoading = false; // Les données sont déjà chargées par le cache
+  const friendsLoading = false;
 
   const handleCreateConversation = async (friendId: string) => {
     try {
-      const convId = await createConversation([friendId]);
+      // Créer une conversation privée
+      const { data: currentUser } = await supabase.auth.getUser();
+      if (!currentUser?.user?.id) throw new Error('User not authenticated');
+
+      // Vérifier si une conversation existe déjà
+      const { data: myParticipations } = await supabase
+        .from('conversation_participants')
+        .select('conversation_id')
+        .eq('user_id', currentUser.user.id);
+
+      if (myParticipations && myParticipations.length > 0) {
+        const myConvIds = myParticipations.map(p => p.conversation_id);
+        const { data: friendParticipations } = await supabase
+          .from('conversation_participants')
+          .select('conversation_id')
+          .eq('user_id', friendId)
+          .in('conversation_id', myConvIds);
+
+        if (friendParticipations && friendParticipations.length > 0) {
+          for (const fp of friendParticipations) {
+            const { data: convData } = await supabase
+              .from('conversations')
+              .select('is_group')
+              .eq('id', fp.conversation_id)
+              .single();
+
+            if (convData?.is_group) continue;
+
+            const { count } = await supabase
+              .from('conversation_participants')
+              .select('*', { count: 'exact', head: true })
+              .eq('conversation_id', fp.conversation_id);
+
+            if (count === 2) {
+              setShowFriendsModal(false);
+              router.push(`/chat-detail?id=${fp.conversation_id}`);
+              return;
+            }
+          }
+        }
+      }
+
+      // Créer nouvelle conversation
+      const { data: conversation, error: convError } = await supabase
+        .from('conversations')
+        .insert({ is_group: false })
+        .select()
+        .single();
+
+      if (convError) throw convError;
+
+      const participants = [currentUser.user.id, friendId].map(userId => ({
+        conversation_id: conversation.id,
+        user_id: userId,
+      }));
+
+      const { error: partError } = await supabase
+        .from('conversation_participants')
+        .insert(participants);
+
+      if (partError) throw partError;
+
       setShowFriendsModal(false);
-      router.push(`/chat-detail?id=${convId}`);
+      router.push(`/chat-detail?id=${conversation.id}`);
     } catch (error) {
       console.error('Error creating conversation:', error);
     }
   };
 
- // Dans app/(tabs)/chat.tsx, remplace la fonction renderChatItem par celle-ci :
-useFocusEffect(
-  useCallback(() => {
-    // Rafraîchir les conversations à chaque fois qu'on revient sur cette page
-    refreshConversations();
-  }, [refreshConversations])
-);
+  // Pas besoin de rafraîchir les conversations, le cache est mis à jour en temps réel
 const renderChatItem = (chat: Conversation) => (
   <TouchableOpacity
     key={chat.id}

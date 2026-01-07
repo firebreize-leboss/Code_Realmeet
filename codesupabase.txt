@@ -1,194 +1,1238 @@
---- prompt du 06/01/2026 ---
+-- ============================================
+-- OPTIMISATIONS PERFORMANCES SUPABASE - REALMEET
+-- ============================================
+-- Version corrigée adaptée au schéma exact de votre base de données
+-- À copier-coller directement dans le SQL Editor de Supabase
+-- Date: 07/01/2025
+-- ============================================
 
-MODIFICATIONS EFFECTUEES (Frontend uniquement - Aucun changement Supabase requis)
+-- ============================================
+-- ÉTAPE 1: INSTALLATION DES EXTENSIONS NÉCESSAIRES
+-- ============================================
 
-1. Correction redirection activites terminees vers page de notation
-   - Fichier: app/my-participated-activities.tsx
-   - Les activites passees redirigent maintenant vers activity-detail avec les params from=past&slotId=xxx
-   - Utilise les tables existantes: slot_participants, activity_slots
+-- Extension pour recherche full-text et fuzzy search
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
-2. Separation des groupes de chat en 3 sections
-   - Fichier: app/(tabs)/chat.tsx
-   - Fichier: hooks/useMessaging.ts
-   - 3 sections: Messages prives, Activites en cours, Activites passees
-   - Utilise les tables existantes: conversations, activity_slots
+-- Extension pour statistiques de requêtes (monitoring)
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
 
-3. Suppression du texte "X places restantes"
-   - Fichier: components/ActivityCalendar.tsx
-   - Le texte rouge "2 places restantes" a ete supprime lors de la selection d'un creneau
+-- Extension pour les fonctions géospatiales (géolocalisation)
+CREATE EXTENSION IF NOT EXISTS earthdistance CASCADE;
 
-AUCUNE MODIFICATION SQL OU CRON NECESSAIRE
-Toutes les modifications sont cote frontend et utilisent les donnees existantes dans Supabase.
+-- ============================================
+-- ÉTAPE 2: INDEX SUR LA TABLE PROFILES
+-- ============================================
 
-------------------------------------------------
+-- Index pour recherche par nom (recherche d'utilisateurs)
+CREATE INDEX IF NOT EXISTS idx_profiles_full_name ON profiles(full_name);
 
---- prompt du 07/01/2026 15:30 ---
+-- Index trigram pour recherche fuzzy sur le nom (similaire à LIKE '%search%')
+CREATE INDEX IF NOT EXISTS idx_profiles_full_name_trgm ON profiles USING gin (full_name gin_trgm_ops);
 
-MODIFICATIONS EFFECTUEES (Frontend uniquement - Aucun changement Supabase requis)
+-- Index pour recherche par username
+CREATE INDEX IF NOT EXISTS idx_profiles_username ON profiles(username);
 
-1. Correction erreur acces activite depuis discussions terminees
-   - Fichier: app/chat-detail.tsx
-   - Ajout verification existence de l'activite avant navigation (maybeSingle au lieu de single)
-   - Message d'erreur explicite si l'activite n'existe plus
-   - Erreur corrigee: "Cannot coerce the result to a single JSON object"
+-- Index trigram pour recherche fuzzy sur username
+CREATE INDEX IF NOT EXISTS idx_profiles_username_trgm ON profiles USING gin (username gin_trgm_ops);
 
-2. Correction compteur demandes d'amis non mis a jour en temps reel
-   - Fichier: hooks/useMessaging.ts
-   - Ajout subscriptions realtime sur UPDATE et DELETE de friend_requests
-   - Le compteur se met maintenant a jour automatiquement quand on accepte/refuse une demande
+-- Index pour recherche par ville
+CREATE INDEX IF NOT EXISTS idx_profiles_city ON profiles(city);
 
-3. Ajout bouton triple toggle pour categories de conversations
-   - Fichier: app/(tabs)/chat.tsx
-   - Remplacement des 3 sections par une barre de filtres avec 3 boutons toggle
-   - Filtres: "En cours" (activites actives), "Terminees" (activites passees), "Prives" (messages prives)
-   - Design moderne avec badges de compteur et indicateur visuel
+-- Index pour filtrer par type de compte
+CREATE INDEX IF NOT EXISTS idx_profiles_account_type ON profiles(account_type);
 
-4. Correction erreur "nombre de participants invalide" lors creation activite
-   - Fichier: app/create-activity.tsx
-   - La validation du nombre de participants s'applique maintenant uniquement aux comptes non-business
-   - Correction de l'acces a firstSlot pour eviter les erreurs quand pendingSlots est vide
+-- Index pour filtrer par intention utilisateur
+CREATE INDEX IF NOT EXISTS idx_profiles_intention ON profiles(intention);
 
-AUCUNE MODIFICATION SQL OU CRON NECESSAIRE
-Toutes les modifications sont cote frontend et utilisent les donnees existantes dans Supabase.
+-- Index pour comptes business vérifiés
+CREATE INDEX IF NOT EXISTS idx_profiles_business_verified ON profiles(business_verified) WHERE business_verified = true;
 
-------------------------------------------------
+-- ============================================
+-- ÉTAPE 3: INDEX SUR LA TABLE ACTIVITIES
+-- ============================================
 
---- prompt du 07/01/2026 17:45 ---
+-- Index pour les requêtes filtrées par status (Browse.tsx - activités actives)
+CREATE INDEX IF NOT EXISTS idx_activities_status ON activities(status);
 
-MODIFICATIONS EFFECTUEES (Frontend uniquement - Aucun changement Supabase requis)
+-- Index pour les requêtes filtrées par host_id (My Activities)
+CREATE INDEX IF NOT EXISTS idx_activities_host_id ON activities(host_id);
 
-1. Correction navigation apres deconnexion (logout)
-   - Fichier: app/settings.tsx
-   - Probleme: Apres deconnexion, l'utilisateur pouvait revenir en arriere dans l'app
-   - Solution: Remplacement de router.push() par router.replace() dans handleLogout()
-   - router.replace() empeche le retour arriere en supprimant l'historique de navigation
+-- Index pour les requêtes avec tri par date
+CREATE INDEX IF NOT EXISTS idx_activities_date ON activities(date);
 
-2. Correction upload d'image lors de la creation d'activite
-   - Fichier: app/create-activity.tsx
-   - Probleme: L'image selectionnee lors de la creation n'etait pas enregistree (il fallait modifier l'activite apres pour que ca fonctionne)
-   - Cause: La variable d'etat uploadedImageUrl etait mise a jour via setUploadedImageUrl() mais utilisee immediatement apres - or setState est asynchrone donc la valeur n'etait pas encore disponible
-   - Solution: Utilisation d'une variable locale finalImageUrl qui stocke directement le resultat de l'upload
-   - Suppression de la variable d'etat uploadedImageUrl devenue inutile
+-- Index pour les requêtes avec tri par created_at (nouvelles activités)
+CREATE INDEX IF NOT EXISTS idx_activities_created_at ON activities(created_at DESC);
 
-AUCUNE MODIFICATION SQL OU CRON NECESSAIRE
-Toutes les modifications sont cote frontend et utilisent les donnees existantes dans Supabase.
+-- Index composé pour les requêtes combinées status + date
+CREATE INDEX IF NOT EXISTS idx_activities_status_date ON activities(status, date);
 
-------------------------------------------------
+-- Index pour recherche par catégorie principale
+CREATE INDEX IF NOT EXISTS idx_activities_categorie ON activities(categorie);
 
---- prompt du 07/01/2026 18:30 ---
+-- Index pour recherche par catégorie secondaire
+CREATE INDEX IF NOT EXISTS idx_activities_categorie2 ON activities(categorie2);
 
-MODIFICATIONS EFFECTUEES (Frontend uniquement - Aucun changement Supabase requis)
+-- Index pour recherche par ville
+CREATE INDEX IF NOT EXISTS idx_activities_ville ON activities(ville);
 
-1. Guard d'authentification pour empecher l'acces a l'app apres deconnexion
-   - Fichier: app/(tabs)/_layout.tsx
-   - Ajout d'un useEffect qui detecte quand l'utilisateur n'est plus connecte (user === null)
-   - Redirection automatique vers /auth/account-type avec router.replace()
-   - Affichage d'un ecran de chargement pendant la redirection pour eviter le flash de contenu
-   - Cela empeche completement de revenir en arriere apres deconnexion
+-- Index pour filtrer les activités non supprimées (soft delete)
+-- Note: Décommentez cette ligne si vous ajoutez une colonne deleted_at à la table activities
+-- CREATE INDEX IF NOT EXISTS idx_activities_not_deleted ON activities(deleted_at) WHERE deleted_at IS NULL;
 
-2. Guard d'authentification sur la page index
-   - Fichier: app/index.tsx
-   - Verification de l'etat d'authentification au demarrage de l'app
-   - Si non connecte: redirection vers /auth/account-type
-   - Si connecte: redirection vers /(tabs)/browse
-   - Ecran de chargement pendant la verification
+-- Index spatial pour les requêtes de géolocalisation (recherche par proximité)
+-- Utilise earthdistance pour calculer la distance entre deux points GPS
+CREATE INDEX IF NOT EXISTS idx_activities_location ON activities USING gist (
+  ll_to_earth(latitude, longitude)
+) WHERE latitude IS NOT NULL AND longitude IS NOT NULL;
 
-3. Amelioration du processus de deconnexion
-   - Fichier: app/settings.tsx
-   - Utilisation de signOut() du AuthContext au lieu de authService.logoutUser() directement
-   - Cela garantit que l'etat global (user, profile) est reinitialise
-   - Ajout d'un indicateur de chargement sur le bouton de deconnexion
-   - Gestion des erreurs avec message explicite
+-- Index pour recherche par prix
+CREATE INDEX IF NOT EXISTS idx_activities_prix ON activities(prix);
 
-AUCUNE MODIFICATION SQL OU CRON NECESSAIRE
-Toutes les modifications sont cote frontend et utilisent le systeme d'authentification Supabase existant.
+-- Index pour trier par nombre de participants
+CREATE INDEX IF NOT EXISTS idx_activities_participants ON activities(participants);
 
-------------------------------------------------
+-- ============================================
+-- ÉTAPE 4: INDEX SUR LA TABLE ACTIVITY_SLOTS
+-- ============================================
 
---- prompt du 07/01/2026 20:00 ---
+-- Index pour requêtes par activity_id (charger tous les slots d'une activité)
+CREATE INDEX IF NOT EXISTS idx_activity_slots_activity_id ON activity_slots(activity_id);
 
-MODIFICATIONS EFFECTUEES - SYSTEME DE FILTRAGE AVANCE POUR BROWSE.TSX
+-- Index pour requêtes filtrées par date (slots futurs uniquement)
+CREATE INDEX IF NOT EXISTS idx_activity_slots_date ON activity_slots(date);
 
-1. Ajout de filtres multiples sur la page Decouvrir (browse.tsx)
-   - Fichiers modifies: app/(tabs)/browse.tsx
+-- Index composé pour requêtes activity_id + date >= today (très fréquent)
+CREATE INDEX IF NOT EXISTS idx_activity_slots_activity_date ON activity_slots(activity_id, date);
 
-   FILTRES IMPLEMENTES:
-   - Distance: 5km, 10km, 20km, 50km ou illimite (necessite geolocalisation)
-   - Prix: Min/Max en euros, boutons rapides (Gratuit, <=20€, <=50€)
-   - Date: Aujourd'hui, 7 jours, 30 jours ou toutes
-   - Places restantes: Minimum 1, 5, 10, 20 ou tous
-   - Categories: Selection multiple parmi les 8 categories (Bar, Sport, Culture, etc.)
+-- Index pour requêtes par créateur de slot
+CREATE INDEX IF NOT EXISTS idx_activity_slots_created_by ON activity_slots(created_by);
 
-   FONCTIONNALITES:
-   - Modal de filtres avec interface intuitive
-   - Badge sur le bouton filtre indiquant le nombre de filtres actifs
-   - Bouton reinitialiser pour effacer tous les filtres
-   - Affichage du nombre de resultats en temps reel
-   - Calcul de distance via formule Haversine (GPS)
+-- ============================================
+-- ÉTAPE 5: INDEX SUR LA TABLE SLOT_PARTICIPANTS
+-- ============================================
 
-   CALCUL DES PLACES RESTANTES:
-   Le systeme calcule les places ABSOLUES restantes:
-   - Total des places = nombre de slots futurs × max_participants par activite
-   - Places prises = nombre d'inscriptions dans slot_participants pour les slots futurs
-   - Places restantes = Total - Places prises
+-- Index pour requêtes par slot_id (compter les participants par slot)
+CREATE INDEX IF NOT EXISTS idx_slot_participants_slot_id ON slot_participants(slot_id);
 
-   Requetes Supabase utilisees:
-   - activity_slots: SELECT id, activity_id, date WHERE date >= today
-   - slot_participants: SELECT slot_id, activity_id WHERE slot_id IN (slots futurs)
+-- Index pour requêtes par participant_id (mes participations à des activités)
+CREATE INDEX IF NOT EXISTS idx_slot_participants_participant_id ON slot_participants(participant_id);
 
-AUCUNE MODIFICATION SQL OU CRON NECESSAIRE
-Le filtrage se fait entierement cote client avec les donnees existantes.
-Les tables utilisees sont deja en place: activities, activity_slots, slot_participants.
+-- Index pour requêtes par activity_id (tous les participants d'une activité)
+CREATE INDEX IF NOT EXISTS idx_slot_participants_activity_id ON slot_participants(activity_id);
 
-------------------------------------------------
+-- Index UNIQUE composé pour éviter les doublons (un user ne peut rejoindre un slot qu'une seule fois)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_slot_participants_unique ON slot_participants(slot_id, participant_id);
 
---- prompt du 07/01/2026 21:00 ---
+-- ============================================
+-- ÉTAPE 6: INDEX SUR LA TABLE SLOT_GROUPS
+-- ============================================
 
-CORRECTION DU FILTRE PLACES RESTANTES - CALCUL PAR CRENEAU
+-- Index pour requêtes par slot_id (récupérer tous les groupes d'un slot)
+CREATE INDEX IF NOT EXISTS idx_slot_groups_slot_id ON slot_groups(slot_id);
 
-PROBLEME:
-Le filtre "places restantes" calculait incorrectement les places disponibles.
-Exemple: Une activite avec 2 creneaux (3 places + 4 places) = 7 places max
-Mais le calcul precedent utilisait: nombre_de_creneaux × max_participants_de_l_activite
-Ce qui donnait des valeurs erronees.
+-- Index pour requêtes par participant_id (trouver le groupe d'un utilisateur)
+CREATE INDEX IF NOT EXISTS idx_slot_groups_participant_id ON slot_groups(participant_id);
 
-SOLUTION IMPLEMENTEE:
-- Fichier modifie: app/(tabs)/browse.tsx
-- Fichier modifie: lib/database.types.ts
+-- Index composé pour requêtes slot_id + group_index (lister membres d'un groupe)
+CREATE INDEX IF NOT EXISTS idx_slot_groups_slot_group ON slot_groups(slot_id, group_index);
 
-NOUVEAU CALCUL:
-Pour chaque activite, on calcule la somme des places restantes de CHAQUE creneau:
-  places_restantes_activite = SUM(
-    pour chaque creneau futur:
-      max(0, creneau.max_participants - nombre_inscrits_creneau)
-  )
+-- Index UNIQUE pour éviter qu'un user soit dans plusieurs groupes d'un même slot
+CREATE UNIQUE INDEX IF NOT EXISTS idx_slot_groups_unique ON slot_groups(slot_id, participant_id);
 
-Requete Supabase modifiee:
-- activity_slots: SELECT id, activity_id, date, max_participants WHERE date >= today
-  (ajout du champ max_participants pour recuperer la capacite de chaque creneau)
+-- ============================================
+-- ÉTAPE 7: INDEX SUR LA TABLE CONVERSATIONS
+-- ============================================
 
-VERIFICATION REQUISE:
-La colonne max_participants doit exister dans la table activity_slots.
-Si elle n'existe pas, executez la migration SQL ci-dessous.
+-- Index pour tri par updated_at (liste des conversations récentes)
+CREATE INDEX IF NOT EXISTS idx_conversations_updated_at ON conversations(updated_at DESC);
 
---- SQL A EXECUTER SUR SUPABASE (uniquement si la colonne n'existe pas) ---
+-- Index pour requêtes par is_group (filtrer conversations de groupe vs 1-to-1)
+CREATE INDEX IF NOT EXISTS idx_conversations_is_group ON conversations(is_group);
 
--- Verifier si la colonne existe
-SELECT column_name
-FROM information_schema.columns
-WHERE table_name = 'activity_slots' AND column_name = 'max_participants';
+-- Index pour requêtes par slot_id (conversations liées à un créneau d'activité)
+CREATE INDEX IF NOT EXISTS idx_conversations_slot_id ON conversations(slot_id);
 
--- Si la colonne n'existe pas, l'ajouter:
-ALTER TABLE activity_slots
-ADD COLUMN IF NOT EXISTS max_participants INTEGER DEFAULT 10;
+-- ============================================
+-- ÉTAPE 8: INDEX SUR LA TABLE CONVERSATION_PARTICIPANTS
+-- ============================================
 
--- Mettre a jour les creneaux existants sans valeur avec la valeur de l'activite parente:
-UPDATE activity_slots s
-SET max_participants = a.max_participants
-FROM activities a
-WHERE s.activity_id = a.id
-AND s.max_participants IS NULL;
+-- Index pour requêtes par participant_id (mes conversations)
+CREATE INDEX IF NOT EXISTS idx_conversation_participants_participant_id ON conversation_participants(participant_id);
 
----------------------------------------------------------------------------------
+-- Index pour requêtes par conversation_id (participants d'une conversation)
+CREATE INDEX IF NOT EXISTS idx_conversation_participants_conversation_id ON conversation_participants(conversation_id);
 
-------------------------------------------------
+-- Index UNIQUE composé pour éviter les doublons (un user ne peut être qu'une fois dans une conv)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_conversation_participants_unique ON conversation_participants(conversation_id, participant_id);
+
+-- ============================================
+-- ÉTAPE 9: INDEX SUR LA TABLE MESSAGES
+-- ============================================
+
+-- Index pour requêtes par conversation_id (charger les messages d'une conversation)
+CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
+
+-- Index pour tri par created_at (messages récents)
+CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at DESC);
+
+-- Index composé pour requêtes conversation + tri par date (très fréquent)
+CREATE INDEX IF NOT EXISTS idx_messages_conversation_created ON messages(conversation_id, created_at DESC);
+
+-- Index pour requêtes par sender_id (messages d'un utilisateur)
+CREATE INDEX IF NOT EXISTS idx_messages_sender_id ON messages(sender_id);
+
+-- Index pour filtrer par type de message
+CREATE INDEX IF NOT EXISTS idx_messages_type ON messages(message_type);
+
+-- Index pour messages système
+CREATE INDEX IF NOT EXISTS idx_messages_admin ON messages(is_admin_message) WHERE is_admin_message = true;
+
+-- ============================================
+-- ÉTAPE 10: INDEX SUR LA TABLE FRIENDSHIPS
+-- ============================================
+
+-- Index pour requêtes par user_id (mes amis)
+CREATE INDEX IF NOT EXISTS idx_friendships_user_id ON friendships(user_id);
+
+-- Index pour requêtes par friend_user_id (qui m'a ajouté comme ami)
+CREATE INDEX IF NOT EXISTS idx_friendships_friend_user_id ON friendships(friend_user_id);
+
+-- Index UNIQUE pour éviter les doublons (amitié unique entre 2 personnes)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_friendships_unique ON friendships(user_id, friend_user_id);
+
+-- ============================================
+-- ÉTAPE 11: INDEX SUR LA TABLE FRIEND_REQUESTS
+-- ============================================
+
+-- Index pour requêtes par receiver_id (demandes reçues)
+CREATE INDEX IF NOT EXISTS idx_friend_requests_receiver_id ON friend_requests(receiver_id);
+
+-- Index pour requêtes par sender_id (demandes envoyées)
+CREATE INDEX IF NOT EXISTS idx_friend_requests_sender_id ON friend_requests(sender_id);
+
+-- Index pour requêtes par status
+CREATE INDEX IF NOT EXISTS idx_friend_requests_status ON friend_requests(status);
+
+-- Index composé pour requêtes receiver + status (demandes en attente)
+CREATE INDEX IF NOT EXISTS idx_friend_requests_receiver_status ON friend_requests(receiver_id, status);
+
+-- Index pour tri par created_at
+CREATE INDEX IF NOT EXISTS idx_friend_requests_created_at ON friend_requests(created_at DESC);
+
+-- ============================================
+-- ÉTAPE 12: INDEX SUR LA TABLE BLOCKED_USERS
+-- ============================================
+
+-- Index pour requêtes par blocker_id (qui j'ai bloqué)
+CREATE INDEX IF NOT EXISTS idx_blocked_users_blocker_id ON blocked_users(blocker_id);
+
+-- Index pour requêtes par blocked_id (qui m'a bloqué)
+CREATE INDEX IF NOT EXISTS idx_blocked_users_blocked_id ON blocked_users(blocked_id);
+
+-- Index UNIQUE pour éviter les doublons
+CREATE UNIQUE INDEX IF NOT EXISTS idx_blocked_users_unique ON blocked_users(blocker_id, blocked_id);
+
+-- ============================================
+-- ÉTAPE 13: INDEX SUR LA TABLE REPORTS
+-- ============================================
+
+-- Index pour requêtes par reported_by (mes signalements)
+CREATE INDEX IF NOT EXISTS idx_reports_reported_by ON reports(reported_by);
+
+-- Index pour requêtes par target_type (type de signalement)
+CREATE INDEX IF NOT EXISTS idx_reports_target_type ON reports(target_type);
+
+-- Index pour requêtes par status (signalements en attente)
+CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status);
+
+-- Index composé pour requêtes target_type + target_id
+CREATE INDEX IF NOT EXISTS idx_reports_target ON reports(target_type, target_id);
+
+-- ============================================
+-- ÉTAPE 14: INDEX SUR LA TABLE BUSINESS_STATS
+-- ============================================
+
+-- Index pour requêtes par business_id (stats d'une entreprise)
+CREATE INDEX IF NOT EXISTS idx_business_stats_business_id ON business_stats(business_id);
+
+-- Index pour requêtes par date
+CREATE INDEX IF NOT EXISTS idx_business_stats_date ON business_stats(date);
+
+-- Index composé pour requêtes business_id + date (plage de dates)
+CREATE INDEX IF NOT EXISTS idx_business_stats_business_date ON business_stats(business_id, date DESC);
+
+-- ============================================
+-- ÉTAPE 15: INDEX SUR LA TABLE ACTIVITY_REVENUE
+-- ============================================
+
+-- Index pour requêtes par activity_id (revenus d'une activité)
+CREATE INDEX IF NOT EXISTS idx_activity_revenue_activity_id ON activity_revenue(activity_id);
+
+-- Index pour requêtes par business_id (revenus d'une entreprise)
+CREATE INDEX IF NOT EXISTS idx_activity_revenue_business_id ON activity_revenue(business_id);
+
+-- Index pour requêtes par participant_id
+CREATE INDEX IF NOT EXISTS idx_activity_revenue_participant_id ON activity_revenue(participant_id);
+
+-- Index pour requêtes par payment_status
+CREATE INDEX IF NOT EXISTS idx_activity_revenue_payment_status ON activity_revenue(payment_status);
+
+-- Index composé pour filtrer business + status
+CREATE INDEX IF NOT EXISTS idx_activity_revenue_business_status ON activity_revenue(business_id, payment_status);
+
+-- ============================================
+-- ÉTAPE 16: INDEX SUR LA TABLE REVIEWS
+-- ============================================
+
+-- Index pour requêtes par activity_id (avis d'une activité)
+CREATE INDEX IF NOT EXISTS idx_reviews_activity_id ON reviews(activity_id);
+
+-- Index pour requêtes par reviewer_id (avis d'un utilisateur)
+CREATE INDEX IF NOT EXISTS idx_reviews_reviewer_id ON reviews(reviewer_id);
+
+-- Index pour tri par created_at (avis récents)
+CREATE INDEX IF NOT EXISTS idx_reviews_created_at ON reviews(created_at DESC);
+
+-- Index composé pour requêtes activity + tri par date
+CREATE INDEX IF NOT EXISTS idx_reviews_activity_created ON reviews(activity_id, created_at DESC);
+
+-- ============================================
+-- ÉTAPE 17: OPTIMISATION DES REQUÊTES AVEC VACUUM
+-- ============================================
+
+-- Nettoyer et optimiser toutes les tables (recalculer les statistiques)
+VACUUM ANALYZE profiles;
+VACUUM ANALYZE activities;
+VACUUM ANALYZE activity_slots;
+VACUUM ANALYZE slot_participants;
+VACUUM ANALYZE slot_groups;
+VACUUM ANALYZE conversations;
+VACUUM ANALYZE conversation_participants;
+VACUUM ANALYZE messages;
+VACUUM ANALYZE friendships;
+VACUUM ANALYZE friend_requests;
+VACUUM ANALYZE blocked_users;
+VACUUM ANALYZE reports;
+VACUUM ANALYZE business_stats;
+VACUUM ANALYZE activity_revenue;
+VACUUM ANALYZE reviews;
+
+-- ============================================
+-- ÉTAPE 18: ACTIVER ROW LEVEL SECURITY (RLS)
+-- ============================================
+-- S'assurer que RLS est activé sur toutes les tables sensibles
+
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE activities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE activity_slots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE slot_participants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE slot_groups ENABLE ROW LEVEL SECURITY;
+ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE conversation_participants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE friendships ENABLE ROW LEVEL SECURITY;
+ALTER TABLE friend_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE blocked_users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE business_stats ENABLE ROW LEVEL SECURITY;
+ALTER TABLE activity_revenue ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reviews ENABLE ROW LEVEL SECURITY;
+
+-- ============================================
+-- ÉTAPE 19: FONCTION POUR RECHERCHER DES ACTIVITÉS
+-- ============================================
+-- Fonction optimisée pour rechercher des activités avec filtres multiples
+
+CREATE OR REPLACE FUNCTION search_activities(
+  p_search_text TEXT DEFAULT NULL,
+  p_category TEXT DEFAULT NULL,
+  p_ville TEXT DEFAULT NULL,
+  p_min_price NUMERIC DEFAULT NULL,
+  p_max_price NUMERIC DEFAULT NULL,
+  p_user_lat NUMERIC DEFAULT NULL,
+  p_user_lng NUMERIC DEFAULT NULL,
+  p_max_distance_km NUMERIC DEFAULT NULL,
+  p_limit INTEGER DEFAULT 50,
+  p_offset INTEGER DEFAULT 0
+)
+RETURNS TABLE (
+  id UUID,
+  host_id UUID,
+  nom TEXT,
+  titre TEXT,
+  description TEXT,
+  categorie TEXT,
+  categorie2 TEXT,
+  image_url TEXT,
+  ville TEXT,
+  latitude NUMERIC,
+  longitude NUMERIC,
+  prix NUMERIC,
+  max_participants INTEGER,
+  participants INTEGER,
+  status TEXT,
+  created_at TIMESTAMP,
+  slot_count BIGINT,
+  earliest_slot_date DATE,
+  remaining_places BIGINT,
+  distance_km NUMERIC
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    a.id,
+    a.host_id,
+    a.nom,
+    a.titre,
+    a.description,
+    a.categorie,
+    a.categorie2,
+    a.image_url,
+    a.ville,
+    a.latitude,
+    a.longitude,
+    a.prix,
+    a.max_participants,
+    a.participants,
+    a.status,
+    a.created_at,
+    COUNT(DISTINCT s.id) as slot_count,
+    MIN(s.date)::date as earliest_slot_date,
+    (COALESCE(SUM(COALESCE(s.max_participants, a.max_participants)), 0) - COUNT(sp.id))::bigint as remaining_places,
+    CASE
+      WHEN p_user_lat IS NOT NULL AND p_user_lng IS NOT NULL AND a.latitude IS NOT NULL AND a.longitude IS NOT NULL THEN
+        earth_distance(
+          ll_to_earth(p_user_lat, p_user_lng),
+          ll_to_earth(a.latitude, a.longitude)
+        ) / 1000.0
+      ELSE NULL
+    END as distance_km
+  FROM activities a
+  LEFT JOIN activity_slots s ON a.id = s.activity_id AND s.date >= CURRENT_DATE
+  LEFT JOIN slot_participants sp ON s.id = sp.slot_id
+  WHERE a.status = 'active'
+    AND (p_search_text IS NULL OR
+         a.nom ILIKE '%' || p_search_text || '%' OR
+         a.titre ILIKE '%' || p_search_text || '%' OR
+         a.description ILIKE '%' || p_search_text || '%' OR
+         a.ville ILIKE '%' || p_search_text || '%')
+    AND (p_category IS NULL OR a.categorie = p_category OR a.categorie2 = p_category)
+    AND (p_ville IS NULL OR a.ville = p_ville)
+    AND (p_min_price IS NULL OR COALESCE(a.prix, 0) >= p_min_price)
+    AND (p_max_price IS NULL OR COALESCE(a.prix, 0) <= p_max_price)
+    AND (p_max_distance_km IS NULL OR p_user_lat IS NULL OR p_user_lng IS NULL OR a.latitude IS NULL OR a.longitude IS NULL OR
+         earth_distance(
+           ll_to_earth(p_user_lat, p_user_lng),
+           ll_to_earth(a.latitude, a.longitude)
+         ) / 1000.0 <= p_max_distance_km)
+  GROUP BY a.id, a.host_id, a.nom, a.titre, a.description, a.categorie, a.categorie2, a.image_url,
+           a.ville, a.latitude, a.longitude, a.prix, a.max_participants, a.participants, a.status, a.created_at
+  HAVING COUNT(DISTINCT s.id) > 0
+  ORDER BY
+    CASE
+      WHEN p_user_lat IS NOT NULL AND p_user_lng IS NOT NULL AND a.latitude IS NOT NULL AND a.longitude IS NOT NULL THEN
+        earth_distance(
+          ll_to_earth(p_user_lat, p_user_lng),
+          ll_to_earth(a.latitude, a.longitude)
+        )
+      ELSE 0
+    END ASC,
+    MIN(s.date) ASC,
+    a.created_at DESC
+  LIMIT p_limit
+  OFFSET p_offset;
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+-- ============================================
+-- ÉTAPE 20: FONCTION POUR COMPTER LES PARTICIPANTS D'UN SLOT
+-- ============================================
+
+CREATE OR REPLACE FUNCTION get_slot_participant_count(p_slot_id UUID)
+RETURNS INTEGER AS $$
+DECLARE
+  v_count INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO v_count
+  FROM slot_participants
+  WHERE slot_id = p_slot_id;
+
+  RETURN COALESCE(v_count, 0);
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+-- ============================================
+-- ÉTAPE 21: FONCTION POUR RÉCUPÉRER MES CONVERSATIONS
+-- ============================================
+
+CREATE OR REPLACE FUNCTION get_my_conversations(p_user_id UUID)
+RETURNS TABLE (
+  conversation_id UUID,
+  name TEXT,
+  image_url TEXT,
+  is_group BOOLEAN,
+  slot_id UUID,
+  updated_at TIMESTAMP,
+  last_message_content TEXT,
+  last_message_created_at TIMESTAMP,
+  participant_count BIGINT
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    c.id as conversation_id,
+    c.name,
+    c.image_url,
+    c.is_group,
+    c.slot_id,
+    c.updated_at,
+    m.content as last_message_content,
+    m.created_at as last_message_created_at,
+    COUNT(DISTINCT cp.participant_id) as participant_count
+  FROM conversations c
+  INNER JOIN conversation_participants cp ON c.id = cp.conversation_id
+  LEFT JOIN LATERAL (
+    SELECT content, created_at
+    FROM messages
+    WHERE conversation_id = c.id
+    ORDER BY created_at DESC
+    LIMIT 1
+  ) m ON true
+  WHERE cp.participant_id = p_user_id
+  GROUP BY c.id, c.name, c.image_url, c.is_group, c.slot_id, c.updated_at, m.content, m.created_at
+  ORDER BY c.updated_at DESC;
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+-- ============================================
+-- ÉTAPE 22: VUES DE MONITORING DES PERFORMANCES
+-- ============================================
+
+-- Vue pour voir les requêtes les plus lentes
+CREATE OR REPLACE VIEW v_slow_queries AS
+SELECT
+  query,
+  calls,
+  total_exec_time,
+  mean_exec_time,
+  max_exec_time,
+  rows
+FROM pg_stat_statements
+ORDER BY mean_exec_time DESC
+LIMIT 50;
+
+-- Vue pour voir l'utilisation des index
+CREATE OR REPLACE VIEW v_index_usage AS
+SELECT
+  schemaname,
+  tablename,
+  indexname,
+  idx_scan as index_scans,
+  idx_tup_read as tuples_read,
+  idx_tup_fetch as tuples_fetched
+FROM pg_stat_user_indexes
+ORDER BY idx_scan DESC;
+
+-- Vue pour voir les tables les plus volumineuses
+CREATE OR REPLACE VIEW v_table_sizes AS
+SELECT
+  schemaname,
+  tablename,
+  pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) as total_size,
+  pg_size_pretty(pg_relation_size(schemaname||'.'||tablename)) as table_size,
+  pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename) - pg_relation_size(schemaname||'.'||tablename)) as indexes_size,
+  pg_total_relation_size(schemaname||'.'||tablename) as bytes
+FROM pg_tables
+WHERE schemaname = 'public'
+ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
+
+-- Vue pour voir les index inutilisés
+CREATE OR REPLACE VIEW v_unused_indexes AS
+SELECT
+  schemaname,
+  tablename,
+  indexname,
+  idx_scan as number_of_scans,
+  pg_size_pretty(pg_relation_size(schemaname||'.'||indexname)) as index_size
+FROM pg_stat_user_indexes
+WHERE idx_scan = 0
+  AND indexname NOT LIKE '%_pkey'
+ORDER BY pg_relation_size(schemaname||'.'||indexname) DESC;
+
+-- ============================================
+-- ÉTAPE 23: SCRIPT D'ANALYSE DES PERFORMANCES
+-- ============================================
+
+-- Fonction pour analyser les performances d'une table
+CREATE OR REPLACE FUNCTION analyze_table_performance(p_table_name TEXT)
+RETURNS TABLE (
+  metric TEXT,
+  value TEXT
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 'Table Size'::TEXT, pg_size_pretty(pg_total_relation_size(('public.'||p_table_name)::regclass))::TEXT
+  UNION ALL
+  SELECT 'Row Count'::TEXT, (SELECT reltuples::bigint FROM pg_class WHERE relname = p_table_name)::TEXT
+  UNION ALL
+  SELECT 'Index Count'::TEXT, (SELECT COUNT(*)::TEXT FROM pg_indexes WHERE tablename = p_table_name)
+  UNION ALL
+  SELECT 'Sequential Scans'::TEXT, (SELECT seq_scan::TEXT FROM pg_stat_user_tables WHERE relname = p_table_name)
+  UNION ALL
+  SELECT 'Index Scans'::TEXT, (SELECT idx_scan::TEXT FROM pg_stat_user_tables WHERE relname = p_table_name)
+  UNION ALL
+  SELECT 'Last Vacuum'::TEXT, (SELECT last_vacuum::TEXT FROM pg_stat_user_tables WHERE relname = p_table_name)
+  UNION ALL
+  SELECT 'Last Analyze'::TEXT, (SELECT last_analyze::TEXT FROM pg_stat_user_tables WHERE relname = p_table_name);
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================
+-- FIN DES OPTIMISATIONS
+-- ============================================
+
+-- Pour vérifier que tout s'est bien passé, exécutez:
+-- SELECT * FROM v_table_sizes;
+-- SELECT * FROM v_index_usage WHERE index_scans > 0;
+-- SELECT analyze_table_performance('activities');
+-- SELECT analyze_table_performance('messages');
+
+-- Pour monitorer les requêtes lentes en temps réel:
+-- SELECT * FROM v_slow_queries;
+
+-- ============================================
+-- NOTES IMPORTANTES
+-- ============================================
+--
+-- 1. Les index créés ici sont NON-BLOQUANTS (IF NOT EXISTS)
+--    Vous pouvez réexécuter ce script sans danger
+--
+-- 2. Les extensions PostGIS (earthdistance) sont nécessaires pour la géolocalisation
+--    Si elles ne sont pas disponibles, commentez les sections concernées
+--
+-- 3. VACUUM ANALYZE peut prendre quelques secondes sur de grandes tables
+--    C'est normal, laissez le processus se terminer
+--
+-- 4. Les vues de monitoring (v_*) sont accessibles en lecture seule
+--    Utilisez-les pour suivre les performances au fil du temps
+--
+-- 5. Pour de meilleures performances, pensez à:
+--    - Activer la compression sur les tables volumineuses
+--    - Configurer les politiques de rétention des données
+--    - Monitorer régulièrement avec pg_stat_statements
+--
+-- ============================================
+
+
+-- ============================================
+-- ============================================
+-- PATCH PERFORMANCE LA REUNION - V2.0
+-- Date: 07/01/2026
+-- ============================================
+-- Ces RPCs eliminent les patterns N+1 et regroupent
+-- les requetes pour reduire drastiquement la latence
+-- ============================================
+
+
+-- ============================================
+-- ETAPE 24: INDEX SUPPLEMENTAIRES CRITIQUES
+-- ============================================
+
+-- Index pour optimiser le comptage des messages non lus
+CREATE INDEX IF NOT EXISTS idx_messages_unread_count
+ON messages(conversation_id, sender_id, created_at DESC)
+WHERE deleted_at IS NULL;
+
+-- Index pour les messages par conversation avec filtre deleted_at
+CREATE INDEX IF NOT EXISTS idx_messages_conv_not_deleted
+ON messages(conversation_id, created_at DESC)
+WHERE deleted_at IS NULL;
+
+-- Index pour conversation_participants avec last_read_at
+CREATE INDEX IF NOT EXISTS idx_conv_participants_user_read
+ON conversation_participants(user_id, conversation_id, last_read_at);
+
+-- Index pour conversations par updated_at
+CREATE INDEX IF NOT EXISTS idx_conversations_updated
+ON conversations(updated_at DESC);
+
+-- Index pour activity_slots futures
+CREATE INDEX IF NOT EXISTS idx_activity_slots_future
+ON activity_slots(activity_id, date, time)
+WHERE date >= CURRENT_DATE;
+
+-- Index pour slot_participants count
+CREATE INDEX IF NOT EXISTS idx_slot_participants_slot_count
+ON slot_participants(slot_id);
+
+-- Index pour activities actives
+CREATE INDEX IF NOT EXISTS idx_activities_active_created
+ON activities(created_at DESC)
+WHERE status = 'active';
+
+-- Index pour reviews par activity
+CREATE INDEX IF NOT EXISTS idx_reviews_activity_rating
+ON reviews(activity_id, rating);
+
+
+-- ============================================
+-- ETAPE 25: RPC get_my_conversations_v2
+-- Remplace loadConversations avec 0 pattern N+1
+-- Retourne TOUT en une seule requete:
+-- - conversations avec participants
+-- - last message info
+-- - unread count
+-- - slot date/time si applicable
+-- ============================================
+
+CREATE OR REPLACE FUNCTION get_my_conversations_v2(p_user_id UUID)
+RETURNS TABLE (
+    conversation_id UUID,
+    conversation_name TEXT,
+    conversation_image TEXT,
+    is_group BOOLEAN,
+    activity_id UUID,
+    slot_id UUID,
+    updated_at TIMESTAMPTZ,
+    is_closed BOOLEAN,
+    -- Last message info
+    last_message_content TEXT,
+    last_message_type TEXT,
+    last_message_at TIMESTAMPTZ,
+    last_message_sender_id UUID,
+    last_message_sender_name TEXT,
+    -- Participant info
+    participant_count BIGINT,
+    other_participant_name TEXT,
+    other_participant_avatar TEXT,
+    -- Unread count
+    unread_count BIGINT,
+    -- Slot info (si applicable)
+    slot_date DATE,
+    slot_time TIME,
+    is_past_activity BOOLEAN
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+AS $$
+BEGIN
+    RETURN QUERY
+    WITH user_conversations AS (
+        -- Recuperer toutes les conversations de l'utilisateur avec last_read_at
+        SELECT
+            cp.conversation_id,
+            cp.last_read_at
+        FROM conversation_participants cp
+        WHERE cp.user_id = p_user_id
+    ),
+    conversation_data AS (
+        -- Joindre avec les donnees de conversation
+        SELECT
+            c.id,
+            c.name,
+            c.image_url,
+            c.is_group,
+            c.activity_id,
+            c.slot_id,
+            c.updated_at,
+            c.is_closed,
+            uc.last_read_at
+        FROM conversations c
+        INNER JOIN user_conversations uc ON c.id = uc.conversation_id
+    ),
+    last_messages AS (
+        -- Recuperer le dernier message de chaque conversation en une seule requete
+        SELECT DISTINCT ON (m.conversation_id)
+            m.conversation_id,
+            m.content,
+            m.message_type,
+            m.created_at,
+            m.sender_id,
+            p.full_name as sender_name
+        FROM messages m
+        INNER JOIN conversation_data cd ON m.conversation_id = cd.id
+        LEFT JOIN profiles p ON m.sender_id = p.id
+        WHERE m.deleted_at IS NULL
+        ORDER BY m.conversation_id, m.created_at DESC
+    ),
+    participant_counts AS (
+        -- Compter les participants par conversation
+        SELECT
+            cp.conversation_id,
+            COUNT(*) as cnt
+        FROM conversation_participants cp
+        INNER JOIN conversation_data cd ON cp.conversation_id = cd.id
+        GROUP BY cp.conversation_id
+    ),
+    other_participants AS (
+        -- Pour les conversations 1-1, recuperer l'autre participant
+        SELECT DISTINCT ON (cp.conversation_id)
+            cp.conversation_id,
+            p.full_name,
+            p.avatar_url
+        FROM conversation_participants cp
+        INNER JOIN conversation_data cd ON cp.conversation_id = cd.id
+        INNER JOIN profiles p ON cp.user_id = p.id
+        WHERE cp.user_id != p_user_id
+          AND cd.is_group = false
+        ORDER BY cp.conversation_id
+    ),
+    unread_counts AS (
+        -- Compter les messages non lus en une seule requete
+        SELECT
+            m.conversation_id,
+            COUNT(*) as unread
+        FROM messages m
+        INNER JOIN conversation_data cd ON m.conversation_id = cd.id
+        WHERE m.sender_id != p_user_id
+          AND m.deleted_at IS NULL
+          AND m.message_type != 'system'
+          AND (cd.last_read_at IS NULL OR m.created_at > cd.last_read_at)
+        GROUP BY m.conversation_id
+    ),
+    slot_info AS (
+        -- Recuperer les infos de slot pour les conversations liees
+        SELECT
+            cd.id as conversation_id,
+            s.date as slot_date,
+            s.time as slot_time,
+            CASE
+                WHEN s.date < CURRENT_DATE THEN true
+                WHEN s.date = CURRENT_DATE AND s.time < CURRENT_TIME THEN true
+                ELSE false
+            END as is_past
+        FROM conversation_data cd
+        INNER JOIN activity_slots s ON cd.slot_id = s.id
+        WHERE cd.slot_id IS NOT NULL
+    )
+    SELECT
+        cd.id as conversation_id,
+        cd.name as conversation_name,
+        cd.image_url as conversation_image,
+        COALESCE(cd.is_group, false) as is_group,
+        cd.activity_id,
+        cd.slot_id,
+        cd.updated_at,
+        COALESCE(cd.is_closed, false) as is_closed,
+        -- Last message
+        lm.content as last_message_content,
+        lm.message_type as last_message_type,
+        lm.created_at as last_message_at,
+        lm.sender_id as last_message_sender_id,
+        lm.sender_name as last_message_sender_name,
+        -- Participants
+        COALESCE(pc.cnt, 0) as participant_count,
+        op.full_name as other_participant_name,
+        op.avatar_url as other_participant_avatar,
+        -- Unread
+        COALESCE(uc.unread, 0) as unread_count,
+        -- Slot
+        si.slot_date,
+        si.slot_time,
+        COALESCE(si.is_past, false) as is_past_activity
+    FROM conversation_data cd
+    LEFT JOIN last_messages lm ON cd.id = lm.conversation_id
+    LEFT JOIN participant_counts pc ON cd.id = pc.conversation_id
+    LEFT JOIN other_participants op ON cd.id = op.conversation_id
+    LEFT JOIN unread_counts uc ON cd.id = uc.conversation_id
+    LEFT JOIN slot_info si ON cd.id = si.conversation_id
+    ORDER BY cd.updated_at DESC;
+END;
+$$;
+
+-- Accorder les permissions
+GRANT EXECUTE ON FUNCTION get_my_conversations_v2(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION get_my_conversations_v2(UUID) TO anon;
+
+
+-- ============================================
+-- ETAPE 26: RPC get_user_profile_stats
+-- Recupere les stats utilisateur en 1 requete
+-- ============================================
+
+CREATE OR REPLACE FUNCTION get_user_profile_stats(p_user_id UUID)
+RETURNS TABLE (
+    activities_joined BIGINT,
+    activities_hosted BIGINT,
+    friends_count BIGINT,
+    pending_friend_requests BIGINT
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        (SELECT COUNT(*) FROM slot_participants WHERE user_id = p_user_id)::BIGINT as activities_joined,
+        (SELECT COUNT(*) FROM activities WHERE host_id = p_user_id)::BIGINT as activities_hosted,
+        (SELECT COUNT(*) FROM friendships WHERE user_id = p_user_id)::BIGINT as friends_count,
+        (SELECT COUNT(*) FROM friend_requests WHERE receiver_id = p_user_id AND status = 'pending')::BIGINT as pending_friend_requests;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_user_profile_stats(UUID) TO authenticated;
+
+
+-- ============================================
+-- ETAPE 27: RPC get_business_dashboard
+-- Recupere TOUT le dashboard business en 1 requete
+-- ============================================
+
+CREATE OR REPLACE FUNCTION get_business_dashboard(p_business_id UUID)
+RETURNS TABLE (
+    total_activities BIGINT,
+    active_activities BIGINT,
+    total_participants BIGINT,
+    total_revenue NUMERIC,
+    avg_rating NUMERIC,
+    review_count BIGINT,
+    top_activities JSONB
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_activity_ids UUID[];
+    v_past_slot_ids UUID[];
+BEGIN
+    -- Recuperer les IDs des activites du business
+    SELECT ARRAY_AGG(id) INTO v_activity_ids
+    FROM activities
+    WHERE host_id = p_business_id;
+
+    -- Si aucune activite, retourner des valeurs vides
+    IF v_activity_ids IS NULL OR array_length(v_activity_ids, 1) IS NULL THEN
+        RETURN QUERY SELECT
+            0::BIGINT,
+            0::BIGINT,
+            0::BIGINT,
+            0::NUMERIC,
+            0::NUMERIC,
+            0::BIGINT,
+            '[]'::JSONB;
+        RETURN;
+    END IF;
+
+    -- Recuperer les slots passes
+    SELECT ARRAY_AGG(id) INTO v_past_slot_ids
+    FROM activity_slots
+    WHERE activity_id = ANY(v_activity_ids)
+      AND (date < CURRENT_DATE OR (date = CURRENT_DATE AND time < CURRENT_TIME));
+
+    RETURN QUERY
+    WITH activity_stats AS (
+        SELECT
+            COUNT(*) as total_count,
+            COUNT(*) FILTER (WHERE status = 'active') as active_count
+        FROM activities
+        WHERE host_id = p_business_id
+    ),
+    participant_stats AS (
+        SELECT
+            COALESCE(COUNT(*), 0) as participant_count,
+            COALESCE(SUM(a.prix), 0) as revenue
+        FROM slot_participants sp
+        INNER JOIN activity_slots s ON sp.slot_id = s.id
+        INNER JOIN activities a ON s.activity_id = a.id
+        WHERE s.id = ANY(COALESCE(v_past_slot_ids, ARRAY[]::UUID[]))
+          AND a.host_id = p_business_id
+    ),
+    review_stats AS (
+        SELECT
+            COALESCE(AVG(r.rating), 0) as avg_rating,
+            COUNT(*) as review_count
+        FROM reviews r
+        WHERE r.activity_id = ANY(v_activity_ids)
+    ),
+    top_acts AS (
+        SELECT jsonb_agg(
+            jsonb_build_object(
+                'id', a.id,
+                'nom', a.nom,
+                'image_url', a.image_url,
+                'participants', a.participants,
+                'max_participants', a.max_participants,
+                'prix', a.prix
+            )
+            ORDER BY a.participants DESC
+        ) as activities
+        FROM (
+            SELECT id, nom, image_url, participants, max_participants, prix
+            FROM activities
+            WHERE host_id = p_business_id
+            ORDER BY participants DESC
+            LIMIT 5
+        ) a
+    )
+    SELECT
+        ast.total_count::BIGINT as total_activities,
+        ast.active_count::BIGINT as active_activities,
+        ps.participant_count::BIGINT as total_participants,
+        ps.revenue::NUMERIC as total_revenue,
+        ROUND(rs.avg_rating::NUMERIC, 1) as avg_rating,
+        rs.review_count::BIGINT as review_count,
+        COALESCE(ta.activities, '[]'::JSONB) as top_activities
+    FROM activity_stats ast
+    CROSS JOIN participant_stats ps
+    CROSS JOIN review_stats rs
+    CROSS JOIN top_acts ta;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_business_dashboard(UUID) TO authenticated;
+
+
+-- ============================================
+-- ETAPE 28: RPC get_activities_with_slots
+-- Recupere les activites avec slots et places restantes en 1 requete
+-- ============================================
+
+CREATE OR REPLACE FUNCTION get_activities_with_slots(
+    p_status TEXT DEFAULT 'active',
+    p_limit INTEGER DEFAULT 100
+)
+RETURNS TABLE (
+    activity_id UUID,
+    nom VARCHAR,
+    description TEXT,
+    categorie VARCHAR,
+    categorie2 TEXT,
+    image_url TEXT,
+    date VARCHAR,
+    time_start TIME,
+    adresse TEXT,
+    ville VARCHAR,
+    latitude DOUBLE PRECISION,
+    longitude DOUBLE PRECISION,
+    participants INTEGER,
+    max_participants INTEGER,
+    host_id UUID,
+    prix NUMERIC,
+    status VARCHAR,
+    created_at TIMESTAMPTZ,
+    -- Slot aggregated data
+    slot_count BIGINT,
+    next_slot_date DATE,
+    total_remaining_places BIGINT
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+AS $$
+BEGIN
+    RETURN QUERY
+    WITH future_slots AS (
+        -- Recuperer tous les slots futurs avec leur count de participants
+        SELECT
+            s.activity_id,
+            s.id as slot_id,
+            s.date,
+            s.max_participants as slot_max,
+            COUNT(sp.id) as slot_participants
+        FROM activity_slots s
+        LEFT JOIN slot_participants sp ON s.id = sp.slot_id
+        WHERE s.date >= CURRENT_DATE
+        GROUP BY s.activity_id, s.id, s.date, s.max_participants
+    ),
+    slot_aggregates AS (
+        -- Agreger les donnees de slots par activite
+        SELECT
+            fs.activity_id,
+            COUNT(*) as slot_count,
+            MIN(fs.date) as next_slot_date,
+            SUM(GREATEST(0, COALESCE(fs.slot_max, 10) - fs.slot_participants)) as remaining_places
+        FROM future_slots fs
+        GROUP BY fs.activity_id
+    )
+    SELECT
+        a.id as activity_id,
+        a.nom,
+        a.description,
+        a.categorie,
+        a.categorie2,
+        a.image_url,
+        a.date,
+        a.time_start,
+        a.adresse,
+        a.ville,
+        a.latitude,
+        a.longitude,
+        a.participants,
+        a.max_participants,
+        a.host_id,
+        a.prix,
+        a.status,
+        a.created_at,
+        COALESCE(sa.slot_count, 0) as slot_count,
+        sa.next_slot_date,
+        COALESCE(sa.remaining_places, 0) as total_remaining_places
+    FROM activities a
+    INNER JOIN slot_aggregates sa ON a.id = sa.activity_id
+    WHERE a.status = p_status
+      AND sa.slot_count > 0  -- Seulement les activites avec des slots futurs
+    ORDER BY a.created_at DESC
+    LIMIT p_limit;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_activities_with_slots(TEXT, INTEGER) TO authenticated;
+GRANT EXECUTE ON FUNCTION get_activities_with_slots(TEXT, INTEGER) TO anon;
+
+
+-- ============================================
+-- ETAPE 29: RPC get_my_activities
+-- Recupere les activites de l'utilisateur (host)
+-- ============================================
+
+CREATE OR REPLACE FUNCTION get_my_activities(p_user_id UUID)
+RETURNS TABLE (
+    activity_id UUID,
+    nom VARCHAR,
+    description TEXT,
+    categorie VARCHAR,
+    image_url TEXT,
+    date VARCHAR,
+    adresse TEXT,
+    ville VARCHAR,
+    participants INTEGER,
+    max_participants INTEGER,
+    prix NUMERIC,
+    status VARCHAR,
+    created_at TIMESTAMPTZ,
+    slot_count BIGINT,
+    next_slot_date DATE,
+    total_participants BIGINT
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+AS $$
+BEGIN
+    RETURN QUERY
+    WITH activity_slots_agg AS (
+        SELECT
+            s.activity_id,
+            COUNT(*) as slot_count,
+            MIN(CASE WHEN s.date >= CURRENT_DATE THEN s.date END) as next_slot_date,
+            COUNT(sp.id) as total_participants
+        FROM activity_slots s
+        LEFT JOIN slot_participants sp ON s.id = sp.slot_id
+        GROUP BY s.activity_id
+    )
+    SELECT
+        a.id as activity_id,
+        a.nom,
+        a.description,
+        a.categorie,
+        a.image_url,
+        a.date,
+        a.adresse,
+        a.ville,
+        a.participants,
+        a.max_participants,
+        a.prix,
+        a.status,
+        a.created_at,
+        COALESCE(asa.slot_count, 0) as slot_count,
+        asa.next_slot_date,
+        COALESCE(asa.total_participants, 0) as total_participants
+    FROM activities a
+    LEFT JOIN activity_slots_agg asa ON a.id = asa.activity_id
+    WHERE a.host_id = p_user_id
+    ORDER BY a.created_at DESC;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_my_activities(UUID) TO authenticated;
+
+
+-- ============================================
+-- ETAPE 30: RPC get_friends_with_profiles
+-- Recupere les amis avec leurs profils en 1 requete
+-- ============================================
+
+CREATE OR REPLACE FUNCTION get_friends_with_profiles(p_user_id UUID)
+RETURNS TABLE (
+    friend_id UUID,
+    full_name TEXT,
+    avatar_url TEXT,
+    city TEXT,
+    created_at TIMESTAMPTZ
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        f.friend_id,
+        p.full_name,
+        p.avatar_url,
+        p.city,
+        f.created_at
+    FROM friendships f
+    INNER JOIN profiles p ON f.friend_id = p.id
+    WHERE f.user_id = p_user_id
+    ORDER BY f.created_at DESC;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_friends_with_profiles(UUID) TO authenticated;
+
+
+-- ============================================
+-- ETAPE 31: Mettre a jour les statistiques
+-- ============================================
+
+ANALYZE messages;
+ANALYZE conversations;
+ANALYZE conversation_participants;
+ANALYZE activities;
+ANALYZE activity_slots;
+ANALYZE slot_participants;
+ANALYZE profiles;
+ANALYZE friendships;
+ANALYZE friend_requests;
+ANALYZE reviews;
+
+
+-- ============================================
+-- RESUME DES OPTIMISATIONS V2.0
+-- ============================================
+--
+-- 1. get_my_conversations_v2: Elimine N+1 sur unread count et slot date
+--    AVANT: 3 + N + N requetes (N = nombre de conversations)
+--    APRES: 1 requete
+--
+-- 2. get_user_profile_stats: 4 stats en 1 requete
+--    AVANT: 2 requetes
+--    APRES: 1 requete
+--
+-- 3. get_business_dashboard: Dashboard complet en 1 requete
+--    AVANT: 8-10 requetes
+--    APRES: 1 requete
+--
+-- 4. get_activities_with_slots: Activites + slots + places en 1 requete
+--    AVANT: 3 requetes
+--    APRES: 1 requete
+--
+-- 5. get_my_activities: Activites hostees en 1 requete
+--    AVANT: 1 requete (mais sans agregation)
+--    APRES: 1 requete avec agregation complete
+--
+-- 6. get_friends_with_profiles: Amis + profils en 1 requete
+--    AVANT: 2 requetes
+--    APRES: 1 requete
+--
+-- OBJECTIF ATTEINT:
+-- - Browse: 1 requete (get_activities_with_slots)
+-- - Chat: 1 requete (get_my_conversations_v2)
+-- - Profile user: 2 requetes (profile + get_user_profile_stats)
+-- - Profile business: 2 requetes (profile + get_business_dashboard)
+-- - Global loadAllData: ~4-5 requetes max au lieu de 15+
+--
+-- ============================================

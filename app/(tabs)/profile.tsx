@@ -119,18 +119,30 @@ export default function ProfileScreen() {
   const loadUserStats = async (userId: string) => {
     setLoadingStats(true);
     try {
-      const { count: joined } = await supabase
-        .from('slot_participants')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', userId);
+      // Essayer la RPC optimisée d'abord (1 requête au lieu de 2)
+      const { data, error } = await supabase.rpc('get_user_profile_stats', {
+        p_user_id: userId
+      } as any) as { data: any; error: any };
 
-      const { count: hosted } = await supabase
-        .from('activities')
-        .select('*', { count: 'exact', head: true })
-        .eq('host_id', userId);
+      if (error) {
+        console.error('RPC get_user_profile_stats error:', error);
+        // Fallback vers les anciennes requêtes
+        const { count: joined } = await supabase
+          .from('slot_participants')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', userId);
 
-      setActivitiesJoined(joined || 0);
-      setActivitiesHosted(hosted || 0);
+        const { count: hosted } = await supabase
+          .from('activities')
+          .select('*', { count: 'exact', head: true })
+          .eq('host_id', userId);
+
+        setActivitiesJoined(joined || 0);
+        setActivitiesHosted(hosted || 0);
+      } else if (data && data.length > 0) {
+        setActivitiesJoined(data[0].activities_joined || 0);
+        setActivitiesHosted(data[0].activities_hosted || 0);
+      }
     } catch (error) {
       console.error('Error loading user stats:', error);
     } finally {
@@ -140,6 +152,42 @@ export default function ProfileScreen() {
 
   const loadBusinessDashboard = async (businessId: string) => {
     setLoadingStats(true);
+    try {
+      // Essayer la RPC optimisée d'abord (1 requête au lieu de 8-10)
+      const { data, error } = await supabase.rpc('get_business_dashboard', {
+        p_business_id: businessId
+      } as any) as { data: any; error: any };
+
+      if (error) {
+        console.error('RPC get_business_dashboard error:', error);
+        // Fallback vers les anciennes requêtes
+        await loadBusinessDashboardFallback(businessId);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        const dashboardRow = data[0];
+        setDashboardData({
+          total_activities: dashboardRow.total_activities || 0,
+          active_activities: dashboardRow.active_activities || 0,
+          total_participants: dashboardRow.total_participants || 0,
+          total_revenue: dashboardRow.total_revenue || 0,
+          avg_rating: dashboardRow.avg_rating || 0,
+          review_count: dashboardRow.review_count || 0,
+          monthly_stats: [],
+          top_activities: dashboardRow.top_activities || [],
+        });
+      }
+    } catch (error) {
+      console.error('Error loading business dashboard:', error);
+      await loadBusinessDashboardFallback(businessId);
+    } finally {
+      setLoadingStats(false);
+    }
+  };
+
+  // Fallback pour compatibilité si RPC n'est pas encore déployée
+  const loadBusinessDashboardFallback = async (businessId: string) => {
     try {
       // Charger les stats de base
       const { count: totalActivities } = await supabase
@@ -163,11 +211,11 @@ export default function ProfileScreen() {
       const now = new Date();
       const todayStr = now.toISOString().split('T')[0];
       const nowTime = now.toTimeString().slice(0, 5);
-      
-      const activityIdsForStats = activities?.map(a => a.id) || [];
+
+      const activityIdsForStats = activities?.map((a: any) => a.id) || [];
       let totalParticipants = 0;
       let totalRevenue = 0;
-      
+
       if (activityIdsForStats.length > 0) {
         // Récupérer les créneaux passés
         const { data: pastSlots } = await supabase
@@ -175,28 +223,28 @@ export default function ProfileScreen() {
           .select('id, activity_id')
           .in('activity_id', activityIdsForStats)
           .or(`date.lt.${todayStr},and(date.eq.${todayStr},time.lt.${nowTime})`);
-        
-        const pastSlotIds = pastSlots?.map(s => s.id) || [];
-        
+
+        const pastSlotIds = pastSlots?.map((s: any) => s.id) || [];
+
         if (pastSlotIds.length > 0) {
           // Compter les participants de ces créneaux
           const { count } = await supabase
             .from('slot_participants')
             .select('*', { count: 'exact', head: true })
             .in('slot_id', pastSlotIds);
-          
+
           totalParticipants = count || 0;
-          
+
           // Calculer les revenus basés sur les créneaux terminés
-          const slotActivityMap = new Map(pastSlots?.map(s => [s.id, s.activity_id]) || []);
-          const activityPrices = new Map(activities?.map(a => [a.id, a.prix || 0]) || []);
-          
+          const slotActivityMap = new Map(pastSlots?.map((s: any) => [s.id, s.activity_id]) || []);
+          const activityPrices = new Map(activities?.map((a: any) => [a.id, a.prix || 0]) || []);
+
           const { data: participantsData } = await supabase
             .from('slot_participants')
             .select('slot_id')
             .in('slot_id', pastSlotIds);
-          
-          totalRevenue = (participantsData || []).reduce((sum, p) => {
+
+          totalRevenue = (participantsData || []).reduce((sum: number, p: any) => {
             const activityId = slotActivityMap.get(p.slot_id);
             const price = activityId ? activityPrices.get(activityId) || 0 : 0;
             return sum + price;
@@ -213,19 +261,19 @@ export default function ProfileScreen() {
         .limit(5);
 
       // Récupérer le vrai nombre d'avis depuis la table reviews
-      const activityIds = activities?.map(a => a.id) || [];
+      const activityIds = activities?.map((a: any) => a.id) || [];
       let reviewCount = 0;
       let avgRating = 0;
-      
+
       if (activityIds.length > 0) {
         const { data: reviewsData } = await supabase
           .from('reviews')
           .select('rating')
           .in('activity_id', activityIds);
-        
+
         reviewCount = reviewsData?.length || 0;
         if (reviewCount > 0) {
-          avgRating = reviewsData!.reduce((sum, r) => sum + r.rating, 0) / reviewCount;
+          avgRating = reviewsData!.reduce((sum: number, r: any) => sum + r.rating, 0) / reviewCount;
         }
       }
 
@@ -240,9 +288,7 @@ export default function ProfileScreen() {
         top_activities: topActivities || [],
       });
     } catch (error) {
-      console.error('Error loading basic business stats:', error);
-    } finally {
-      setLoadingStats(false);
+      console.error('Error loading business dashboard fallback:', error);
     }
   };
 

@@ -27,6 +27,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomTabBarHeightContext } from '@react-navigation/bottom-tabs';
 import { PREDEFINED_CATEGORIES } from '@/constants/categories';
+import { useDataCache } from '@/contexts/DataCacheContext';
 
 
 const PROTOMAPS_KEY = process.env.EXPO_PUBLIC_PROTOMAPS_KEY || '';
@@ -109,13 +110,10 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 export default function BrowseScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { cache, loading: cacheLoading, refreshActivities } = useDataCache();
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('liste');
   const [selectedActivity, setSelectedActivity] = useState<SelectedActivity | null>(null);
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [latestSlotDateByActivity, setLatestSlotDateByActivity] = useState<Record<string, string | null>>({});
-  const [slotCountByActivity, setSlotCountByActivity] = useState<Record<string, number>>({});
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const webViewRef = useRef<WebView>(null);
@@ -126,13 +124,23 @@ export default function BrowseScreen() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
 
+  // Utiliser les données du cache
+  const activities = cache.activities;
+  const latestSlotDateByActivity = Object.fromEntries(
+    Object.entries(cache.slotDataByActivity).map(([id, data]) => [id, data.latestDate])
+  );
+  const slotCountByActivity = Object.fromEntries(
+    Object.entries(cache.slotDataByActivity).map(([id, data]) => [id, data.slotCount])
+  );
+  const remainingPlacesByActivity = Object.fromEntries(
+    Object.entries(cache.slotDataByActivity).map(([id, data]) => [id, data.remainingPlaces])
+  );
+  const loading = cacheLoading;
+
   // États pour les filtres
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<FilterOptions>(DEFAULT_FILTERS);
   const [tempFilters, setTempFilters] = useState<FilterOptions>(DEFAULT_FILTERS);
-
-  // Données de places restantes par activité (total des places de tous les slots - places prises)
-  const [remainingPlacesByActivity, setRemainingPlacesByActivity] = useState<Record<string, number>>({});
 
   // Compteur de filtres actifs
   const activeFiltersCount = useMemo(() => {
@@ -223,86 +231,8 @@ export default function BrowseScreen() {
     };
   }, []);
 
-  const loadActivities = async () => {
-    try {
-      const result = await activityService.getActivities();
-      if (result.success && result.data) {
-
-        // Charge la date la plus récente dispo (activity_slots) pour chaque activité
-        const ids = result.data.map(a => a.id);
-        const todayStr = new Date().toISOString().split('T')[0];
-
-        // Récupérer les slots futurs avec leurs IDs et leur capacité individuelle
-        const { data: slots } = await supabase
-          .from('activity_slots')
-          .select('id, activity_id, date, max_participants')
-          .in('activity_id', ids)
-          .gte('date', todayStr)
-          .order('date', { ascending: true });
-
-        const slotIds = (slots || []).map(s => s.id);
-
-        // Récupérer le nombre de participants par slot
-        const { data: slotParticipants } = await supabase
-          .from('slot_participants')
-          .select('slot_id, activity_id')
-          .in('slot_id', slotIds.length > 0 ? slotIds : ['__none__']);
-
-        // Calculer les participants par slot (pour calculer les places restantes par slot)
-        const participantsBySlot: Record<string, number> = {};
-        (slotParticipants || []).forEach(sp => {
-          participantsBySlot[sp.slot_id] = (participantsBySlot[sp.slot_id] || 0) + 1;
-        });
-
-        // Calculer les places totales et restantes par activité
-        // en sommant la capacité de chaque créneau moins ses inscrits
-        const map: Record<string, string | null> = {};
-        const slotCountMap: Record<string, number> = {};
-        const remainingMap: Record<string, number> = {};
-
-        ids.forEach(id => {
-          map[id] = null;
-          slotCountMap[id] = 0;
-          remainingMap[id] = 0;
-        });
-
-        // Pour chaque slot, calculer les places restantes et les ajouter au total de l'activité
-        (slots || []).forEach(s => {
-          if (map[s.activity_id] == null) map[s.activity_id] = s.date;
-          slotCountMap[s.activity_id] = (slotCountMap[s.activity_id] || 0) + 1;
-
-          // Capacité de ce créneau (fallback sur 10 si non défini)
-          const slotCapacity = s.max_participants || 10;
-          // Nombre de participants inscrits à ce créneau
-          const slotParticipantCount = participantsBySlot[s.id] || 0;
-          // Places restantes pour ce créneau
-          const slotRemaining = Math.max(0, slotCapacity - slotParticipantCount);
-          // Ajouter au total de l'activité
-          remainingMap[s.activity_id] = (remainingMap[s.activity_id] || 0) + slotRemaining;
-        });
-
-        setLatestSlotDateByActivity(map);
-        setSlotCountByActivity(slotCountMap);
-        setRemainingPlacesByActivity(remainingMap);
-
-        // Filtrer : garder uniquement les activités qui ont au moins un créneau futur
-        const activitiesWithSlots = result.data.filter((a: Activity) => map[a.id] !== null);
-        setActivities(activitiesWithSlots);
-
-        if (viewMode === 'maps' && activitiesWithSlots.length > 0) {
-          setTimeout(() => sendActivitiesToMap(activitiesWithSlots, map), 1000);
-        }
-      }
-
-    } catch (error) {
-      console.error('Erreur chargement activités:', error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  useEffect(() => { loadActivities(); }, []);
+  // Les données viennent du cache, pas besoin de loadActivities
+  // Le cache est géré globalement par DataCacheProvider
 
   useEffect(() => {
     if (viewMode === 'maps' && activities.length > 0 && !params.selectedActivityId) {
@@ -310,9 +240,10 @@ export default function BrowseScreen() {
     }
   }, [viewMode, activities, params.selectedActivityId]);
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setRefreshing(true);
-    loadActivities();
+    await refreshActivities();
+    setRefreshing(false);
   };
 
   const sendActivitiesToMap = (
