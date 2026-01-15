@@ -1,5 +1,5 @@
 // app/(tabs)/chat.tsx
-import React, { useState, useEffect , useCallback} from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,11 +14,10 @@ import {
   TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { useFriendRequests } from '@/hooks/useMessaging';
-import { useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDataCache } from '@/contexts/DataCacheContext';
 import { supabase } from "@/lib/supabase"; // adapte le chemin
@@ -53,11 +52,19 @@ export default function ChatScreen() {
   const [activeFilter, setActiveFilter] = useState<ChatFilter>('ongoing');
 
   // Obtenir les données via le cache global
-  const { cache, markConversationAsRead } = useDataCache();
+  const { cache, markConversationAsRead, refreshConversations } = useDataCache();
   const { pendingCount: pendingRequestsCount } = useFriendRequests();
   const { profile } = useAuth();
   const [activityContacts, setActivityContacts] = useState<Friend[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Rafraîchir les conversations à chaque fois qu'on revient sur cette page
+  // pour mettre à jour les compteurs de messages non lus
+  useFocusEffect(
+    useCallback(() => {
+      refreshConversations();
+    }, [refreshConversations])
+  );
 
   // Utiliser les données du cache
   const conversations = cache.conversations;
@@ -146,7 +153,11 @@ const renderChatItem = (chat: Conversation) => (
   <TouchableOpacity
     key={chat.id}
     style={styles.chatItem}
-    onPress={() => router.push(`/chat-detail?id=${chat.id}`)}
+    onPress={() => {
+      // Marquer comme lue immédiatement (optimistic)
+      markConversationAsRead(chat.id);
+      router.push(`/chat-detail?id=${chat.id}`);
+    }}
     activeOpacity={0.8}
   >
     <View style={styles.chatImageContainer}>
@@ -182,6 +193,7 @@ const renderChatItem = (chat: Conversation) => (
     </View>
   </TouchableOpacity>
 );
+
 // Charger les personnes avec qui on a fait des activités
 const loadActivityContacts = async () => {
   try {

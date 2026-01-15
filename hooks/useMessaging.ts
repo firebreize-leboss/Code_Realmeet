@@ -674,13 +674,13 @@ export function useConversations() {
   };
 
   return {
-    conversations,
-    loading,
-    error,
-    createConversation,
-    markAsRead,
-    refresh: loadConversations,
-  };
+  conversations,
+  loading,
+  error,
+  createConversation,
+  markAsRead,
+  refreshConversations: loadConversations,
+};
 }
 
 // ============================================
@@ -691,12 +691,106 @@ export function useMessages(conversationId: string) {
   const [messages, setMessages] = useState<TransformedMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [userProfile, setUserProfile] = useState<{ full_name: string; avatar_url: string } | null>(null);
+  const loadedMessageIdsRef = useRef<Set<string>>(new Set());
+  const isLoadingRef = useRef(false);
+  const hasInitialLoadRef = useRef(false);
 
+  // Chargement initial PARALLÈLE : utilisateur + messages en même temps
+  useEffect(() => {
+    if (!conversationId || hasInitialLoadRef.current) return;
+    hasInitialLoadRef.current = true;
+
+    const loadInitialData = async () => {
+      try {
+        isLoadingRef.current = true;
+        setLoading(true);
+
+        // Charger utilisateur ET messages EN PARALLÈLE
+        const [userResult, messagesResult] = await Promise.all([
+          // 1. Charger l'utilisateur et son profil
+          (async () => {
+            const { data: userData } = await supabase.auth.getUser();
+            if (!userData?.user?.id) return null;
+
+            const { data: profileData } = await supabase
+              .from('profiles')
+              .select('full_name, avatar_url')
+              .eq('id', userData.user.id)
+              .single();
+
+            return {
+              userId: userData.user.id,
+              profile: profileData as { full_name: string; avatar_url: string } | null
+            };
+          })(),
+          // 2. Charger les messages
+          supabase
+            .from('messages')
+            .select(`
+              *,
+              profiles:sender_id (
+                id,
+                full_name,
+                avatar_url
+              )
+            `)
+            .eq('conversation_id', conversationId)
+            .is('deleted_at', null)
+            .order('created_at', { ascending: true })
+        ]);
+
+        // Mettre à jour l'utilisateur
+        if (userResult) {
+          setCurrentUserId(userResult.userId);
+          if (userResult.profile) {
+            setUserProfile(userResult.profile);
+          }
+        }
+
+        // Mettre à jour les messages
+        if (!messagesResult.error && messagesResult.data) {
+          const messagesData = messagesResult.data as any[];
+          const transformedMessages: TransformedMessage[] = messagesData.map(msg => ({
+            id: msg.id,
+            senderId: msg.sender_id,
+            senderName: msg.profiles?.full_name || 'Inconnu',
+            senderAvatar: msg.profiles?.avatar_url,
+            text: msg.content || undefined,
+            imageUrl: msg.message_type === 'image' ? msg.media_url || undefined : undefined,
+            voiceUrl: msg.message_type === 'voice' ? msg.media_url || undefined : undefined,
+            voiceDuration: msg.media_duration || undefined,
+            type: msg.message_type,
+            timestamp: new Date(msg.created_at).toLocaleTimeString('fr-FR', {
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+            status: 'delivered' as const,
+          }));
+
+          loadedMessageIdsRef.current = new Set(transformedMessages.map(m => m.id));
+          setMessages(transformedMessages);
+        }
+      } catch (err) {
+        console.error('Error loading initial data:', err);
+        setError(err as Error);
+      } finally {
+        setLoading(false);
+        isLoadingRef.current = false;
+      }
+    };
+
+    loadInitialData();
+  }, [conversationId]);
+
+  // Fonction de refresh (pour les rechargements manuels)
   const loadMessages = useCallback(async () => {
-    if (!conversationId) return;
+    if (!conversationId || isLoadingRef.current) return;
 
     try {
-      setLoading(true);
+      isLoadingRef.current = true;
+
       const { data, error } = await supabase
         .from('messages')
         .select(`
@@ -727,15 +821,16 @@ export function useMessages(conversationId: string) {
           hour: '2-digit',
           minute: '2-digit',
         }),
-        status: 'delivered', // Messages chargés sont déjà délivrés
+        status: 'delivered',
       })) || [];
 
+      loadedMessageIdsRef.current = new Set(transformedMessages.map(m => m.id));
       setMessages(transformedMessages);
     } catch (err) {
       console.error('Error loading messages:', err);
       setError(err as Error);
     } finally {
-      setLoading(false);
+      isLoadingRef.current = false;
     }
   }, [conversationId]);
 
@@ -759,65 +854,57 @@ export function useMessages(conversationId: string) {
           filter: `conversation_id=eq.${conversationId}`,
         },
         async (payload: any) => {
-          console.log('🔔 New message from other user:', payload);
+          const newMsg = payload.new;
+
+          // Vérifier si le message existe déjà (évite les doublons avec les messages optimistes)
+          if (loadedMessageIdsRef.current.has(newMsg.id)) {
+            return;
+          }
+
+          // Charger le profil de l'expéditeur
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('full_name, avatar_url')
+            .eq('id', newMsg.sender_id)
+            .single();
+
+          const profile = profileData as { full_name: string; avatar_url: string } | null;
+
+          const newMessage: TransformedMessage = {
+            id: newMsg.id,
+            senderId: newMsg.sender_id,
+            senderName: profile?.full_name || 'Inconnu',
+            senderAvatar: profile?.avatar_url,
+            text: newMsg.content || undefined,
+            imageUrl: newMsg.message_type === 'image' ? newMsg.media_url || undefined : undefined,
+            voiceUrl: newMsg.message_type === 'voice' ? newMsg.media_url || undefined : undefined,
+            voiceDuration: newMsg.media_duration || undefined,
+            type: newMsg.message_type,
+            timestamp: new Date(newMsg.created_at).toLocaleTimeString('fr-FR', {
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+            status: 'delivered',
+          };
 
           setMessages(prev => {
-            const exists = prev.some(msg => msg.id === payload.new.id);
-            if (exists) {
-              console.log('⚠️ Message already exists, skipping');
+            // Double vérification pour éviter les doublons
+            if (prev.some(m => m.id === newMsg.id)) {
               return prev;
             }
-
-            supabase
-              .from('profiles')
-              .select('full_name, avatar_url')
-              .eq('id', payload.new.sender_id)
-              .single()
-              .then(({ data: profile }) => {
-                const newMessage: TransformedMessage = {
-                  id: payload.new.id,
-                  senderId: payload.new.sender_id,
-                  senderName: profile?.full_name || 'Inconnu',
-                  senderAvatar: profile?.avatar_url,
-                  text: payload.new.content || undefined,
-                  imageUrl: payload.new.message_type === 'image' 
-                    ? payload.new.media_url || undefined 
-                    : undefined,
-                  voiceUrl: payload.new.message_type === 'voice' 
-                    ? payload.new.media_url || undefined 
-                    : undefined,
-                  voiceDuration: payload.new.media_duration || undefined,
-                  type: payload.new.message_type,
-                  timestamp: new Date(payload.new.created_at).toLocaleTimeString('fr-FR', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  }),
-                  status: 'delivered',
-                };
-
-                setMessages(prevMsgs => {
-                  if (prevMsgs.some(m => m.id === newMessage.id)) {
-                    return prevMsgs;
-                  }
-                  return [...prevMsgs, newMessage];
-                });
-              });
-
-            return prev;
+            loadedMessageIdsRef.current.add(newMsg.id);
+            return [...prev, newMessage];
           });
         }
       )
-      .subscribe(status => {
-        console.log('📡 Realtime subscription status:', status);
-      });
+      .subscribe();
 
     return () => {
-      console.log('🔌 Cleaning up realtime subscription');
       supabase.removeChannel(channel);
     };
   }, [conversationId, loadMessages]);
 
-  // ENVOI DE MESSAGE AVEC SYSTÈME DE STATUT
+  // ENVOI DE MESSAGE AVEC SYSTÈME DE STATUT OPTIMISÉ (utilise le cache)
   const sendMessage = async (
     content: string,
     type: 'text' | 'image' | 'voice' = 'text',
@@ -825,23 +912,32 @@ export function useMessages(conversationId: string) {
     mediaDuration?: number
   ) => {
     try {
-      const { data: currentUser } = await supabase.auth.getUser();
+      // Utiliser le cache si disponible, sinon charger
+      let userId = currentUserId;
+      let profile = userProfile;
 
-      if (!currentUser?.user?.id) {
-        throw new Error('User not authenticated');
+      if (!userId) {
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData?.user?.id) {
+          throw new Error('User not authenticated');
+        }
+        userId = userData.user.id;
       }
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('full_name, avatar_url')
-        .eq('id', currentUser.user.id)
-        .single();
+      if (!profile) {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('full_name, avatar_url')
+          .eq('id', userId)
+          .single();
+        profile = profileData as { full_name: string; avatar_url: string } | null;
+      }
 
       const tempId = `temp_${Date.now()}_${Math.random()}`;
 
       const optimisticMessage: TransformedMessage = {
         id: tempId,
-        senderId: currentUser.user.id,
+        senderId: userId,
         senderName: profile?.full_name || 'Moi',
         senderAvatar: profile?.avatar_url,
         text: type === 'text' ? content : undefined,
@@ -858,16 +954,16 @@ export function useMessages(conversationId: string) {
 
       setMessages(prev => [...prev, optimisticMessage]);
 
-      const { data, error } = await supabase
+      const { data: messageData, error } = await supabase
         .from('messages')
         .insert({
           conversation_id: conversationId,
-          sender_id: currentUser.user.id,
+          sender_id: userId,
           content: type === 'text' ? content : null,
           message_type: type,
           media_url: mediaUrl || null,
           media_duration: mediaDuration || null,
-        })
+        } as any)
         .select()
         .single();
 
@@ -882,27 +978,24 @@ export function useMessages(conversationId: string) {
         throw error;
       }
 
+      const insertedMessage = messageData as { id: string } | null;
+      if (!insertedMessage) throw new Error('Message insertion failed');
+
+      // Ajouter le vrai ID aux messages chargés pour éviter les doublons avec realtime
+      loadedMessageIdsRef.current.add(insertedMessage.id);
+
+      // Remplacer le message optimiste par le vrai message
       setMessages(prev =>
         prev.map(msg =>
           msg.id === tempId
             ? {
                 ...msg,
-                id: data.id,
-                status: 'sent' as const,
+                id: insertedMessage.id,
+                status: 'delivered' as const,
               }
             : msg
         )
       );
-
-      setTimeout(() => {
-        setMessages(prev =>
-          prev.map(msg =>
-            msg.id === data.id
-              ? { ...msg, status: 'delivered' as const }
-              : msg
-          )
-        );
-      }, 1000);
 
     } catch (err) {
       console.error('Error sending message:', err);
@@ -916,6 +1009,7 @@ export function useMessages(conversationId: string) {
     error,
     sendMessage,
     refresh: loadMessages,
+    currentUserId,
   };
 }
 

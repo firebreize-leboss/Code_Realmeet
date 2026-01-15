@@ -23,7 +23,7 @@ import { colors, commonStyles } from '@/styles/commonStyles';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 // ✅ MODIFICATION : Ajouter useConversations pour markAsRead
-import { useMessages, useConversations, MessageStatus, TransformedMessage } from '@/hooks/useMessaging';
+import { useMessages, useConversations, TransformedMessage } from '@/hooks/useMessaging';
 import { Keyboard } from 'react-native';
 import { messageStorageService } from '@/services/message-storage.service';
 import { voiceMessageService } from '@/services/voice-message.service';
@@ -53,9 +53,6 @@ export default function ChatDetailScreen() {
   const [convImage, setConvImage] = useState('');
   const [isGroup, setIsGroup] = useState(false);
   const [activityId, setActivityId] = useState<string | null>(null);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [currentUserName, setCurrentUserName] = useState('Moi');
-  const [currentUserAvatar, setCurrentUserAvatar] = useState('');
   const [message, setMessage] = useState('');
   const [otherUserId, setOtherUserId] = useState<string | null>(null);
 
@@ -81,19 +78,14 @@ export default function ChatDetailScreen() {
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportTargetMessageId, setReportTargetMessageId] = useState<string | null>(null);
 
-  const [localMessages, setLocalMessages] = useState<Message[]>([]);
+  const { messages, loading: messagesLoading, sendMessage, currentUserId } = useMessages(conversationId as string);
 
-  const { messages, loading: messagesLoading, sendMessage } = useMessages(conversationId as string);
-  
   // ✅ MODIFICATION : Récupérer markAsRead depuis useConversations
   const { markAsRead } = useConversations();
-  
-  const combinedMessages: Message[] = [...(messages || []), ...localMessages];
 
   const [keyboardExtraOffset, setKeyboardExtraOffset] = useState(0);
 
-  const { refreshConversations } = useConversations();
-
+  
   // ✅ NOUVEAU : Marquer la conversation comme lue quand on l'ouvre
   useEffect(() => {
     if (conversationId) {
@@ -112,7 +104,7 @@ export default function ChatDetailScreen() {
     }
   }, [messages, conversationId, markAsRead]);
 
-  // Charger les infos de conversation
+  // Charger les infos de conversation (OPTIMISÉ - requêtes groupées)
   useEffect(() => {
     const loadConversationInfo = async () => {
       try {
@@ -120,107 +112,115 @@ export default function ChatDetailScreen() {
         const currentUser = userData?.user;
         if (!currentUser) return;
 
-        setCurrentUserId(currentUser.id);
+        if (!conversationId) return;
 
-        const { data: myProfile } = await supabase
-          .from('profiles')
-          .select('full_name, avatar_url')
-          .eq('id', currentUser.id)
+        // Charger les infos de conversation
+        const { data: convDataRaw } = await supabase
+          .from('conversations')
+          .select('*, name, image_url, is_closed, closed_reason, closed_at, activity_id, slot_id')
+          .eq('id', conversationId)
           .single();
 
-        if (myProfile) {
-          setCurrentUserName(myProfile.full_name || 'Moi');
-          setCurrentUserAvatar(myProfile.avatar_url || '');
+        const convData = convDataRaw as any;
+        if (!convData) return;
+
+        const isGroupConv = convData.is_group === true || !convData.name;
+        setIsGroup(isGroupConv);
+
+        // REQUÊTE GROUPÉE 2: Charger slot et participants en parallèle si nécessaire
+        const requests: any[] = [];
+
+        if (convData.slot_id) {
+          requests.push(
+            supabase
+              .from('activity_slots')
+              .select('activity_id, date, time, duration')
+              .eq('id', convData.slot_id)
+              .single()
+          );
         }
 
-        if (conversationId) {
-          const { data: convData } = await supabase
-            .from('conversations')
-            .select('*, name, image_url, is_closed, closed_reason, closed_at, activity_id, slot_id')
-            .eq('id', conversationId)
-            .single();
+        if (!convData.name) {
+          requests.push(
+            supabase
+              .from('conversation_participants')
+              .select(`user_id, is_muted, profiles (full_name, avatar_url)`)
+              .eq('conversation_id', conversationId)
+          );
+        }
 
-          if (convData) {
-            const isGroupConv = convData.is_group === true || !convData.name;
-            setIsGroup(isGroupConv);
+        const results = requests.length > 0 ? await Promise.all(requests) : [];
 
-            // Récupérer l'activity_id pour les groupes d'activité
-            if (convData.slot_id) {
-              const { data: slotData } = await supabase
-                .from('activity_slots')
-                .select('activity_id, date, time, duration')
-                .eq('id', convData.slot_id)
-                .single();
+        // Traiter les résultats du slot
+        if (convData.slot_id && results[0]?.data) {
+          const slotData = results[0].data;
 
-              if (slotData?.activity_id) {
-                setActivityId(slotData.activity_id);
-              }
+          if (slotData?.activity_id) {
+            setActivityId(slotData.activity_id);
+          }
 
-              // Vérifier si le créneau est passé et fermer le groupe automatiquement
-              if (slotData && !convData.is_closed) {
-                const slotDateTime = new Date(`${slotData.date}T${slotData.time || '00:00'}`);
-                const slotDuration = slotData.duration || 60; // durée en minutes
-                const slotEndTime = new Date(slotDateTime.getTime() + slotDuration * 60000);
-                const now = new Date();
+          // Vérifier si le créneau est passé
+          if (slotData && !convData.is_closed) {
+            const slotDateTime = new Date(`${slotData.date}T${slotData.time || '00:00'}`);
+            const slotDuration = slotData.duration || 60;
+            const slotEndTime = new Date(slotDateTime.getTime() + slotDuration * 60000);
+            const now = new Date();
 
-                if (now > slotEndTime) {
-                  // Le créneau est passé, fermer la conversation
-                  await supabase
-                    .from('conversations')
-                    .update({
-                      is_closed: true,
-                      closed_reason: 'Le créneau de cette activité est terminé',
-                      closed_at: new Date().toISOString(),
-                    })
-                    .eq('id', conversationId);
+            if (now > slotEndTime) {
+              await supabase
+                .from('conversations')
+                .update({
+                  is_closed: true,
+                  closed_reason: 'Le créneau de cette activité est terminé',
+                  closed_at: new Date().toISOString(),
+                })
+                .eq('id', conversationId);
 
-                  convData.is_closed = true;
-                  convData.closed_reason = 'Le créneau de cette activité est terminé';
-                  convData.closed_at = new Date().toISOString();
-                }
-              }
-            } else if (convData.activity_id) {
-              setActivityId(convData.activity_id);
+              convData.is_closed = true;
+              convData.closed_reason = 'Le créneau de cette activité est terminé';
+              convData.closed_at = new Date().toISOString();
+            }
+          }
+        } else if (convData.activity_id) {
+          setActivityId(convData.activity_id);
+        }
+
+        setConversationStatus({
+          isClosed: convData.is_closed || false,
+          closedReason: convData.closed_reason,
+          closedAt: convData.closed_at,
+        });
+
+        if (convData.name) {
+          setConvName(convData.name);
+          setConvImage(convData.image_url || '');
+        } else {
+          // Traiter les participants
+          const participantsIndex = convData.slot_id ? 1 : 0;
+          const participants = results[participantsIndex]?.data;
+
+          if (participants) {
+            const myParticipant = participants.find((p: any) => p.user_id === currentUser.id);
+            if (myParticipant) {
+              setIsMuted(myParticipant.is_muted || false);
             }
 
-            setConversationStatus({
-              isClosed: convData.is_closed || false,
-              closedReason: convData.closed_reason,
-              closedAt: convData.closed_at,
-            });
+            const otherParticipant = participants.find((p: any) => p.user_id !== currentUser.id);
 
-            if (convData.name) {
-              setConvName(convData.name);
-              setConvImage(convData.image_url || '');
-            } else {
-              const { data: participants } = await supabase
-                .from('conversation_participants')
-                .select(`user_id, is_muted, profiles (full_name, avatar_url)`)
-                .eq('conversation_id', conversationId);
+            if (otherParticipant) {
+              setOtherUserId(otherParticipant.user_id);
+              const profile = (otherParticipant as any).profiles;
+              setConvName(profile?.full_name || 'Utilisateur');
+              setConvImage(profile?.avatar_url || '');
 
-              const myParticipant = participants?.find((p: any) => p.user_id === currentUser.id);
-              if (myParticipant) {
-                setIsMuted(myParticipant.is_muted || false);
-              }
+              // REQUÊTE GROUPÉE 3: Vérifier le blocage en parallèle
+              const [blocked, blockedByOther] = await Promise.all([
+                blockService.isUserBlocked(otherParticipant.user_id),
+                blockService.amIBlockedBy(otherParticipant.user_id)
+              ]);
 
-              
-
-              const otherParticipant = participants?.find(
-                (p: any) => p.user_id !== currentUser.id
-              );
-
-              if (otherParticipant) {
-                setOtherUserId(otherParticipant.user_id);
-                const profile = (otherParticipant as any).profiles;
-                setConvName(profile?.full_name || 'Utilisateur');
-                setConvImage(profile?.avatar_url || '');
-
-                const blocked = await blockService.isUserBlocked(otherParticipant.user_id);
-                setIsBlocked(blocked);
-
-                const blockedByOther = await blockService.amIBlockedBy(otherParticipant.user_id);
-                setHasBlockedMe(blockedByOther);
-              }
+              setIsBlocked(blocked);
+              setHasBlockedMe(blockedByOther);
             }
           }
         }
@@ -260,7 +260,7 @@ useEffect(() => {
   
   useEffect(() => {
     scrollViewRef.current?.scrollToEnd({ animated: true });
-  }, [combinedMessages]);
+  }, [messages]);
 
   useEffect(() => {
     return () => {
@@ -365,27 +365,10 @@ useEffect(() => {
     setMessage('');
     Keyboard.dismiss();
 
-    const optimisticId = `temp-${Date.now()}`;
-    const optimisticMessage: Message = {
-      id: optimisticId,
-      senderId: currentUserId!,
-      senderName: currentUserName,
-      senderAvatar: currentUserAvatar,
-      text: userMessage,
-      timestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-      status: 'sending' as MessageStatus,
-      type: 'text',
-    };
-
-    setLocalMessages(prev => [...prev, optimisticMessage]);
-
     try {
       await sendMessage(userMessage, 'text');
-      setLocalMessages(prev => prev.filter(msg => msg.id !== optimisticId));
     } catch (error) {
-      setLocalMessages(prev =>
-        prev.map(msg => (msg.id === optimisticId ? { ...msg, status: 'failed' as MessageStatus } : msg))
-      );
+      console.error('Error sending message:', error);
     }
   };
 
@@ -409,28 +392,10 @@ useEffect(() => {
       });
 
       if (!result.canceled && result.assets[0]) {
-        const optimisticId = `temp-${Date.now()}`;
-        const optimisticMessage: Message = {
-          id: optimisticId,
-          senderId: currentUserId!,
-          senderName: currentUserName,
-          senderAvatar: currentUserAvatar,
-          imageUrl: result.assets[0].uri,
-          timestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-          status: 'sending' as MessageStatus,
-          type: 'image',
-        };
-
-        setLocalMessages(prev => [...prev, optimisticMessage]);
-
         try {
           const uploadedUrl = await messageStorageService.uploadImage(result.assets[0].uri);
           await sendMessage('', 'image', uploadedUrl);
-          setLocalMessages(prev => prev.filter(msg => msg.id !== optimisticId));
         } catch (error) {
-          setLocalMessages(prev =>
-            prev.map(msg => (msg.id === optimisticId ? { ...msg, status: 'failed' as MessageStatus } : msg))
-          );
           Alert.alert('Erreur', "Impossible d'envoyer l'image");
         }
       }
@@ -481,34 +446,15 @@ useEffect(() => {
     const duration = result.duration || recordingTime;
 
     if (duration >= 1) {
-      const optimisticId = `temp-${Date.now()}`;
-      const optimisticMessage: Message = {
-        id: optimisticId,
-        senderId: currentUserId!,
-        senderName: currentUserName,
-        senderAvatar: currentUserAvatar,
-        voiceUrl: uri,
-        voiceDuration: duration,
-        timestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-        status: 'sending' as MessageStatus,
-        type: 'voice',
-      };
-
-      setLocalMessages(prev => [...prev, optimisticMessage]);
-
       try {
         const uploadedUrl = await messageStorageService.uploadVoiceMessage(uri);
         if (uploadedUrl) {
           await sendMessage('', 'voice', uploadedUrl, duration);
-          setLocalMessages(prev => prev.filter(msg => msg.id !== optimisticId));
         } else {
           throw new Error('Upload failed');
         }
       } catch (error) {
         console.error('Erreur upload message vocal:', error);
-        setLocalMessages(prev =>
-          prev.map(msg => (msg.id === optimisticId ? { ...msg, status: 'failed' as MessageStatus } : msg))
-        );
         Alert.alert('Erreur', "Impossible d'envoyer le message vocal");
       }
     }
@@ -707,12 +653,12 @@ useEffect(() => {
             </View>
           )}
 
-          {messagesLoading ? (
+          {(messagesLoading || !currentUserId) ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={colors.primary} />
             </View>
           ) : (
-            combinedMessages.map(renderMessage)
+            messages.map(renderMessage)
           )}
         </ScrollView>
 
