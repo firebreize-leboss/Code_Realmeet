@@ -349,10 +349,10 @@ export default function ChatScreen() {
     >
       <View style={styles.onlineAvatarContainer}>
         <LinearGradient
-          colors={['#A855F7', '#EC4899', '#F43F5E']}
-          style={styles.onlineAvatarBorder}
+          colors={['#60A5FA', '#818CF8', '#C084FC']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
+          style={styles.onlineAvatarBorder}
         >
           <View style={styles.onlineAvatarInner}>
             <Image
@@ -407,13 +407,20 @@ export default function ChatScreen() {
         <View style={styles.chatItemContent}>
           {/* Avatar avec indicateur en ligne */}
           <View style={styles.chatImageContainer}>
-            <Image
-              source={{ uri: chat.image || 'https://via.placeholder.com/56' }}
-              style={[
-                styles.chatImage,
-                isActivity && styles.chatImageActivity,
-              ]}
-            />
+            <LinearGradient
+              colors={['#60A5FA', '#818CF8', '#C084FC']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.chatAvatarGradient}
+            >
+              <Image
+                source={{ uri: chat.image || 'https://via.placeholder.com/56' }}
+                style={[
+                  styles.chatImage,
+                  isActivity && styles.chatImageActivity,
+                ]}
+              />
+            </LinearGradient>
             {isOnline && (
               <View style={styles.chatOnlineIndicator}>
                 <OnlinePulse size={14} />
@@ -475,7 +482,7 @@ export default function ChatScreen() {
               </Text>
               {chat.unreadCount !== undefined && chat.unreadCount > 0 && (
                 <LinearGradient
-                  colors={isActivity ? ['#3B82F6', '#06B6D4'] : ['#F43F5E', '#EC4899']}
+                  colors={['#818CF8', '#C084FC']}
                   style={styles.unreadBadge}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
@@ -518,58 +525,27 @@ export default function ChatScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      {/* Header avec gradient */}
+      {/* Header */}
       <LinearGradient
-        colors={['#A855F7', '#EC4899', '#F43F5E']}
-        style={styles.header}
+        colors={['#60A5FA', '#818CF8', '#C084FC']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
+        style={styles.header}
       >
         <SafeAreaView edges={['top']} style={styles.headerSafeArea}>
           <View style={styles.headerTop}>
             <View style={styles.headerTitleRow}>
-              <Text style={styles.headerTitle}>Messages</Text>
-              <View style={styles.headerButtons}>
+              <View style={{ flex: 1 }} />
+              <Text style={styles.headerUsername}>
+                {profile?.full_name || profile?.username || 'Utilisateur'}
+              </Text>
+              <View style={styles.headerEditButtonContainer}>
                 <TouchableOpacity
-                  style={styles.headerButton}
-                  onPress={() => router.push('/friend-requests')}
-                >
-                  <IconSymbol name="envelope.fill" size={20} color="#FFFFFF" />
-                  {pendingRequestsCount > 0 && (
-                    <View style={styles.headerBadge}>
-                      <Text style={styles.headerBadgeText}>
-                        {pendingRequestsCount > 9 ? '9+' : pendingRequestsCount}
-                      </Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.headerButton}
-                  onPress={() => router.push('/add-friends')}
-                >
-                  <IconSymbol name="person.badge.plus" size={20} color="#FFFFFF" />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.headerButton}
+                  style={styles.headerEditButton}
                   onPress={() => setShowFriendsModal(true)}
                 >
-                  <IconSymbol name="square.and.pencil" size={20} color="#FFFFFF" />
+                  <IconSymbol name="pencil" size={20} color="#FFFFFF" />
                 </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Compteurs */}
-            <View style={styles.headerStats}>
-              <View style={styles.headerStatItem}>
-                <IconSymbol name="person.2.fill" size={14} color="rgba(255,255,255,0.9)" />
-                <Text style={styles.headerStatText}>{groupsCount} groupes</Text>
-              </View>
-              <Text style={styles.headerStatDot}>•</Text>
-              <View style={styles.headerStatItem}>
-                <IconSymbol name="heart.fill" size={14} color="rgba(255,255,255,0.9)" />
-                <Text style={styles.headerStatText}>{friendsCount} amis</Text>
               </View>
             </View>
 
@@ -612,10 +588,10 @@ export default function ChatScreen() {
         >
           {activeFilter === 'all' ? (
             <LinearGradient
-              colors={['#A855F7', '#EC4899']}
-              style={styles.filterTabActive}
+              colors={['#60A5FA', '#818CF8']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
+              style={styles.filterTabActive}
             >
               <IconSymbol name="sparkles" size={16} color="#FFFFFF" />
               <Text style={styles.filterTabTextActive}>Tous</Text>
@@ -636,10 +612,10 @@ export default function ChatScreen() {
         >
           {activeFilter === 'activities' ? (
             <LinearGradient
-              colors={['#3B82F6', '#06B6D4']}
-              style={styles.filterTabActive}
+              colors={['#60A5FA', '#818CF8']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
+              style={styles.filterTabActive}
             >
               <IconSymbol name="calendar" size={16} color="#FFFFFF" />
               <Text style={styles.filterTabTextActive}>Activités</Text>
@@ -670,10 +646,10 @@ export default function ChatScreen() {
         >
           {activeFilter === 'friends' ? (
             <LinearGradient
-              colors={['#F43F5E', '#EC4899']}
-              style={styles.filterTabActive}
+              colors={['#60A5FA', '#818CF8']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
+              style={styles.filterTabActive}
             >
               <IconSymbol name="heart.fill" size={16} color="#FFFFFF" />
               <Text style={styles.filterTabTextActive}>Amis</Text>
@@ -700,7 +676,7 @@ export default function ChatScreen() {
       {/* Bannière d'info selon le filtre */}
       {activeFilter === 'activities' && (
         <View style={styles.infoBannerActivity}>
-          <IconSymbol name="calendar" size={18} color="#3B82F6" />
+          <IconSymbol name="calendar" size={18} color="#818CF8" />
           <Text style={styles.infoBannerTextActivity}>
             Groupes d'activités - Conversations créées automatiquement pour vos activités planifiées
           </Text>
@@ -715,6 +691,17 @@ export default function ChatScreen() {
         </View>
       )}
 
+      {/* Titre Messages */}
+      <View style={styles.messagesTitleContainer}>
+        <Text style={styles.messagesTitle}>Messages</Text>
+        <LinearGradient
+          colors={['#60A5FA', '#C084FC']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.messagesTitleBar}
+        />
+      </View>
+
       {/* Liste des conversations */}
       <ScrollView
         style={styles.scrollView}
@@ -726,7 +713,7 @@ export default function ChatScreen() {
       >
         {convLoading ? (
           <View style={styles.emptyState}>
-            <ActivityIndicator size="large" color="#A855F7" />
+            <ActivityIndicator size="large" color="#818CF8" />
           </View>
         ) : getFilteredConversations().length > 0 ? (
           <View style={styles.section}>
@@ -792,7 +779,7 @@ export default function ChatScreen() {
 
           {friendsLoading ? (
             <View style={styles.emptyState}>
-              <ActivityIndicator size="large" color="#A855F7" />
+              <ActivityIndicator size="large" color="#818CF8" />
               <Text style={styles.emptyText}>Chargement...</Text>
             </View>
           ) : friends.length === 0 ? (
@@ -852,13 +839,11 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAF5FF',
+    backgroundColor: '#FFF8F5',
   },
 
   // Header styles
   header: {
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
     overflow: 'hidden',
   },
   headerSafeArea: {
@@ -871,65 +856,33 @@ const styles = StyleSheet.create({
   },
   headerTitleRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: -0.5,
-  },
-  headerButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  headerButton: {
-    position: 'relative',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-  },
-  headerBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#F43F5E',
-  },
-  headerStats: {
-    flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 16,
   },
-  headerStatItem: {
-    flexDirection: 'row',
+  headerUsername: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'center',
+  },
+  headerEditButtonContainer: {
+    position: 'absolute',
+    right: 0,
+  },
+  headerEditButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 6,
-  },
-  headerStatText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.9)',
-  },
-  headerStatDot: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.6)',
-    marginHorizontal: 10,
+    ...Platform.select({
+      ios: {
+        backdropFilter: 'blur(10px)',
+      },
+      android: {},
+    }),
   },
   searchBar: {
     flexDirection: 'row',
@@ -951,7 +904,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3E8FF',
+    borderBottomColor: '#F3F4F6',
   },
   onlineSectionTitle: {
     fontSize: 14,
@@ -979,6 +932,11 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 30,
     padding: 3,
+    shadowColor: 'rgba(129, 140, 248, 0.3)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   onlineAvatarInner: {
     flex: 1,
@@ -1010,6 +968,8 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     gap: 10,
     backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
   filterTab: {
     flex: 1,
@@ -1022,6 +982,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 12,
     gap: 6,
+    shadowColor: 'rgba(129, 140, 248, 0.3)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 6,
+    elevation: 4,
   },
   filterTabInactive: {
     flexDirection: 'row',
@@ -1032,7 +997,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: '#FFFFFF',
     borderWidth: 1.5,
-    borderColor: '#E5E7EB',
+    borderColor: '#F3F4F6',
     gap: 6,
   },
   filterTabTextActive: {
@@ -1074,23 +1039,42 @@ const styles = StyleSheet.create({
     color: '#6B7280',
   },
 
+  // Messages title
+  messagesTitleContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 10,
+    backgroundColor: '#FFFFFF',
+  },
+  messagesTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  messagesTitleBar: {
+    width: 30,
+    height: 3,
+    borderRadius: 2,
+  },
+
   // Info banners
   infoBannerActivity: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#FEFCFF',
     marginHorizontal: 16,
     marginTop: 12,
     padding: 14,
     borderRadius: 12,
     gap: 10,
     borderLeftWidth: 4,
-    borderLeftColor: '#3B82F6',
+    borderLeftColor: '#818CF8',
   },
   infoBannerTextActivity: {
     flex: 1,
     fontSize: 13,
-    color: '#1D4ED8',
+    color: '#7B2CBF',
     fontWeight: '500',
     lineHeight: 18,
   },
@@ -1128,13 +1112,16 @@ const styles = StyleSheet.create({
   section: {
     paddingHorizontal: 16,
     gap: 12,
+    backgroundColor: '#FFFFFF',
   },
   chatCard: {
     borderRadius: 16,
     padding: 14,
-    shadowColor: '#000',
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+    shadowColor: 'rgba(0,0,0,0.06)',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
+    shadowOpacity: 1,
     shadowRadius: 8,
     elevation: 3,
   },
@@ -1190,6 +1177,14 @@ const styles = StyleSheet.create({
   chatImageContainer: {
     position: 'relative',
   },
+  chatAvatarGradient: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    padding: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   chatImage: {
     width: 56,
     height: 56,
@@ -1231,7 +1226,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     fontWeight: '700',
-    color: '#1F2937',
+    color: '#6B21A8',
   },
   chatTime: {
     fontSize: 12,
@@ -1294,7 +1289,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 8,
-    shadowColor: '#A855F7',
+    shadowColor: '#818CF8',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
@@ -1316,7 +1311,7 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#374151',
+    color: '#6B21A8',
     marginTop: 16,
     marginBottom: 8,
   },
@@ -1345,7 +1340,7 @@ const styles = StyleSheet.create({
   // Modal styles
   modalContainer: {
     flex: 1,
-    backgroundColor: '#FAF5FF',
+    backgroundColor: '#FFF8F5',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1355,12 +1350,12 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#F3E8FF',
+    borderBottomColor: '#FFF0E8',
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1F2937',
+    color: '#6B21A8',
   },
   closeButton: {
     width: 40,
@@ -1419,8 +1414,8 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     gap: 14,
     borderWidth: 1.5,
-    borderColor: '#F3E8FF',
-    shadowColor: '#A855F7',
+    borderColor: '#FFF0E8',
+    shadowColor: '#818CF8',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 4,
@@ -1447,7 +1442,7 @@ const styles = StyleSheet.create({
   friendName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1F2937',
+    color: '#6B21A8',
   },
   friendStatus: {
     fontSize: 13,
