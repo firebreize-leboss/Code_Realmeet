@@ -320,6 +320,48 @@ export async function rejectFriendRequest(requestId: string) {
 }
 
 /**
+ * Retire un ami (supprime la relation d'amitié dans les deux sens)
+ */
+export async function removeFriend(friendId: string) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) throw new Error('No user logged in');
+
+    // Supprimer la relation dans les deux sens
+    const { error: error1 } = await supabase
+      .from('friendships')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('friend_id', friendId);
+
+    if (error1) throw error1;
+
+    const { error: error2 } = await supabase
+      .from('friendships')
+      .delete()
+      .eq('user_id', friendId)
+      .eq('friend_id', user.id);
+
+    if (error2) throw error2;
+
+    // Supprimer aussi les demandes d'ami acceptées entre les deux utilisateurs
+    // pour qu'une nouvelle demande puisse être envoyée
+    await supabase
+      .from('friend_requests')
+      .delete()
+      .or(`and(sender_id.eq.${user.id},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${user.id})`);
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error removing friend:', error);
+    return {
+      success: false,
+      error: error as Error,
+    };
+  }
+}
+
+/**
  * Crée une nouvelle conversation
  */
 export async function createConversation(participantIds: string[]) {

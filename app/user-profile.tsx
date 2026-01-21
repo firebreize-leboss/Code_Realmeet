@@ -19,9 +19,10 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { PersonalityTagsBadges } from '@/components/PersonalityTagsBadges';
 import ReportModal from '@/components/ReportModal';
 import { colors } from '@/styles/commonStyles';
-import { supabase } from '@/lib/supabase';
+import { supabase, removeFriend } from '@/lib/supabase';
 import { blockService } from '@/services/block.service';
 import { useAuth } from '@/contexts/AuthContext';
+import { useDataCache } from '@/contexts/DataCacheContext';
 import { UserIntention, getIntentionInfo } from '@/lib/database.types';
 
 interface UserProfile {
@@ -44,6 +45,7 @@ export default function UserProfileScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const { profile: currentUserProfile } = useAuth();
+  const { refreshFriends } = useDataCache();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -51,6 +53,7 @@ export default function UserProfileScreen() {
   const [showReportModal, setShowReportModal] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
   const [sendingRequest, setSendingRequest] = useState(false);
+  const [removingFriend, setRemovingFriend] = useState(false);
 
   // Vérifier si l'utilisateur actuel est une entreprise
   const isCurrentUserBusiness = currentUserProfile?.account_type === 'business';
@@ -239,6 +242,39 @@ export default function UserProfileScreen() {
     setTimeout(() => {
       setShowReportModal(true);
     }, 300);
+  };
+
+  // Retirer de ses amis
+  const handleRemoveFriend = async () => {
+    if (!profile) return;
+    setShowOptionsModal(false);
+
+    Alert.alert(
+      'Retirer de ses amis ?',
+      `${profile.full_name} ne sera plus dans votre liste d'amis. Vous devrez renvoyer une demande d'ami pour redevenir amis.`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Retirer',
+          style: 'destructive',
+          onPress: async () => {
+            setRemovingFriend(true);
+            const result = await removeFriend(profile.id);
+            setRemovingFriend(false);
+
+            if (result.success) {
+              // Mettre à jour l'état local
+              setProfile(prev => prev ? { ...prev, is_friend: false, request_sent: false } : null);
+              // Rafraîchir le cache des amis
+              refreshFriends();
+              Alert.alert('Succès', `${profile.full_name} a été retiré de vos amis`);
+            } else {
+              Alert.alert('Erreur', 'Impossible de retirer cet ami');
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (loading) {
@@ -430,6 +466,20 @@ export default function UserProfileScreen() {
         >
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Options</Text>
+
+            {/* Option Retirer de ses amis - seulement si c'est un ami */}
+            {profile.is_friend && (
+              <TouchableOpacity
+                style={styles.modalOption}
+                onPress={handleRemoveFriend}
+                disabled={removingFriend}
+              >
+                <IconSymbol name="person.badge.minus" size={20} color={colors.error} />
+                <Text style={[styles.modalOptionText, { color: colors.error }]}>
+                  {removingFriend ? 'Suppression...' : 'Retirer de ses amis'}
+                </Text>
+              </TouchableOpacity>
+            )}
 
             {/* Option Signaler */}
             <TouchableOpacity style={styles.modalOption} onPress={handleReportUser}>
