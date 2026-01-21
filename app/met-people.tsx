@@ -18,6 +18,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
+import { useDataCache } from '@/contexts/DataCacheContext';
 
 interface MetPerson {
   id: string;
@@ -33,6 +34,7 @@ interface MetPerson {
 
 export default function MetPeopleScreen() {
   const router = useRouter();
+  const { cache } = useDataCache();
   const [people, setPeople] = useState<MetPerson[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -40,10 +42,13 @@ export default function MetPeopleScreen() {
   const [hidingUser, setHidingUser] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
+  // Utiliser les amis du cache pour vérifier le statut d'ami
+  const friendIds = new Set(cache.friends.map(f => f.friend_id));
+
   useFocusEffect(
     useCallback(() => {
       loadMetPeople();
-    }, [])
+    }, [cache.friends]) // Recharger quand la liste d'amis change
   );
 
   const loadMetPeople = async () => {
@@ -149,12 +154,6 @@ export default function MetPeopleScreen() {
         return;
       }
 
-      // Récupérer les amis existants
-      const { data: friendships } = await supabase
-        .from('friendships')
-        .select('friend_id')
-        .eq('user_id', userId);
-
       // Récupérer les demandes en attente envoyées
       const { data: requests } = await supabase
         .from('friend_requests')
@@ -169,13 +168,13 @@ export default function MetPeopleScreen() {
           .from('met_people_hidden')
           .select('hidden_user_id')
           .eq('user_id', userId);
-        
+
         hiddenIds = new Set(hiddenUsers?.map(h => h.hidden_user_id) || []);
       } catch {
         // Table n'existe pas encore, on continue
       }
 
-      const friendIds = new Set(friendships?.map(f => f.friend_id) || []);
+      // Utiliser les amis du cache (déjà défini plus haut via friendIds)
       const pendingIds = new Set(requests?.map(r => r.receiver_id) || []);
 
       // Construire la liste des personnes rencontrées (dédupliquées)

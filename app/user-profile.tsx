@@ -12,6 +12,9 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -54,6 +57,8 @@ export default function UserProfileScreen() {
   const [isBlocked, setIsBlocked] = useState(false);
   const [sendingRequest, setSendingRequest] = useState(false);
   const [removingFriend, setRemovingFriend] = useState(false);
+  const [showInvitationModal, setShowInvitationModal] = useState(false);
+  const [invitationMessage, setInvitationMessage] = useState('');
 
   // Vérifier si l'utilisateur actuel est une entreprise
   const isCurrentUserBusiness = currentUserProfile?.account_type === 'business';
@@ -163,37 +168,218 @@ export default function UserProfileScreen() {
     }
   };
 
-  const handleSendFriendRequest = async () => {
-    if (!profile) return;
+  const handleOpenInvitationModal = () => {
+    setInvitationMessage('');
+    setShowInvitationModal(true);
+  };
+
+  const handleSendInvitation = async () => {
+    if (!profile || !invitationMessage.trim()) {
+      Alert.alert('Erreur', 'Veuillez écrire un message d\'invitation');
+      return;
+    }
+
     setSendingRequest(true);
+    setShowInvitationModal(false);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non connecté');
 
-      const { error } = await supabase.from('friend_requests').insert({
-        sender_id: user.id,
-        receiver_id: profile.id,
-        status: 'pending',
-      });
+      // 1. Créer la demande d'ami
+      const { data: friendRequest, error: requestError } = await supabase
+        .from('friend_requests')
+        .insert({
+          sender_id: user.id,
+          receiver_id: profile.id,
+          status: 'pending',
+        })
+        .select()
+        .single();
 
-      if (error && !error.message.toLowerCase().includes('duplicate')) {
-        throw error;
+      if (requestError) {
+        if (requestError.message.toLowerCase().includes('duplicate')) {
+          Alert.alert('Info', 'Une demande d\'ami est déjà en attente');
+          return;
+        }
+        throw requestError;
       }
 
+      // 2. Vérifier si une conversation existe déjà
+      const { data: myParticipations } = await supabase
+        .from('conversation_participants')
+        .select('conversation_id')
+        .eq('user_id', user.id);
+
+      let existingConvId: string | null = null;
+
+      if (myParticipations && myParticipations.length > 0) {
+        const myConvIds = myParticipations.map(p => p.conversation_id);
+        const { data: friendParticipations } = await supabase
+          .from('conversation_participants')
+          .select('conversation_id')
+          .eq('user_id', profile.id)
+          .in('conversation_id', myConvIds);
+
+        if (friendParticipations && friendParticipations.length > 0) {
+          for (const fp of friendParticipations) {
+            const { data: convData } = await supabase
+              .from('conversations')
+              .select('is_group')
+              .eq('id', fp.conversation_id)
+              .single();
+
+            if (convData?.is_group) continue;
+
+            const { count } = await supabase
+              .from('conversation_participants')
+              .select('*', { count: 'exact', head: true })
+              .eq('conversation_id', fp.conversation_id);
+
+            if (count === 2) {
+              existingConvId = fp.conversation_id;
+
+              // Réinitialiser is_hidden si la conversation était cachée
+              await supabase
+                .from('conversation_participants')
+                .update({ is_hidden: false })
+                .eq('conversation_id', fp.conversation_id)
+                .eq('user_id', user.id);
+
+              break;
+            }
+          }
+        }
+      }
+
+      let conversationId: string;
+
+      if (existingConvId) {
+        // Mettre à jour la conversation existante avec le friend_request_id
+        await supabase
+          .from('conversations')
+          .update({ friend_request_id: friendRequest.id })
+          .eq('id', existingConvId);
+        conversationId = existingConvId;
+      } else {
+        // 3. Créer une nouvelle conversation liée à la demande d'ami
+        const { data: conversation, error: convError } = await supabase
+          .from('conversations')
+          .insert({
+            is_group: false,
+            friend_request_id: friendRequest.id,
+          })
+          .select()
+          .single();
+
+        if (convError) throw convError;
+        conversationId = conversation.id;
+
+        // 4. Ajouter les participants
+        const { error: partError } = await supabase
+          .from('conversation_participants')
+          .insert([
+            { conversation_id: conversationId, user_id: user.id },
+            { conversation_id: conversationId, user_id: profile.id },
+          ]);
+
+        if (partError) throw partError;
+      }
+
+      // 5. Envoyer le message d'invitation
+      const { error: msgError } = await supabase.from('messages').insert({
+        conversation_id: conversationId,
+        sender_id: user.id,
+        content: invitationMessage.trim(),
+        message_type: 'text',
+      });
+
+      if (msgError) throw msgError;
+
       setProfile(prev => prev ? { ...prev, request_sent: true } : null);
-      Alert.alert('Succès', 'Demande d\'ami envoyée !');
+      Alert.alert('Succès', 'Invitation envoyée ! En attente de réponse.');
     } catch (error: any) {
-      console.error('Error sending friend request:', error);
-      Alert.alert('Erreur', error.message || 'Impossible d\'envoyer la demande');
+      console.error('Error sending invitation:', error);
+      Alert.alert('Erreur', error.message || 'Impossible d\'envoyer l\'invitation');
     } finally {
       setSendingRequest(false);
     }
   };
 
-  const handleStartConversation = () => {
-    if (profile) {
-      router.push(`/chat?recipientId=${profile.id}`);
+  const handleStartConversation = async () => {
+    if (!profile) return;
+
+    try {
+      const { data: currentUser } = await supabase.auth.getUser();
+      if (!currentUser?.user?.id) throw new Error('User not authenticated');
+
+      const { data: myParticipations } = await supabase
+        .from('conversation_participants')
+        .select('conversation_id')
+        .eq('user_id', currentUser.user.id);
+
+      if (myParticipations && myParticipations.length > 0) {
+        const myConvIds = myParticipations.map(p => p.conversation_id);
+        const { data: friendParticipations } = await supabase
+          .from('conversation_participants')
+          .select('conversation_id')
+          .eq('user_id', profile.id)
+          .in('conversation_id', myConvIds);
+
+        if (friendParticipations && friendParticipations.length > 0) {
+          for (const fp of friendParticipations) {
+            const { data: convData } = await supabase
+              .from('conversations')
+              .select('is_group')
+              .eq('id', fp.conversation_id)
+              .single();
+
+            if (convData?.is_group) continue;
+
+            const { count } = await supabase
+              .from('conversation_participants')
+              .select('*', { count: 'exact', head: true })
+              .eq('conversation_id', fp.conversation_id);
+
+            if (count === 2) {
+              // Réinitialiser is_hidden si la conversation était cachée
+              await supabase
+                .from('conversation_participants')
+                .update({ is_hidden: false })
+                .eq('conversation_id', fp.conversation_id)
+                .eq('user_id', currentUser.user.id);
+
+              router.push(`/chat-detail?id=${fp.conversation_id}`);
+              return;
+            }
+          }
+        }
+      }
+
+      // Si aucune conversation n'existe, en créer une nouvelle
+      const { data: conversation, error: convError } = await supabase
+        .from('conversations')
+        .insert({ is_group: false })
+        .select()
+        .single();
+
+      if (convError) throw convError;
+
+      const participants = [currentUser.user.id, profile.id].map(userId => ({
+        conversation_id: conversation.id,
+        user_id: userId,
+      }));
+
+      const { error: partError } = await supabase
+        .from('conversation_participants')
+        .insert(participants);
+
+      if (partError) throw partError;
+
+      router.push(`/chat-detail?id=${conversation.id}`);
+    } catch (error) {
+      console.error('Error creating conversation:', error);
+      Alert.alert('Erreur', 'Impossible de démarrer la conversation');
     }
   };
 
@@ -413,40 +599,34 @@ export default function UserProfileScreen() {
                 <IconSymbol name="hand.raised.slash" size={20} color={colors.text} />
                 <Text style={styles.unblockButtonText}>Débloquer</Text>
               </TouchableOpacity>
+            ) : profile.is_friend ? (
+              /* Si ami : afficher le bouton Message */
+              <TouchableOpacity style={styles.messageButton} onPress={handleStartConversation}>
+                <IconSymbol name="message.fill" size={20} color={colors.background} />
+                <Text style={styles.messageButtonText}>Message</Text>
+              </TouchableOpacity>
+            ) : profile.request_sent ? (
+              /* Si demande envoyée : afficher le badge */
+              <View style={styles.pendingBadge}>
+                <IconSymbol name="clock" size={16} color={colors.textSecondary} />
+                <Text style={styles.pendingText}>Invitation envoyée</Text>
+              </View>
             ) : (
-              <>
-                {/* Bouton Message */}
-                <TouchableOpacity style={styles.messageButton} onPress={handleStartConversation}>
-                  <IconSymbol name="message.fill" size={20} color={colors.background} />
-                  <Text style={styles.messageButtonText}>Message</Text>
-                </TouchableOpacity>
-
-                {/* Bouton Ajouter en ami */}
-                {!profile.is_friend && !profile.request_sent && (
-                  <TouchableOpacity
-                    style={styles.addFriendButton}
-                    onPress={handleSendFriendRequest}
-                    disabled={sendingRequest}
-                  >
-                    {sendingRequest ? (
-                      <ActivityIndicator size="small" color={colors.primary} />
-                    ) : (
-                      <>
-                        <IconSymbol name="person.badge.plus" size={20} color={colors.primary} />
-                        <Text style={styles.addFriendButtonText}>Ajouter</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
+              /* Si non-ami : afficher le bouton Ajouter qui ouvre la modal d'invitation */
+              <TouchableOpacity
+                style={styles.invitationButton}
+                onPress={handleOpenInvitationModal}
+                disabled={sendingRequest}
+              >
+                {sendingRequest ? (
+                  <ActivityIndicator size="small" color={colors.background} />
+                ) : (
+                  <>
+                    <IconSymbol name="person.badge.plus" size={20} color={colors.background} />
+                    <Text style={styles.invitationButtonText}>Ajouter</Text>
+                  </>
                 )}
-
-                {/* Badge demande envoyée */}
-                {profile.request_sent && (
-                  <View style={styles.pendingBadge}>
-                    <IconSymbol name="clock" size={16} color={colors.textSecondary} />
-                    <Text style={styles.pendingText}>Demande envoyée</Text>
-                  </View>
-                )}
-              </>
+              </TouchableOpacity>
             )}
           </View>
         )}
@@ -524,6 +704,77 @@ export default function UserProfileScreen() {
         targetId={profile.id}
         targetName={profile.full_name}
       />
+
+      {/* Modal d'invitation */}
+      <Modal
+        visible={showInvitationModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowInvitationModal(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.invitationModalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <TouchableOpacity
+            style={styles.invitationModalBackdrop}
+            activeOpacity={1}
+            onPress={() => setShowInvitationModal(false)}
+          />
+          <View style={styles.invitationModalContent}>
+            <View style={styles.invitationModalHeader}>
+              <Text style={styles.invitationModalTitle}>Envoyer une invitation</Text>
+              <TouchableOpacity onPress={() => setShowInvitationModal(false)}>
+                <IconSymbol name="xmark" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.invitationRecipient}>
+              <Image
+                source={{ uri: profile.avatar_url || 'https://via.placeholder.com/40' }}
+                style={styles.invitationRecipientAvatar}
+              />
+              <Text style={styles.invitationRecipientName}>{profile.full_name}</Text>
+            </View>
+
+            <Text style={styles.invitationHint}>
+              Écrivez un message pour vous présenter. {profile.full_name} devra accepter votre invitation pour pouvoir discuter.
+            </Text>
+
+            <TextInput
+              style={styles.invitationInput}
+              placeholder="Bonjour ! J'aimerais faire votre connaissance..."
+              placeholderTextColor={colors.textSecondary}
+              value={invitationMessage}
+              onChangeText={setInvitationMessage}
+              multiline
+              maxLength={500}
+              textAlignVertical="top"
+            />
+
+            <View style={styles.invitationCharCount}>
+              <Text style={styles.invitationCharCountText}>
+                {invitationMessage.length}/500
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.invitationSendButton,
+                !invitationMessage.trim() && styles.invitationSendButtonDisabled,
+              ]}
+              onPress={handleSendInvitation}
+              disabled={!invitationMessage.trim() || sendingRequest}
+            >
+              {sendingRequest ? (
+                <ActivityIndicator size="small" color={colors.background} />
+              ) : (
+                <Text style={styles.invitationSendButtonText}>Envoyer l'invitation</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -831,5 +1082,107 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: colors.textSecondary,
+  },
+  // Styles pour le bouton d'invitation
+  invitationButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    padding: 14,
+    borderRadius: 12,
+    gap: 8,
+  },
+  invitationButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.background,
+  },
+  // Styles pour la modal d'invitation
+  invitationModalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  invitationModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  invitationModalContent: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: 40,
+  },
+  invitationModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  invitationModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  invitationRecipient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+    padding: 12,
+    backgroundColor: colors.card,
+    borderRadius: 12,
+  },
+  invitationRecipientAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.border,
+  },
+  invitationRecipientName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  invitationHint: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  invitationInput: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 15,
+    color: colors.text,
+    minHeight: 120,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  invitationCharCount: {
+    alignItems: 'flex-end',
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  invitationCharCountText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  invitationSendButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
+  invitationSendButtonDisabled: {
+    backgroundColor: colors.border,
+  },
+  invitationSendButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.background,
   },
 });

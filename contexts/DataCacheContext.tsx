@@ -93,6 +93,7 @@ interface DataCacheContextType {
   addConversationToCache: (conversation: Conversation) => void;
   updateConversationInCache: (conversationId: string, updates: Partial<Conversation>) => void;
   markConversationAsRead: (conversationId: string) => void;
+  removeConversationFromCache: (conversationId: string) => void;
 }
 
 const DataCacheContext = createContext<DataCacheContextType | undefined>(undefined);
@@ -347,11 +348,12 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
     try {
       const userId = user.id;
 
-      // Récupérer les conversations de l'utilisateur
+      // Récupérer les conversations de l'utilisateur (exclure les conversations cachées)
       const { data: participantData } = await supabase
         .from('conversation_participants')
         .select('conversation_id, last_read_at')
-        .eq('user_id', userId);
+        .eq('user_id', userId)
+        .eq('is_hidden', false);
 
       const conversationIds = participantData?.map(p => p.conversation_id) || [];
 
@@ -697,6 +699,13 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user]);
 
+  const removeConversationFromCache = useCallback((conversationId: string) => {
+    setCache(prev => ({
+      ...prev,
+      conversations: prev.conversations.filter(c => c.id !== conversationId),
+    }));
+  }, []);
+
   // ============================================
   // CHARGEMENT INITIAL
   // ============================================
@@ -788,6 +797,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
         addConversationToCache,
         updateConversationInCache,
         markConversationAsRead,
+        removeConversationFromCache,
       }}
     >
       {children}

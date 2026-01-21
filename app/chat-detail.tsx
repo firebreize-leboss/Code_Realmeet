@@ -69,6 +69,14 @@ export default function ChatDetailScreen() {
   // États pour le blocage
   const [isBlocked, setIsBlocked] = useState(false);
   const [hasBlockedMe, setHasBlockedMe] = useState(false);
+
+  // États pour l'invitation en attente
+  const [pendingInvitation, setPendingInvitation] = useState<{
+    friendRequestId: string | null;
+    isRecipient: boolean;
+    senderName: string;
+  } | null>(null);
+  const [processingInvitation, setProcessingInvitation] = useState(false);
   
   // États pour le modal et la sourdine
   const [showOptionsModal, setShowOptionsModal] = useState(false);
@@ -117,12 +125,46 @@ export default function ChatDetailScreen() {
         // Charger les infos de conversation
         const { data: convDataRaw } = await supabase
           .from('conversations')
-          .select('*, name, image_url, is_closed, closed_reason, closed_at, activity_id, slot_id')
+          .select('*, name, image_url, is_closed, closed_reason, closed_at, activity_id, slot_id, friend_request_id')
           .eq('id', conversationId)
           .single();
 
         const convData = convDataRaw as any;
         if (!convData) return;
+
+        // Vérifier si c'est une conversation avec invitation en attente
+        if (convData.friend_request_id) {
+          const { data: friendRequest } = await supabase
+            .from('friend_requests')
+            .select('id, sender_id, receiver_id, status')
+            .eq('id', convData.friend_request_id)
+            .single();
+
+          if (friendRequest && friendRequest.status === 'pending') {
+            const isRecipient = friendRequest.receiver_id === currentUser.id;
+
+            // Récupérer le nom de l'expéditeur pour l'affichage
+            let senderName = 'Utilisateur';
+            if (isRecipient) {
+              const { data: senderProfile } = await supabase
+                .from('profiles')
+                .select('full_name')
+                .eq('id', friendRequest.sender_id)
+                .single();
+              senderName = senderProfile?.full_name || 'Utilisateur';
+            }
+
+            setPendingInvitation({
+              friendRequestId: friendRequest.id,
+              isRecipient,
+              senderName,
+            });
+          } else {
+            setPendingInvitation(null);
+          }
+        } else {
+          setPendingInvitation(null);
+        }
 
         const isGroupConv = convData.is_group === true || !convData.name;
         setIsGroup(isGroupConv);
@@ -274,6 +316,8 @@ useEffect(() => {
   const canSendMessages = (): boolean => {
     if (conversationStatus.isClosed) return false;
     if (isBlocked || hasBlockedMe) return false;
+    // Si invitation en attente, personne ne peut envoyer de messages supplémentaires
+    if (pendingInvitation) return false;
     return true;
   };
 
@@ -286,6 +330,12 @@ useEffect(() => {
     }
     if (isBlocked) return 'Vous avez bloqué cet utilisateur.';
     if (hasBlockedMe) return 'Vous ne pouvez pas envoyer de messages à cet utilisateur.';
+    if (pendingInvitation) {
+      if (pendingInvitation.isRecipient) {
+        return null; // Pas de warning, on affiche les boutons à la place
+      }
+      return "En attente de réponse à votre invitation.";
+    }
     return null;
   };
 
@@ -296,6 +346,87 @@ useEffect(() => {
     } else if (otherUserId) {
       router.push(`/user-profile?id=${otherUserId}`);
     }
+  };
+
+  // Accepter l'invitation (demande d'ami)
+  const handleAcceptInvitation = async () => {
+    if (!pendingInvitation?.friendRequestId) return;
+
+    setProcessingInvitation(true);
+    try {
+      // Utiliser la RPC pour accepter la demande d'ami
+      const { error } = await supabase.rpc('accept_friend_request', {
+        p_request_id: pendingInvitation.friendRequestId,
+      });
+
+      if (error) throw error;
+
+      // Supprimer le friend_request_id de la conversation pour la débloquer
+      await supabase
+        .from('conversations')
+        .update({ friend_request_id: null })
+        .eq('id', conversationId);
+
+      setPendingInvitation(null);
+      Alert.alert('Succès', 'Invitation acceptée ! Vous pouvez maintenant discuter.');
+    } catch (error: any) {
+      console.error('Error accepting invitation:', error);
+      Alert.alert('Erreur', 'Impossible d\'accepter l\'invitation');
+    } finally {
+      setProcessingInvitation(false);
+    }
+  };
+
+  // Refuser l'invitation
+  const handleRejectInvitation = async () => {
+    if (!pendingInvitation?.friendRequestId) return;
+
+    Alert.alert(
+      'Refuser l\'invitation ?',
+      'Cette personne ne pourra plus vous envoyer de messages.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Refuser',
+          style: 'destructive',
+          onPress: async () => {
+            setProcessingInvitation(true);
+            try {
+              // Refuser la demande d'ami
+              const { error } = await supabase
+                .from('friend_requests')
+                .update({ status: 'rejected' })
+                .eq('id', pendingInvitation.friendRequestId);
+
+              if (error) throw error;
+
+              // Supprimer le friend_request_id mais garder la conversation fermée
+              await supabase
+                .from('conversations')
+                .update({
+                  friend_request_id: null,
+                  is_closed: true,
+                  closed_reason: 'invitation_rejected',
+                })
+                .eq('id', conversationId);
+
+              setPendingInvitation(null);
+              setConversationStatus({
+                isClosed: true,
+                closedReason: 'invitation_rejected',
+              });
+
+              Alert.alert('Invitation refusée', 'Cette conversation est maintenant fermée.');
+            } catch (error: any) {
+              console.error('Error rejecting invitation:', error);
+              Alert.alert('Erreur', 'Impossible de refuser l\'invitation');
+            } finally {
+              setProcessingInvitation(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleToggleMute = async () => {
@@ -670,6 +801,42 @@ useEffect(() => {
   ]}
 >
 
+
+          {/* Bannière d'invitation en attente pour le destinataire */}
+          {pendingInvitation?.isRecipient && (
+            <View style={styles.invitationBanner}>
+              <View style={styles.invitationBannerContent}>
+                <IconSymbol name="person.badge.plus" size={20} color={colors.primary} />
+                <Text style={styles.invitationBannerText}>
+                  {pendingInvitation.senderName} souhaite vous ajouter en ami
+                </Text>
+              </View>
+              <View style={styles.invitationActions}>
+                <TouchableOpacity
+                  style={styles.invitationRejectButton}
+                  onPress={handleRejectInvitation}
+                  disabled={processingInvitation}
+                >
+                  {processingInvitation ? (
+                    <ActivityIndicator size="small" color={colors.text} />
+                  ) : (
+                    <Text style={styles.invitationRejectText}>Refuser</Text>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.invitationAcceptButton}
+                  onPress={handleAcceptInvitation}
+                  disabled={processingInvitation}
+                >
+                  {processingInvitation ? (
+                    <ActivityIndicator size="small" color={colors.background} />
+                  ) : (
+                    <Text style={styles.invitationAcceptText}>Accepter</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
 
           {inputWarning && (
             <View style={styles.warningBanner}>
@@ -1101,5 +1268,58 @@ headerSubtitle: {
   modalOptionText: {
     fontSize: 16,
     color: colors.text,
+  },
+  // Styles pour l'invitation en attente
+  invitationBanner: {
+    backgroundColor: colors.primary + '10',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: colors.primary + '30',
+  },
+  invitationBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
+  invitationBannerText: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  invitationActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  invitationRejectButton: {
+    flex: 1,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  invitationRejectText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  invitationAcceptButton: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  invitationAcceptText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.background,
   },
 });

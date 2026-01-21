@@ -12,6 +12,7 @@ import {
   FlatList,
   ActivityIndicator,
   TextInput,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -21,6 +22,7 @@ import { useFriendRequests } from '@/hooks/useMessaging';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDataCache } from '@/contexts/DataCacheContext';
 import { supabase } from "@/lib/supabase";
+import { LinearGradient } from 'expo-linear-gradient';
 
 interface Friend {
   id: string;
@@ -59,7 +61,7 @@ export default function ChatScreen() {
   const [activeFilter, setActiveFilter] = useState<ChatFilter>('all');
 
   // Obtenir les données via le cache global
-  const { cache, markConversationAsRead, refreshConversations } = useDataCache();
+  const { cache, markConversationAsRead, refreshConversations, removeConversationFromCache } = useDataCache();
   const { pendingCount: pendingRequestsCount } = useFriendRequests();
   const { profile } = useAuth();
   const [activityContacts, setActivityContacts] = useState<Friend[]>([]);
@@ -126,6 +128,13 @@ export default function ChatScreen() {
               .eq('conversation_id', fp.conversation_id);
 
             if (count === 2) {
+              // Réinitialiser is_hidden si la conversation était cachée
+              await supabase
+                .from('conversation_participants')
+                .update({ is_hidden: false })
+                .eq('conversation_id', fp.conversation_id)
+                .eq('user_id', currentUser.user.id);
+
               setShowFriendsModal(false);
               router.push(`/chat-detail?id=${fp.conversation_id}`);
               return;
@@ -261,6 +270,46 @@ export default function ChatScreen() {
     }
   };
 
+  // Supprimer une conversation (la cacher pour l'utilisateur)
+  const handleDeleteConversation = async (conversationId: string, conversationName: string) => {
+    Alert.alert(
+      'Supprimer la conversation',
+      `Voulez-vous supprimer la conversation avec ${conversationName} ? Vous pourrez démarrer une nouvelle conversation plus tard.`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { data: currentUser } = await supabase.auth.getUser();
+              if (!currentUser?.user?.id) return;
+
+              // Retirer immédiatement du cache (optimistic update)
+              removeConversationFromCache(conversationId);
+
+              // Marquer la conversation comme cachée pour cet utilisateur en BDD
+              const { error } = await supabase
+                .from('conversation_participants')
+                .update({ is_hidden: true })
+                .eq('conversation_id', conversationId)
+                .eq('user_id', currentUser.user.id);
+
+              if (error) {
+                // En cas d'erreur, rafraîchir pour remettre l'état correct
+                await refreshConversations();
+                throw error;
+              }
+            } catch (error) {
+              console.error('Erreur suppression conversation:', error);
+              Alert.alert('Erreur', 'Impossible de supprimer la conversation');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   // Render d'un item de conversation style Instagram
   const renderChatItem = (chat: Conversation) => {
     return (
@@ -268,8 +317,13 @@ export default function ChatScreen() {
         key={chat.id}
         style={styles.chatItem}
         onPress={() => {
+          console.log('[CHAT ITEM] Clic court sur conversation:', chat.id, chat.name);
           markConversationAsRead(chat.id);
           router.push(`/chat-detail?id=${chat.id}`);
+        }}
+        onLongPress={() => {
+          console.log('[CHAT ITEM] 🔴 Appui long détecté sur conversation:', chat.id, chat.name);
+          handleDeleteConversation(chat.id, chat.name);
         }}
         activeOpacity={0.7}
       >
@@ -294,11 +348,16 @@ export default function ChatScreen() {
 
         {/* Badge non lu */}
         {chat.unreadCount !== undefined && chat.unreadCount > 0 && (
-          <View style={styles.unreadBadge}>
+          <LinearGradient
+            colors={['#60A5FA', '#818CF8', '#C084FC']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.unreadBadge}
+          >
             <Text style={styles.unreadText}>
               {chat.unreadCount > 99 ? '99+' : chat.unreadCount}
             </Text>
-          </View>
+          </LinearGradient>
         )}
       </TouchableOpacity>
     );
@@ -330,8 +389,13 @@ export default function ChatScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      {/* Header - barre bleue simple avec nom centré et bouton crayon à droite */}
-      <View style={styles.header}>
+      {/* Header - barre avec dégradé bleu → violet → rose/violet */}
+      <LinearGradient
+        colors={['#60A5FA', '#818CF8', '#C084FC']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.header}
+      >
         <SafeAreaView edges={['top']} style={styles.headerSafeArea}>
           <View style={styles.headerTop}>
             <View style={styles.headerTitleRow}>
@@ -370,7 +434,7 @@ export default function ChatScreen() {
             </View>
           </View>
         </SafeAreaView>
-      </View>
+      </LinearGradient>
 
       {/* Barre de recherche */}
       <View style={styles.searchContainer}>
@@ -389,38 +453,83 @@ export default function ChatScreen() {
       {/* Onglets de filtre */}
       <View style={styles.filterTabs}>
         <TouchableOpacity
-          style={[styles.filterTab, activeFilter === 'all' && styles.filterTabActive]}
           onPress={() => setActiveFilter('all')}
           activeOpacity={0.7}
         >
-          <Text style={[styles.filterTabText, activeFilter === 'all' && styles.filterTabTextActive]}>Tous</Text>
+          {activeFilter === 'all' ? (
+            <LinearGradient
+              colors={['#60A5FA', '#818CF8', '#C084FC']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.filterTabActive}
+            >
+              <Text style={styles.filterTabTextActive}>Tous</Text>
+            </LinearGradient>
+          ) : (
+            <View style={styles.filterTab}>
+              <Text style={styles.filterTabText}>Tous</Text>
+            </View>
+          )}
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.filterTab, activeFilter === 'activities' && styles.filterTabActive]}
           onPress={() => setActiveFilter('activities')}
           activeOpacity={0.7}
         >
-          <Text style={[styles.filterTabText, activeFilter === 'activities' && styles.filterTabTextActive]}>
-            Activités {activitiesCount > 0 && `(${activitiesCount})`}
-          </Text>
+          {activeFilter === 'activities' ? (
+            <LinearGradient
+              colors={['#60A5FA', '#818CF8', '#C084FC']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.filterTabActive}
+            >
+              <Text style={styles.filterTabTextActive}>
+                Activités {activitiesCount > 0 && `(${activitiesCount})`}
+              </Text>
+            </LinearGradient>
+          ) : (
+            <View style={styles.filterTab}>
+              <Text style={styles.filterTabText}>
+                Activités {activitiesCount > 0 && `(${activitiesCount})`}
+              </Text>
+            </View>
+          )}
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.filterTab, activeFilter === 'friends' && styles.filterTabActive]}
           onPress={() => setActiveFilter('friends')}
           activeOpacity={0.7}
         >
-          <Text style={[styles.filterTabText, activeFilter === 'friends' && styles.filterTabTextActive]}>
-            Amis {privateCount > 0 && `(${privateCount})`}
-          </Text>
+          {activeFilter === 'friends' ? (
+            <LinearGradient
+              colors={['#60A5FA', '#818CF8', '#C084FC']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.filterTabActive}
+            >
+              <Text style={styles.filterTabTextActive}>
+                Amis {privateCount > 0 && `(${privateCount})`}
+              </Text>
+            </LinearGradient>
+          ) : (
+            <View style={styles.filterTab}>
+              <Text style={styles.filterTabText}>
+                Amis {privateCount > 0 && `(${privateCount})`}
+              </Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 
-      {/* Titre Messages avec barre bleue */}
+      {/* Titre Messages avec barre dégradée */}
       <View style={styles.messagesTitleContainer}>
         <Text style={styles.messagesTitle}>Messages</Text>
-        <View style={styles.messagesTitleBar} />
+        <LinearGradient
+          colors={['#60A5FA', '#818CF8', '#C084FC']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.messagesTitleBar}
+        />
       </View>
 
       {/* Liste des conversations pleine largeur */}
@@ -462,11 +571,15 @@ export default function ChatScreen() {
                 : 'Vos conversations apparaîtront ici'}
             </Text>
             {activeFilter === 'friends' && (
-              <TouchableOpacity
-                style={styles.startChatButton}
-                onPress={() => setShowFriendsModal(true)}
-              >
-                <Text style={styles.startChatButtonText}>Nouvelle conversation</Text>
+              <TouchableOpacity onPress={() => setShowFriendsModal(true)}>
+                <LinearGradient
+                  colors={['#60A5FA', '#818CF8', '#C084FC']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.startChatButton}
+                >
+                  <Text style={styles.startChatButtonText}>Nouvelle conversation</Text>
+                </LinearGradient>
               </TouchableOpacity>
             )}
           </View>
@@ -518,7 +631,7 @@ export default function ChatScreen() {
               </View>
 
               <View style={styles.modalInfoBar}>
-                <IconSymbol name="info.circle.fill" size={14} color="#3B82F6" />
+                <IconSymbol name="info.circle.fill" size={14} color="#818CF8" />
                 <Text style={styles.modalInfoBarText}>
                   Vous pouvez contacter les personnes avec qui vous avez fait une activité
                 </Text>
@@ -556,9 +669,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
 
-  // Header - barre bleue simple
+  // Header - barre avec dégradé
   header: {
-    backgroundColor: '#3B82F6',
+    // backgroundColor sera remplacé par le gradient
   },
   headerSafeArea: {
     width: '100%',
@@ -608,7 +721,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 4,
     borderWidth: 2,
-    borderColor: '#3B82F6',
+    borderColor: '#60A5FA',
   },
   headerBadgeText: {
     fontSize: 10,
@@ -643,17 +756,26 @@ const styles = StyleSheet.create({
   filterTabs: {
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
   },
   filterTab: {
-    flex: 1,
-    paddingVertical: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+    minWidth: '30%',
     alignItems: 'center',
   },
   filterTabActive: {
-    borderBottomWidth: 2,
-    borderBottomColor: '#3B82F6',
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 20,
+    minWidth: '30%',
+    alignItems: 'center',
   },
   filterTabText: {
     fontSize: 14,
@@ -661,7 +783,9 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
   },
   filterTabTextActive: {
-    color: '#3B82F6',
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 
   // Titre Messages
@@ -680,7 +804,6 @@ const styles = StyleSheet.create({
   messagesTitleBar: {
     width: 40,
     height: 3,
-    backgroundColor: '#3B82F6',
     borderRadius: 2,
   },
 
@@ -742,7 +865,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   unreadBadge: {
-    backgroundColor: '#3B82F6',
     borderRadius: 12,
     minWidth: 22,
     height: 22,
@@ -779,7 +901,6 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   startChatButton: {
-    backgroundColor: '#3B82F6',
     borderRadius: 24,
     paddingHorizontal: 28,
     paddingVertical: 14,
@@ -847,7 +968,7 @@ const styles = StyleSheet.create({
   modalInfoBarText: {
     flex: 1,
     fontSize: 13,
-    color: '#3B82F6',
+    color: '#818CF8',
     fontWeight: '500',
   },
   friendsList: {

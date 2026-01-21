@@ -285,29 +285,38 @@ export interface Database {
         Row: {
           id: string
           slot_id: string | null
+          activity_id: string | null
           name: string | null
           image_url: string | null
           is_group: boolean
+          is_closed: boolean
           created_at: string
           updated_at: string
+          friend_request_id: string | null
         }
         Insert: {
           id?: string
           slot_id?: string | null
+          activity_id?: string | null
           name?: string | null
           image_url?: string | null
           is_group?: boolean
+          is_closed?: boolean
           created_at?: string
           updated_at?: string
+          friend_request_id?: string | null
         }
         Update: {
           id?: string
           slot_id?: string | null
+          activity_id?: string | null
           name?: string | null
           image_url?: string | null
           is_group?: boolean
+          is_closed?: boolean
           created_at?: string
           updated_at?: string
+          friend_request_id?: string | null
         }
       }
       conversation_participants: {
@@ -315,18 +324,24 @@ export interface Database {
           id: string
           conversation_id: string
           user_id: string
+          is_hidden: boolean
+          last_read_at: string | null
           created_at: string
         }
         Insert: {
           id?: string
           conversation_id: string
           user_id: string
+          is_hidden?: boolean
+          last_read_at?: string | null
           created_at?: string
         }
         Update: {
           id?: string
           conversation_id?: string
           user_id?: string
+          is_hidden?: boolean
+          last_read_at?: string | null
           created_at?: string
         }
       }
@@ -340,8 +355,9 @@ export interface Database {
           media_url: string | null
           media_duration: number | null
           is_admin_message: boolean
+          deleted_at: string | null
           created_at: string
-          
+
         }
         Insert: {
           id?: string
@@ -352,6 +368,7 @@ export interface Database {
           media_url?: string | null
           media_duration?: number | null
           is_admin_message?: boolean
+          deleted_at?: string | null
           created_at?: string
         }
         Update: {
@@ -363,6 +380,7 @@ export interface Database {
           media_url?: string | null
           media_duration?: number | null
           is_admin_message?: boolean
+          deleted_at?: string | null
           created_at?: string
 
         }

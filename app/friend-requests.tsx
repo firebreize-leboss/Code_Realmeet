@@ -78,12 +78,18 @@ export default function FriendRequestsScreen() {
   const handleAcceptRequest = async (requestId: string) => {
     setProcessing(requestId);
     try {
-      const { error } = await supabase.rpc('accept_friend_request', { 
-        p_request_id: requestId 
+      const { error } = await supabase.rpc('accept_friend_request', {
+        p_request_id: requestId
       });
-      
+
       if (error) throw error;
-      
+
+      // Débloquer la conversation associée si elle existe
+      await supabase
+        .from('conversations')
+        .update({ friend_request_id: null })
+        .eq('friend_request_id', requestId);
+
       setRequests(prev => prev.filter(req => req.id !== requestId));
       Alert.alert('Succès', 'Demande acceptée ! Vous êtes maintenant amis.');
     } catch (error) {

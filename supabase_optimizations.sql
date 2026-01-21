@@ -9,6 +9,19 @@
 -- ============================================
 
 -- ============================================
+-- PARTIE 0: SCHEMA UPDATES
+-- ============================================
+
+-- Ajouter le champ is_hidden pour cacher des conversations
+ALTER TABLE conversation_participants
+ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN DEFAULT false;
+
+-- Index pour filtrer les conversations cachées
+CREATE INDEX IF NOT EXISTS idx_conv_participants_hidden
+ON conversation_participants(user_id, is_hidden)
+WHERE is_hidden = false;
+
+-- ============================================
 -- PARTIE 1: INDEX MANQUANTS CRITIQUES
 -- ============================================
 
@@ -93,11 +106,13 @@ BEGIN
     RETURN QUERY
     WITH user_conversations AS (
         -- Recuperer toutes les conversations de l'utilisateur avec last_read_at
+        -- Exclure les conversations cachées (supprimées par l'utilisateur)
         SELECT
             cp.conversation_id,
             cp.last_read_at
         FROM conversation_participants cp
         WHERE cp.user_id = p_user_id
+          AND COALESCE(cp.is_hidden, false) = false
     ),
     conversation_data AS (
         -- Joindre avec les donnees de conversation
@@ -574,6 +589,26 @@ ANALYZE reviews;
 
 
 -- ============================================
+-- PARTIE 9: SYSTEME D'INVITATION AVEC MESSAGE
+-- Ajoute friend_request_id aux conversations pour lier
+-- une conversation à une demande d'ami en attente
+-- ============================================
+
+-- Ajouter la colonne friend_request_id à conversations
+ALTER TABLE conversations
+ADD COLUMN IF NOT EXISTS friend_request_id UUID REFERENCES friend_requests(id) ON DELETE SET NULL;
+
+-- Index pour trouver rapidement les conversations liées à une demande d'ami
+CREATE INDEX IF NOT EXISTS idx_conversations_friend_request
+ON conversations(friend_request_id)
+WHERE friend_request_id IS NOT NULL;
+
+-- Commentaire pour documentation
+COMMENT ON COLUMN conversations.friend_request_id IS
+'ID de la demande d''ami en attente. Si non null, la conversation est bloquée jusqu''à acceptation.';
+
+
+-- ============================================
 -- FIN DU SCRIPT D'OPTIMISATION
 -- ============================================
 --
@@ -584,6 +619,7 @@ ANALYZE reviews;
 -- 4. get_activities_with_slots: Activites + slots + places en 1 requete
 -- 5. get_my_activities: Activites hostees en 1 requete
 -- 6. get_friends_with_profiles: Amis + profils en 1 requete
+-- 7. Systeme d'invitation: friend_request_id sur conversations
 --
 -- Objectif atteint:
 -- - Browse: 1 requete (get_activities_with_slots)
