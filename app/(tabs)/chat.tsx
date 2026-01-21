@@ -1,5 +1,5 @@
 // app/(tabs)/chat.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,11 @@ import {
   ActivityIndicator,
   TextInput,
   Alert,
+  Animated as RNAnimated,
+  Pressable,
+  Dimensions,
+  LayoutAnimation,
+  UIManager,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -23,6 +28,21 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useDataCache } from '@/contexts/DataCacheContext';
 import { supabase } from "@/lib/supabase";
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+  interpolate,
+  Extrapolation,
+  runOnJS,
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
+
+// Enable LayoutAnimation on Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 interface Friend {
   id: string;
@@ -44,6 +64,7 @@ interface Conversation {
   slotDate?: string | null;
   isActivityGroup?: boolean;
   isPastActivity?: boolean;
+  isMuted?: boolean;
   // Nouveaux champs optionnels
   is_online?: boolean;
   activity_name?: string;
@@ -59,9 +80,10 @@ export default function ChatScreen() {
   const router = useRouter();
   const [showFriendsModal, setShowFriendsModal] = useState(false);
   const [activeFilter, setActiveFilter] = useState<ChatFilter>('all');
+  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
 
   // Obtenir les données via le cache global
-  const { cache, markConversationAsRead, refreshConversations, removeConversationFromCache } = useDataCache();
+  const { cache, markConversationAsRead, refreshConversations, removeConversationFromCache, toggleMuteConversation } = useDataCache();
   const { pendingCount: pendingRequestsCount } = useFriendRequests();
   const { profile } = useAuth();
   const [activityContacts, setActivityContacts] = useState<Friend[]>([]);
@@ -271,96 +293,183 @@ export default function ChatScreen() {
   };
 
   // Supprimer une conversation (la cacher pour l'utilisateur)
-  const handleDeleteConversation = async (conversationId: string, conversationName: string) => {
-    Alert.alert(
-      'Supprimer la conversation',
-      `Voulez-vous supprimer la conversation avec ${conversationName} ? Vous pourrez démarrer une nouvelle conversation plus tard.`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Supprimer',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const { data: currentUser } = await supabase.auth.getUser();
-              if (!currentUser?.user?.id) return;
+  const handleDeleteConversation = async (conversationId: string) => {
+    try {
+      const { data: currentUser } = await supabase.auth.getUser();
+      if (!currentUser?.user?.id) return;
 
-              // Retirer immédiatement du cache (optimistic update)
-              removeConversationFromCache(conversationId);
+      // Retirer immédiatement du cache (optimistic update)
+      removeConversationFromCache(conversationId);
 
-              // Marquer la conversation comme cachée pour cet utilisateur en BDD
-              const { error } = await supabase
-                .from('conversation_participants')
-                .update({ is_hidden: true })
-                .eq('conversation_id', conversationId)
-                .eq('user_id', currentUser.user.id);
+      // Marquer la conversation comme cachée pour cet utilisateur en BDD
+      const { error } = await supabase
+        .from('conversation_participants')
+        .update({ is_hidden: true })
+        .eq('conversation_id', conversationId)
+        .eq('user_id', currentUser.user.id);
 
-              if (error) {
-                // En cas d'erreur, rafraîchir pour remettre l'état correct
-                await refreshConversations();
-                throw error;
-              }
-            } catch (error) {
-              console.error('Erreur suppression conversation:', error);
-              Alert.alert('Erreur', 'Impossible de supprimer la conversation');
-            }
-          },
-        },
-      ]
+      if (error) {
+        // En cas d'erreur, rafraîchir pour remettre l'état correct
+        await refreshConversations();
+        throw error;
+      }
+
+      // Désélectionner après suppression
+      setSelectedConversation(null);
+    } catch (error) {
+      console.error('Erreur suppression conversation:', error);
+      Alert.alert('Erreur', 'Impossible de supprimer la conversation');
+    }
+  };
+
+  // Fermer la barre d'actions
+  const handleCloseActionBar = () => {
+    setSelectedConversation(null);
+  };
+
+  // Actions disponibles dans la barre contextuelle
+  const handleMuteConversation = async () => {
+    if (!selectedConversation) return;
+
+    const newMutedState = await toggleMuteConversation(selectedConversation.id);
+    setSelectedConversation(null);
+  };
+
+  const handleArchiveConversation = () => {
+    // TODO: Implémenter l'archivage
+    Alert.alert('Archiver', `Conversation "${selectedConversation?.name}" archivée`);
+    setSelectedConversation(null);
+  };
+
+  // Composant pour un item de conversation avec animation fluide
+  const ChatItem = ({ chat }: { chat: Conversation }) => {
+    const isSelected = selectedConversation?.id === chat.id;
+    const scale = useSharedValue(1);
+    const checkOpacity = useSharedValue(0);
+    const bgOpacity = useSharedValue(0);
+
+    // Mettre à jour les animations quand la sélection change
+    useEffect(() => {
+      if (isSelected) {
+        scale.value = withSpring(0.98, { damping: 15, stiffness: 300 });
+        checkOpacity.value = withSpring(1, { damping: 15, stiffness: 300 });
+        bgOpacity.value = withTiming(1, { duration: 150 });
+      } else {
+        scale.value = withSpring(1, { damping: 15, stiffness: 300 });
+        checkOpacity.value = withTiming(0, { duration: 150 });
+        bgOpacity.value = withTiming(0, { duration: 150 });
+      }
+    }, [isSelected]);
+
+    const animatedContainerStyle = useAnimatedStyle(() => ({
+      transform: [{ scale: scale.value }],
+    }));
+
+    const animatedBgStyle = useAnimatedStyle(() => ({
+      opacity: bgOpacity.value,
+    }));
+
+    const animatedCheckStyle = useAnimatedStyle(() => ({
+      opacity: checkOpacity.value,
+      transform: [
+        { scale: interpolate(checkOpacity.value, [0, 1], [0.5, 1], Extrapolation.CLAMP) },
+      ],
+    }));
+
+    const handlePress = () => {
+      if (selectedConversation) {
+        setSelectedConversation(null);
+      } else {
+        markConversationAsRead(chat.id);
+        router.push(`/chat-detail?id=${chat.id}`);
+      }
+    };
+
+    const handleLongPress = async () => {
+      try {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      } catch (e) {
+        // Haptics might not be available
+      }
+      setSelectedConversation(chat);
+    };
+
+    return (
+      <Animated.View style={animatedContainerStyle}>
+        <Pressable
+          onPress={handlePress}
+          onLongPress={handleLongPress}
+          delayLongPress={300}
+          style={styles.chatItem}
+        >
+          {/* Background de sélection animé */}
+          <Animated.View style={[styles.chatItemSelectedBg, animatedBgStyle]} />
+
+          {/* Indicateur de sélection animé (position absolute) */}
+          <Animated.View style={[styles.selectionIndicator, animatedCheckStyle]}>
+            <LinearGradient
+              colors={['#60A5FA', '#818CF8', '#C084FC']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.selectionCheckBg}
+            >
+              <IconSymbol name="checkmark" size={14} color="#FFFFFF" />
+            </LinearGradient>
+          </Animated.View>
+
+          {/* Avatar */}
+          <Image
+            source={{ uri: chat.image || 'https://via.placeholder.com/56' }}
+            style={styles.chatAvatar}
+          />
+
+          {/* Infos conversation */}
+          <View style={styles.chatInfo}>
+            <View style={styles.chatHeader}>
+              <Text style={styles.chatName} numberOfLines={1}>
+                {chat.name}
+              </Text>
+              <Text style={styles.chatTime}>{chat.lastMessageTime}</Text>
+            </View>
+            <Text style={styles.lastMessage} numberOfLines={1}>
+              {chat.lastMessage || 'Commencez une conversation...'}
+            </Text>
+          </View>
+
+          {/* Icône de sourdine */}
+          {chat.isMuted && !isSelected && (
+            <TouchableOpacity
+              style={styles.muteIconContainer}
+              onPress={() => {
+                toggleMuteConversation(chat.id);
+              }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <IconSymbol name="bell.slash.fill" size={18} color="#9CA3AF" />
+            </TouchableOpacity>
+          )}
+
+          {/* Badge non lu */}
+          {chat.unreadCount !== undefined && chat.unreadCount > 0 && !isSelected && (
+            <LinearGradient
+              colors={['#60A5FA', '#818CF8', '#C084FC']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.unreadBadge}
+            >
+              <Text style={styles.unreadText}>
+                {chat.unreadCount > 99 ? '99+' : chat.unreadCount}
+              </Text>
+            </LinearGradient>
+          )}
+        </Pressable>
+      </Animated.View>
     );
   };
 
-  // Render d'un item de conversation style Instagram
+  // Render d'un item de conversation
   const renderChatItem = (chat: Conversation) => {
-    return (
-      <TouchableOpacity
-        key={chat.id}
-        style={styles.chatItem}
-        onPress={() => {
-          console.log('[CHAT ITEM] Clic court sur conversation:', chat.id, chat.name);
-          markConversationAsRead(chat.id);
-          router.push(`/chat-detail?id=${chat.id}`);
-        }}
-        onLongPress={() => {
-          console.log('[CHAT ITEM] 🔴 Appui long détecté sur conversation:', chat.id, chat.name);
-          handleDeleteConversation(chat.id, chat.name);
-        }}
-        activeOpacity={0.7}
-      >
-        {/* Avatar */}
-        <Image
-          source={{ uri: chat.image || 'https://via.placeholder.com/56' }}
-          style={styles.chatAvatar}
-        />
-
-        {/* Infos conversation */}
-        <View style={styles.chatInfo}>
-          <View style={styles.chatHeader}>
-            <Text style={styles.chatName} numberOfLines={1}>
-              {chat.name}
-            </Text>
-            <Text style={styles.chatTime}>{chat.lastMessageTime}</Text>
-          </View>
-          <Text style={styles.lastMessage} numberOfLines={1}>
-            {chat.lastMessage || 'Commencez une conversation...'}
-          </Text>
-        </View>
-
-        {/* Badge non lu */}
-        {chat.unreadCount !== undefined && chat.unreadCount > 0 && (
-          <LinearGradient
-            colors={['#60A5FA', '#818CF8', '#C084FC']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.unreadBadge}
-          >
-            <Text style={styles.unreadText}>
-              {chat.unreadCount > 99 ? '99+' : chat.unreadCount}
-            </Text>
-          </LinearGradient>
-        )}
-      </TouchableOpacity>
-    );
+    return <ChatItem key={chat.id} chat={chat} />;
   };
 
   const renderFriendItem = ({ item }: { item: Friend }) => (
@@ -389,52 +498,110 @@ export default function ChatScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      {/* Header - barre avec dégradé bleu → violet → rose/violet */}
-      <LinearGradient
-        colors={['#60A5FA', '#818CF8', '#C084FC']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={styles.header}
-      >
-        <SafeAreaView edges={['top']} style={styles.headerSafeArea}>
-          <View style={styles.headerTop}>
-            <View style={styles.headerTitleRow}>
-              <View style={styles.headerLeftButtons}>
+      {/* Barre d'actions contextuelle (style WhatsApp) */}
+      {selectedConversation && (
+        <View style={styles.actionBarContainer}>
+          <LinearGradient
+            colors={['rgba(96, 165, 250, 0.95)', 'rgba(129, 140, 252, 0.95)', 'rgba(192, 132, 252, 0.95)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.actionBar}
+          >
+            <SafeAreaView edges={['top']} style={styles.actionBarSafeArea}>
+              <View style={styles.actionBarContent}>
+                {/* Bouton retour */}
                 <TouchableOpacity
-                  style={styles.headerButton}
-                  onPress={() => router.push('/add-friends')}
+                  style={styles.actionBarButton}
+                  onPress={handleCloseActionBar}
                 >
-                  <IconSymbol name="person.badge.plus" size={20} color="#FFFFFF" />
+                  <IconSymbol name="arrow.left" size={22} color="#FFFFFF" />
+                </TouchableOpacity>
+
+                {/* Compteur de sélection */}
+                <Text style={styles.actionBarCount}>1</Text>
+
+                {/* Spacer */}
+                <View style={styles.actionBarSpacer} />
+
+                {/* Actions */}
+                <TouchableOpacity
+                  style={styles.actionBarButton}
+                  onPress={handleMuteConversation}
+                >
+                  <IconSymbol
+                    name={selectedConversation?.isMuted ? "bell.fill" : "bell.slash.fill"}
+                    size={22}
+                    color="#FFFFFF"
+                  />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.actionBarButton}
+                  onPress={handleArchiveConversation}
+                >
+                  <IconSymbol name="archivebox.fill" size={22} color="#FFFFFF" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.actionBarButton}
+                  onPress={() => handleDeleteConversation(selectedConversation.id)}
+                >
+                  <IconSymbol name="trash.fill" size={22} color="#FFFFFF" />
                 </TouchableOpacity>
               </View>
-              <Text style={styles.headerUsername}>
-                {profile?.full_name || profile?.username || 'Utilisateur'}
-              </Text>
-              <View style={styles.headerRightButtons}>
-                <TouchableOpacity
-                  style={styles.headerButton}
-                  onPress={() => router.push('/friend-requests')}
-                >
-                  <IconSymbol name="envelope.fill" size={20} color="#FFFFFF" />
-                  {pendingRequestsCount > 0 && (
-                    <View style={styles.headerBadge}>
-                      <Text style={styles.headerBadgeText}>
-                        {pendingRequestsCount > 9 ? '9+' : pendingRequestsCount}
-                      </Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.headerButton}
-                  onPress={() => setShowFriendsModal(true)}
-                >
-                  <IconSymbol name="pencil" size={20} color="#FFFFFF" />
-                </TouchableOpacity>
+            </SafeAreaView>
+          </LinearGradient>
+        </View>
+      )}
+
+      {/* Header - barre avec dégradé bleu → violet → rose/violet */}
+      {!selectedConversation && (
+        <LinearGradient
+          colors={['#60A5FA', '#818CF8', '#C084FC']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.header}
+        >
+          <SafeAreaView edges={['top']} style={styles.headerSafeArea}>
+            <View style={styles.headerTop}>
+              <View style={styles.headerTitleRow}>
+                <View style={styles.headerLeftButtons}>
+                  <TouchableOpacity
+                    style={styles.headerButton}
+                    onPress={() => router.push('/add-friends')}
+                  >
+                    <IconSymbol name="person.badge.plus" size={20} color="#FFFFFF" />
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.headerUsername}>
+                  {profile?.full_name || profile?.username || 'Utilisateur'}
+                </Text>
+                <View style={styles.headerRightButtons}>
+                  <TouchableOpacity
+                    style={styles.headerButton}
+                    onPress={() => router.push('/friend-requests')}
+                  >
+                    <IconSymbol name="envelope.fill" size={20} color="#FFFFFF" />
+                    {pendingRequestsCount > 0 && (
+                      <View style={styles.headerBadge}>
+                        <Text style={styles.headerBadgeText}>
+                          {pendingRequestsCount > 9 ? '9+' : pendingRequestsCount}
+                        </Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.headerButton}
+                    onPress={() => setShowFriendsModal(true)}
+                  >
+                    <IconSymbol name="pencil" size={20} color="#FFFFFF" />
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
-          </View>
-        </SafeAreaView>
-      </LinearGradient>
+          </SafeAreaView>
+        </LinearGradient>
+      )}
 
       {/* Barre de recherche */}
       <View style={styles.searchContainer}>
@@ -669,6 +836,43 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
 
+  // Barre d'actions contextuelle (style WhatsApp)
+  actionBarContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 100,
+  },
+  actionBar: {
+    width: '100%',
+  },
+  actionBarSafeArea: {
+    width: '100%',
+  },
+  actionBarContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 12,
+  },
+  actionBarButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  actionBarCount: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginLeft: 8,
+  },
+  actionBarSpacer: {
+    flex: 1,
+  },
+
   // Header - barre avec dégradé
   header: {
     // backgroundColor sera remplacé par le gradient
@@ -831,6 +1035,31 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#F9FAFB',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  chatItemSelectedBg: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(129, 140, 252, 0.12)',
+  },
+  selectionIndicator: {
+    position: 'absolute',
+    left: 8,
+    top: '50%',
+    marginTop: -14,
+    zIndex: 10,
+  },
+  selectionCheckBg: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#818CF8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   chatAvatar: {
     width: 56,
@@ -855,6 +1084,9 @@ const styles = StyleSheet.create({
     color: '#1F2937',
     marginRight: 8,
   },
+  chatNameSelected: {
+    color: '#818CF8',
+  },
   chatTime: {
     fontSize: 12,
     color: '#9CA3AF',
@@ -863,6 +1095,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
     lineHeight: 20,
+  },
+  muteIconContainer: {
+    marginLeft: 8,
+    padding: 4,
   },
   unreadBadge: {
     borderRadius: 12,

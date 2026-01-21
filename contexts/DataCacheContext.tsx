@@ -52,6 +52,7 @@ interface Conversation {
   slotTime?: string;
   updated_at: string;
   participantCount?: number;
+  isMuted?: boolean;
 }
 
 interface Friend {
@@ -94,6 +95,7 @@ interface DataCacheContextType {
   updateConversationInCache: (conversationId: string, updates: Partial<Conversation>) => void;
   markConversationAsRead: (conversationId: string) => void;
   removeConversationFromCache: (conversationId: string) => void;
+  toggleMuteConversation: (conversationId: string) => Promise<boolean>;
 }
 
 const DataCacheContext = createContext<DataCacheContextType | undefined>(undefined);
@@ -351,7 +353,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       // Récupérer les conversations de l'utilisateur (exclure les conversations cachées)
       const { data: participantData } = await supabase
         .from('conversation_participants')
-        .select('conversation_id, last_read_at')
+        .select('conversation_id, last_read_at, is_muted')
         .eq('user_id', userId)
         .eq('is_hidden', false);
 
@@ -363,8 +365,10 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       }
 
       const lastReadMap: Record<string, string | null> = {};
+      const isMutedMap: Record<string, boolean> = {};
       participantData?.forEach(p => {
         lastReadMap[p.conversation_id] = p.last_read_at;
+        isMutedMap[p.conversation_id] = p.is_muted || false;
       });
 
       // Récupérer les conversations avec participants
@@ -457,6 +461,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
           updated_at: conv.updated_at,
           unreadCount: unreadCounts[conv.id] || 0,
           isPastActivity: false,
+          isMuted: isMutedMap[conv.id] || false,
         };
       }) || [];
 
@@ -519,6 +524,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
           slotTime: conv.slot_time || null,
           updated_at: conv.updated_at,
           participantCount: conv.participant_count || 0,
+          isMuted: conv.is_muted || false,
         };
       });
 
@@ -706,6 +712,56 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  const toggleMuteConversation = useCallback(async (conversationId: string): Promise<boolean> => {
+    if (!user?.id) return false;
+
+    // Trouver l'état actuel
+    const conversation = cache.conversations.find(c => c.id === conversationId);
+    if (!conversation) return false;
+
+    const newMutedState = !conversation.isMuted;
+
+    // Optimistic update
+    setCache(prev => ({
+      ...prev,
+      conversations: prev.conversations.map(c =>
+        c.id === conversationId ? { ...c, isMuted: newMutedState } : c
+      ),
+    }));
+
+    try {
+      const { error } = await supabase
+        .from('conversation_participants')
+        .update({ is_muted: newMutedState })
+        .eq('conversation_id', conversationId)
+        .eq('user_id', user.id);
+
+      if (error) {
+        // Rollback on error
+        setCache(prev => ({
+          ...prev,
+          conversations: prev.conversations.map(c =>
+            c.id === conversationId ? { ...c, isMuted: !newMutedState } : c
+          ),
+        }));
+        console.error('Error toggling mute:', error);
+        return false;
+      }
+
+      return newMutedState;
+    } catch (error) {
+      // Rollback on error
+      setCache(prev => ({
+        ...prev,
+        conversations: prev.conversations.map(c =>
+          c.id === conversationId ? { ...c, isMuted: !newMutedState } : c
+        ),
+      }));
+      console.error('Error toggling mute:', error);
+      return false;
+    }
+  }, [user, cache.conversations]);
+
   // ============================================
   // CHARGEMENT INITIAL
   // ============================================
@@ -798,6 +854,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
         updateConversationInCache,
         markConversationAsRead,
         removeConversationFromCache,
+        toggleMuteConversation,
       }}
     >
       {children}

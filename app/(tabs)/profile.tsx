@@ -1,6 +1,6 @@
 // app/(tabs)/profile.tsx
-// Profile screen with conditional rendering for user/business accounts
-// MODIFIÉ: Ajout de personality_tags
+// Profile screen with modern Tinder-like design
+// Uses same design system as chat.tsx (gradient header, modern cards)
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -18,10 +18,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
-import { PersonalityTagsBadges } from '@/components/PersonalityTagsBadges'; // NOUVEAU
+import { PersonalityTagsBadges } from '@/components/PersonalityTagsBadges';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
 import { getIntentionInfo } from '@/lib/database.types';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -33,7 +35,8 @@ interface UserProfile {
   bio: string | null;
   city: string | null;
   interests: string[] | null;
-  personality_tags: string[] | null; // NOUVEAU
+  personality_tags: string[] | null;
+  intention?: string;
   account_type: 'user' | 'business';
   business_name?: string;
   business_description?: string;
@@ -119,14 +122,12 @@ export default function ProfileScreen() {
   const loadUserStats = async (userId: string) => {
     setLoadingStats(true);
     try {
-      // Essayer la RPC optimisée d'abord (1 requête au lieu de 2)
       const { data, error } = await supabase.rpc('get_user_profile_stats', {
         p_user_id: userId
       } as any) as { data: any; error: any };
 
       if (error) {
         console.error('RPC get_user_profile_stats error:', error);
-        // Fallback vers les anciennes requêtes
         const { count: joined } = await supabase
           .from('slot_participants')
           .select('*', { count: 'exact', head: true })
@@ -153,14 +154,12 @@ export default function ProfileScreen() {
   const loadBusinessDashboard = async (businessId: string) => {
     setLoadingStats(true);
     try {
-      // Essayer la RPC optimisée d'abord (1 requête au lieu de 8-10)
       const { data, error } = await supabase.rpc('get_business_dashboard', {
         p_business_id: businessId
       } as any) as { data: any; error: any };
 
       if (error) {
         console.error('RPC get_business_dashboard error:', error);
-        // Fallback vers les anciennes requêtes
         await loadBusinessDashboardFallback(businessId);
         return;
       }
@@ -186,10 +185,8 @@ export default function ProfileScreen() {
     }
   };
 
-  // Fallback pour compatibilité si RPC n'est pas encore déployée
   const loadBusinessDashboardFallback = async (businessId: string) => {
     try {
-      // Charger les stats de base
       const { count: totalActivities } = await supabase
         .from('activities')
         .select('*', { count: 'exact', head: true })
@@ -201,13 +198,11 @@ export default function ProfileScreen() {
         .eq('host_id', businessId)
         .eq('status', 'active');
 
-      // Récupérer les activités pour calculer les participants
       const { data: activities } = await supabase
         .from('activities')
         .select('id, participants, prix')
         .eq('host_id', businessId);
 
-      // Compter les participants des créneaux TERMINÉS uniquement
       const now = new Date();
       const todayStr = now.toISOString().split('T')[0];
       const nowTime = now.toTimeString().slice(0, 5);
@@ -217,7 +212,6 @@ export default function ProfileScreen() {
       let totalRevenue = 0;
 
       if (activityIdsForStats.length > 0) {
-        // Récupérer les créneaux passés
         const { data: pastSlots } = await supabase
           .from('activity_slots')
           .select('id, activity_id')
@@ -227,7 +221,6 @@ export default function ProfileScreen() {
         const pastSlotIds = pastSlots?.map((s: any) => s.id) || [];
 
         if (pastSlotIds.length > 0) {
-          // Compter les participants de ces créneaux
           const { count } = await supabase
             .from('slot_participants')
             .select('*', { count: 'exact', head: true })
@@ -235,7 +228,6 @@ export default function ProfileScreen() {
 
           totalParticipants = count || 0;
 
-          // Calculer les revenus basés sur les créneaux terminés
           const slotActivityMap = new Map(pastSlots?.map((s: any) => [s.id, s.activity_id]) || []);
           const activityPrices = new Map(activities?.map((a: any) => [a.id, a.prix || 0]) || []);
 
@@ -252,7 +244,6 @@ export default function ProfileScreen() {
         }
       }
 
-      // Top activités
       const { data: topActivities } = await supabase
         .from('activities')
         .select('id, titre, image_url, participants, max_participants, prix, date')
@@ -260,7 +251,6 @@ export default function ProfileScreen() {
         .order('participants', { ascending: false })
         .limit(5);
 
-      // Récupérer le vrai nombre d'avis depuis la table reviews
       const activityIds = activities?.map((a: any) => a.id) || [];
       let reviewCount = 0;
       let avgRating = 0;
@@ -307,33 +297,40 @@ export default function ProfileScreen() {
   // Loading state
   if (loading) {
     return (
-      <SafeAreaView style={commonStyles.container} edges={['top']}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
+      <LinearGradient
+        colors={['#60A5FA', '#818CF8', '#C084FC']}
+        style={styles.container}
+      >
+        <SafeAreaView style={styles.loadingContainer} edges={['top']}>
+          <ActivityIndicator size="large" color="#FFFFFF" />
           <Text style={styles.loadingText}>Chargement...</Text>
-        </View>
-      </SafeAreaView>
+        </SafeAreaView>
+      </LinearGradient>
     );
   }
 
   // Not connected state
   if (!profile) {
     return (
-      <SafeAreaView style={commonStyles.container} edges={['top']}>
-        <View style={styles.notConnectedContainer}>
-          <IconSymbol name="person.crop.circle" size={80} color={colors.textSecondary} />
+      <LinearGradient
+        colors={['#60A5FA', '#818CF8', '#C084FC']}
+        style={styles.container}
+      >
+        <SafeAreaView style={styles.notConnectedContainer} edges={['top']}>
+          <IconSymbol name="person.crop.circle" size={80} color="rgba(255,255,255,0.9)" />
           <Text style={styles.notConnectedTitle}>Non connecté</Text>
           <Text style={styles.notConnectedText}>
-            Connectez-vous pour accéder à votre profil et rejoindre des activités
+            Connectez-vous pour accéder à votre profil
           </Text>
           <TouchableOpacity
-            style={styles.connectButton}
             onPress={() => router.push('/auth/account-type')}
+            style={styles.connectButton}
+            activeOpacity={0.8}
           >
             <Text style={styles.connectButtonText}>Se connecter</Text>
           </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+        </SafeAreaView>
+      </LinearGradient>
     );
   }
 
@@ -353,117 +350,145 @@ export default function ProfileScreen() {
     );
   }
 
-  // Render user profile
+  // Render user profile (Glassmorphism design)
   return (
-    <SafeAreaView style={commonStyles.container} edges={['top', 'bottom']}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Profile</Text>
-        <TouchableOpacity
-          onPress={() => router.push('/settings')}
-          style={styles.settingsButton}
+    <LinearGradient
+      colors={['#60A5FA', '#818CF8', '#C084FC']}
+      style={styles.container}
+    >
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        {/* Header minimaliste */}
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => router.push('/settings')}
+            style={styles.headerButton}
+          >
+            <IconSymbol name="gear" size={22} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FFFFFF" />
+          }
         >
-          <IconSymbol name="gear" size={24} color={colors.text} />
-        </TouchableOpacity>
-      </View>
+        {/* Carte Profil avec effet verre */}
+        <View style={styles.glassCard}>
+          <View style={styles.profileSection}>
+            <View style={styles.avatarContainer}>
+              <Image
+                source={{ uri: profile.avatar_url || 'https://via.placeholder.com/90' }}
+                style={styles.avatar}
+              />
+              <TouchableOpacity
+                style={styles.editBadge}
+                onPress={() => router.push('/edit-profile')}
+              >
+                <IconSymbol name="pencil" size={11} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
-        <View style={styles.profileHeader}>
-          <Image
-            source={{ uri: profile.avatar_url || 'https://via.placeholder.com/120' }}
-            style={styles.avatar}
-          />
-          <Text style={styles.name}>{profile.full_name || profile.username}</Text>
-          <View style={styles.locationRow}>
-            <IconSymbol name="location.fill" size={16} color={colors.textSecondary} />
-            <Text style={styles.city}>{profile.city || 'Ville non renseignée'}</Text>
+            <Text style={styles.userName}>{profile.full_name || profile.username}</Text>
+
+            {profile.city && (
+              <View style={styles.locationRow}>
+                <IconSymbol name="location.fill" size={13} color="rgba(255,255,255,0.95)" />
+                <Text style={styles.locationText}>{profile.city}</Text>
+              </View>
+            )}
           </View>
+
+          {/* Bouton modifier */}
+          <TouchableOpacity
+            style={styles.editButton}
+            onPress={() => router.push('/edit-profile')}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.editButtonText}>Modifier le profil</Text>
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Bio</Text>
-          <View style={styles.card}>
-            <Text style={styles.bio}>{profile.bio || 'Aucune bio renseignée'}</Text>
+        {/* Stats Card Glass */}
+        {loadingStats ? (
+          <View style={styles.glassCard}>
+            <ActivityIndicator size="small" color="#FFFFFF" />
           </View>
-        </View>
+        ) : (
+          <TouchableOpacity
+            style={styles.glassCard}
+            onPress={() => router.push('/my-participated-activities')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.statsRow}>
+              <View style={styles.statsIcon}>
+                <IconSymbol name="calendar" size={22} color="#FFFFFF" />
+              </View>
+              <View style={styles.statsContent}>
+                <Text style={styles.statsValue}>{activitiesJoined}</Text>
+                <Text style={styles.statsLabel}>Activités rejointes</Text>
+              </View>
+              <IconSymbol name="chevron.right" size={18} color="rgba(255,255,255,0.7)" />
+            </View>
+          </TouchableOpacity>
+        )}
 
-        {/* NOUVEAU: Section Personnalité */}
-        {profile.personality_tags && profile.personality_tags.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Personnalité</Text>
-            <PersonalityTagsBadges tags={profile.personality_tags} />
+        {/* Bio */}
+        {profile.bio && (
+          <View style={styles.glassCard}>
+            <Text style={styles.sectionTitle}>Bio</Text>
+            <Text style={styles.bioText}>{profile.bio}</Text>
           </View>
         )}
 
-        {/* Section Intention */}
-        {profile.intention && (() => {
-          const intentionInfo = getIntentionInfo(profile.intention);
-          return intentionInfo ? (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Recherche</Text>
-              <View style={[styles.intentionCard, { borderColor: intentionInfo.color }]}>
-                <View style={[styles.intentionIcon, { backgroundColor: intentionInfo.color + '20' }]}>
-                  <IconSymbol name={intentionInfo.icon as any} size={22} color={intentionInfo.color} />
-                </View>
-                <Text style={[styles.intentionText, { color: intentionInfo.color }]}>
-                  {intentionInfo.label}
-                </Text>
-              </View>
-            </View>
-          ) : null;
-        })()}
-
-        {profile.interests && profile.interests.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Interests</Text>
-            <View style={styles.interestsContainer}>
-              {profile.interests.map((interest, index) => (
-                <View key={index} style={styles.interestBadge}>
-                  <Text style={styles.interestText}>{interest}</Text>
+        {/* Personnalité */}
+        {profile.personality_tags && profile.personality_tags.length > 0 && (
+          <View style={styles.glassCard}>
+            <Text style={styles.sectionTitle}>Personnalité</Text>
+            <View style={styles.tagsContainer}>
+              {profile.personality_tags.map((tag, index) => (
+                <View key={index} style={styles.tag}>
+                  <Text style={styles.tagText}>{tag}</Text>
                 </View>
               ))}
             </View>
           </View>
         )}
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Activités</Text>
-          {loadingStats ? (
-            <View style={styles.statsLoading}>
-              <ActivityIndicator size="small" color={colors.primary} />
-            </View>
-          ) : (
-            <TouchableOpacity 
-              style={styles.activitiesCard}
-              onPress={() => router.push('/my-participated-activities')}
-              activeOpacity={0.7}
-            >
-              <View style={styles.activitiesCardContent}>
-                <IconSymbol name="calendar" size={24} color={colors.primary} />
-                <View style={styles.activitiesCardText}>
-                  <Text style={styles.activitiesCardValue}>{activitiesJoined}</Text>
-                  <Text style={styles.activitiesCardLabel}>Activités rejointes</Text>
+        {/* Intention */}
+        {profile.intention && (() => {
+          const intentionInfo = getIntentionInfo(profile.intention);
+          return intentionInfo ? (
+            <View style={styles.glassCard}>
+              <Text style={styles.sectionTitle}>Recherche</Text>
+              <View style={styles.intentionRow}>
+                <View style={styles.intentionIcon}>
+                  <IconSymbol name={intentionInfo.icon as any} size={18} color="#FFFFFF" />
                 </View>
+                <Text style={styles.intentionText}>{intentionInfo.label}</Text>
               </View>
-              <IconSymbol name="chevron.right" size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
-          )}
-        </View>
+            </View>
+          ) : null;
+        })()}
 
-        <TouchableOpacity
-          style={styles.editButton}
-          onPress={() => router.push('/edit-profile')}
-        >
-          <Text style={styles.editButtonText}>Edit Profile</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </SafeAreaView>
+        {/* Intérêts */}
+        {profile.interests && profile.interests.length > 0 && (
+          <View style={styles.glassCard}>
+            <Text style={styles.sectionTitle}>Centres d'intérêt</Text>
+            <View style={styles.tagsContainer}>
+              {profile.interests.map((interest, index) => (
+                <View key={index} style={styles.tag}>
+                  <Text style={styles.tagText}>{interest}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+        </ScrollView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
@@ -494,34 +519,41 @@ function BusinessProfileView({
 }: BusinessProfileViewProps) {
 
   return (
-    <SafeAreaView style={commonStyles.container} edges={['top', 'bottom']}>
-      {/* Header */}
-      <View style={styles.businessHeader}>
-        <View style={styles.businessHeaderLeft}>
-          <Text style={styles.headerTitle}>Dashboard</Text>
-          {profile.business_verified && (
-            <View style={styles.verifiedBadge}>
-              <IconSymbol name="checkmark.seal.fill" size={14} color="#10B981" />
-              <Text style={styles.verifiedText}>Vérifié</Text>
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      {/* Header avec dégradé */}
+      <LinearGradient
+        colors={['#60A5FA', '#818CF8', '#C084FC']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.header}
+      >
+        <SafeAreaView edges={['top']} style={styles.headerSafeArea}>
+          <View style={styles.headerContent}>
+            <View style={styles.headerLeft}>
+              {profile.business_verified && (
+                <View style={styles.verifiedBadge}>
+                  <IconSymbol name="checkmark.seal.fill" size={12} color="#FFFFFF" />
+                  <Text style={styles.verifiedText}>Vérifié</Text>
+                </View>
+              )}
             </View>
-          )}
-        </View>
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            onPress={() => router.push('/settings')}
-            style={styles.settingsButton}
-          >
-            <IconSymbol name="gear" size={24} color={colors.text} />
-          </TouchableOpacity>
-        </View>
-      </View>
+            <Text style={styles.headerTitle}>Dashboard</Text>
+            <TouchableOpacity
+              onPress={() => router.push('/settings')}
+              style={styles.headerButton}
+            >
+              <IconSymbol name="gear" size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.businessContentContainer}
+        contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#818CF8" />
         }
       >
         {/* Business Profile Card */}
@@ -547,15 +579,15 @@ function BusinessProfileView({
                 </View>
               )}
               {profile.business_rating !== undefined && profile.business_rating > 0 && (
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.ratingRow}
                   onPress={() => router.push(`/business-reviews?id=${profile.id}&name=${encodeURIComponent(profile.business_name || '')}`)}
                 >
-                  <IconSymbol name="star.fill" size={16} color="#F59E0B" />
+                  <IconSymbol name="star.fill" size={14} color="#F59E0B" />
                   <Text style={styles.ratingText}>
                     {profile.business_rating.toFixed(1)} ({profile.business_review_count} avis)
                   </Text>
-                  <IconSymbol name="chevron.right" size={14} color={colors.textSecondary} />
+                  <IconSymbol name="chevron.right" size={12} color="#9CA3AF" />
                 </TouchableOpacity>
               )}
             </View>
@@ -564,43 +596,72 @@ function BusinessProfileView({
             style={styles.editBusinessButton}
             onPress={() => router.push('/edit-business-profile')}
           >
-            <IconSymbol name="pencil" size={16} color={colors.primary} />
-            <Text style={styles.editBusinessText}>Modifier</Text>
+            <LinearGradient
+              colors={['#60A5FA', '#818CF8', '#C084FC']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.editBusinessGradient}
+            >
+              <IconSymbol name="pencil" size={14} color="#FFFFFF" />
+              <Text style={styles.editBusinessText}>Modifier</Text>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
 
-        {/* Quick Stats Cards */}
+        {/* Quick Stats Grid */}
         <View style={styles.quickStatsGrid}>
-          <View style={[styles.quickStatCard, { backgroundColor: '#6366F120' }]}>
-            <IconSymbol name="calendar" size={24} color="#6366F1" />
-            <Text style={styles.quickStatValue}>
-              {dashboardData?.total_activities || 0}
-            </Text>
-            <Text style={styles.quickStatLabel}>Activités créées</Text>
+          <View style={styles.quickStatCard}>
+            <LinearGradient
+              colors={['rgba(96, 165, 250, 0.15)', 'rgba(96, 165, 250, 0.05)']}
+              style={styles.quickStatGradient}
+            >
+              <IconSymbol name="calendar" size={24} color="#60A5FA" />
+              <Text style={styles.quickStatValue}>
+                {dashboardData?.total_activities || 0}
+              </Text>
+              <Text style={styles.quickStatLabel}>Activités</Text>
+            </LinearGradient>
           </View>
-          <View style={[styles.quickStatCard, { backgroundColor: '#10B98120' }]}>
-            <IconSymbol name="person.2.fill" size={24} color="#10B981" />
-            <Text style={styles.quickStatValue}>
-              {dashboardData?.total_participants || 0}
-            </Text>
-            <Text style={styles.quickStatLabel}>Participants</Text>
+          <View style={styles.quickStatCard}>
+            <LinearGradient
+              colors={['rgba(129, 140, 252, 0.15)', 'rgba(129, 140, 252, 0.05)']}
+              style={styles.quickStatGradient}
+            >
+              <IconSymbol name="person.2.fill" size={24} color="#818CF8" />
+              <Text style={styles.quickStatValue}>
+                {dashboardData?.total_participants || 0}
+              </Text>
+              <Text style={styles.quickStatLabel}>Participants</Text>
+            </LinearGradient>
           </View>
-          <TouchableOpacity 
-            style={[styles.quickStatCard, { backgroundColor: '#F59E0B20' }]}
+          <TouchableOpacity
+            style={styles.quickStatCard}
             onPress={() => router.push(`/business-reviews?id=${profile.id}&name=${encodeURIComponent(profile.business_name || '')}`)}
           >
-            <IconSymbol name="message.fill" size={24} color="#F59E0B" />
-            <Text style={styles.quickStatValue}>
-              {dashboardData?.review_count || 0}
-            </Text>
-            <Text style={styles.quickStatLabel}>Avis reçus</Text>
+            <LinearGradient
+              colors={['rgba(192, 132, 252, 0.15)', 'rgba(192, 132, 252, 0.05)']}
+              style={styles.quickStatGradient}
+            >
+              <IconSymbol name="message.fill" size={24} color="#C084FC" />
+              <Text style={styles.quickStatValue}>
+                {dashboardData?.review_count || 0}
+              </Text>
+              <Text style={styles.quickStatLabel}>Avis</Text>
+            </LinearGradient>
           </TouchableOpacity>
-          <View style={[styles.quickStatCard, { backgroundColor: '#EC489920' }]}>
-            <IconSymbol name="dollarsign.circle.fill" size={24} color="#EC4899" />
-            <Text style={styles.quickStatValue}>
-              {(dashboardData?.total_revenue || 0).toFixed(0)}€
-            </Text>
-            <Text style={styles.quickStatLabel}>Revenus</Text>
+          <View style={styles.quickStatCard}>
+            <LinearGradient
+              colors={['rgba(96, 165, 250, 0.15)', 'rgba(192, 132, 252, 0.15)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.quickStatGradient}
+            >
+              <IconSymbol name="dollarsign.circle.fill" size={24} color="#818CF8" />
+              <Text style={styles.quickStatValue}>
+                {(dashboardData?.total_revenue || 0).toFixed(0)}€
+              </Text>
+              <Text style={styles.quickStatLabel}>Revenus</Text>
+            </LinearGradient>
           </View>
         </View>
 
@@ -609,33 +670,46 @@ function BusinessProfileView({
           {(['7d', '30d', '90d'] as const).map((period) => (
             <TouchableOpacity
               key={period}
-              style={[
-                styles.periodButton,
-                selectedPeriod === period && styles.periodButtonActive,
-              ]}
               onPress={() => setSelectedPeriod(period)}
+              activeOpacity={0.7}
             >
-              <Text
-                style={[
-                  styles.periodButtonText,
-                  selectedPeriod === period && styles.periodButtonTextActive,
-                ]}
-              >
-                {period === '7d' ? '7 jours' : period === '30d' ? '30 jours' : '90 jours'}
-              </Text>
+              {selectedPeriod === period ? (
+                <LinearGradient
+                  colors={['#60A5FA', '#818CF8', '#C084FC']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.periodButtonActive}
+                >
+                  <Text style={styles.periodButtonTextActive}>
+                    {period === '7d' ? '7 jours' : period === '30d' ? '30 jours' : '90 jours'}
+                  </Text>
+                </LinearGradient>
+              ) : (
+                <View style={styles.periodButton}>
+                  <Text style={styles.periodButtonText}>
+                    {period === '7d' ? '7 jours' : period === '30d' ? '30 jours' : '90 jours'}
+                  </Text>
+                </View>
+              )}
             </TouchableOpacity>
           ))}
         </View>
 
-        {/* Stats Summary Card */}
-        <View style={styles.chartSection}>
-          <Text style={styles.chartTitle}>Résumé des performances</Text>
+        {/* Performance Summary */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Résumé des performances</Text>
+          <LinearGradient
+            colors={['#60A5FA', '#818CF8', '#C084FC']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.sectionTitleBar}
+          />
           {loadingStats ? (
-            <View style={styles.chartLoading}>
-              <ActivityIndicator size="small" color={colors.primary} />
+            <View style={styles.statsLoading}>
+              <ActivityIndicator size="small" color="#818CF8" />
             </View>
           ) : (
-            <View style={styles.performanceSummary}>
+            <View style={styles.performanceCard}>
               <View style={styles.performanceRow}>
                 <Text style={styles.performanceLabel}>Total activités</Text>
                 <Text style={styles.performanceValue}>{dashboardData?.total_activities || 0}</Text>
@@ -660,8 +734,14 @@ function BusinessProfileView({
         {profile.business_description && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Bio</Text>
-            <View style={styles.card}>
-              <Text style={styles.businessDescription}>{profile.business_description}</Text>
+            <LinearGradient
+              colors={['#60A5FA', '#818CF8', '#C084FC']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.sectionTitleBar}
+            />
+            <View style={styles.bioCard}>
+              <Text style={styles.bioText}>{profile.business_description}</Text>
             </View>
           </View>
         )}
@@ -669,28 +749,42 @@ function BusinessProfileView({
         {/* Contact Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Contact</Text>
-          <View style={styles.card}>
+          <LinearGradient
+            colors={['#60A5FA', '#818CF8', '#C084FC']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.sectionTitleBar}
+          />
+          <View style={styles.contactCard}>
             {profile.business_address && (
               <View style={styles.contactRow}>
-                <IconSymbol name="location.fill" size={18} color={colors.primary} />
+                <View style={styles.contactIconContainer}>
+                  <IconSymbol name="location.fill" size={16} color="#818CF8" />
+                </View>
                 <Text style={styles.contactText}>{profile.business_address}</Text>
               </View>
             )}
             {profile.business_phone && (
               <View style={styles.contactRow}>
-                <IconSymbol name="phone.fill" size={18} color={colors.primary} />
+                <View style={styles.contactIconContainer}>
+                  <IconSymbol name="phone.fill" size={16} color="#818CF8" />
+                </View>
                 <Text style={styles.contactText}>{profile.business_phone}</Text>
               </View>
             )}
             {profile.business_email && (
               <View style={styles.contactRow}>
-                <IconSymbol name="envelope.fill" size={18} color={colors.primary} />
+                <View style={styles.contactIconContainer}>
+                  <IconSymbol name="envelope.fill" size={16} color="#818CF8" />
+                </View>
                 <Text style={styles.contactText}>{profile.business_email}</Text>
               </View>
             )}
             {profile.business_website && (
               <View style={styles.contactRow}>
-                <IconSymbol name="globe" size={18} color={colors.primary} />
+                <View style={styles.contactIconContainer}>
+                  <IconSymbol name="globe" size={16} color="#818CF8" />
+                </View>
                 <Text style={[styles.contactText, styles.linkText]}>{profile.business_website}</Text>
               </View>
             )}
@@ -709,7 +803,76 @@ function BusinessProfileView({
 // ============================================
 
 const styles = StyleSheet.create({
-  // Loading & Empty States
+  // Main container
+  container: {
+    flex: 1,
+  },
+  safeArea: {
+    flex: 1,
+  },
+
+  // Header
+  header: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    alignItems: 'flex-end',
+  },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  headerLeft: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  headerButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerSafeArea: {
+    width: '100%',
+  },
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  verifiedText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+
+  // ScrollView
+  scrollView: {
+    flex: 1,
+  },
+  contentContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 100 : 120,
+    gap: 16,
+  },
+
+  // Loading
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -718,8 +881,11 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 16,
-    color: colors.textSecondary,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
+
+  // Not Connected
   notConnectedContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -727,209 +893,209 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
     gap: 16,
   },
+  notConnectedIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(192, 132, 252, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   notConnectedTitle: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '700',
-    color: colors.text,
+    color: '#FFFFFF',
+    marginTop: 16,
   },
   notConnectedText: {
     fontSize: 16,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.9)',
     textAlign: 'center',
     lineHeight: 24,
   },
   connectButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderRadius: 24,
     paddingHorizontal: 32,
     paddingVertical: 14,
-    borderRadius: 12,
     marginTop: 8,
   },
   connectButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.background,
+    color: '#FFFFFF',
   },
 
-  // Header
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  settingsButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
+  // Glass Card (effet verre)
+  glassCard: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
 
-  // ScrollView
-  scrollView: {
-    flex: 1,
-  },
-  contentContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: Platform.OS === 'ios' ? 100 : 120,
-  },
-
-  // User Profile
-  profileHeader: {
+  // Profile Section
+  profileSection: {
     alignItems: 'center',
-    marginBottom: 24,
-  },
-  avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
     marginBottom: 16,
   },
-  name: {
-    fontSize: 24,
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: 14,
+  },
+  avatar: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.5)',
+  },
+  editBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(255,255,255,0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.6)',
+  },
+  userName: {
+    fontSize: 26,
     fontWeight: '700',
-    color: colors.text,
+    color: '#FFFFFF',
     marginBottom: 4,
   },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
   },
-  city: {
-    fontSize: 16,
-    color: colors.textSecondary,
+  locationText: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.95)',
+    fontWeight: '500',
   },
+  editButton: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    paddingVertical: 11,
+    paddingHorizontal: 28,
+    borderRadius: 18,
+    alignSelf: 'center',
+  },
+  editButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+
+  // Stats Row
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  statsIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  statsContent: {
+    flex: 1,
+  },
+  statsValue: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  statsLabel: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: 2,
+  },
+
+  // Section
   section: {
     marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#FFFFFF',
     marginBottom: 12,
   },
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 16,
+  sectionTitleBar: {
+    width: 40,
+    height: 3,
+    borderRadius: 2,
+    marginBottom: 16,
   },
-  bio: {
-    fontSize: 16,
-    color: colors.textSecondary,
-    lineHeight: 24,
+
+  // Bio
+  bioText: {
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.95)',
+    lineHeight: 22,
   },
-  interestsContainer: {
+
+  // Tags
+  tagsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
   },
-  interestBadge: {
-    backgroundColor: colors.primary + '20',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+  tag: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    paddingHorizontal: 13,
+    paddingVertical: 7,
+    borderRadius: 14,
   },
-  interestText: {
-    fontSize: 14,
+  tagText: {
+    fontSize: 13,
     fontWeight: '600',
-    color: colors.primary,
-  },
-  statsLoading: {
-    paddingVertical: 40,
-    alignItems: 'center',
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 20,
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: colors.primary,
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  editButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 20,
-  },
-  editButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.background,
+    color: '#FFFFFF',
   },
 
-  // Business Profile Styles
-  businessHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  businessHeaderLeft: {
-    flexDirection: 'column',
-    gap: 4,
-  },
-  headerActions: {
+  // Intention
+  intentionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
   },
-  createButton: {
-    backgroundColor: colors.primary,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  intentionIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.25)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  verifiedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#10B98120',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    alignSelf: 'flex-start',
-  },
-  verifiedText: {
-    fontSize: 12,
+  intentionText: {
+    fontSize: 15,
     fontWeight: '600',
-    color: '#10B981',
+    color: '#FFFFFF',
   },
-  businessContentContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: Platform.OS === 'ios' ? 100 : 120,
-  },
+
+  // Business Profile Styles
   businessProfileCard: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
     overflow: 'hidden',
     marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
   },
   coverImage: {
     width: '100%',
@@ -943,46 +1109,21 @@ const styles = StyleSheet.create({
   businessLogo: {
     width: 80,
     height: 80,
-    borderRadius: 12,
-    backgroundColor: colors.background,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
   },
   businessInfo: {
     flex: 1,
     paddingTop: 8,
   },
-  activitiesCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 16,
-  },
-  activitiesCardContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  activitiesCardText: {
-    gap: 2,
-  },
-  activitiesCardValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  activitiesCardLabel: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
   businessName: {
     fontSize: 20,
     fontWeight: '700',
-    color: colors.text,
-    marginBottom: 4,
+    color: '#1F2937',
+    marginBottom: 6,
   },
   categoryBadge: {
-    backgroundColor: colors.secondary + '20',
+    backgroundColor: 'rgba(129, 140, 252, 0.15)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
@@ -992,7 +1133,7 @@ const styles = StyleSheet.create({
   categoryText: {
     fontSize: 12,
     fontWeight: '600',
-    color: colors.secondary,
+    color: '#818CF8',
   },
   ratingRow: {
     flexDirection: 'row',
@@ -1000,23 +1141,28 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   ratingText: {
-    fontSize: 14,
-    color: colors.textSecondary,
+    fontSize: 13,
+    color: '#6B7280',
   },
   editBusinessButton: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+  },
+  editBusinessGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
     paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.background,
+    borderRadius: 12,
   },
   editBusinessText: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.primary,
+    color: '#FFFFFF',
   },
+
+  // Quick Stats Grid
   quickStatsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1024,125 +1170,116 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   quickStatCard: {
-    width: (SCREEN_WIDTH - 52) / 2,
+    width: (SCREEN_WIDTH - 44) / 2,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  quickStatGradient: {
     padding: 16,
-    borderRadius: 12,
     alignItems: 'center',
     gap: 8,
   },
   quickStatValue: {
     fontSize: 24,
     fontWeight: '700',
-    color: colors.text,
+    color: '#1F2937',
   },
   quickStatLabel: {
     fontSize: 12,
-    color: colors.textSecondary,
-    textAlign: 'center',
+    color: '#6B7280',
   },
+
+  // Period Selector
   periodSelector: {
     flexDirection: 'row',
-    backgroundColor: colors.card,
+    backgroundColor: '#F3F4F6',
     borderRadius: 12,
     padding: 4,
     marginBottom: 20,
+    gap: 4,
   },
   periodButton: {
     flex: 1,
     paddingVertical: 10,
+    paddingHorizontal: 16,
     alignItems: 'center',
-    borderRadius: 8,
+    borderRadius: 10,
   },
   periodButtonActive: {
-    backgroundColor: colors.primary,
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    borderRadius: 10,
   },
   periodButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.textSecondary,
+    color: '#9CA3AF',
   },
   periodButtonTextActive: {
-    color: colors.background,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
-  chartSection: {
-    backgroundColor: colors.card,
+
+  // Performance Card
+  performanceCard: {
+    backgroundColor: '#F9FAFB',
     borderRadius: 16,
     padding: 16,
-    marginBottom: 20,
-  },
-  chartTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 16,
-  },
-  chartLoading: {
-    height: 120,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  performanceSummary: {
-    gap: 12,
   },
   performanceRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: colors.background,
+    borderBottomColor: '#E5E7EB',
   },
   performanceLabel: {
     fontSize: 14,
-    color: colors.textSecondary,
+    color: '#6B7280',
   },
   performanceValue: {
     fontSize: 16,
     fontWeight: '700',
-    color: colors.text,
+    color: '#1F2937',
   },
-  businessDescription: {
-    fontSize: 15,
-    color: colors.textSecondary,
-    lineHeight: 22,
+
+  // Contact Card
+  contactCard: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 16,
+    padding: 16,
   },
   contactRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingVertical: 8,
+    paddingVertical: 10,
   },
-  contactText: {
-    fontSize: 15,
-    color: colors.text,
-    flex: 1,
-  },
-  linkText: {
-    color: colors.primary,
-  },
-  intentionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    padding: 16,
-    borderRadius: 16,
-    gap: 14,
-    borderWidth: 1,
-  },
-  intentionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  contactIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'rgba(129, 140, 252, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  intentionText: {
-    fontSize: 16,
-    fontWeight: '600',
+  contactText: {
+    flex: 1,
+    fontSize: 15,
+    color: '#374151',
+  },
+  linkText: {
+    color: '#818CF8',
   },
   emptyText: {
     fontSize: 14,
-    color: colors.textSecondary,
+    color: '#9CA3AF',
     fontStyle: 'italic',
+    textAlign: 'center',
+    paddingVertical: 8,
   },
 });

@@ -642,116 +642,123 @@ export default function BrowseScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={commonStyles.container} edges={['top']}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
+      <LinearGradient
+        colors={['#60A5FA', '#818CF8', '#C084FC']}
+        style={styles.container}
+      >
+        <SafeAreaView style={styles.loadingContainer} edges={['top']}>
+          <ActivityIndicator size="large" color="#FFFFFF" />
           <Text style={styles.loadingText}>Chargement des activités...</Text>
-        </View>
-      </SafeAreaView>
+        </SafeAreaView>
+      </LinearGradient>
     );
   }
 
   return (
-    <SafeAreaView style={commonStyles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Découvrir</Text>
-        <View style={styles.headerActions}>
-          <View style={styles.toggleContainer}>
-            <TouchableOpacity style={[styles.toggleButton, viewMode === 'liste' && styles.toggleButtonActive]} onPress={() => setViewMode('liste')}>
-              <IconSymbol name="list.bullet" size={20} color={viewMode === 'liste' ? colors.background : colors.textSecondary} />
-              <Text style={[styles.toggleText, viewMode === 'liste' && styles.toggleTextActive]}>Liste</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.toggleButton, viewMode === 'maps' && styles.toggleButtonActive]} onPress={() => setViewMode('maps')}>
-              <IconSymbol name="map.fill" size={20} color={viewMode === 'maps' ? colors.background : colors.textSecondary} />
-              <Text style={[styles.toggleText, viewMode === 'maps' && styles.toggleTextActive]}>Maps</Text>
-            </TouchableOpacity>
-          </View>
-          {isBusiness && (
-  <TouchableOpacity onPress={() => router.push('/create-activity')} style={styles.createButton}>
-    <IconSymbol name="plus" size={24} color={colors.background} />
-  </TouchableOpacity>
-)}
-        </View>
-      </View>
-
-      {viewMode === 'liste' ? (
-        <>
-          <View style={styles.searchRow}>
-            <View style={styles.searchContainer}>
-              <IconSymbol name="magnifyingglass" size={20} color={colors.textSecondary} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Rechercher des activités..."
-                placeholderTextColor={colors.textSecondary}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-              />
+    <LinearGradient
+      colors={['#60A5FA', '#818CF8', '#C084FC']}
+      style={styles.container}
+    >
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Découvrir</Text>
+          <View style={styles.headerActions}>
+            <View style={styles.toggleContainer}>
+              <TouchableOpacity style={[styles.toggleButton, viewMode === 'liste' && styles.toggleButtonActive]} onPress={() => setViewMode('liste')}>
+                <IconSymbol name="list.bullet" size={20} color={viewMode === 'liste' ? '#FFFFFF' : 'rgba(255,255,255,0.7)'} />
+                <Text style={[styles.toggleText, viewMode === 'liste' && styles.toggleTextActive]}>Liste</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.toggleButton, viewMode === 'maps' && styles.toggleButtonActive]} onPress={() => setViewMode('maps')}>
+                <IconSymbol name="map.fill" size={20} color={viewMode === 'maps' ? '#FFFFFF' : 'rgba(255,255,255,0.7)'} />
+                <Text style={[styles.toggleText, viewMode === 'maps' && styles.toggleTextActive]}>Maps</Text>
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              style={[styles.filterButton, activeFiltersCount > 0 && styles.filterButtonActive]}
-              onPress={() => {
-                setTempFilters(filters);
-                setShowFilters(true);
-              }}
+            {isBusiness && (
+              <TouchableOpacity onPress={() => router.push('/create-activity')} style={styles.createButton}>
+                <IconSymbol name="plus" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        {viewMode === 'liste' ? (
+          <>
+            <View style={styles.searchRow}>
+              <View style={styles.searchContainer}>
+                <IconSymbol name="magnifyingglass" size={20} color="rgba(255,255,255,0.9)" />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Rechercher des activités..."
+                  placeholderTextColor="rgba(255,255,255,0.6)"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                />
+              </View>
+              <TouchableOpacity
+                style={[styles.filterButton, activeFiltersCount > 0 && styles.filterButtonActive]}
+                onPress={() => {
+                  setTempFilters(filters);
+                  setShowFilters(true);
+                }}
+              >
+                <IconSymbol name="line.3.horizontal.decrease.circle" size={22} color={activeFiltersCount > 0 ? '#FFFFFF' : 'rgba(255,255,255,0.9)'} />
+                {activeFiltersCount > 0 && (
+                  <View style={styles.filterBadge}>
+                    <Text style={styles.filterBadgeText}>{activeFiltersCount}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              style={styles.scrollView}
+              contentContainerStyle={[styles.contentContainer, Platform.OS !== 'ios' && styles.contentContainerWithTabBar]}
+              showsVerticalScrollIndicator={false}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#FFFFFF" />}
             >
-              <IconSymbol name="line.3.horizontal.decrease.circle" size={22} color={activeFiltersCount > 0 ? colors.background : colors.textSecondary} />
-              {activeFiltersCount > 0 && (
-                <View style={styles.filterBadge}>
-                  <Text style={styles.filterBadgeText}>{activeFiltersCount}</Text>
+              {filteredActivities.length > 0 ? filteredActivities.map((a, i) => renderActivityCard(a, i)) : (
+                <View style={styles.emptyState}>
+                  <IconSymbol name="calendar" size={64} color="rgba(255,255,255,0.7)" />
+                  <Text style={styles.emptyText}>Aucune activité trouvée</Text>
+                  <Text style={styles.emptySubtext}>{searchQuery ? 'Essayez une autre recherche' : 'Créez la première activité !'}</Text>
                 </View>
               )}
-            </TouchableOpacity>
-          </View>
-          <ScrollView 
-            style={styles.scrollView}
-            contentContainerStyle={[styles.contentContainer, Platform.OS !== 'ios' && styles.contentContainerWithTabBar]} 
-            showsVerticalScrollIndicator={false} 
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
-          >
-            {filteredActivities.length > 0 ? filteredActivities.map((a, i) => renderActivityCard(a, i)) : (
-              <View style={styles.emptyState}>
-                <IconSymbol name="calendar" size={64} color={colors.textSecondary} />
-                <Text style={styles.emptyText}>Aucune activité trouvée</Text>
-                <Text style={styles.emptySubtext}>{searchQuery ? 'Essayez une autre recherche' : 'Créez la première activité !'}</Text>
-              </View>
+            </ScrollView>
+          </>
+        ) : (
+          <View style={styles.mapContainer}>
+            <WebView
+              ref={webViewRef}
+              source={{ html: mapHTML }}
+              style={styles.map}
+              onMessage={handleWebViewMessage}
+              onLoadEnd={() => {
+                if (activities.length > 0) {
+                  sendActivitiesToMap(activities, !hasCenteredOnActivity.current);
+                }
+              }}
+              javaScriptEnabled
+              domStorageEnabled
+              scrollEnabled={false}
+              bounces={false}
+            />
+            {userLocation && (
+              <TouchableOpacity style={styles.locationButton} onPress={centerOnUser}>
+                <IconSymbol name="location.fill" size={22} color="#FFFFFF" />
+              </TouchableOpacity>
             )}
-          </ScrollView>
-        </>
-      ) : (
-        <View style={styles.mapContainer}>
-          <WebView
-            ref={webViewRef}
-            source={{ html: mapHTML }}
-            style={styles.map}
-            onMessage={handleWebViewMessage}
-            onLoadEnd={() => {
-              if (activities.length > 0) {
-                sendActivitiesToMap(activities, !hasCenteredOnActivity.current);
-              }
-            }}
-            javaScriptEnabled
-            domStorageEnabled
-            scrollEnabled={false}
-            bounces={false}
-          />
-          {userLocation && (
-            <TouchableOpacity style={styles.locationButton} onPress={centerOnUser}>
-              <IconSymbol name="location.fill" size={22} color={colors.primary} />
-            </TouchableOpacity>
-          )}
-          {renderSelectedActivity()}
-        </View>
-      )}
+            {renderSelectedActivity()}
+          </View>
+        )}
 
-      {/* Modal de filtres */}
-      <Modal
-        visible={showFilters}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowFilters(false)}
-      >
-        <View style={styles.filterModalOverlay}>
-          <View style={styles.filterModalContent}>
+        {/* Modal de filtres */}
+        <Modal
+          visible={showFilters}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setShowFilters(false)}
+        >
+          <View style={styles.filterModalOverlay}>
+            <View style={styles.filterModalContent}>
             <View style={styles.filterModalHeader}>
               <Text style={styles.filterModalTitle}>Filtres</Text>
               <TouchableOpacity onPress={() => setShowFilters(false)}>
@@ -999,63 +1006,70 @@ export default function BrowseScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
+            </View>
           </View>
-        </View>
-      </Modal>
-    </SafeAreaView>
+        </Modal>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    paddingHorizontal: 20, 
-    paddingVertical: 16 
+  container: {
+    flex: 1,
   },
-  headerTitle: { 
-    fontSize: 28, 
-    fontWeight: '700', 
-    color: colors.text 
+  safeArea: {
+    flex: 1,
   },
-  headerActions: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    gap: 12 
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
   },
-  toggleContainer: { 
-    flexDirection: 'row', 
-    backgroundColor: colors.card, 
-    borderRadius: 12, 
-    padding: 4 
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
-  toggleButton: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    paddingHorizontal: 12, 
-    paddingVertical: 8, 
-    borderRadius: 8, 
-    gap: 6 
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
-  toggleButtonActive: { 
-    backgroundColor: colors.primary 
+  toggleContainer: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 12,
+    padding: 4,
   },
-  toggleText: { 
-    fontSize: 14, 
-    fontWeight: '600', 
-    color: colors.textSecondary 
+  toggleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 6,
   },
-  toggleTextActive: { 
-    color: colors.background 
+  toggleButtonActive: {
+    backgroundColor: 'rgba(255,255,255,0.35)',
   },
-  createButton: { 
-    width: 44, 
-    height: 44, 
-    borderRadius: 22, 
-    backgroundColor: colors.primary, 
-    justifyContent: 'center', 
-    alignItems: 'center' 
+  toggleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.7)',
+  },
+  toggleTextActive: {
+    color: '#FFFFFF',
+  },
+  createButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   searchRow: {
     flexDirection: 'row',
@@ -1068,27 +1082,31 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.card,
+    backgroundColor: 'rgba(255,255,255,0.18)',
     borderRadius: 12,
     paddingHorizontal: 16,
-    gap: 12
+    gap: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   searchInput: {
     flex: 1,
     paddingVertical: 14,
     fontSize: 16,
-    color: colors.text
+    color: '#FFFFFF',
   },
   filterButton: {
     width: 48,
     height: 48,
     borderRadius: 12,
-    backgroundColor: colors.card,
+    backgroundColor: 'rgba(255,255,255,0.18)',
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   filterButtonActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: 'rgba(255,255,255,0.35)',
   },
   filterBadge: {
     position: 'absolute',
@@ -1116,45 +1134,48 @@ const styles = StyleSheet.create({
   contentContainerWithTabBar: { 
     paddingBottom: 100 
   },
-  loadingContainer: { 
-    flex: 1, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    gap: 12 
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
   },
-  loadingText: { 
-    fontSize: 16, 
-    color: colors.textSecondary 
+  loadingText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
-  emptyState: { 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    paddingVertical: 60 
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
   },
-  emptyText: { 
-    fontSize: 20, 
-    fontWeight: '600', 
-    color: colors.text, 
-    marginTop: 16 
+  emptyText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginTop: 16,
   },
-  emptySubtext: { 
-    fontSize: 16, 
-    color: colors.textSecondary, 
-    textAlign: 'center' 
+  emptySubtext: {
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.9)',
+    textAlign: 'center',
   },
 
   // =====================================================
-  // STYLES AMÉLIORÉS POUR LES CARTES D'ACTIVITÉS
+  // STYLES AMÉLIORÉS POUR LES CARTES D'ACTIVITÉS (Glassmorphism)
   // =====================================================
-  activityCard: { 
-    height: 220, 
-    borderRadius: 20, 
-    overflow: 'hidden', 
+  activityCard: {
+    height: 220,
+    borderRadius: 20,
+    overflow: 'hidden',
     marginBottom: 16,
-    backgroundColor: colors.card,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 6,
   },
@@ -1176,14 +1197,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
-  categoryBadge: { 
-    backgroundColor: colors.primary, 
-    paddingHorizontal: 14, 
-    paddingVertical: 7, 
+  categoryBadge: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 4,
   },
@@ -1195,10 +1218,12 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   fullBadge: {
-    backgroundColor: '#E74C3C',
+    backgroundColor: 'rgba(231, 76, 60, 0.9)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
   },
   fullBadgeText: {
     color: '#FFFFFF',
@@ -1223,14 +1248,16 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
   },
-  metaRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 5,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.25)',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   metaText: { 
     fontSize: 12, 
@@ -1263,36 +1290,38 @@ const styles = StyleSheet.create({
   map: { 
     flex: 1 
   },
-  locationButton: { 
-    position: 'absolute', 
-    top: 16, 
-    right: 16, 
-    width: 44, 
-    height: 44, 
-    borderRadius: 22, 
-    backgroundColor: colors.card, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    shadowColor: '#000', 
-    shadowOffset: { width: 0, height: 2 }, 
-    shadowOpacity: 0.1, 
-    shadowRadius: 4, 
-    elevation: 3 
+  locationButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  activityDetail: { 
-    position: 'absolute', 
-    bottom: 0, 
-    left: 0, 
-    right: 0, 
-    backgroundColor: colors.card, 
-    borderTopLeftRadius: 24, 
-    borderTopRightRadius: 24, 
-    maxHeight: '60%', 
-    shadowColor: '#000', 
-    shadowOffset: { width: 0, height: -4 }, 
-    shadowOpacity: 0.1, 
-    shadowRadius: 12, 
-    elevation: 8 
+  activityDetail: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '60%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
   },
   dragHandle: { 
     width: 40, 

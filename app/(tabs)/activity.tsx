@@ -10,14 +10,16 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
-import { colors, commonStyles } from '@/styles/commonStyles';
+import { colors } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
 import { intelligentGroupsService } from '@/services/intelligent-groups.service';
 import { useAuth } from '@/contexts/AuthContext';
+import { LinearGradient } from 'expo-linear-gradient';
 
 type TabType = 'ongoing' | 'past';
 type BusinessTabType = 'created' | 'live';
@@ -29,14 +31,12 @@ interface Activity {
   date_heure: string;
   adresse: string;
   ville: string;
-  // Pour les entreprises
   participants?: number;
   max_participants?: number;
   status?: string;
   user_slot_id?: string;
-  // Nouveau pour entreprises
-  hasLiveSlots?: boolean; // A des créneaux futurs
-  isPublished?: boolean; // status === 'active'
+  hasLiveSlots?: boolean;
+  isPublished?: boolean;
 }
 
 export default function ActivityScreen() {
@@ -49,6 +49,7 @@ export default function ActivityScreen() {
   const [ongoingActivities, setOngoingActivities] = useState<Activity[]>([]);
   const [pastActivities, setPastActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   const isBusiness = profile?.account_type === 'business';
 
@@ -62,7 +63,6 @@ export default function ActivityScreen() {
     }, [isBusiness])
   );
 
-// ✅ Charger les activités CRÉÉES par l'entreprise
   const loadBusinessActivities = async () => {
     try {
       setLoading(true);
@@ -74,7 +74,6 @@ export default function ActivityScreen() {
         return;
       }
 
-      // Récupérer toutes les activités créées par l'entreprise
       const { data: activities, error } = await supabase
         .from('activities')
         .select('id, nom, image_url, adresse, ville, date, time_start, participants, max_participants, status')
@@ -90,10 +89,8 @@ export default function ActivityScreen() {
       const now = new Date();
       const todayStr = now.toISOString().split('T')[0];
 
-      // Pour chaque activité, vérifier si elle a des créneaux futurs et compter les participants
       const activitiesWithSlotInfo = await Promise.all(
         (activities || []).map(async (activity) => {
-          // Récupérer uniquement les créneaux FUTURS (comme dans ActivityCalendar)
           const { data: futureSlots } = await supabase
             .from('activity_slots')
             .select('id, max_participants')
@@ -103,13 +100,11 @@ export default function ActivityScreen() {
           const futureSlotIds = (futureSlots || []).map(s => s.id);
           const futureSlotsCount = futureSlotIds.length;
 
-          // Calculer le max_participants TOTAL (somme des créneaux FUTURS uniquement)
           const totalMaxParticipants = (futureSlots || []).reduce(
             (sum, slot) => sum + (slot.max_participants || 10),
             0
           );
 
-          // Compter les participants inscrits sur les créneaux FUTURS uniquement
           let participantsCount = 0;
           if (futureSlotIds.length > 0) {
             const { count } = await supabase
@@ -127,21 +122,18 @@ export default function ActivityScreen() {
             date_heure: activity.date ? `${activity.date}T${activity.time_start || '00:00'}` : now.toISOString(),
             hasLiveSlots,
             isPublished,
-            participants: participantsCount, // Participants sur créneaux futurs uniquement
-            max_participants: totalMaxParticipants > 0 ? totalMaxParticipants : activity.max_participants, // Max des créneaux futurs
+            participants: participantsCount,
+            max_participants: totalMaxParticipants > 0 ? totalMaxParticipants : activity.max_participants,
           };
         })
       );
 
-      // Activités "en cours" = publiées ET ayant des créneaux futurs
       const live = activitiesWithSlotInfo.filter(a => a.isPublished && a.hasLiveSlots);
       setLiveActivities(live);
 
-      // Activités "créées" = TOUTES SAUF celles qui sont en ligne
       const created = activitiesWithSlotInfo.filter(a => !(a.isPublished && a.hasLiveSlots));
       setCreatedActivities(created);
 
-      // Pour compatibilité avec l'ancien code (utilisateurs)
       setOngoingActivities(live);
       setPastActivities([]);
     } catch (error) {
@@ -151,10 +143,8 @@ export default function ActivityScreen() {
     }
   };
 
-  // Publier une activité (passer de draft à active)
   const handlePublishActivity = async (activityId: string) => {
     try {
-      // Vérifier qu'il y a au moins un créneau futur
       const now = new Date();
       const todayStr = now.toISOString().split('T')[0];
 
@@ -186,7 +176,7 @@ export default function ActivityScreen() {
       Alert.alert('Erreur', 'Impossible de publier l\'activité');
     }
   };
-  // Mettre en pause une activité
+
   const handlePauseActivity = async (activityId: string) => {
     Alert.alert(
       'Mettre en pause',
@@ -217,103 +207,6 @@ export default function ActivityScreen() {
     );
   };
 
-  const renderBusinessActivityItem = (activity: Activity) => {
-    const isLive = activity.isPublished && activity.hasLiveSlots;
-
-    return (
-      <TouchableOpacity
-        key={activity.id}
-        style={styles.activityItem}
-        onPress={() => router.push(`/manage-activity?id=${activity.id}`)}
-        activeOpacity={0.8}
-      >
-        <Image
-          source={{ uri: activity.image_url || 'https://via.placeholder.com/80' }}
-          style={styles.activityImage}
-        />
-        <View style={styles.activityInfo}>
-          <View style={styles.activityTitleRow}>
-            <Text style={styles.activityTitle} numberOfLines={2}>
-              {activity.nom}
-            </Text>
-            {/* Badge "En ligne" si publiée et a des créneaux */}
-            {isLive && (
-              <View style={styles.liveBadge}>
-                <View style={styles.liveDot} />
-                <Text style={styles.liveBadgeText}>En ligne</Text>
-              </View>
-            )}
-            {/* Badge "Brouillon" si pas publiée */}
-            {!activity.isPublished && (
-              <View style={styles.draftBadge}>
-                <Text style={styles.draftBadgeText}>Brouillon</Text>
-              </View>
-            )}
-          </View>
-          
-          <View style={styles.activityMeta}>
-            <View style={styles.metaItem}>
-              <IconSymbol name="location.fill" size={14} color={colors.textSecondary} />
-              <Text style={styles.metaText} numberOfLines={1}>
-                {activity.ville}
-              </Text>
-            </View>
-          </View>
-          
-          {activity.participants !== undefined && (
-            <View style={styles.metaItem}>
-              <IconSymbol name="person.2.fill" size={14} color={colors.primary} />
-              <Text style={[styles.metaText, { color: colors.primary }]}>
-                {activity.participants}/{activity.max_participants} inscrits
-              </Text>
-            </View>
-          )}
-
-          {/* Bouton Publier si brouillon (onglet Créées) */}
-          {!activity.isPublished && businessTab === 'created' && (
-            <>
-              {activity.hasLiveSlots ? (
-                <TouchableOpacity
-                  style={styles.publishButton}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    handlePublishActivity(activity.id);
-                  }}
-                >
-                  <IconSymbol name="paperplane.fill" size={14} color={colors.background} />
-                  <Text style={styles.publishButtonText}>Publier</Text>
-                </TouchableOpacity>
-              ) : (
-                <View style={styles.noSlotsMessage}>
-                  <IconSymbol name="exclamationmark.triangle.fill" size={12} color="#f59e0b" />
-                  <Text style={styles.noSlotsMessageText}>
-                    Ajoutez des créneaux pour publier
-                  </Text>
-                </View>
-              )}
-            </>
-          )}
-
-          {/* Bouton Mettre en pause si en ligne (onglet En cours) */}
-          {activity.isPublished && businessTab === 'live' && (
-            <TouchableOpacity
-              style={styles.pauseButton}
-              onPress={(e) => {
-                e.stopPropagation();
-                handlePauseActivity(activity.id);
-              }}
-            >
-              <IconSymbol name="pause.circle.fill" size={14} color={colors.background} />
-              <Text style={styles.pauseButtonText}>Mettre en pause</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-        <IconSymbol name="chevron.right" size={20} color={colors.textSecondary} />
-      </TouchableOpacity>
-    );
-  };
-
-  // ✅ Charger les activités auxquelles l'utilisateur PARTICIPE
   const loadUserActivities = async () => {
     try {
       setLoading(true);
@@ -327,7 +220,6 @@ export default function ActivityScreen() {
 
       const now = new Date().toISOString();
 
-      // Récupérer depuis slot_participants
       const { data: participations, error: partError } = await supabase
         .from('slot_participants')
         .select('activity_id, slot_id')
@@ -355,11 +247,10 @@ export default function ActivityScreen() {
         console.error('Erreur chargement activités:', actError);
       }
 
-      // Pour chaque activité, récupérer la date du créneau
       const activitiesWithSlotDates = await Promise.all(
         (activities || []).map(async (activity) => {
           const participation = participations?.find(p => p.activity_id === activity.id);
-          
+
           if (participation?.slot_id) {
             const { data: slotData } = await supabase
               .from('activity_slots')
@@ -408,7 +299,6 @@ export default function ActivityScreen() {
       setOngoingActivities(ongoing);
       setPastActivities(past);
 
-      // Vérifier si des groupes doivent être formés (backup du cron)
       for (const activity of ongoing) {
         if (activity.user_slot_id) {
           try {
@@ -417,10 +307,10 @@ export default function ActivityScreen() {
               .select('groups_formed, activity_id')
               .eq('id', activity.user_slot_id)
               .single();
-            
+
             if (slotData && !slotData.groups_formed) {
               const formed = await intelligentGroupsService.checkAndFormGroupsIfNeeded(
-                activity.user_slot_id, 
+                activity.user_slot_id,
                 slotData.activity_id
               );
               if (formed) {
@@ -440,6 +330,16 @@ export default function ActivityScreen() {
     }
   };
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    if (isBusiness) {
+      await loadBusinessActivities();
+    } else {
+      await loadUserActivities();
+    }
+    setRefreshing(false);
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('fr-FR', {
@@ -457,18 +357,109 @@ export default function ActivityScreen() {
     });
   };
 
+  const renderBusinessActivityItem = (activity: Activity) => {
+    const isLive = activity.isPublished && activity.hasLiveSlots;
+
+    return (
+      <TouchableOpacity
+        key={activity.id}
+        style={styles.activityItem}
+        onPress={() => router.push(`/manage-activity?id=${activity.id}`)}
+        activeOpacity={0.8}
+      >
+        <Image
+          source={{ uri: activity.image_url || 'https://via.placeholder.com/80' }}
+          style={styles.activityImage}
+        />
+        <View style={styles.activityInfo}>
+          <View style={styles.activityTitleRow}>
+            <Text style={styles.activityTitle} numberOfLines={2}>
+              {activity.nom}
+            </Text>
+            {isLive && (
+              <View style={styles.liveBadge}>
+                <View style={styles.liveDot} />
+                <Text style={styles.liveBadgeText}>En ligne</Text>
+              </View>
+            )}
+            {!activity.isPublished && (
+              <View style={styles.draftBadge}>
+                <Text style={styles.draftBadgeText}>Brouillon</Text>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.activityMeta}>
+            <View style={styles.metaItem}>
+              <IconSymbol name="location.fill" size={14} color="rgba(255,255,255,0.9)" />
+              <Text style={styles.metaText} numberOfLines={1}>
+                {activity.ville}
+              </Text>
+            </View>
+          </View>
+
+          {activity.participants !== undefined && (
+            <View style={styles.metaItem}>
+              <IconSymbol name="person.2.fill" size={14} color="#FFFFFF" />
+              <Text style={[styles.metaText, { color: '#FFFFFF', fontWeight: '600' }]}>
+                {activity.participants}/{activity.max_participants} inscrits
+              </Text>
+            </View>
+          )}
+
+          {!activity.isPublished && businessTab === 'created' && (
+            <>
+              {activity.hasLiveSlots ? (
+                <TouchableOpacity
+                  style={styles.publishButton}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handlePublishActivity(activity.id);
+                  }}
+                >
+                  <IconSymbol name="paperplane.fill" size={14} color="#818CF8" />
+                  <Text style={styles.publishButtonText}>Publier</Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.noSlotsMessage}>
+                  <IconSymbol name="exclamationmark.triangle.fill" size={12} color="#f59e0b" />
+                  <Text style={styles.noSlotsMessageText}>
+                    Ajoutez des créneaux pour publier
+                  </Text>
+                </View>
+              )}
+            </>
+          )}
+
+          {activity.isPublished && businessTab === 'live' && (
+            <TouchableOpacity
+              style={styles.pauseButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                handlePauseActivity(activity.id);
+              }}
+            >
+              <IconSymbol name="pause.circle.fill" size={14} color="#f59e0b" />
+              <Text style={styles.pauseButtonText}>Mettre en pause</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        <IconSymbol name="chevron.right" size={20} color="rgba(255,255,255,0.7)" />
+      </TouchableOpacity>
+    );
+  };
+
   const renderActivityItem = (activity: Activity) => (
     <TouchableOpacity
       key={activity.id}
       style={styles.activityItem}
       onPress={() => router.push(
-  isBusiness
-    ? `/manage-activity?id=${activity.id}`
-    : activeTab === 'past'
-      ? `/activity-detail?id=${activity.id}&from=past&slotId=${activity.user_slot_id ?? ''}`
-      : `/activity-detail?id=${activity.id}&from=myActivities`
-)}
-
+        isBusiness
+          ? `/manage-activity?id=${activity.id}`
+          : activeTab === 'past'
+            ? `/activity-detail?id=${activity.id}&from=past&slotId=${activity.user_slot_id ?? ''}`
+            : `/activity-detail?id=${activity.id}&from=myActivities`
+      )}
       activeOpacity={0.8}
     >
       <Image
@@ -481,31 +472,30 @@ export default function ActivityScreen() {
         </Text>
         <View style={styles.activityMeta}>
           <View style={styles.metaItem}>
-            <IconSymbol name="calendar" size={14} color={colors.textSecondary} />
+            <IconSymbol name="calendar" size={14} color="rgba(255,255,255,0.9)" />
             <Text style={styles.metaText}>{formatDate(activity.date_heure)}</Text>
           </View>
           <View style={styles.metaItem}>
-            <IconSymbol name="clock.fill" size={14} color={colors.textSecondary} />
+            <IconSymbol name="clock.fill" size={14} color="rgba(255,255,255,0.9)" />
             <Text style={styles.metaText}>{formatTime(activity.date_heure)}</Text>
           </View>
         </View>
         <View style={styles.metaItem}>
-          <IconSymbol name="location.fill" size={14} color={colors.textSecondary} />
+          <IconSymbol name="location.fill" size={14} color="rgba(255,255,255,0.9)" />
           <Text style={styles.metaText} numberOfLines={1}>
             {activity.ville}
           </Text>
         </View>
-        {/* Afficher les participants pour les entreprises */}
         {isBusiness && activity.participants !== undefined && (
           <View style={styles.metaItem}>
-            <IconSymbol name="person.2.fill" size={14} color={colors.primary} />
-            <Text style={[styles.metaText, { color: colors.primary }]}>
+            <IconSymbol name="person.2.fill" size={14} color="#FFFFFF" />
+            <Text style={[styles.metaText, { color: '#FFFFFF', fontWeight: '600' }]}>
               {activity.participants}/{activity.max_participants} inscrits
             </Text>
           </View>
         )}
       </View>
-      <IconSymbol name="chevron.right" size={20} color={colors.textSecondary} />
+      <IconSymbol name="chevron.right" size={20} color="rgba(255,255,255,0.7)" />
     </TouchableOpacity>
   );
 
@@ -514,7 +504,7 @@ export default function ActivityScreen() {
       <IconSymbol
         name={isBusiness ? "calendar.badge.plus" : "calendar"}
         size={64}
-        color={colors.textSecondary}
+        color="rgba(255,255,255,0.7)"
       />
       <Text style={styles.emptyTitle}>
         {activeTab === 'ongoing'
@@ -533,57 +523,78 @@ export default function ActivityScreen() {
           style={styles.createButton}
           onPress={() => router.push('/create-activity')}
         >
-          <IconSymbol name="plus" size={20} color={colors.background} />
+          <IconSymbol name="plus" size={20} color="#818CF8" />
           <Text style={styles.createButtonText}>Créer une activité</Text>
         </TouchableOpacity>
       )}
     </View>
   );
 
-  // ============================================
-  // RENDU ENTREPRISE
-  // ============================================
+  // Loading state
+  if (loading) {
+    return (
+      <LinearGradient
+        colors={['#60A5FA', '#818CF8', '#C084FC']}
+        style={styles.container}
+      >
+        <SafeAreaView style={styles.safeArea} edges={['top']}>
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>{isBusiness ? 'Mes activités' : 'My Activities'}</Text>
+          </View>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#FFFFFF" />
+            <Text style={styles.loadingText}>Chargement...</Text>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
+    );
+  }
+
+  // Business view
   if (isBusiness) {
     return (
-      <SafeAreaView style={commonStyles.container} edges={['top']}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Mes activités</Text>
-        </View>
-
-        <View style={styles.tabContainer}>
-          <TouchableOpacity
-            style={[styles.tab, businessTab === 'live' && styles.tabActive]}
-            onPress={() => setBusinessTab('live')}
-          >
-            <Text style={[styles.tabText, businessTab === 'live' && styles.tabTextActive]}>
-              En cours
-            </Text>
-            {liveActivities.length > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{liveActivities.length}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, businessTab === 'created' && styles.tabActive]}
-            onPress={() => setBusinessTab('created')}
-          >
-            <Text style={[styles.tabText, businessTab === 'created' && styles.tabTextActive]}>
-              Créées
-            </Text>
-            {createdActivities.length > 0 && (
-              <View style={[styles.badge, businessTab !== 'created' && styles.badgeInactive]}>
-                <Text style={styles.badgeText}>{createdActivities.length}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
+      <LinearGradient
+        colors={['#60A5FA', '#818CF8', '#C084FC']}
+        style={styles.container}
+      >
+        <SafeAreaView style={styles.safeArea} edges={['top']}>
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>Mes activités</Text>
           </View>
-        ) : (
+
+          <View style={styles.tabContainer}>
+            <TouchableOpacity
+              style={[styles.tab, businessTab === 'live' && styles.tabActive]}
+              onPress={() => setBusinessTab('live')}
+            >
+              <Text style={[styles.tabText, businessTab === 'live' && styles.tabTextActive]}>
+                En cours
+              </Text>
+              {liveActivities.length > 0 && (
+                <View style={[styles.badge, businessTab === 'live' && styles.badgeActive]}>
+                  <Text style={[styles.badgeText, businessTab === 'live' && styles.badgeTextActive]}>
+                    {liveActivities.length}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tab, businessTab === 'created' && styles.tabActive]}
+              onPress={() => setBusinessTab('created')}
+            >
+              <Text style={[styles.tabText, businessTab === 'created' && styles.tabTextActive]}>
+                Créées
+              </Text>
+              {createdActivities.length > 0 && (
+                <View style={[styles.badge, businessTab === 'created' && styles.badgeActive]}>
+                  <Text style={[styles.badgeText, businessTab === 'created' && styles.badgeTextActive]}>
+                    {createdActivities.length}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+
           <ScrollView
             style={styles.scrollView}
             contentContainerStyle={[
@@ -591,13 +602,16 @@ export default function ActivityScreen() {
               Platform.OS !== 'ios' && styles.contentContainerWithTabBar,
             ]}
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#FFFFFF" />
+            }
           >
             {businessTab === 'live' ? (
               liveActivities.length > 0 ? (
                 liveActivities.map(renderBusinessActivityItem)
               ) : (
                 <View style={styles.emptyContainer}>
-                  <IconSymbol name="calendar" size={64} color={colors.textSecondary} />
+                  <IconSymbol name="calendar" size={64} color="rgba(255,255,255,0.7)" />
                   <Text style={styles.emptyTitle}>Aucune activité en cours</Text>
                   <Text style={styles.emptyText}>
                     Publiez une activité avec des créneaux futurs pour la voir ici
@@ -606,13 +620,12 @@ export default function ActivityScreen() {
               )
             ) : (
               <>
-                {/* Bouton créer une activité */}
                 <TouchableOpacity
                   style={styles.createActivityCard}
                   onPress={() => router.push('/create-activity')}
                 >
                   <View style={styles.createActivityIcon}>
-                    <IconSymbol name="plus" size={32} color={colors.primary} />
+                    <IconSymbol name="plus" size={32} color="#FFFFFF" />
                   </View>
                   <Text style={styles.createActivityText}>Créer une nouvelle activité</Text>
                   <Text style={styles.createActivitySubtext}>
@@ -624,7 +637,7 @@ export default function ActivityScreen() {
                   createdActivities.map(renderBusinessActivityItem)
                 ) : (
                   <View style={styles.emptyContainer}>
-                    <IconSymbol name="folder" size={64} color={colors.textSecondary} />
+                    <IconSymbol name="folder" size={64} color="rgba(255,255,255,0.7)" />
                     <Text style={styles.emptyTitle}>Aucune activité créée</Text>
                     <Text style={styles.emptyText}>
                       Créez votre première activité pour commencer
@@ -634,49 +647,55 @@ export default function ActivityScreen() {
               </>
             )}
           </ScrollView>
-        )}
-      </SafeAreaView>
+        </SafeAreaView>
+      </LinearGradient>
     );
   }
 
-  // ============================================
-  // RENDU UTILISATEUR
-  // ============================================
+  // User view
   return (
-    <SafeAreaView style={commonStyles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Activities</Text>
-      </View>
-
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'ongoing' && styles.tabActive]}
-          onPress={() => setActiveTab('ongoing')}
-        >
-          <Text style={[styles.tabText, activeTab === 'ongoing' && styles.tabTextActive]}>
-            Ongoing
-          </Text>
-          {ongoingActivities.length > 0 && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{ongoingActivities.length}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'past' && styles.tabActive]}
-          onPress={() => setActiveTab('past')}
-        >
-          <Text style={[styles.tabText, activeTab === 'past' && styles.tabTextActive]}>
-            Past
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
+    <LinearGradient
+      colors={['#60A5FA', '#818CF8', '#C084FC']}
+      style={styles.container}
+    >
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Mes activités</Text>
         </View>
-      ) : (
+
+        <View style={styles.tabContainer}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'ongoing' && styles.tabActive]}
+            onPress={() => setActiveTab('ongoing')}
+          >
+            <Text style={[styles.tabText, activeTab === 'ongoing' && styles.tabTextActive]}>
+              En cours
+            </Text>
+            {ongoingActivities.length > 0 && (
+              <View style={[styles.badge, activeTab === 'ongoing' && styles.badgeActive]}>
+                <Text style={[styles.badgeText, activeTab === 'ongoing' && styles.badgeTextActive]}>
+                  {ongoingActivities.length}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'past' && styles.tabActive]}
+            onPress={() => setActiveTab('past')}
+          >
+            <Text style={[styles.tabText, activeTab === 'past' && styles.tabTextActive]}>
+              Passées
+            </Text>
+            {pastActivities.length > 0 && (
+              <View style={[styles.badge, activeTab === 'past' && styles.badgeActive]}>
+                <Text style={[styles.badgeText, activeTab === 'past' && styles.badgeTextActive]}>
+                  {pastActivities.length}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={[
@@ -684,6 +703,9 @@ export default function ActivityScreen() {
             Platform.OS !== 'ios' && styles.contentContainerWithTabBar,
           ]}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#FFFFFF" />
+          }
         >
           {activeTab === 'ongoing' ? (
             ongoingActivities.length > 0 ? (
@@ -699,33 +721,29 @@ export default function ActivityScreen() {
             )
           )}
         </ScrollView>
-      )}
-    </SafeAreaView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  safeArea: {
+    flex: 1,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingVertical: 16,
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: '700',
-    color: colors.text,
-  },
-  addButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.primary + '15',
-    justifyContent: 'center',
-    alignItems: 'center',
+    color: '#FFFFFF',
   },
   tabContainer: {
     flexDirection: 'row',
@@ -736,39 +754,48 @@ const styles = StyleSheet.create({
   tab: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
     borderRadius: 20,
-    backgroundColor: colors.surface,
-    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   tabActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: 'rgba(255,255,255,0.35)',
+    borderColor: 'rgba(255,255,255,0.5)',
   },
   tabText: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.7)',
   },
   tabTextActive: {
-    color: colors.background,
+    color: '#FFFFFF',
   },
   badge: {
-    backgroundColor: colors.background,
+    backgroundColor: 'rgba(255,255,255,0.25)',
     borderRadius: 10,
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
     paddingVertical: 2,
+  },
+  badgeActive: {
+    backgroundColor: 'rgba(255,255,255,0.35)',
   },
   badgeText: {
     fontSize: 12,
     fontWeight: '600',
-    color: colors.primary,
+    color: 'rgba(255,255,255,0.7)',
+  },
+  badgeTextActive: {
+    color: '#FFFFFF',
   },
   scrollView: {
     flex: 1,
   },
   contentContainer: {
-    padding: 20,
+    paddingHorizontal: 20,
     paddingBottom: 40,
   },
   contentContainerWithTabBar: {
@@ -778,25 +805,33 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   activityItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: 'rgba(255,255,255,0.18)',
     borderRadius: 16,
-    padding: 12,
+    padding: 14,
     marginBottom: 12,
-    gap: 12,
+    gap: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   activityImage: {
     width: 80,
     height: 80,
     borderRadius: 12,
-    backgroundColor: colors.background,
+    backgroundColor: 'rgba(255,255,255,0.1)',
   },
   activityInfo: {
     flex: 1,
-    gap: 4,
+    gap: 6,
   },
   activityTitleRow: {
     flexDirection: 'row',
@@ -808,11 +843,13 @@ const styles = StyleSheet.create({
   liveBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#10b981' + '20',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    backgroundColor: 'rgba(16, 185, 129, 0.3)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 12,
     gap: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.5)',
   },
   liveDot: {
     width: 6,
@@ -826,10 +863,12 @@ const styles = StyleSheet.create({
     color: '#10b981',
   },
   draftBadge: {
-    backgroundColor: '#f59e0b' + '20',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    backgroundColor: 'rgba(245, 158, 11, 0.3)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.5)',
   },
   draftBadgeText: {
     fontSize: 11,
@@ -839,9 +878,9 @@ const styles = StyleSheet.create({
   publishButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 16,
     gap: 6,
     marginTop: 8,
@@ -850,18 +889,20 @@ const styles = StyleSheet.create({
   publishButtonText: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.background,
+    color: '#818CF8',
   },
   noSlotsMessage: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f59e0b' + '20',
+    backgroundColor: 'rgba(245, 158, 11, 0.3)',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 16,
     gap: 6,
     marginTop: 8,
     alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.5)',
   },
   noSlotsMessageText: {
     fontSize: 12,
@@ -869,20 +910,20 @@ const styles = StyleSheet.create({
     color: '#f59e0b',
   },
   createActivityCard: {
-    backgroundColor: colors.card,
+    backgroundColor: 'rgba(255,255,255,0.18)',
     borderRadius: 16,
     padding: 24,
     alignItems: 'center',
     marginBottom: 16,
     borderWidth: 2,
-    borderColor: colors.primary + '30',
+    borderColor: 'rgba(255,255,255,0.3)',
     borderStyle: 'dashed',
   },
   createActivityIcon: {
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: colors.primary + '15',
+    backgroundColor: 'rgba(255,255,255,0.25)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
@@ -890,20 +931,17 @@ const styles = StyleSheet.create({
   createActivityText: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text,
+    color: '#FFFFFF',
     marginBottom: 4,
   },
   createActivitySubtext: {
     fontSize: 13,
-    color: colors.textSecondary,
-  },
-  badgeInactive: {
-    backgroundColor: colors.textSecondary,
+    color: 'rgba(255,255,255,0.8)',
   },
   activityTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text,
+    color: '#FFFFFF',
   },
   activityMeta: {
     flexDirection: 'row',
@@ -916,7 +954,7 @@ const styles = StyleSheet.create({
   },
   metaText: {
     fontSize: 13,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.9)',
   },
   emptyContainer: {
     flex: 1,
@@ -928,21 +966,21 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: colors.text,
+    color: '#FFFFFF',
     marginTop: 10,
   },
   emptyText: {
     fontSize: 14,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.9)',
     textAlign: 'center',
     paddingHorizontal: 40,
   },
   createButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.primary,
+    backgroundColor: 'rgba(255,255,255,0.9)',
     paddingVertical: 12,
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
     borderRadius: 25,
     marginTop: 16,
     gap: 8,
@@ -950,22 +988,24 @@ const styles = StyleSheet.create({
   createButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.background,
+    color: '#818CF8',
   },
   pauseButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f59e0b',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: 'rgba(245, 158, 11, 0.3)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 16,
     gap: 6,
     marginTop: 8,
     alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.5)',
   },
   pauseButtonText: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.background,
+    color: '#f59e0b',
   },
 });

@@ -35,13 +35,17 @@ interface FloatingTabBarProps {
   containerWidth?: number;
   borderRadius?: number;
   bottomMargin?: number;
+  currentIndex?: number;
+  onTabPress?: (index: number) => void;
 }
 
 export default function FloatingTabBar({
   tabs = [],
   containerWidth = 240,
   borderRadius = 25,
-  bottomMargin
+  bottomMargin,
+  currentIndex,
+  onTabPress,
 }: FloatingTabBarProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -49,9 +53,14 @@ export default function FloatingTabBar({
   const animatedValue = useSharedValue(0);
   const { width: screenWidth } = Dimensions.get('window');
 
-  // Improved active tab detection with better path matching
+  // Utiliser currentIndex si fourni, sinon détecter via pathname (mode legacy)
   const activeTabIndex = React.useMemo(() => {
-    // Find the best matching tab based on the current pathname
+    // Si currentIndex est fourni, l'utiliser directement
+    if (currentIndex !== undefined) {
+      return currentIndex;
+    }
+
+    // Mode legacy: détecter via pathname
     if (!tabs || tabs.length === 0) return 0;
     let bestMatch = -1;
     let bestMatchScore = 0;
@@ -59,20 +68,13 @@ export default function FloatingTabBar({
     tabs.forEach((tab, index) => {
       let score = 0;
 
-      // Exact route match gets highest score
       if (pathname === tab.route) {
         score = 100;
-      }
-      // Check if pathname starts with tab route (for nested routes)
-      else if (pathname.startsWith(tab.route)) {
+      } else if (pathname.startsWith(tab.route)) {
         score = 80;
-      }
-      // Check if pathname contains the tab name
-      else if (pathname.includes(tab.name)) {
+      } else if (pathname.includes(tab.name)) {
         score = 60;
-      }
-      // Check for partial matches in the route
-      else if (tab.route.includes('/(tabs)/') && pathname.includes(tab.route.split('/(tabs)/')[1])) {
+      } else if (tab.route.includes('/(tabs)/') && pathname.includes(tab.route.split('/(tabs)/')[1])) {
         score = 40;
       }
 
@@ -82,9 +84,8 @@ export default function FloatingTabBar({
       }
     });
 
-    // Default to first tab if no match found
     return bestMatch >= 0 ? bestMatch : 0;
-  }, [pathname, tabs]);
+  }, [pathname, tabs, currentIndex]);
 
   React.useEffect(() => {
     if (activeTabIndex >= 0) {
@@ -96,8 +97,12 @@ export default function FloatingTabBar({
     }
   }, [activeTabIndex, animatedValue]);
 
-  const handleTabPress = (route: string) => {
-    router.push(route);
+  const handleTabPress = (index: number, route: string) => {
+    if (onTabPress) {
+      onTabPress(index);
+    } else {
+      router.push(route);
+    }
   };
 
   // Remove unnecessary tabBarStyle animation to prevent flickering
@@ -117,47 +122,51 @@ export default function FloatingTabBar({
     };
   });
 
-  // Dynamic styles based on theme - Modern light theme
+  // Dynamic styles based on theme - Glassmorphism effect like profile.tsx
   const dynamicStyles = {
     blurContainer: {
       ...styles.blurContainer,
       ...Platform.select({
         ios: {
-          backgroundColor: 'rgba(255, 255, 255, 0.85)', // Clean white with slight transparency
+          backgroundColor: 'rgba(255, 255, 255, 0.75)', // Increased opacity for better readability
         },
         android: {
-          backgroundColor: 'rgba(255, 255, 255, 0.98)', // Almost opaque white
-          elevation: 12, // More prominent shadow for Android
+          backgroundColor: 'rgba(255, 255, 255, 0.75)', // Increased opacity for better readability
+          elevation: 0,
         },
         web: {
-          backgroundColor: 'rgba(255, 255, 255, 0.95)',
-          backdropFilter: 'blur(20px)', // Stronger blur for modern feel
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)', // Softer shadow
+          backgroundColor: 'rgba(255, 255, 255, 0.75)',
+          backdropFilter: 'blur(20px)',
+          boxShadow: 'none',
         },
       }),
     },
     background: {
       ...styles.background,
-      backgroundColor: Platform.OS === 'ios' ? 'transparent' : 'rgba(255, 255, 255, 0.05)',
+      backgroundColor: 'transparent',
     },
     indicator: {
       ...styles.indicator,
-      backgroundColor: colors.primary, // Vibrant coral-pink accent
+      backgroundColor: 'rgba(255, 255, 255, 0.4)', // Increased opacity for better contrast
       width: `${(100 / tabs.length) - 3}%`, // Dynamic width based on number of tabs
     },
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+    <SafeAreaView
+      style={styles.safeArea}
+      edges={['bottom']}
+    >
       <View style={[
         styles.container,
         {
           width: containerWidth,
-          marginBottom: bottomMargin ?? (Platform.OS === 'ios' ? 10 : 20)
+          marginBottom: bottomMargin ?? 0
         }
       ]}>
         <BlurView
           intensity={Platform.OS === 'web' ? 0 : 80}
+          tint="light"
           style={[dynamicStyles.blurContainer, { borderRadius }]}
         >
           <View style={dynamicStyles.background} />
@@ -170,21 +179,21 @@ export default function FloatingTabBar({
                 <TouchableOpacity
                   key={tab.name}
                   style={styles.tab}
-                  onPress={() => handleTabPress(tab.route)}
+                  onPress={() => handleTabPress(index, tab.route)}
                   activeOpacity={0.7}
                 >
                   <View style={styles.tabContent}>
                     <IconSymbol
                       name={tab.icon}
                       size={24}
-                      color={isActive ? colors.textOnPrimary : colors.textSecondary}
+                      color={isActive ? '#1E40AF' : 'rgba(0, 0, 0, 0.6)'}
                     />
                     <Text
                       style={[
                         styles.tabLabel,
-                        { color: colors.textSecondary },
+                        { color: 'rgba(0, 0, 0, 0.6)' },
                         isActive && {
-                          color: colors.textOnPrimary,
+                          color: '#1E40AF',
                           fontWeight: '600'
                         },
                       ]}
@@ -205,19 +214,21 @@ export default function FloatingTabBar({
 const styles = StyleSheet.create({
   safeArea: {
     position: 'absolute',
-    bottom: 0,
+    bottom: Platform.OS === 'android' ? 8 : 0,
     left: 0,
     right: 0,
     zIndex: 1000,
     alignItems: 'center', // Center the content
   },
   container: {
-    marginHorizontal: 20,
     alignSelf: 'center',
-    // width and marginBottom handled dynamically via props
+    marginBottom: Platform.OS === 'android' ? 8 : 0,
+    // width handled dynamically via props
   },
   blurContainer: {
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.1)', // Subtle border for better definition
     // borderRadius and other styling applied dynamically
   },
   background: {

@@ -14,18 +14,21 @@ import { supabase } from '@/lib/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
-import { colors, commonStyles } from '@/styles/commonStyles';
+import { colors } from '@/styles/commonStyles';
 import { authService } from '@/services/auth.service';
 import { notificationService } from '@/lib/notifications';
 import { useAuth } from '@/contexts/AuthContext';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const { signOut } = useAuth();
   const [notificationsEnabled, setNotificationsEnabled] = React.useState(true);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [locationEnabled, setLocationEnabled] = React.useState(true);
   const [logoutLoading, setLogoutLoading] = useState(false);
+
   // Charger l'état initial des notifications
   React.useEffect(() => {
     const loadNotificationStatus = async () => {
@@ -49,7 +52,7 @@ export default function SettingsScreen() {
         setNotificationsLoading(false);
         return;
       }
-      
+
       const success = await notificationService.toggleNotifications(value);
       if (success) {
         setNotificationsEnabled(value);
@@ -91,14 +94,14 @@ export default function SettingsScreen() {
       activeOpacity={0.7}
     >
       <View style={styles.settingIcon}>
-        <IconSymbol name={icon} size={24} color={colors.primary} />
+        <IconSymbol name={icon} size={22} color="#FFFFFF" />
       </View>
       <View style={styles.settingContent}>
         <Text style={styles.settingTitle}>{title}</Text>
         {subtitle && <Text style={styles.settingSubtitle}>{subtitle}</Text>}
       </View>
       {showChevron && (
-        <IconSymbol name="chevron.right" size={20} color={colors.textSecondary} />
+        <IconSymbol name="chevron.right" size={18} color="rgba(255,255,255,0.7)" />
       )}
     </TouchableOpacity>
   );
@@ -109,29 +112,37 @@ export default function SettingsScreen() {
     subtitle,
     value,
     onValueChange,
+    loading = false,
   }: {
     icon: string;
     title: string;
     subtitle?: string;
     value: boolean;
     onValueChange: (value: boolean) => void;
+    loading?: boolean;
   }) => (
     <View style={styles.settingItem}>
       <View style={styles.settingIcon}>
-        <IconSymbol name={icon} size={24} color={colors.primary} />
+        <IconSymbol name={icon} size={22} color="#FFFFFF" />
       </View>
       <View style={styles.settingContent}>
         <Text style={styles.settingTitle}>{title}</Text>
         {subtitle && <Text style={styles.settingSubtitle}>{subtitle}</Text>}
       </View>
-      <Switch
-        value={value}
-        onValueChange={onValueChange}
-        trackColor={{ false: colors.border, true: colors.primary }}
-        thumbColor={colors.text}
-      />
+      {loading ? (
+        <ActivityIndicator size="small" color="#FFFFFF" />
+      ) : (
+        <Switch
+          value={value}
+          onValueChange={onValueChange}
+          trackColor={{ false: 'rgba(255,255,255,0.3)', true: 'rgba(255,255,255,0.5)' }}
+          thumbColor={value ? '#FFFFFF' : 'rgba(255,255,255,0.8)'}
+          ios_backgroundColor="rgba(255,255,255,0.3)"
+        />
+      )}
     </View>
   );
+
   const handleDeleteAccount = async () => {
     Alert.alert(
       'Supprimer mon compte',
@@ -199,6 +210,7 @@ export default function SettingsScreen() {
       setDeleteLoading(false);
     }
   };
+
   const handleLogout = async () => {
     setLogoutLoading(true);
     try {
@@ -216,159 +228,190 @@ export default function SettingsScreen() {
   };
 
   return (
-    <SafeAreaView style={commonStyles.container} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
+    <LinearGradient
+      colors={['#60A5FA', '#818CF8', '#C084FC']}
+      style={styles.container}
+    >
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <IconSymbol name="chevron.left" size={22} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Paramètres</Text>
+          <View style={styles.placeholder} />
+        </View>
+
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
         >
-          <IconSymbol name="chevron.left" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Settings</Text>
-        <View style={styles.placeholder} />
-      </View>
-
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Account</Text>
-          <View style={styles.card}>
-            <SettingItem
-              icon="person.fill"
-              title="Edit Profile"
-              subtitle="Update your personal information"
-              onPress={() => router.push('/edit-profile')}
-            />
-            <View style={styles.divider} />
-            <SettingItem
-              icon="lock.fill"
-              title="Privacy"
-              subtitle="Manage your privacy settings"
-              onPress={() => console.log('Privacy')}
-            />
-            <SettingItem
-              icon="nosign"
-              title="Utilisateurs bloqués"
-              subtitle="Gérer les personnes bloquées"
-              onPress={() => router.push('/blocked-users')}
-            />
+          {/* Section Compte */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Compte</Text>
+            <View style={styles.glassCard}>
+              <SettingItem
+                icon="person.fill"
+                title="Modifier le profil"
+                subtitle="Mettre à jour vos informations"
+                onPress={() => router.push('/edit-profile')}
+              />
+              <View style={styles.divider} />
+              <SettingItem
+                icon="lock.fill"
+                title="Confidentialité"
+                subtitle="Gérer vos paramètres de confidentialité"
+                onPress={() => console.log('Privacy')}
+              />
+              <View style={styles.divider} />
+              <SettingItem
+                icon="nosign"
+                title="Utilisateurs bloqués"
+                subtitle="Gérer les personnes bloquées"
+                onPress={() => router.push('/blocked-users')}
+              />
+            </View>
           </View>
-        </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Preferences</Text>
-          <View style={styles.card}>
-            <SettingItem
-              icon="location.fill"
-              title="Distance"
-              subtitle="Set your search radius"
-              onPress={() => console.log('Distance')}
-            />
-            <View style={styles.divider} />
-            <SettingItem
-              icon="square.stack.3d.up.fill"
-              title="Categories"
-              subtitle="Choose your interests"
-              onPress={() => console.log('Categories')}
-            />
+          {/* Section Préférences */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Préférences</Text>
+            <View style={styles.glassCard}>
+              <SettingItem
+                icon="location.fill"
+                title="Distance"
+                subtitle="Définir votre rayon de recherche"
+                onPress={() => console.log('Distance')}
+              />
+              <View style={styles.divider} />
+              <SettingItem
+                icon="square.stack.3d.up.fill"
+                title="Catégories"
+                subtitle="Choisir vos centres d'intérêt"
+                onPress={() => console.log('Categories')}
+              />
+            </View>
           </View>
-        </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Notifications</Text>
-          <View style={styles.card}>
-            <SettingToggle
-              icon="bell.fill"
-              title="Push Notifications"
-              subtitle="Get notified about new activities"
-              value={notificationsEnabled}
-              onValueChange={setNotificationsEnabled}
-            />
-            <View style={styles.divider} />
-            <SettingToggle
-              icon="location.fill"
-              title="Location Services"
-              subtitle="Find activities near you"
-              value={locationEnabled}
-              onValueChange={setLocationEnabled}
-            />
+          {/* Section Notifications */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Notifications</Text>
+            <View style={styles.glassCard}>
+              <SettingToggle
+                icon="bell.fill"
+                title="Notifications push"
+                subtitle="Recevoir des alertes pour les nouvelles activités"
+                value={notificationsEnabled}
+                onValueChange={handleNotificationToggle}
+                loading={notificationsLoading}
+              />
+              <View style={styles.divider} />
+              <SettingToggle
+                icon="location.fill"
+                title="Services de localisation"
+                subtitle="Trouver des activités près de vous"
+                value={locationEnabled}
+                onValueChange={setLocationEnabled}
+              />
+            </View>
           </View>
-        </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>About</Text>
-          <View style={styles.card}>
-            <SettingItem
-              icon="info.circle.fill"
-              title="Help & Support"
-              onPress={() => console.log('Help')}
-            />
-            <View style={styles.divider} />
-            <SettingItem
-              icon="doc.text.fill"
-              title="Terms of Service"
-              onPress={() => console.log('Terms')}
-            />
-            <View style={styles.divider} />
-            <SettingItem
-              icon="shield.fill"
-              title="Privacy Policy"
-              onPress={() => console.log('Privacy Policy')}
-            />
+          {/* Section À propos */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>À propos</Text>
+            <View style={styles.glassCard}>
+              <SettingItem
+                icon="info.circle.fill"
+                title="Aide & Support"
+                onPress={() => console.log('Help')}
+              />
+              <View style={styles.divider} />
+              <SettingItem
+                icon="doc.text.fill"
+                title="Conditions d'utilisation"
+                onPress={() => console.log('Terms')}
+              />
+              <View style={styles.divider} />
+              <SettingItem
+                icon="shield.fill"
+                title="Politique de confidentialité"
+                onPress={() => console.log('Privacy Policy')}
+              />
+            </View>
           </View>
-        </View>
 
-        <TouchableOpacity
-          style={styles.logoutButton}
-          onPress={handleLogout}
-          disabled={logoutLoading}
-        >
-          {logoutLoading ? (
-            <ActivityIndicator color={colors.text} />
-          ) : (
-            <Text style={styles.logoutText}>Log Out</Text>
-          )}
-        </TouchableOpacity>
+          {/* Bouton Déconnexion */}
+          <TouchableOpacity
+            style={styles.logoutButton}
+            onPress={handleLogout}
+            disabled={logoutLoading}
+            activeOpacity={0.8}
+          >
+            {logoutLoading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <>
+                <IconSymbol name="rectangle.portrait.and.arrow.right" size={20} color="#FFFFFF" />
+                <Text style={styles.logoutText}>Se déconnecter</Text>
+              </>
+            )}
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.deleteAccountButton}
-          onPress={handleDeleteAccount}
-          disabled={deleteLoading}
-        >
-          {deleteLoading ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <Text style={styles.deleteAccountText}>Supprimer mon compte</Text>
-          )}
-        </TouchableOpacity>
-      </ScrollView>
-    </SafeAreaView>
+          {/* Bouton Supprimer compte */}
+          <TouchableOpacity
+            style={styles.deleteAccountButton}
+            onPress={handleDeleteAccount}
+            disabled={deleteLoading}
+            activeOpacity={0.8}
+          >
+            {deleteLoading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <>
+                <IconSymbol name="trash.fill" size={20} color="#FFFFFF" />
+                <Text style={styles.deleteAccountText}>Supprimer mon compte</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          {/* Version */}
+          <Text style={styles.versionText}>Version 1.0.0</Text>
+        </ScrollView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  safeArea: {
+    flex: 1,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 16,
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.card,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: '600',
-    color: colors.text,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   placeholder: {
     width: 40,
@@ -378,35 +421,38 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     paddingHorizontal: 20,
-    paddingBottom: 40,
+    paddingBottom: Platform.OS === 'ios' ? 100 : 120,
   },
   section: {
     marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.9)',
     marginBottom: 12,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 1,
+    marginLeft: 4,
   },
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
+  glassCard: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
     overflow: 'hidden',
   },
   settingItem: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
-    gap: 12,
+    gap: 14,
   },
   settingIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.primary + '20',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.25)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -416,42 +462,57 @@ const styles = StyleSheet.create({
   settingTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text,
+    color: '#FFFFFF',
     marginBottom: 2,
   },
   settingSubtitle: {
     fontSize: 13,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.8)',
   },
   divider: {
     height: 1,
-    backgroundColor: colors.border,
-    marginLeft: 68,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    marginLeft: 72,
   },
   logoutButton: {
-    backgroundColor: colors.error,
-    borderRadius: 12,
-    paddingVertical: 16,
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 16,
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderRadius: 16,
+    paddingVertical: 16,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
-  
   logoutText: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text,
+    color: '#FFFFFF',
   },
   deleteAccountButton: {
-    backgroundColor: '#DC2626',
-    borderRadius: 12,
-    paddingVertical: 16,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(220, 38, 38, 0.8)',
+    borderRadius: 16,
+    paddingVertical: 16,
     marginTop: 12,
-    marginBottom: 40,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   deleteAccountText: {
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  versionText: {
+    textAlign: 'center',
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.6)',
+    marginTop: 24,
+    marginBottom: 20,
   },
 });

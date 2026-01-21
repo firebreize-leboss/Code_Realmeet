@@ -1,13 +1,22 @@
 // app/(tabs)/_layout.tsx
-// Navigation conditionnelle selon le type de compte (user/business)
+// Navigation avec swipe entre les tabs (style Instagram)
 // Avec guard d'authentification pour rediriger vers /auth/account-type si non connecté
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { View, ActivityIndicator } from 'react-native';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { useRouter } from 'expo-router';
 import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
+import SwipeableTabView from '@/components/SwipeableTabView';
 import { useAuth } from '@/contexts/AuthContext';
 import { colors } from '@/styles/commonStyles';
+
+// Import des écrans
+import ProfileScreen from './profile';
+import BrowseScreen from './browse';
+import CategoryScreen from './category';
+import ActivityScreen from './activity';
+import ChatScreen from './chat';
+import BusinessGroupsScreen from './business-groups';
 
 // Tabs pour les utilisateurs standard (5 tabs)
 const userTabs: TabBarItem[] = [
@@ -80,26 +89,52 @@ const businessTabs: TabBarItem[] = [
 export default function TabLayout() {
   const { user, profile, loading } = useAuth();
   const router = useRouter();
-  const [tabs, setTabs] = useState<TabBarItem[]>(userTabs);
+  const [currentTabIndex, setCurrentTabIndex] = useState(0);
   const [isRedirecting, setIsRedirecting] = useState(false);
+
+  const isBusiness = profile?.account_type === 'business';
+  const tabs = isBusiness ? businessTabs : userTabs;
+
+  // Mémoiser les écrans pour éviter les re-renders inutiles
+  const tabScreens = useMemo(() => {
+    if (isBusiness) {
+      return [
+        <ProfileScreen key="profile" />,
+        <BrowseScreen key="browse" />,
+        <CategoryScreen key="category" />,
+        <ActivityScreen key="activity" />,
+        <BusinessGroupsScreen key="business-groups" />,
+      ];
+    }
+    return [
+      <ProfileScreen key="profile" />,
+      <BrowseScreen key="browse" />,
+      <CategoryScreen key="category" />,
+      <ActivityScreen key="activity" />,
+      <ChatScreen key="chat" />,
+    ];
+  }, [isBusiness]);
 
   // Guard d'authentification: rediriger vers /auth/account-type si non connecté
   useEffect(() => {
     if (!loading && !user) {
       setIsRedirecting(true);
-      // Utiliser replace pour empêcher le retour arrière vers l'app
       router.replace('/auth/account-type');
     }
   }, [loading, user]);
 
+  // Réinitialiser l'index du tab quand le type de compte change
   useEffect(() => {
-    if (profile) {
-      setTabs(profile.account_type === 'business' ? businessTabs : userTabs);
-    } else {
-      // Si pas de profil (non connecté), afficher les tabs utilisateur par défaut
-      setTabs(userTabs);
-    }
-  }, [profile?.account_type]);
+    setCurrentTabIndex(0);
+  }, [isBusiness]);
+
+  const handleIndexChange = useCallback((index: number) => {
+    setCurrentTabIndex(index);
+  }, []);
+
+  const handleTabPress = useCallback((index: number) => {
+    setCurrentTabIndex(index);
+  }, []);
 
   // Écran de chargement pendant la vérification du type de compte ou redirection
   if (loading || isRedirecting || !user) {
@@ -110,30 +145,21 @@ export default function TabLayout() {
     );
   }
 
-  const isBusiness = profile?.account_type === 'business';
-
   return (
-    <>
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          animation: 'none',
-        }}
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <SwipeableTabView
+        currentIndex={currentTabIndex}
+        onIndexChange={handleIndexChange}
+        enabled={true}
       >
-        {/* Écrans communs aux deux types */}
-        <Stack.Screen name="profile" />
-        <Stack.Screen name="browse" />
-        <Stack.Screen name="activity" />
-        <Stack.Screen name="category" />
-        
-        {/* Écrans spécifiques */}
-        <Stack.Screen name="chat" />
-        <Stack.Screen name="business-groups" />
-      </Stack>
-      <FloatingTabBar 
-        tabs={tabs} 
+        {tabScreens}
+      </SwipeableTabView>
+      <FloatingTabBar
+        tabs={tabs}
         containerWidth={380}
+        currentIndex={currentTabIndex}
+        onTabPress={handleTabPress}
       />
-    </>
+    </View>
   );
 }
