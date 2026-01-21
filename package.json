@@ -81,6 +81,7 @@
     "eslint-plugin-import": "^2.31.0",
     "eslint-plugin-react": "^7.37.4",
     "globals": "^15.14.0",
+    "supabase": "^2.72.8",
     "typescript": "^5.8.3",
     "webpack-cli": "^6.0.1"
   },

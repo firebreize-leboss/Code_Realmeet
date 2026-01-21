@@ -1,0 +1,208 @@
+table_name	column_name	data_type	is_nullable
+activities	id	uuid	NO
+activities	nom	character varying	NO
+activities	titre	character varying	YES
+activities	categorie	character varying	NO
+activities	description	text	NO
+activities	image_url	text	YES
+activities	host_id	uuid	NO
+activities	host_type	character varying	YES
+activities	date	character varying	NO
+activities	time_start	time without time zone	YES
+activities	time_end	time without time zone	YES
+activities	dates_supplementaires	text	YES
+activities	adresse	text	NO
+activities	ville	character varying	NO
+activities	code_postal	character varying	YES
+activities	latitude	double precision	NO
+activities	longitude	double precision	NO
+activities	participants	integer	YES
+activities	max_participants	integer	NO
+activities	places_restantes	integer	YES
+activities	prix	numeric	YES
+activities	prix_devise	character varying	YES
+activities	inclusions	ARRAY	YES
+activities	regles	ARRAY	YES
+activities	created_at	timestamp with time zone	YES
+activities	updated_at	timestamp with time zone	YES
+activities	status	character varying	YES
+activities	categorie2	text	YES
+activity_participants	id	uuid	NO
+activity_participants	activity_id	uuid	NO
+activity_participants	user_id	uuid	NO
+activity_participants	joined_at	timestamp with time zone	YES
+activity_revenue	id	uuid	NO
+activity_revenue	activity_id	uuid	YES
+activity_revenue	business_id	uuid	YES
+activity_revenue	participant_id	uuid	YES
+activity_revenue	amount	numeric	NO
+activity_revenue	currency	character varying	YES
+activity_revenue	payment_status	character varying	YES
+activity_revenue	created_at	timestamp with time zone	YES
+activity_slots	id	uuid	NO
+activity_slots	activity_id	uuid	NO
+activity_slots	date	date	NO
+activity_slots	time	time without time zone	NO
+activity_slots	created_by	uuid	NO
+activity_slots	created_at	timestamp with time zone	YES
+activity_slots	duration	integer	YES
+activity_slots	max_participants	integer	YES
+activity_slots	max_groups	integer	YES
+activity_slots	participants_per_group	integer	YES
+activity_slots	groups_formed	boolean	YES
+activity_slots	groups_formed_at	timestamp with time zone	YES
+blocked_users	id	uuid	NO
+blocked_users	blocker_id	uuid	NO
+blocked_users	blocked_id	uuid	NO
+blocked_users	created_at	timestamp with time zone	YES
+business_stats	id	uuid	NO
+business_stats	business_id	uuid	YES
+business_stats	date	date	NO
+business_stats	views	integer	YES
+business_stats	activity_views	integer	YES
+business_stats	total_participants	integer	YES
+business_stats	total_revenue	numeric	YES
+business_stats	created_at	timestamp with time zone	YES
+conversation_participants	id	uuid	NO
+conversation_participants	conversation_id	uuid	NO
+conversation_participants	user_id	uuid	NO
+conversation_participants	joined_at	timestamp with time zone	NO
+conversation_participants	last_read_at	timestamp with time zone	YES
+conversation_participants	is_muted	boolean	YES
+conversation_participants	is_hidden	boolean	YES
+conversations	id	uuid	NO
+conversations	created_at	timestamp with time zone	NO
+conversations	updated_at	timestamp with time zone	NO
+conversations	last_message_at	timestamp with time zone	YES
+conversations	activity_id	uuid	YES
+conversations	name	text	YES
+conversations	image_url	text	YES
+conversations	is_group	boolean	YES
+conversations	slot_id	uuid	YES
+conversations	is_closed	boolean	YES
+conversations	closed_at	timestamp with time zone	YES
+conversations	closed_reason	text	YES
+conversations	friend_request_id	uuid	YES
+conversations_with_last_message	conversation_id	uuid	YES
+conversations_with_last_message	last_message_at	timestamp with time zone	YES
+conversations_with_last_message	last_message_content	text	YES
+conversations_with_last_message	last_message_type	text	YES
+conversations_with_last_message	last_message_sender_id	uuid	YES
+conversations_with_last_message	last_message_sender_name	text	YES
+conversations_with_last_message	participant_count	bigint	YES
+friend_requests	id	uuid	NO
+friend_requests	sender_id	uuid	NO
+friend_requests	receiver_id	uuid	NO
+friend_requests	status	text	NO
+friend_requests	created_at	timestamp with time zone	NO
+friend_requests	updated_at	timestamp with time zone	NO
+friend_requests_with_profiles	id	uuid	YES
+friend_requests_with_profiles	sender_id	uuid	YES
+friend_requests_with_profiles	receiver_id	uuid	YES
+friend_requests_with_profiles	status	text	YES
+friend_requests_with_profiles	created_at	timestamp with time zone	YES
+friend_requests_with_profiles	sender_name	text	YES
+friend_requests_with_profiles	sender_avatar	text	YES
+friend_requests_with_profiles	receiver_name	text	YES
+friend_requests_with_profiles	receiver_avatar	text	YES
+friends_with_profiles	user_id	uuid	YES
+friends_with_profiles	friend_id	uuid	YES
+friends_with_profiles	full_name	text	YES
+friends_with_profiles	avatar_url	text	YES
+friends_with_profiles	city	text	YES
+friends_with_profiles	created_at	timestamp with time zone	YES
+friendships	id	uuid	NO
+friendships	user_id	uuid	NO
+friendships	friend_id	uuid	NO
+friendships	created_at	timestamp with time zone	NO
+messages	id	uuid	NO
+messages	conversation_id	uuid	NO
+messages	sender_id	uuid	NO
+messages	content	text	YES
+messages	message_type	text	NO
+messages	media_url	text	YES
+messages	media_duration	integer	YES
+messages	created_at	timestamp with time zone	NO
+messages	updated_at	timestamp with time zone	NO
+messages	deleted_at	timestamp with time zone	YES
+messages	is_admin_message	boolean	YES
+met_people_hidden	user_id	uuid	NO
+met_people_hidden	hidden_user_id	uuid	NO
+met_people_hidden	created_at	timestamp with time zone	NO
+profiles	id	uuid	NO
+profiles	username	text	NO
+profiles	full_name	text	YES
+profiles	avatar_url	text	YES
+profiles	bio	text	YES
+profiles	city	text	YES
+profiles	date_of_birth	date	YES
+profiles	phone	text	YES
+profiles	interests	ARRAY	YES
+profiles	created_at	timestamp with time zone	YES
+profiles	updated_at	timestamp with time zone	YES
+profiles	activities_joined	integer	YES
+profiles	activities_hosted	integer	YES
+profiles	account_type	character varying	YES
+profiles	business_name	character varying	YES
+profiles	business_description	text	YES
+profiles	business_category	character varying	YES
+profiles	business_website	character varying	YES
+profiles	business_phone	character varying	YES
+profiles	business_email	character varying	YES
+profiles	business_address	text	YES
+profiles	business_siret	character varying	YES
+profiles	business_logo_url	text	YES
+profiles	business_cover_url	text	YES
+profiles	business_hours	jsonb	YES
+profiles	business_social_links	jsonb	YES
+profiles	business_verified	boolean	YES
+profiles	business_rating	numeric	YES
+profiles	business_review_count	integer	YES
+profiles	intention	text	YES
+profiles	personality_tags	ARRAY	YES
+profiles	expo_push_token	text	YES
+profiles	notifications_enabled	boolean	YES
+reports	id	uuid	NO
+reports	reported_by	uuid	NO
+reports	target_type	text	NO
+reports	target_id	uuid	NO
+reports	reason	text	NO
+reports	description	text	YES
+reports	status	text	NO
+reports	created_at	timestamp with time zone	NO
+reports	updated_at	timestamp with time zone	NO
+reviews	id	uuid	NO
+reviews	activity_id	uuid	NO
+reviews	reviewer_id	uuid	NO
+reviews	rating	integer	NO
+reviews	comment	text	YES
+reviews	created_at	timestamp with time zone	NO
+slot_group_members	id	uuid	NO
+slot_group_members	group_id	uuid	YES
+slot_group_members	user_id	uuid	YES
+slot_group_members	compatibility_score	numeric	YES
+slot_group_members	created_at	timestamp with time zone	YES
+slot_groups	id	uuid	NO
+slot_groups	slot_id	uuid	NO
+slot_groups	activity_id	uuid	YES
+slot_groups	group_number	integer	YES
+slot_groups	group_name	text	YES
+slot_groups	conversation_id	uuid	YES
+slot_groups	created_at	timestamp with time zone	YES
+slot_groups_backup	slot_id	uuid	YES
+slot_groups_backup	user_id	uuid	YES
+slot_groups_backup	group_index	integer	YES
+slot_groups_backup	created_at	timestamp with time zone	YES
+slot_groups_backup	conversation_id	uuid	YES
+slot_participants	id	uuid	NO
+slot_participants	slot_id	uuid	NO
+slot_participants	activity_id	uuid	NO
+slot_participants	user_id	uuid	NO
+slot_participants	joined_at	timestamp with time zone	YES
+v_slow_queries	query	text	YES
+v_slow_queries	calls	bigint	YES
+v_slow_queries	total_exec_time	double precision	YES
+v_slow_queries	mean_exec_time	double precision	YES
+v_slow_queries	max_exec_time	double precision	YES
+v_slow_queries	rows	bigint	YES
+(206 rows)
