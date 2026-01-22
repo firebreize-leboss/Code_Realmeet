@@ -61,11 +61,12 @@ interface ActivityCalendarProps {
   onSlotSelect?: (slot: SelectedSlot | null) => void;
   externalSelectedSlot?: SelectedSlot | null;
   mode?: 'select' | 'edit';
-  onSlotsChange?: (slots: PendingSlot[]) => void;
+  onSlotsChange?: ((slots: PendingSlot[]) => void) | ((addedDate?: string) => void);
   pendingSlots?: PendingSlot[];
   readOnly?: boolean;
   userJoinedSlotId?: string;
   maxParticipants?: number;
+  initialWeekOffset?: number;
 }
 
 const dayNames = ['LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM', 'DIM'];
@@ -89,9 +90,10 @@ export default function ActivityCalendar({
   readOnly = false,
   userJoinedSlotId,
   maxParticipants,
+  initialWeekOffset = 0,
 }: ActivityCalendarProps) {
   // Entreprise (edit) : navigation semaine -> weekOffset
-  const [weekOffset, setWeekOffset] = useState(0);
+  const [weekOffset, setWeekOffset] = useState(initialWeekOffset);
   const [weekDays, setWeekDays] = useState<DaySlots[]>([]);
 
   // Utilisateur (select) : jours futurs avec créneaux -> pagination par pages de 7
@@ -105,9 +107,8 @@ export default function ActivityCalendar({
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [newTime, setNewTime] = useState('');
   const [newDuration, setNewDuration] = useState('60');
-  const [newMaxParticipants, setNewMaxParticipants] = useState('10');
-  const [newMaxGroups, setNewMaxGroups] = useState('1');
-  const [newParticipantsPerGroup, setNewParticipantsPerGroup] = useState('');
+  const [newMaxGroups, setNewMaxGroups] = useState('2');
+  const [newParticipantsPerGroup, setNewParticipantsPerGroup] = useState('5');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [addingSlot, setAddingSlot] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<SelectedSlot | null>(null);
@@ -458,9 +459,8 @@ export default function ActivityCalendar({
     setSelectedDate(date);
     setNewTime('');
     setNewDuration('60');
-    setNewMaxParticipants('10');
-    setNewMaxGroups('1');
-    setNewParticipantsPerGroup('');
+    setNewMaxGroups('2');
+    setNewParticipantsPerGroup('5');
     setShowTimeModal(true);
   };
 
@@ -481,6 +481,23 @@ export default function ActivityCalendar({
       return;
     }
 
+    // Validation des groupes et participants par groupe
+    const maxGroups = parseInt(newMaxGroups, 10);
+    const participantsPerGroup = parseInt(newParticipantsPerGroup, 10);
+
+    if (!maxGroups || maxGroups < 1) {
+      Alert.alert('Champ requis', 'Veuillez indiquer le nombre de groupes.');
+      return;
+    }
+
+    if (!participantsPerGroup || participantsPerGroup < 1) {
+      Alert.alert('Champ requis', 'Veuillez indiquer le nombre de personnes par groupe.');
+      return;
+    }
+
+    // Calcul automatique du nombre total de places
+    const maxParticipants = maxGroups * participantsPerGroup;
+
     const formattedTime = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
     const dateStr = formatDateLocal(selectedDate);
     const duration = parseInt(newDuration, 10);
@@ -492,8 +509,7 @@ export default function ActivityCalendar({
         Alert.alert('Créneau existant', 'Ce créneau existe déjà.');
         return;
       }
-      const maxParts = parseInt(newMaxParticipants, 10) || 10;
-      onSlotsChange?.([...pendingSlots, { date: dateStr, time: formattedTime, duration, max_participants: maxParts }]);
+      onSlotsChange?.([...pendingSlots, { date: dateStr, time: formattedTime, duration, max_participants: maxParticipants }]);
       setShowTimeModal(false);
       return;
     }
@@ -502,11 +518,6 @@ export default function ActivityCalendar({
     try {
       setAddingSlot(true);
 
-      const maxGroups = parseInt(newMaxGroups, 10) || 1;
-      const participantsPerGroup = newParticipantsPerGroup
-        ? parseInt(newParticipantsPerGroup, 10)
-        : null;
-
       const { data: inserted, error } = await supabase
         .from('activity_slots')
         .insert({
@@ -514,7 +525,7 @@ export default function ActivityCalendar({
           date: dateStr,
           time: formattedTime,
           duration,
-          max_participants: parseInt(newMaxParticipants, 10) || 10,
+          max_participants: maxParticipants,
           max_groups: maxGroups,
           participants_per_group: participantsPerGroup,
           created_by: currentUserId,
@@ -549,6 +560,9 @@ export default function ActivityCalendar({
       );
 
       setShowTimeModal(false);
+
+      // ✅ Notifier le parent que les créneaux ont changé, en passant la date ajoutée
+      (onSlotsChange as (addedDate?: string) => void)?.(dateStr);
     } catch (e) {
       console.error('Erreur ajout créneau:', e);
       Alert.alert('Erreur', "Impossible d'ajouter le créneau.");
@@ -606,6 +620,9 @@ export default function ActivityCalendar({
                 return { ...day, slots: day.slots.filter(s => s.id !== slot.id) };
               })
             );
+
+            // ✅ Notifier le parent que les créneaux ont changé
+            onSlotsChange?.();
           } catch (e) {
             console.error('Erreur suppression:', e);
             Alert.alert('Erreur', 'Impossible de supprimer le créneau.');
@@ -859,25 +876,10 @@ export default function ActivityCalendar({
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Places max pour ce créneau</Text>
+                <Text style={styles.inputLabel}>Nombre de groupes</Text>
                 <TextInput
                   style={styles.timeInput}
-                  placeholder="10"
-                  placeholderTextColor={colors.textSecondary}
-                  value={newMaxParticipants}
-                  onChangeText={setNewMaxParticipants}
-                  keyboardType="number-pad"
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Nombre de groupes simultanés</Text>
-                <Text style={styles.inputHint}>
-                  Ex: 3 groupes de 5 personnes = 3 sessions en parallèle
-                </Text>
-                <TextInput
-                  style={styles.timeInput}
-                  placeholder="1"
+                  placeholder="2"
                   placeholderTextColor={colors.textSecondary}
                   value={newMaxGroups}
                   onChangeText={setNewMaxGroups}
@@ -886,19 +888,25 @@ export default function ActivityCalendar({
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Participants par groupe (optionnel)</Text>
-                <Text style={styles.inputHint}>
-                  Laisser vide pour distribution automatique
-                </Text>
+                <Text style={styles.inputLabel}>Personnes par groupe</Text>
                 <TextInput
                   style={styles.timeInput}
-                  placeholder="Auto"
+                  placeholder="5"
                   placeholderTextColor={colors.textSecondary}
                   value={newParticipantsPerGroup}
                   onChangeText={setNewParticipantsPerGroup}
                   keyboardType="number-pad"
                 />
               </View>
+
+              {newMaxGroups && newParticipantsPerGroup && (
+                <View style={styles.totalPlacesInfo}>
+                  <IconSymbol name="person.2.fill" size={16} color={colors.primary} />
+                  <Text style={styles.totalPlacesText}>
+                    Total : {parseInt(newMaxGroups, 10) * parseInt(newParticipantsPerGroup, 10)} places
+                  </Text>
+                </View>
+              )}
 
               <TouchableOpacity
                 style={[styles.confirmButton, addingSlot && styles.confirmButtonDisabled]}
@@ -1200,5 +1208,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: colors.background,
+  },
+  totalPlacesInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.primary + '15',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  totalPlacesText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.primary,
   },
 });

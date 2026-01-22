@@ -128,10 +128,26 @@ export default function ActivityScreen() {
         })
       );
 
+      // Remettre en draft les activités publiées qui n'ont plus de créneaux futurs
+      // Cela empêche qu'elles repassent automatiquement en "live" quand on ajoute des créneaux
+      for (const activity of activitiesWithSlotInfo) {
+        if (activity.isPublished && !activity.hasLiveSlots) {
+          // L'activité était publiée mais n'a plus de créneaux futurs -> la remettre en draft
+          await supabase
+            .from('activities')
+            .update({ status: 'draft' })
+            .eq('id', activity.id);
+          activity.isPublished = false;
+          activity.status = 'draft';
+        }
+      }
+
+      // Une activité est "en cours" (live) uniquement si elle est publiée (status='active') ET a des créneaux futurs
       const live = activitiesWithSlotInfo.filter(a => a.isPublished && a.hasLiveSlots);
       setLiveActivities(live);
 
-      const created = activitiesWithSlotInfo.filter(a => !(a.isPublished && a.hasLiveSlots));
+      // Une activité est "créée" si elle n'est PAS publiée (status='draft')
+      const created = activitiesWithSlotInfo.filter(a => !a.isPublished);
       setCreatedActivities(created);
 
       setOngoingActivities(live);
@@ -177,29 +193,29 @@ export default function ActivityScreen() {
     }
   };
 
-  const handlePauseActivity = async (activityId: string) => {
+  const handleUnpublishActivity = async (activityId: string) => {
     Alert.alert(
-      'Mettre en pause',
-      'Les utilisateurs ne pourront plus s\'inscrire. Continuer ?',
+      'Retirer de la publication',
+      'L\'activité ne sera plus visible par les utilisateurs. Elle retournera dans vos activités créées. Continuer ?',
       [
         { text: 'Annuler', style: 'cancel' },
         {
-          text: 'Mettre en pause',
+          text: 'Retirer',
           style: 'destructive',
           onPress: async () => {
             try {
               const { error } = await supabase
                 .from('activities')
-                .update({ status: 'paused' })
+                .update({ status: 'draft' })
                 .eq('id', activityId);
 
               if (error) throw error;
 
-              Alert.alert('Succès', 'Activité mise en pause');
+              Alert.alert('Succès', 'Activité retirée de la publication');
               loadBusinessActivities();
             } catch (error) {
-              console.error('Erreur pause:', error);
-              Alert.alert('Erreur', 'Impossible de mettre en pause');
+              console.error('Erreur retrait publication:', error);
+              Alert.alert('Erreur', 'Impossible de retirer la publication');
             }
           },
         },
@@ -382,7 +398,7 @@ export default function ActivityScreen() {
                 <Text style={styles.liveBadgeText}>En ligne</Text>
               </View>
             )}
-            {!activity.isPublished && (
+            {activity.status === 'draft' && (
               <View style={styles.draftBadge}>
                 <Text style={styles.draftBadgeText}>Brouillon</Text>
               </View>
@@ -407,7 +423,7 @@ export default function ActivityScreen() {
             </View>
           )}
 
-          {!activity.isPublished && businessTab === 'created' && (
+          {businessTab === 'created' && (
             <>
               {activity.hasLiveSlots ? (
                 <TouchableOpacity
@@ -433,14 +449,14 @@ export default function ActivityScreen() {
 
           {activity.isPublished && businessTab === 'live' && (
             <TouchableOpacity
-              style={styles.pauseButton}
+              style={styles.unpublishButton}
               onPress={(e) => {
                 e.stopPropagation();
-                handlePauseActivity(activity.id);
+                handleUnpublishActivity(activity.id);
               }}
             >
-              <IconSymbol name="pause.circle.fill" size={14} color="#f59e0b" />
-              <Text style={styles.pauseButtonText}>Mettre en pause</Text>
+              <IconSymbol name="xmark.circle.fill" size={14} color="#ef4444" />
+              <Text style={styles.unpublishButtonText}>Retirer</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -990,10 +1006,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#818CF8',
   },
-  pauseButton: {
+  unpublishButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(245, 158, 11, 0.3)',
+    backgroundColor: 'rgba(239, 68, 68, 0.3)',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 16,
@@ -1001,11 +1017,11 @@ const styles = StyleSheet.create({
     marginTop: 8,
     alignSelf: 'flex-start',
     borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.5)',
+    borderColor: 'rgba(239, 68, 68, 0.5)',
   },
-  pauseButtonText: {
+  unpublishButtonText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#f59e0b',
+    color: '#ef4444',
   },
 });

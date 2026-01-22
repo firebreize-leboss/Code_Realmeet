@@ -73,6 +73,8 @@ export default function ManageActivityScreen() {
   const [showSlotModal, setShowSlotModal] = useState(false);
   const [showGroupsModal, setShowGroupsModal] = useState(false);
   const [selectedSlotForGroups, setSelectedSlotForGroups] = useState<SlotStats | null>(null);
+  const [calendarKey, setCalendarKey] = useState(0);
+  const [calendarWeekOffset, setCalendarWeekOffset] = useState(0);
 
   useEffect(() => {
     loadActivityData();
@@ -451,8 +453,38 @@ export default function ManageActivityScreen() {
               </Text>
               
               <ActivityCalendar
+                key={calendarKey}
                 activityId={activity.id}
                 mode="edit"
+                initialWeekOffset={calendarWeekOffset}
+                onSlotsChange={(addedDate?: string) => {
+                  // Calculer le weekOffset pour la date ajoutée
+                  if (addedDate) {
+                    const targetDate = new Date(addedDate + 'T00:00:00');
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+
+                    // Trouver le lundi de la semaine courante
+                    const currentDay = today.getDay();
+                    const mondayOffset = currentDay === 0 ? -6 : 1 - currentDay;
+                    const currentMonday = new Date(today);
+                    currentMonday.setDate(today.getDate() + mondayOffset);
+
+                    // Trouver le lundi de la semaine cible
+                    const targetDay = targetDate.getDay();
+                    const targetMondayOffset = targetDay === 0 ? -6 : 1 - targetDay;
+                    const targetMonday = new Date(targetDate);
+                    targetMonday.setDate(targetDate.getDate() + targetMondayOffset);
+
+                    // Calculer la différence en semaines
+                    const diffTime = targetMonday.getTime() - currentMonday.getTime();
+                    const diffWeeks = Math.round(diffTime / (7 * 24 * 60 * 60 * 1000));
+
+                    setCalendarWeekOffset(diffWeeks);
+                  }
+                  loadActivityData();
+                  setCalendarKey(prev => prev + 1);
+                }}
               />
 
               {/* Liste des créneaux avec infos participants */}
