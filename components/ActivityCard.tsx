@@ -1,5 +1,5 @@
 // components/ActivityCard.tsx
-// Carte d'activité avec adaptation pour comptes entreprise
+// Carte d'activité moderne avec 3 variantes : compact, full, list
 
 import React from 'react';
 import {
@@ -11,13 +11,19 @@ import {
   Dimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { IconSymbol } from '@/components/IconSymbol';
+import { Calendar, MapPin, Users, Heart } from 'lucide-react-native';
 import { colors, borderRadius, spacing, shadows, typography } from '@/styles/commonStyles';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useBusinessRestrictions } from '@/hooks/useBusinessRestrictions';
 import { PREDEFINED_CATEGORIES } from '@/constants/categories';
+import { IconSymbol } from '@/components/IconSymbol';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Aurora Glow colors
+const AURORA_BLUE = '#60A5FA';
+const AURORA_VIOLET = '#818CF8';
+const AURORA_PURPLE = '#C084FC';
 
 interface Activity {
   id: string;
@@ -36,6 +42,7 @@ interface Activity {
   host_name?: string;
   host_avatar?: string;
   host_is_business?: boolean;
+  allDates?: string[];
 }
 
 interface ActivityCardProps {
@@ -43,13 +50,17 @@ interface ActivityCardProps {
   variant?: 'full' | 'compact' | 'list';
   showHost?: boolean;
   showCompetitorBadge?: boolean;
+  onLikePress?: () => void;
+  isLiked?: boolean;
 }
 
-export default function ActivityCard({ 
-  activity, 
+export default function ActivityCard({
+  activity,
   variant = 'full',
   showHost = true,
   showCompetitorBadge = false,
+  onLikePress,
+  isLiked = false,
 }: ActivityCardProps) {
   const router = useRouter();
   const { isBusiness, canViewCompetitors } = useBusinessRestrictions();
@@ -68,27 +79,33 @@ export default function ActivityCard({
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    return date.toLocaleDateString('fr-FR', { 
-      day: 'numeric', 
-      month: 'short' 
+    return date.toLocaleDateString('fr-FR', {
+      day: 'numeric',
+      month: 'short'
     });
+  };
+
+  const formatDateShort = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('fr-FR', {
+      day: 'numeric',
+      month: 'short'
+    }).replace('.', '');
+  };
+
+  const formatPrice = (prix: number | undefined) => {
+    if (prix === undefined || prix === 0) return 'Gratuit';
+    return `${prix}€`;
   };
 
   const spotsLeft = activity.max_participants - activity.participants;
   const isFull = spotsLeft <= 0;
   const isAlmostFull = spotsLeft <= 3 && spotsLeft > 0;
 
-  // Get category color
-  const getCategoryColor = (categoryName: string) => {
-    const category = PREDEFINED_CATEGORIES.find(
-      cat => cat.name.toLowerCase() === categoryName.toLowerCase()
-    );
-    return category?.color || colors.primary;
-  };
-
-  const categoryColor = getCategoryColor(activity.categorie);
-
-  // Variante compacte pour grille
+  // =============================================
+  // VARIANT: COMPACT (pour liste catégorie)
+  // Design inspiré TooGoodToGo : image large + contenu en bas
+  // =============================================
   if (variant === 'compact') {
     return (
       <TouchableOpacity
@@ -96,57 +113,143 @@ export default function ActivityCard({
         onPress={handlePress}
         activeOpacity={0.8}
       >
-        <Image
-          source={{ uri: activity.image_url || 'https://via.placeholder.com/160' }}
-          style={styles.compactImage}
-        />
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.8)']}
-          style={styles.compactGradient}
-        />
-        
-        {/* Badge catégorie */}
-        <View style={[styles.compactBadge, { backgroundColor: categoryColor }]}>
-          <Text style={styles.compactBadgeText}>{activity.categorie}</Text>
+        {/* Zone image large */}
+        <View style={styles.compactImageContainer}>
+          <Image
+            source={{ uri: activity.image_url || 'https://via.placeholder.com/400' }}
+            style={styles.compactImage}
+          />
+
+          {/* Gradient overlay pour lisibilité */}
+          <LinearGradient
+            colors={['rgba(0,0,0,0.4)', 'transparent', 'rgba(0,0,0,0.3)']}
+            style={styles.compactImageGradient}
+          />
+
+          {/* Badge places restantes - top left */}
+          {spotsLeft <= 5 && spotsLeft > 0 && (
+            <View style={styles.compactSpotsLeftBadge}>
+              <Text style={styles.compactSpotsLeftText}>
+                {spotsLeft === 1 ? '1 place' : `${spotsLeft} places`}
+              </Text>
+            </View>
+          )}
+
+          {/* Badge complet - top left */}
+          {isFull && (
+            <View style={styles.compactFullBadge}>
+              <Text style={styles.compactFullText}>Complet</Text>
+            </View>
+          )}
+
+          {/* Bouton like - top right */}
+          {onLikePress && (
+            <TouchableOpacity
+              style={styles.compactLikeButton}
+              onPress={onLikePress}
+              activeOpacity={0.8}
+            >
+              <Heart
+                size={18}
+                color={isLiked ? '#EF4444' : '#6B7280'}
+                fill={isLiked ? '#EF4444' : 'transparent'}
+              />
+            </TouchableOpacity>
+          )}
+
+          {/* Badge concurrent (pour entreprises) */}
+          {showCompetitorBadge && isBusiness && canViewCompetitors && (
+            <View style={styles.compactCompetitorBadge}>
+              <IconSymbol name="eye.fill" size={10} color="#FFFFFF" />
+              <Text style={styles.compactCompetitorText}>Concurrent</Text>
+            </View>
+          )}
+
+          {/* Avatar host + nom en bas de l'image */}
+          {showHost && (activity.host_avatar || activity.host_name) && (
+            <TouchableOpacity
+              style={styles.compactHostRow}
+              onPress={handleHostPress}
+              activeOpacity={0.8}
+            >
+              {activity.host_avatar && (
+                <Image
+                  source={{ uri: activity.host_avatar }}
+                  style={styles.compactHostAvatar}
+                />
+              )}
+              <Text style={styles.compactHostName} numberOfLines={1}>
+                {activity.host_name || 'Organisateur'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
-        {/* Badge concurrent (pour entreprises) */}
-        {showCompetitorBadge && isBusiness && canViewCompetitors && (
-          <View style={styles.competitorBadge}>
-            <IconSymbol name="eye.fill" size={10} color={colors.background} />
-            <Text style={styles.competitorBadgeText}>Concurrent</Text>
-          </View>
-        )}
-
+        {/* Zone contenu blanche */}
         <View style={styles.compactContent}>
-          <Text style={styles.compactTitle} numberOfLines={2}>{activity.nom}</Text>
-          
-          <View style={styles.compactMeta}>
-            {activity.date && (
-              <View style={styles.metaItem}>
-                <IconSymbol name="calendar" size={12} color={colors.text} />
-                <Text style={styles.metaText}>{formatDate(activity.date)}</Text>
+          {/* Titre de l'activité */}
+          <Text style={styles.compactTitle} numberOfLines={1}>
+            {activity.nom}
+          </Text>
+
+          {/* Dates en bulles */}
+          {activity.allDates && activity.allDates.length > 0 ? (
+            <View style={styles.compactDatesContainer}>
+              <View style={styles.compactDateBubbles}>
+                {activity.allDates.slice(0, 3).map((dateStr, index) => (
+                  <View key={index} style={styles.compactDateBubble}>
+                    <Calendar size={12} color={AURORA_VIOLET} />
+                    <Text style={styles.compactDateBubbleText}>{formatDateShort(dateStr)}</Text>
+                  </View>
+                ))}
               </View>
-            )}
-            <View style={styles.metaItem}>
-              <IconSymbol name="person.2.fill" size={12} color={isFull ? colors.error : colors.text} />
-              <Text style={[styles.metaText, isFull && styles.fullText]}>
-                {activity.participants}/{activity.max_participants}
+              {activity.allDates.length > 3 && (
+                <Text style={styles.compactMoreDates}>
+                  +{activity.allDates.length - 3} autre{activity.allDates.length - 3 > 1 ? 's' : ''} date{activity.allDates.length - 3 > 1 ? 's' : ''}
+                </Text>
+              )}
+            </View>
+          ) : (
+            <View style={styles.compactDateRow}>
+              <Calendar size={14} color="#6B7280" />
+              <Text style={styles.compactDateText}>
+                {activity.date ? formatDate(activity.date) : 'Date à définir'}
+                {activity.time_start && ` · ${activity.time_start}`}
               </Text>
+            </View>
+          )}
+
+          {/* Ligne du bas : lieu + participants | prix */}
+          <View style={styles.compactBottomRow}>
+            <View style={styles.compactLeftInfo}>
+              {activity.ville && (
+                <View style={styles.compactLocationRow}>
+                  <MapPin size={13} color="#9CA3AF" />
+                  <Text style={styles.compactLocationText} numberOfLines={1}>{activity.ville}</Text>
+                </View>
+              )}
+              <View style={styles.compactParticipantsRow}>
+                <Users size={13} color={AURORA_VIOLET} />
+                <Text style={styles.compactParticipantsText}>
+                  {activity.participants}/{activity.max_participants}
+                </Text>
+              </View>
+            </View>
+
+            {/* Prix à droite */}
+            <View style={styles.compactPriceContainer}>
+              <Text style={styles.compactPrice}>{formatPrice(activity.prix)}</Text>
             </View>
           </View>
         </View>
-
-        {activity.prix !== undefined && activity.prix > 0 && (
-          <View style={styles.priceTag}>
-            <Text style={styles.priceText}>{activity.prix}€</Text>
-          </View>
-        )}
       </TouchableOpacity>
     );
   }
 
-  // Variante liste
+  // =============================================
+  // VARIANT: LIST (overlay immersif)
+  // Image full background + card flottante en bas
+  // =============================================
   if (variant === 'list') {
     return (
       <TouchableOpacity
@@ -154,153 +257,171 @@ export default function ActivityCard({
         onPress={handlePress}
         activeOpacity={0.8}
       >
+        {/* Image full background */}
         <Image
-          source={{ uri: activity.image_url || 'https://via.placeholder.com/80' }}
+          source={{ uri: activity.image_url || 'https://via.placeholder.com/400' }}
           style={styles.listImage}
         />
-        
-        <View style={styles.listContent}>
-          <View style={styles.listHeader}>
-            <View style={[styles.listCategoryBadge, { backgroundColor: categoryColor + '30' }]}>
-              <Text style={[styles.listCategoryText, { color: categoryColor }]}>{activity.categorie}</Text>
-            </View>
-            {isAlmostFull && (
-              <View style={styles.urgentBadge}>
-                <Text style={styles.urgentText}>Dernières places</Text>
-              </View>
-            )}
-          </View>
-          
+
+        {/* Gradient overlay */}
+        <LinearGradient
+          colors={['rgba(0,0,0,0.7)', 'rgba(0,0,0,0.2)', 'transparent']}
+          style={styles.listGradient}
+        />
+
+        {/* Badge catégorie top */}
+        <View style={styles.listCategoryBadge}>
+          <Text style={styles.listCategoryText}>{activity.categorie}</Text>
+        </View>
+
+        {/* Bouton like top right */}
+        {onLikePress && (
+          <TouchableOpacity
+            style={styles.listLikeButton}
+            onPress={onLikePress}
+            activeOpacity={0.8}
+          >
+            <Heart
+              size={20}
+              color={isLiked ? '#EF4444' : '#374151'}
+              fill={isLiked ? '#EF4444' : 'transparent'}
+            />
+          </TouchableOpacity>
+        )}
+
+        {/* Card flottante bottom */}
+        <View style={styles.listFloatingCard}>
           <Text style={styles.listTitle} numberOfLines={1}>{activity.nom}</Text>
-          
-          <View style={styles.listMeta}>
-            {activity.date && (
-              <View style={styles.metaItem}>
-                <IconSymbol name="calendar" size={14} color={colors.textSecondary} />
-                <Text style={styles.listMetaText}>{formatDate(activity.date)}</Text>
-              </View>
-            )}
-            {activity.ville && (
-              <View style={styles.metaItem}>
-                <IconSymbol name="location.fill" size={14} color={colors.textSecondary} />
-                <Text style={styles.listMetaText}>{activity.ville}</Text>
-              </View>
-            )}
-          </View>
 
-          {showHost && activity.host_name && (
-            <TouchableOpacity style={styles.hostRow} onPress={handleHostPress}>
-              <Image
-                source={{ uri: activity.host_avatar || 'https://via.placeholder.com/24' }}
-                style={styles.hostAvatar}
-              />
-              <Text style={styles.hostName}>{activity.host_name}</Text>
-              {activity.host_is_business && (
-                <IconSymbol name="checkmark.seal.fill" size={14} color={colors.primary} />
+          <View style={styles.listInfoLayout}>
+            {/* Colonne gauche : date + lieu */}
+            <View style={styles.listLeftColumn}>
+              {activity.date && (
+                <View style={styles.listMetaRow}>
+                  <Calendar size={12} color="#374151" />
+                  <Text style={styles.listMetaText}>{formatDate(activity.date)}</Text>
+                </View>
               )}
-            </TouchableOpacity>
-          )}
+              {activity.ville && (
+                <View style={styles.listMetaRow}>
+                  <MapPin size={12} color="#374151" />
+                  <Text style={styles.listMetaText} numberOfLines={1}>{activity.ville}</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Colonne droite : participants + prix */}
+            <View style={styles.listRightColumn}>
+              <View style={styles.listParticipantsBadge}>
+                <Users size={12} color={AURORA_VIOLET} />
+                <Text style={styles.listParticipantsText}>
+                  {activity.participants}/{activity.max_participants}
+                </Text>
+              </View>
+              <Text style={styles.listPrice}>{formatPrice(activity.prix)}</Text>
+            </View>
+          </View>
         </View>
 
-        <View style={styles.listRight}>
-          <View style={styles.participantsCircle}>
-            <Text style={[styles.participantsText, isFull && styles.fullText]}>
-              {activity.participants}/{activity.max_participants}
-            </Text>
+        {/* Badge complet */}
+        {isFull && (
+          <View style={styles.listFullBadge}>
+            <Text style={styles.listFullBadgeText}>Complet</Text>
           </View>
-          {activity.prix !== undefined && activity.prix > 0 && (
-            <Text style={styles.listPrice}>{activity.prix}€</Text>
-          )}
-        </View>
+        )}
       </TouchableOpacity>
     );
   }
 
-  // Variante full (carte complète)
+  // =============================================
+  // VARIANT: FULL (feed principal)
+  // Layout vertical : image 4/3 + contenu en bas
+  // =============================================
   return (
     <TouchableOpacity
       style={styles.fullCard}
       onPress={handlePress}
-      activeOpacity={0.9}
+      activeOpacity={0.8}
     >
-      <Image
-        source={{ uri: activity.image_url || 'https://via.placeholder.com/400' }}
-        style={styles.fullImage}
-      />
-      <LinearGradient
-        colors={['transparent', 'rgba(0,0,0,0.7)']}
-        style={styles.fullGradient}
-      />
+      {/* Image avec aspect ratio 4/3 */}
+      <View style={styles.fullImageContainer}>
+        <Image
+          source={{ uri: activity.image_url || 'https://via.placeholder.com/400' }}
+          style={styles.fullImage}
+        />
 
-      {/* Badges en haut */}
-      <View style={styles.topBadges}>
-        <View style={[styles.categoryBadge, { backgroundColor: categoryColor }]}>
-          <Text style={styles.categoryBadgeText}>{activity.categorie}</Text>
+        {/* Gradient subtil en bas de l'image */}
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.3)']}
+          style={styles.fullImageGradient}
+        />
+
+        {/* Badges top */}
+        <View style={styles.fullTopBadges}>
+          {/* Badge catégorie */}
+          <View style={styles.fullCategoryBadge}>
+            <Text style={styles.fullCategoryText}>{activity.categorie}</Text>
+          </View>
+
+          {/* Badge prix */}
+          <View style={styles.fullPriceBadge}>
+            <Text style={styles.fullPriceBadgeText}>{formatPrice(activity.prix)}</Text>
+          </View>
         </View>
-        
-        {showCompetitorBadge && isBusiness && (
-          <View style={styles.competitorBadgeLarge}>
-            <IconSymbol name="eye.fill" size={14} color={colors.background} />
-            <Text style={styles.competitorBadgeLargeText}>Veille concurrentielle</Text>
+
+        {/* Bouton like */}
+        {onLikePress && (
+          <TouchableOpacity
+            style={styles.fullLikeButton}
+            onPress={onLikePress}
+            activeOpacity={0.8}
+          >
+            <Heart
+              size={20}
+              color={isLiked ? '#EF4444' : '#374151'}
+              fill={isLiked ? '#EF4444' : 'transparent'}
+            />
+          </TouchableOpacity>
+        )}
+
+        {/* Badge complet */}
+        {isFull && (
+          <View style={styles.fullFullBadge}>
+            <Text style={styles.fullFullBadgeText}>Complet</Text>
           </View>
         )}
 
-        {isFull && (
-          <View style={styles.fullBadge}>
-            <Text style={styles.fullBadgeText}>Complet</Text>
+        {/* Badge concurrent (pour entreprises) */}
+        {showCompetitorBadge && isBusiness && canViewCompetitors && (
+          <View style={styles.fullCompetitorBadge}>
+            <IconSymbol name="eye.fill" size={12} color="#FFFFFF" />
+            <Text style={styles.fullCompetitorText}>Veille</Text>
           </View>
         )}
       </View>
 
-      {/* Prix */}
-      {activity.prix !== undefined && activity.prix > 0 && (
-        <View style={styles.fullPriceTag}>
-          <Text style={styles.fullPriceText}>{activity.prix}€</Text>
-        </View>
-      )}
-
-      {/* Contenu en bas */}
+      {/* Zone contenu bas */}
       <View style={styles.fullContent}>
-        <Text style={styles.fullTitle} numberOfLines={2}>{activity.nom}</Text>
-        
+        {/* Titre */}
+        <Text style={styles.fullTitle} numberOfLines={1}>{activity.nom}</Text>
+
+        {/* Métadonnées en ligne */}
         <View style={styles.fullMeta}>
           {activity.date && (
             <View style={styles.fullMetaItem}>
-              <IconSymbol name="calendar" size={16} color={colors.text} />
-              <Text style={styles.fullMetaText}>
-                {formatDate(activity.date)} {activity.time_start && `à ${activity.time_start}`}
-              </Text>
+              <Calendar size={12} color="#4B5563" />
+              <Text style={styles.fullMetaText}>{formatDate(activity.date)}</Text>
             </View>
           )}
           {activity.ville && (
             <View style={styles.fullMetaItem}>
-              <IconSymbol name="location.fill" size={16} color={colors.text} />
-              <Text style={styles.fullMetaText}>{activity.ville}</Text>
+              <MapPin size={12} color="#4B5563" />
+              <Text style={styles.fullMetaText} numberOfLines={1}>{activity.ville}</Text>
             </View>
           )}
-        </View>
-
-        <View style={styles.fullBottom}>
-          {showHost && activity.host_name && (
-            <TouchableOpacity style={styles.fullHostRow} onPress={handleHostPress}>
-              <Image
-                source={{ uri: activity.host_avatar || 'https://via.placeholder.com/32' }}
-                style={styles.fullHostAvatar}
-              />
-              <Text style={styles.fullHostName}>{activity.host_name}</Text>
-              {activity.host_is_business && (
-                <IconSymbol name="checkmark.seal.fill" size={16} color={colors.primary} />
-              )}
-            </TouchableOpacity>
-          )}
-
-          <View style={styles.fullParticipants}>
-            <IconSymbol 
-              name="person.2.fill" 
-              size={16} 
-              color={isFull ? colors.error : colors.primary} 
-            />
-            <Text style={[styles.fullParticipantsText, isFull && styles.fullText]}>
+          <View style={[styles.fullMetaItem, styles.fullMetaParticipants]}>
+            <Users size={12} color={AURORA_PURPLE} />
+            <Text style={styles.fullMetaParticipantsText}>
               {activity.participants}/{activity.max_participants}
             </Text>
           </View>
@@ -311,362 +432,463 @@ export default function ActivityCard({
 }
 
 const styles = StyleSheet.create({
-  // Compact variant styles - Modern light theme
+  // =============================================
+  // COMPACT VARIANT STYLES (Design TooGoodToGo)
+  // =============================================
   compactCard: {
-    width: (SCREEN_WIDTH - 52) / 2,
-    height: 220,
-    borderRadius: borderRadius.lg,
+    width: SCREEN_WIDTH - 32,
+    borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: colors.card,
-    ...shadows.md,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  compactImageContainer: {
+    width: '100%',
+    height: 140,
+    position: 'relative',
   },
   compactImage: {
     width: '100%',
-    height: '60%',
+    height: '100%',
+    resizeMode: 'cover',
   },
-  compactGradient: {
+  compactImageGradient: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  compactSpotsLeftBadge: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: '60%',
+    top: 12,
+    left: 12,
+    backgroundColor: '#111827',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
   },
-  compactBadge: {
+  compactSpotsLeftText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  compactFullBadge: {
     position: 'absolute',
-    top: spacing.sm,
-    left: spacing.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.full,
+    top: 12,
+    left: 12,
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
   },
-  compactBadgeText: {
-    fontSize: typography.xs,
-    fontWeight: typography.semibold,
-    color: colors.textOnPrimary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  compactFullText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
-  competitorBadge: {
+  compactLikeButton: {
     position: 'absolute',
-    top: spacing.sm,
-    right: spacing.sm,
+    top: 12,
+    right: 12,
+    width: 36,
+    height: 36,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 999,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  compactCompetitorBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 100,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    backgroundColor: colors.warning,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.full,
+    gap: 4,
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
   },
-  competitorBadgeText: {
-    fontSize: typography.xs - 1,
-    fontWeight: typography.semibold,
-    color: colors.textOnPrimary,
+  compactCompetitorText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  compactHostRow: {
+    position: 'absolute',
+    bottom: 10,
+    left: 12,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  compactHostAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.9)',
+  },
+  compactHostName: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   compactContent: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: '40%',
-    padding: spacing.md,
-    backgroundColor: colors.card,
-    justifyContent: 'space-between',
+    padding: 14,
   },
   compactTitle: {
-    fontSize: typography.sm,
-    fontWeight: typography.semibold,
-    color: colors.text,
-    marginBottom: spacing.xs,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 6,
   },
-  compactMeta: {
+  compactDatesContainer: {
+    marginBottom: 10,
+  },
+  compactDateBubbles: {
     flexDirection: 'row',
-    gap: spacing.md,
+    flexWrap: 'nowrap',
+    gap: 8,
   },
-  metaItem: {
+  compactDateBubble: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: 4,
+    backgroundColor: '#EDE9FE',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
-  metaText: {
-    fontSize: typography.xs,
-    color: colors.textSecondary,
+  compactDateBubbleText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: AURORA_VIOLET,
   },
-  priceTag: {
-    position: 'absolute',
-    bottom: spacing.sm,
-    right: spacing.sm,
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.full,
-    ...shadows.sm,
+  compactMoreDates: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 6,
+    fontStyle: 'italic',
   },
-  priceText: {
-    fontSize: typography.sm,
-    fontWeight: typography.bold,
-    color: colors.textOnPrimary,
+  compactDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+  },
+  compactDateText: {
+    fontSize: 13,
+    color: '#6B7280',
+  },
+  compactBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  compactLeftInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  compactLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  compactLocationText: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    maxWidth: 100,
+  },
+  compactParticipantsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  compactParticipantsText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: AURORA_VIOLET,
+  },
+  compactPriceContainer: {
+    alignItems: 'flex-end',
+  },
+  compactPrice: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: AURORA_VIOLET,
   },
 
-  // List variant styles - Modern light theme
+  // =============================================
+  // LIST VARIANT STYLES
+  // =============================================
   listCard: {
-    flexDirection: 'row',
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    ...shadows.sm,
+    height: 208,
+    borderRadius: 16,
+    overflow: 'hidden',
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
   },
   listImage: {
-    width: 90,
-    height: 90,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.borderLight,
+    ...StyleSheet.absoluteFillObject,
+    resizeMode: 'cover',
   },
-  listContent: {
-    flex: 1,
-    marginLeft: spacing.md,
-    justifyContent: 'space-between',
-  },
-  listHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    flexWrap: 'wrap',
+  listGradient: {
+    ...StyleSheet.absoluteFillObject,
   },
   listCategoryBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.full,
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
   },
   listCategoryText: {
-    fontSize: typography.xs,
-    fontWeight: typography.semibold,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#111827',
   },
-  urgentBadge: {
-    backgroundColor: colors.errorLight + '40',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.full,
+  listLikeButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 36,
+    height: 36,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 999,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  urgentText: {
-    fontSize: typography.xs - 1,
-    fontWeight: typography.semibold,
-    color: colors.error,
-    textTransform: 'uppercase',
+  listFloatingCard: {
+    position: 'absolute',
+    bottom: 16,
+    left: 16,
+    right: 16,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    padding: 14,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 6,
   },
   listTitle: {
-    fontSize: typography.base,
-    fontWeight: typography.semibold,
-    color: colors.text,
-    marginTop: spacing.xs,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 10,
   },
-  listMeta: {
+  listInfoLayout: {
     flexDirection: 'row',
-    gap: spacing.md,
-    marginTop: spacing.xs,
+    justifyContent: 'space-between',
   },
-  listMetaText: {
-    fontSize: typography.sm,
-    color: colors.textSecondary,
+  listLeftColumn: {
+    flexDirection: 'column',
+    gap: 6,
+    flex: 1,
   },
-  hostRow: {
+  listMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
+    gap: 6,
   },
-  hostAvatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.borderLight,
+  listMetaText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#374151',
   },
-  hostName: {
-    fontSize: typography.sm,
-    color: colors.textSecondary,
-  },
-  listRight: {
+  listRightColumn: {
+    flexDirection: 'column',
     alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    marginLeft: spacing.sm,
+    gap: 6,
   },
-  participantsCircle: {
-    backgroundColor: colors.backgroundAccent,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-    borderWidth: 1.5,
-    borderColor: colors.primary,
+  listParticipantsBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EDE9FE',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
   },
-  participantsText: {
-    fontSize: typography.sm,
-    fontWeight: typography.semibold,
-    color: colors.primary,
+  listParticipantsText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: AURORA_VIOLET,
   },
   listPrice: {
-    fontSize: typography.lg,
-    fontWeight: typography.bold,
-    color: colors.primary,
-    marginTop: spacing.sm,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  listFullBadge: {
+    position: 'absolute',
+    top: 16,
+    left: 100,
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  listFullBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 
-  // Full variant styles - Modern light theme with prominent image hero
+  // =============================================
+  // FULL VARIANT STYLES
+  // =============================================
   fullCard: {
     width: SCREEN_WIDTH - 32,
-    height: 320,
-    borderRadius: borderRadius.xl,
+    borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: colors.card,
+    backgroundColor: '#FFFFFF',
     marginBottom: spacing.lg,
-    ...shadows.lg,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  fullImageContainer: {
+    width: '100%',
+    aspectRatio: 4 / 3,
+    position: 'relative',
   },
   fullImage: {
     width: '100%',
     height: '100%',
+    resizeMode: 'cover',
   },
-  fullGradient: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  topBadges: {
-    position: 'absolute',
-    top: spacing.lg,
-    left: spacing.lg,
-    right: spacing.lg,
-    flexDirection: 'row',
-    gap: spacing.sm,
-    flexWrap: 'wrap',
-  },
-  categoryBadge: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-    ...shadows.sm,
-  },
-  categoryBadgeText: {
-    fontSize: typography.sm,
-    fontWeight: typography.semibold,
-    color: colors.textOnPrimary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  competitorBadgeLarge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.warning,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-    ...shadows.sm,
-  },
-  competitorBadgeLargeText: {
-    fontSize: typography.xs,
-    fontWeight: typography.semibold,
-    color: colors.textOnPrimary,
-  },
-  fullBadge: {
-    backgroundColor: colors.error,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-    ...shadows.sm,
-  },
-  fullBadgeText: {
-    fontSize: typography.sm,
-    fontWeight: typography.semibold,
-    color: colors.textOnPrimary,
-    textTransform: 'uppercase',
-  },
-  fullPriceTag: {
-    position: 'absolute',
-    top: spacing.lg,
-    right: spacing.lg,
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.lg,
-    ...shadows.md,
-  },
-  fullPriceText: {
-    fontSize: typography.lg,
-    fontWeight: typography.bold,
-    color: colors.textOnPrimary,
-  },
-  fullContent: {
+  fullImageGradient: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    padding: spacing.lg,
-    backgroundColor: 'rgba(255, 255, 255, 0.98)', // Light semi-transparent background
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
+    height: 64,
+  },
+  fullTopBadges: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  fullCategoryBadge: {
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  fullCategoryText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: AURORA_VIOLET,
+  },
+  fullPriceBadge: {
+    backgroundColor: AURORA_VIOLET,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  fullPriceBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  fullLikeButton: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 36,
+    height: 36,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 999,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullFullBadge: {
+    position: 'absolute',
+    top: 12,
+    right: 56,
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  fullFullBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  fullCompetitorBadge: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  fullCompetitorText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  fullContent: {
+    padding: 16,
   },
   fullTitle: {
-    fontSize: typography.xl,
-    fontWeight: typography.bold,
-    color: colors.text,
-    marginBottom: spacing.sm,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 10,
   },
   fullMeta: {
     flexDirection: 'row',
-    gap: spacing.lg,
-    marginBottom: spacing.md,
-    flexWrap: 'wrap',
+    gap: 16,
+    alignItems: 'center',
   },
   fullMetaItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 4,
   },
   fullMetaText: {
-    fontSize: typography.sm,
-    color: colors.textSecondary,
+    fontSize: 12,
+    color: '#4B5563',
   },
-  fullBottom: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: spacing.sm,
+  fullMetaParticipants: {
+    marginLeft: 'auto',
   },
-  fullHostRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  fullHostAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.borderLight,
-    borderWidth: 2,
-    borderColor: colors.backgroundAlt,
-  },
-  fullHostName: {
-    fontSize: typography.sm,
-    color: colors.text,
-    fontWeight: typography.medium,
-  },
-  fullParticipants: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.backgroundAccent,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-    borderWidth: 1.5,
-    borderColor: colors.primary,
-  },
-  fullParticipantsText: {
-    fontSize: typography.sm,
-    fontWeight: typography.semibold,
-    color: colors.primary,
-  },
-  fullText: {
-    color: colors.error,
+  fullMetaParticipantsText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: AURORA_PURPLE,
   },
 });

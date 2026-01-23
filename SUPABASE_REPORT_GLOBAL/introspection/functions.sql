@@ -76,11 +76,11 @@ BEGIN
 END;
 $function$
 
-public|cube|CREATE OR REPLACE FUNCTION public.cube(cube, double precision, double precision)
+public|cube|CREATE OR REPLACE FUNCTION public.cube(cube, double precision)
  RETURNS cube
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/cube', $function$cube_c_f8_f8$function$
+AS '$libdir/cube', $function$cube_c_f8$function$
 
 public|cube|CREATE OR REPLACE FUNCTION public.cube(double precision[], double precision[])
  RETURNS cube
@@ -106,11 +106,11 @@ public|cube|CREATE OR REPLACE FUNCTION public.cube(double precision, double prec
  IMMUTABLE PARALLEL SAFE STRICT
 AS '$libdir/cube', $function$cube_f8_f8$function$
 
-public|cube|CREATE OR REPLACE FUNCTION public.cube(cube, double precision)
+public|cube|CREATE OR REPLACE FUNCTION public.cube(cube, double precision, double precision)
  RETURNS cube
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/cube', $function$cube_c_f8$function$
+AS '$libdir/cube', $function$cube_c_f8_f8$function$
 
 public|cube_cmp|CREATE OR REPLACE FUNCTION public.cube_cmp(cube, cube)
  RETURNS integer
@@ -995,6 +995,7 @@ BEGIN
             cp.last_read_at
         FROM conversation_participants cp
         WHERE cp.user_id = p_user_id
+          AND cp.is_hidden = false  -- ✅ AJOUT DU FILTRE ICI
     ),
     conversation_data AS (
         SELECT
@@ -1079,19 +1080,15 @@ BEGIN
         cd.slot_id,
         cd.updated_at,
         COALESCE(cd.is_closed, false) as is_closed,
-        -- Last message
         lm.content as last_message_content,
         lm.message_type as last_message_type,
         lm.created_at as last_message_at,
         lm.sender_id as last_message_sender_id,
         lm.sender_name as last_message_sender_name,
-        -- Participants
-        COALESCE(pc.cnt, 0) as participant_count,
+        COALESCE(pc.cnt, 0)::BIGINT as participant_count,
         op.full_name as other_participant_name,
         op.avatar_url as other_participant_avatar,
-        -- Unread
-        COALESCE(uc.unread, 0) as unread_count,
-        -- Slot
+        COALESCE(uc.unread, 0)::BIGINT as unread_count,
         si.slot_date,
         si.slot_time,
         COALESCE(si.is_past, false) as is_past_activity

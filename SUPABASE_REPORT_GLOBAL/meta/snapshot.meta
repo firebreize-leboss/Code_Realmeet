@@ -1,0 +1,4 @@
+snapshot_utc=2026-01-23T13:31:18Z
+project_root=/home/ubuntu/realmeet
+database_host=aws-1-eu-west-1.pooler.supabase.com
+database_port=6543

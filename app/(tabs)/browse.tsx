@@ -1,5 +1,5 @@
 // app/(tabs)/browse.tsx
-import React, { useState, useEffect, useRef, useMemo, useContext } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useContext, useCallback } from 'react';
 import {
   View,
   Text,
@@ -15,12 +15,11 @@ import {
   Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
-import { colors, commonStyles, borderRadius, spacing, shadows, typography } from '@/styles/commonStyles';
+import { colors } from '@/styles/commonStyles';
 import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
 import { WebView } from 'react-native-webview';
-import { activityService } from '@/services/activity.service';
 import { supabase } from '@/lib/supabase';
 import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -28,6 +27,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomTabBarHeightContext } from '@react-navigation/bottom-tabs';
 import { PREDEFINED_CATEGORIES } from '@/constants/categories';
 import { useDataCache } from '@/contexts/DataCacheContext';
+import ActivityCard from '@/components/ActivityCard';
 
 
 const PROTOMAPS_KEY = process.env.EXPO_PUBLIC_PROTOMAPS_KEY || '';
@@ -119,6 +119,7 @@ export default function BrowseScreen() {
   const webViewRef = useRef<WebView>(null);
   const hasHandledParams = useRef(false);
   const hasCenteredOnActivity = useRef(false);
+  const isFirstFocus = useRef(true);
   const [isBusiness, setIsBusiness] = useState(false);
   const [detailFooterHeight, setDetailFooterHeight] = useState(0);
   const insets = useSafeAreaInsets();
@@ -183,6 +184,19 @@ export default function BrowseScreen() {
     setIsBusiness(data.user?.user_metadata?.role === 'business');
   });
   }, []);
+
+  // Rafraîchir les activités quand l'écran reprend le focus (retour depuis les détails)
+  useFocusEffect(
+    useCallback(() => {
+      // Ne pas rafraîchir lors du premier focus (le cache initial suffit)
+      if (isFirstFocus.current) {
+        isFirstFocus.current = false;
+        return;
+      }
+      // Rafraîchir les données quand on revient sur l'écran
+      refreshActivities();
+    }, [refreshActivities])
+  );
 
 
   useEffect(() => {
@@ -494,89 +508,21 @@ export default function BrowseScreen() {
 </body>
 </html>`, []);
 
-  // =====================================================
-  // NOUVELLE VERSION DE renderActivityCard
-  // =====================================================
-  const renderActivityCard = (activity: Activity, index: number) => {
-    const isFull = activity.participants >= activity.max_participants;
-    const fillPercent = Math.min((activity.participants / activity.max_participants) * 100, 100);
-    
-    const formattedDate = (() => {
-  const latest = latestSlotDateByActivity[activity.id];
-  if (!latest) return 'Aucune date disponible';
-  try {
-    return new Date(latest).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-  } catch {
-    return latest;
-  }
-})();
-
-
-    return (
-      <TouchableOpacity
-        key={activity.id}
-        style={styles.activityCard}
-        onPress={() => router.push(`/activity-detail?id=${activity.id}&from=browse`)}
-        activeOpacity={0.9}
-      >
-        <Image
-          source={{ uri: activity.image_url || 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=640' }}
-          style={styles.activityImage}
-        />
-        
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.85)']}
-          style={styles.activityGradient}
-          start={{ x: 0, y: 0.3 }}
-          end={{ x: 0, y: 1 }}
-        />
-        
-        <View style={styles.activityOverlay}>
-          <View style={styles.topRow}>
-            <View style={styles.categoryBadge}>
-              <Text style={styles.categoryText}>{activity.categorie}</Text>
-            </View>
-            {isFull && (
-              <View style={styles.fullBadge}>
-                <Text style={styles.fullBadgeText}>COMPLET</Text>
-              </View>
-            )}
-          </View>
-          
-          <View style={styles.activityInfo}>
-            <Text style={styles.activityTitle} numberOfLines={2}>{activity.nom}</Text>
-            
-            <View style={styles.activityMeta}>
-              <View style={styles.metaRow}>
-                <IconSymbol name="location.fill" size={14} color="#FFFFFF" />
-                <Text style={styles.metaText} numberOfLines={1}>{activity.ville}</Text>
-              </View>
-              
-              <View style={styles.metaRow}>
-                <IconSymbol name="calendar.badge.clock" size={14} color="#FFFFFF" />
-                <Text style={styles.metaText}>
-                  {slotCountByActivity[activity.id] || 0} créneau{(slotCountByActivity[activity.id] || 0) > 1 ? 'x' : ''} dispo
-                </Text>
-              </View>
-            </View>
-            
-            <View style={styles.progressContainer}>
-              <View style={styles.progressBar}>
-                <View 
-                  style={[
-                    styles.progressFill, 
-                    { 
-                      width: `${fillPercent}%`,
-                      backgroundColor: isFull ? '#E74C3C' : colors.primary
-                    }
-                  ]} 
-                />
-              </View>
-            </View>
-          </View>
-        </View>
-      </TouchableOpacity>
-    );
+  // Transformer l'activité pour le composant ActivityCard
+  const mapActivityForCard = (activity: Activity) => {
+    const slotData = cache.slotDataByActivity[activity.id];
+    // Calculer le total des places de tous les créneaux
+    const totalMaxPlaces = slotData?.totalMaxPlaces || activity.max_participants;
+    const totalParticipants = totalMaxPlaces - (slotData?.remainingPlaces || 0);
+    return {
+      ...activity,
+      host_id: activity.host_id || '',
+      date: slotData?.latestDate || activity.date,
+      allDates: slotData?.allDates || [],
+      // Utiliser les totaux calculés pour afficher les places correctement
+      participants: totalParticipants,
+      max_participants: totalMaxPlaces,
+    };
   };
 
   const renderSelectedActivity = () => {
@@ -715,7 +661,22 @@ export default function BrowseScreen() {
               showsVerticalScrollIndicator={false}
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#FFFFFF" />}
             >
-              {filteredActivities.length > 0 ? filteredActivities.map((a, i) => renderActivityCard(a, i)) : (
+              {filteredActivities.length > 0 ? (
+                <View style={styles.gridContainer}>
+                  {filteredActivities.map((activity, index) => (
+                    <Animated.View
+                      key={activity.id}
+                      entering={FadeInDown.delay(index * 80).springify()}
+                      style={styles.cardWrapper}
+                    >
+                      <ActivityCard
+                        activity={mapActivityForCard(activity)}
+                        variant="compact"
+                      />
+                    </Animated.View>
+                  ))}
+                </View>
+              ) : (
                 <View style={styles.emptyState}>
                   <IconSymbol name="calendar" size={64} color="rgba(255,255,255,0.7)" />
                   <Text style={styles.emptyText}>Aucune activité trouvée</Text>
@@ -1161,124 +1122,12 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.9)',
     textAlign: 'center',
   },
-
-  // =====================================================
-  // STYLES AMÉLIORÉS POUR LES CARTES D'ACTIVITÉS (Glassmorphism)
-  // =====================================================
-  activityCard: {
-    height: 220,
-    borderRadius: 20,
-    overflow: 'hidden',
-    marginBottom: 16,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 6,
+  gridContainer: {
+    flexDirection: 'column',
+    gap: 12,
   },
-  activityImage: { 
-    width: '100%', 
-    height: '100%',
-    resizeMode: 'cover',
-  },
-  activityGradient: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  activityOverlay: { 
-    ...StyleSheet.absoluteFillObject, 
-    padding: 16, 
-    justifyContent: 'space-between',
-  },
-  topRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  categoryBadge: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  categoryText: { 
-    color: '#FFFFFF', 
-    fontSize: 12, 
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  fullBadge: {
-    backgroundColor: 'rgba(231, 76, 60, 0.9)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
-  },
-  fullBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  activityInfo: { 
-    gap: 10,
-  },
-  activityTitle: { 
-    fontSize: 20, 
-    fontWeight: '800', 
-    color: '#FFFFFF',
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-    lineHeight: 26,
-  },
-  activityMeta: { 
-    flexDirection: 'row', 
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  metaText: { 
-    fontSize: 12, 
-    color: '#FFFFFF', 
-    fontWeight: '600',
-  },
-  activityDetailScrollContent: {
-  paddingBottom: 140,
-},
-  progressContainer: {
-    marginTop: 4,
-  },
-  progressBar: {
-    height: 4,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 2,
+  cardWrapper: {
+    width: '100%',
   },
 
   // =====================================================

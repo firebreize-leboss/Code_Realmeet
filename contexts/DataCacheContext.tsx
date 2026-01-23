@@ -67,6 +67,8 @@ interface SlotData {
   latestDate: string | null;
   slotCount: number;
   remainingPlaces: number;
+  totalMaxPlaces: number;
+  allDates: string[];
 }
 
 interface CacheData {
@@ -197,12 +199,16 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       const slotDataByActivity: Record<string, SlotData> = {};
 
       ids.forEach(id => {
-        slotDataByActivity[id] = { latestDate: null, slotCount: 0, remainingPlaces: 0 };
+        slotDataByActivity[id] = { latestDate: null, slotCount: 0, remainingPlaces: 0, totalMaxPlaces: 0, allDates: [] };
       });
 
       (slots || []).forEach(s => {
         if (!slotDataByActivity[s.activity_id].latestDate) {
           slotDataByActivity[s.activity_id].latestDate = s.date;
+        }
+        // Ajouter la date si elle n'existe pas déjà (dates uniques)
+        if (!slotDataByActivity[s.activity_id].allDates.includes(s.date)) {
+          slotDataByActivity[s.activity_id].allDates.push(s.date);
         }
         slotDataByActivity[s.activity_id].slotCount++;
 
@@ -210,6 +216,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
         const slotParticipantCount = participantsBySlot[s.id] || 0;
         const slotRemaining = Math.max(0, slotCapacity - slotParticipantCount);
         slotDataByActivity[s.activity_id].remainingPlaces += slotRemaining;
+        slotDataByActivity[s.activity_id].totalMaxPlaces += slotCapacity;
       });
 
       // Filtrer les activités avec au moins un créneau futur
@@ -264,6 +271,31 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
         total_remaining_places: a.total_remaining_places,
       }));
 
+      const activityIds = activities.map(a => a.id);
+      const todayStr = new Date().toISOString().split('T')[0];
+
+      // Récupérer toutes les dates uniques et max_participants des slots futurs pour chaque activité
+      const { data: slotsData } = await supabase
+        .from('activity_slots')
+        .select('activity_id, date, max_participants')
+        .in('activity_id', activityIds.length > 0 ? activityIds : ['__none__'])
+        .gte('date', todayStr)
+        .order('date', { ascending: true });
+
+      // Grouper les dates uniques et calculer totalMaxPlaces par activité
+      const datesByActivity: Record<string, string[]> = {};
+      const totalMaxPlacesByActivity: Record<string, number> = {};
+      activityIds.forEach(id => {
+        datesByActivity[id] = [];
+        totalMaxPlacesByActivity[id] = 0;
+      });
+      (slotsData || []).forEach(slot => {
+        if (!datesByActivity[slot.activity_id].includes(slot.date)) {
+          datesByActivity[slot.activity_id].push(slot.date);
+        }
+        totalMaxPlacesByActivity[slot.activity_id] += slot.max_participants || 10;
+      });
+
       // Construire slotDataByActivity depuis les données agrégées
       const slotDataByActivity: Record<string, SlotData> = {};
       activities.forEach(a => {
@@ -271,6 +303,8 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
           latestDate: a.next_slot_date || null,
           slotCount: a.slot_count || 0,
           remainingPlaces: a.total_remaining_places || 0,
+          totalMaxPlaces: totalMaxPlacesByActivity[a.id] || 0,
+          allDates: datesByActivity[a.id] || [],
         };
       });
 

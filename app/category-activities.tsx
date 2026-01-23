@@ -6,7 +6,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Image,
   ActivityIndicator,
   TextInput,
   Platform,
@@ -20,6 +19,7 @@ import { PREDEFINED_CATEGORIES } from '@/constants/categories';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useDataCache } from '@/contexts/DataCacheContext';
+import ActivityCard from '@/components/ActivityCard';
 
 interface Activity {
   id: string;
@@ -35,6 +35,7 @@ interface Activity {
   participants: number;
   max_participants: number;
   prix?: number;
+  host_id?: string;
 }
 
 export default function CategoryActivitiesScreen() {
@@ -71,114 +72,27 @@ export default function CategoryActivitiesScreen() {
     });
   }, [cache.activities, cache.slotDataByActivity, categoryName, searchQuery]);
 
-  const handleActivityPress = (activityId: string) => {
-    router.push(`/activity-detail?id=${activityId}&from=browse`);
-  };
-
   const handleRefresh = async () => {
     setRefreshing(true);
     await refreshActivities();
     setRefreshing(false);
   };
 
-  const renderActivityCard = (activity: Activity, index: number) => {
+  // Transformer l'activité pour le composant ActivityCard
+  const mapActivityForCard = (activity: Activity) => {
     const slotData = cache.slotDataByActivity[activity.id];
-    const remainingPlaces = slotData?.remainingPlaces ?? 0;
-    const slotCount = slotData?.slotCount ?? 0;
-    const isAlmostFull = remainingPlaces <= 3 && remainingPlaces > 0;
-    const isFull = remainingPlaces === 0;
-
-    const formattedDate = (() => {
-      const latest = slotData?.latestDate;
-      if (!latest) return 'Aucune date disponible';
-      try {
-        return new Date(latest).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-      } catch {
-        return latest;
-      }
-    })();
-
-    return (
-      <Animated.View
-        key={activity.id}
-        entering={FadeInDown.delay(index * 100).springify()}
-      >
-        <TouchableOpacity
-          style={styles.activityCard}
-          onPress={() => handleActivityPress(activity.id)}
-          activeOpacity={0.9}
-        >
-          <Image
-            source={{ uri: activity.image_url || 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=800' }}
-            style={styles.activityImage}
-          />
-
-          <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.85)']}
-            style={styles.activityGradient}
-            start={{ x: 0, y: 0.3 }}
-            end={{ x: 0, y: 1 }}
-          />
-
-          {/* Badge catégorie */}
-          <View style={styles.topRow}>
-            <View style={styles.categoryBadge}>
-              <Text style={styles.categoryBadgeText}>{activity.categorie}</Text>
-            </View>
-            {isFull ? (
-              <View style={styles.fullBadge}>
-                <Text style={styles.fullBadgeText}>COMPLET</Text>
-              </View>
-            ) : isAlmostFull ? (
-              <View style={styles.almostFullBadge}>
-                <Text style={styles.almostFullBadgeText}>{remainingPlaces} places</Text>
-              </View>
-            ) : null}
-          </View>
-
-          <View style={styles.activityInfo}>
-            <Text style={styles.activityTitle} numberOfLines={2}>
-              {activity.nom}
-            </Text>
-
-            <View style={styles.activityMeta}>
-              <View style={styles.metaRow}>
-                <IconSymbol name="location.fill" size={14} color="#FFFFFF" />
-                <Text style={styles.metaText} numberOfLines={1}>{activity.ville}</Text>
-              </View>
-
-              <View style={styles.metaRow}>
-                <IconSymbol name="calendar.badge.clock" size={14} color="#FFFFFF" />
-                <Text style={styles.metaText}>
-                  {slotCount} créneau{slotCount > 1 ? 'x' : ''} dispo
-                </Text>
-              </View>
-            </View>
-
-            {activity.prix !== undefined && activity.prix > 0 && (
-              <View style={styles.priceRow}>
-                <IconSymbol name="eurosign.circle.fill" size={14} color="#FFFFFF" />
-                <Text style={styles.priceText}>{activity.prix.toFixed(0)} €</Text>
-              </View>
-            )}
-
-            <View style={styles.progressContainer}>
-              <View style={styles.progressBar}>
-                <View
-                  style={[
-                    styles.progressFill,
-                    {
-                      width: `${Math.min((activity.participants / activity.max_participants) * 100, 100)}%`,
-                      backgroundColor: isFull ? '#E74C3C' : '#FFFFFF'
-                    }
-                  ]}
-                />
-              </View>
-            </View>
-          </View>
-        </TouchableOpacity>
-      </Animated.View>
-    );
+    // Calculer le total des places de tous les créneaux
+    const totalMaxPlaces = slotData?.totalMaxPlaces || activity.max_participants;
+    const totalParticipants = totalMaxPlaces - (slotData?.remainingPlaces || 0);
+    return {
+      ...activity,
+      host_id: activity.host_id || '',
+      date: slotData?.latestDate || activity.date,
+      allDates: slotData?.allDates || [],
+      // Utiliser les totaux calculés pour afficher les places correctement
+      participants: totalParticipants,
+      max_participants: totalMaxPlaces,
+    };
   };
 
   if (cacheLoading) {
@@ -292,7 +206,20 @@ export default function CategoryActivitiesScreen() {
                 {filteredActivities.length} activité{filteredActivities.length > 1 ? 's' : ''}
                 {searchQuery && ` trouvée${filteredActivities.length > 1 ? 's' : ''}`}
               </Text>
-              {filteredActivities.map((activity, index) => renderActivityCard(activity, index))}
+              <View style={styles.gridContainer}>
+                {filteredActivities.map((activity, index) => (
+                  <Animated.View
+                    key={activity.id}
+                    entering={FadeInDown.delay(index * 80).springify()}
+                    style={styles.cardWrapper}
+                  >
+                    <ActivityCard
+                      activity={mapActivityForCard(activity)}
+                      variant="compact"
+                    />
+                  </Animated.View>
+                ))}
+              </View>
             </>
           )}
         </ScrollView>
@@ -394,148 +321,12 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.9)',
     marginBottom: 15,
   },
-
-  // Activity Card Styles (Glassmorphism)
-  activityCard: {
-    height: 220,
-    borderRadius: 20,
-    overflow: 'hidden',
-    marginBottom: 16,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 6,
+  gridContainer: {
+    flexDirection: 'column',
+    gap: 12,
   },
-  activityImage: {
+  cardWrapper: {
     width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
-  activityGradient: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  topRow: {
-    position: 'absolute',
-    top: 12,
-    left: 12,
-    right: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  categoryBadge: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
-  },
-  categoryBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  fullBadge: {
-    backgroundColor: 'rgba(231, 76, 60, 0.9)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
-  },
-  fullBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  almostFullBadge: {
-    backgroundColor: 'rgba(241, 196, 15, 0.9)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
-  },
-  almostFullBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  activityInfo: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 16,
-    gap: 8,
-  },
-  activityTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-    lineHeight: 26,
-  },
-  activityMeta: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  metaText: {
-    fontSize: 12,
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-    alignSelf: 'flex-start',
-  },
-  priceText: {
-    fontSize: 12,
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  progressContainer: {
-    marginTop: 4,
-  },
-  progressBar: {
-    height: 4,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 2,
   },
   emptyContainer: {
     flex: 1,

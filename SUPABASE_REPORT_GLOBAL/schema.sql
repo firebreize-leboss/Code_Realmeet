@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 4lebEAyHY1waNpTstLYsdeYsBqPrdPyJFebFs3nP82ARcuF0l0m7t9Zyc3oSL5k
+\restrict RqnAgKEkd177Ax7IaXXuDDbaeOLuvyMrncBHo8PPURzMZjPWeGxZMNofeoIlMkR
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.7 (Ubuntu 17.7-0ubuntu0.25.04.1)
@@ -795,6 +795,7 @@ BEGIN
             cp.last_read_at
         FROM conversation_participants cp
         WHERE cp.user_id = p_user_id
+          AND cp.is_hidden = false  -- ✅ AJOUT DU FILTRE ICI
     ),
     conversation_data AS (
         SELECT
@@ -879,19 +880,15 @@ BEGIN
         cd.slot_id,
         cd.updated_at,
         COALESCE(cd.is_closed, false) as is_closed,
-        -- Last message
         lm.content as last_message_content,
         lm.message_type as last_message_type,
         lm.created_at as last_message_at,
         lm.sender_id as last_message_sender_id,
         lm.sender_name as last_message_sender_name,
-        -- Participants
-        COALESCE(pc.cnt, 0) as participant_count,
+        COALESCE(pc.cnt, 0)::BIGINT as participant_count,
         op.full_name as other_participant_name,
         op.avatar_url as other_participant_avatar,
-        -- Unread
-        COALESCE(uc.unread, 0) as unread_count,
-        -- Slot
+        COALESCE(uc.unread, 0)::BIGINT as unread_count,
         si.slot_date,
         si.slot_time,
         COALESCE(si.is_past, false) as is_past_activity
@@ -3988,5 +3985,5 @@ ALTER TABLE public.slot_participants ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 4lebEAyHY1waNpTstLYsdeYsBqPrdPyJFebFs3nP82ARcuF0l0m7t9Zyc3oSL5k
+\unrestrict RqnAgKEkd177Ax7IaXXuDDbaeOLuvyMrncBHo8PPURzMZjPWeGxZMNofeoIlMkR
 
