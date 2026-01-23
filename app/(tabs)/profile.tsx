@@ -438,7 +438,7 @@ export default function ProfileScreen() {
         {/* Bio */}
         {profile.bio && (
           <View style={styles.glassCard}>
-            <Text style={styles.sectionTitle}>Bio</Text>
+            <Text style={styles.sectionTitle}>Ma Bio</Text>
             <Text style={styles.bioText}>{profile.bio}</Text>
           </View>
         )}
@@ -733,7 +733,7 @@ function BusinessProfileView({
         {/* Bio Section */}
         {profile.business_description && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Bio</Text>
+            <Text style={styles.sectionTitle}>Ma Bio</Text>
             <LinearGradient
               colors={['#60A5FA', '#818CF8', '#C084FC']}
               start={{ x: 0, y: 0 }}

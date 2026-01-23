@@ -137,6 +137,12 @@ export default function RootLayout() {
                       headerShown: false,
                     }}
                   />
+                  <Stack.Screen
+                    name="category-activities"
+                    options={{
+                      headerShown: false,
+                    }}
+                  />
                   </Stack>
                 </WidgetProvider>
               </GestureHandlerRootView>
