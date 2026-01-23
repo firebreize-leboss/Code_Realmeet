@@ -2,5 +2,6 @@ table_schema	table_name
 public	conversations_with_last_message
 public	friend_requests_with_profiles
 public	friends_with_profiles
+public	v_slots_pending_group_formation
 public	v_slow_queries
-(4 rows)
+(5 rows)

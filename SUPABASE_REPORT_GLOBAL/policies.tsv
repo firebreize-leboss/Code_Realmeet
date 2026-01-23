@@ -33,6 +33,7 @@ public	friend_requests	Users can view their own friend requests	PERMISSIVE	{publ
 public	friendships	Users can delete their own friendships	PERMISSIVE	{public}	DELETE	(auth.uid() = user_id)	
 public	friendships	Users can insert friendships	PERMISSIVE	{public}	INSERT		((auth.uid() IS NOT NULL) AND ((auth.uid() = user_id) OR (auth.uid() = friend_id)))
 public	friendships	Users can view their friendships	PERMISSIVE	{public}	SELECT	(auth.uid() = user_id)	
+public	group_formation_logs	Authenticated users can view logs	PERMISSIVE	{authenticated}	SELECT	true	
 public	messages	Business can insert messages in their activity groups	PERMISSIVE	{public}	INSERT		((EXISTS ( SELECT 1
    FROM conversation_participants cp
   WHERE ((cp.conversation_id = messages.conversation_id) AND (cp.user_id = auth.uid())))) OR (EXISTS ( SELECT 1
@@ -100,4 +101,4 @@ storage	objects	Users can update their own avatar	PERMISSIVE	{public}	UPDATE	((b
 storage	objects	Users can upload activity images	PERMISSIVE	{authenticated}	INSERT		((bucket_id = 'activity-images'::text) AND ((auth.uid())::text = (storage.foldername(name))[1]))
 storage	objects	Users can upload their own avatar	PERMISSIVE	{public}	INSERT		((bucket_id = 'avatars'::text) AND ((storage.foldername(name))[1] = (auth.uid())::text))
 storage	objects	Users can upload voice messages	PERMISSIVE	{public}	INSERT		((bucket_id = 'voice-messages'::text) AND (auth.uid() IS NOT NULL))
-(78 rows)
+(79 rows)

@@ -14,6 +14,7 @@ public	_friend_requests
 public	_friend_requests_with_profiles
 public	_friends_with_profiles
 public	_friendships
+public	_group_formation_logs
 public	_gtrgm
 public	_messages
 public	_met_people_hidden
@@ -24,6 +25,7 @@ public	_slot_group_members
 public	_slot_groups
 public	_slot_groups_backup
 public	_slot_participants
+public	_v_slots_pending_group_formation
 public	_v_slow_queries
 public	activities
 public	activity_participants
@@ -40,6 +42,7 @@ public	friend_requests
 public	friend_requests_with_profiles
 public	friends_with_profiles
 public	friendships
+public	group_formation_logs
 public	gtrgm
 public	messages
 public	met_people_hidden
@@ -50,5 +53,6 @@ public	slot_group_members
 public	slot_groups
 public	slot_groups_backup
 public	slot_participants
+public	v_slots_pending_group_formation
 public	v_slow_queries
-(52 rows)
+(56 rows)

@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict RqnAgKEkd177Ax7IaXXuDDbaeOLuvyMrncBHo8PPURzMZjPWeGxZMNofeoIlMkR
+\restrict uewEf6V6A28i4fAET8E7Nq75P50ygXhJUfPlqaorawWLOWrhovtwPcHL2DZdOpV
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.7 (Ubuntu 17.7-0ubuntu0.25.04.1)
@@ -384,8 +384,8 @@ DECLARE
   v_participant_count INT;
   v_first_user_id UUID;
 BEGIN
-  -- 1. Vérifier si déjà formé
-  IF EXISTS (SELECT 1 FROM activity_slots WHERE id = p_slot_id AND groups_formed = true) THEN
+  -- 1. Vérifier si déjà formé (vérifier les DEUX flags)
+  IF EXISTS (SELECT 1 FROM activity_slots WHERE id = p_slot_id AND (groups_formed = true OR is_locked = true)) THEN
     RETURN jsonb_build_object('success', false, 'error', 'Groupes déjà formés');
   END IF;
 
@@ -404,9 +404,12 @@ BEGIN
   FROM slot_participants WHERE slot_id = p_slot_id;
 
   IF v_participant_count = 0 THEN
-    -- Marquer comme formé même sans participants
+    -- Marquer comme formé même sans participants (synchroniser les deux flags)
     UPDATE activity_slots 
-    SET groups_formed = true, groups_formed_at = NOW() 
+    SET groups_formed = true, 
+        groups_formed_at = NOW(),
+        is_locked = true,
+        locked_at = NOW()
     WHERE id = p_slot_id;
     RETURN jsonb_build_object('success', true, 'groups_created', 0, 'message', 'Aucun participant');
   END IF;
@@ -424,39 +427,41 @@ BEGIN
   RETURNING id INTO v_group_id;
 
   -- 6. Ajouter tous les participants au groupe
-  FOR v_participant IN 
-    SELECT user_id FROM slot_participants WHERE slot_id = p_slot_id
-  LOOP
-    INSERT INTO slot_group_members (group_id, user_id, compatibility_score)
-    VALUES (v_group_id, v_participant.user_id, 0.5);
-    
-    -- Garder le premier user_id pour le message système
-    IF v_first_user_id IS NULL THEN
-      v_first_user_id := v_participant.user_id;
-    END IF;
-  END LOOP;
+  INSERT INTO slot_group_members (group_id, user_id, compatibility_score)
+  SELECT v_group_id, sp.user_id, 0.5
+  FROM slot_participants sp
+  WHERE sp.slot_id = p_slot_id;
 
-  -- 7. Créer la conversation
+  -- 7. Récupérer le premier user pour le message système
+  SELECT user_id INTO v_first_user_id
+  FROM slot_participants WHERE slot_id = p_slot_id LIMIT 1;
+
+  -- 8. Créer la conversation
   INSERT INTO conversations (slot_id, name, image_url, is_group)
   VALUES (p_slot_id, v_activity_name || ' - Groupe 1', v_activity_image, true)
   RETURNING id INTO v_conversation_id;
 
-  -- 8. Ajouter les participants à la conversation
+  -- 9. Ajouter les participants à la conversation
   INSERT INTO conversation_participants (conversation_id, user_id)
-  SELECT v_conversation_id, user_id FROM slot_participants WHERE slot_id = p_slot_id;
+  SELECT v_conversation_id, sp.user_id
+  FROM slot_participants sp
+  WHERE sp.slot_id = p_slot_id;
 
-  -- 9. Lier le groupe à la conversation
+  -- 10. Lier le groupe à la conversation
   UPDATE slot_groups SET conversation_id = v_conversation_id WHERE id = v_group_id;
 
-  -- 10. Message système
+  -- 11. Message système
   INSERT INTO messages (conversation_id, sender_id, content, message_type)
   VALUES (v_conversation_id, v_first_user_id, 
           '🎉 Groupe créé avec ' || v_participant_count || ' participant(s). L''activité commence bientôt !', 
           'system');
 
-  -- 11. Marquer le créneau comme formé
+  -- 12. Marquer le créneau comme formé ET verrouillé (synchroniser les deux flags)
   UPDATE activity_slots 
-  SET groups_formed = true, groups_formed_at = NOW() 
+  SET groups_formed = true, 
+      groups_formed_at = NOW(),
+      is_locked = true,
+      locked_at = NOW()
   WHERE id = p_slot_id;
 
   RETURN jsonb_build_object(
@@ -1015,30 +1020,49 @@ $$;
 CREATE FUNCTION public.process_slots_due_for_grouping() RETURNS integer
     LANGUAGE plpgsql SECURITY DEFINER
     AS $$
-  DECLARE
-    v_slot RECORD;
-    v_count INTEGER := 0;
-    v_result JSONB;
-  BEGIN
-    FOR v_slot IN
-      SELECT s.id, s.date, s.time
-      FROM activity_slots s
-      JOIN activities a ON a.id = s.activity_id
-      WHERE s.is_locked = false
-        AND a.status = 'active'
-        AND (s.date || ' ' || COALESCE(s.time, '00:00'))::timestamp        
-            BETWEEN NOW() + INTERVAL '23 hours 55 minutes'
-            AND NOW() + INTERVAL '24 hours 5 minutes'
-    LOOP
+DECLARE
+  v_slot RECORD;
+  v_count INTEGER := 0;
+  v_result JSONB;
+BEGIN
+  FOR v_slot IN
+    SELECT s.id, s.activity_id, s.date, s.time
+    FROM activity_slots s
+    JOIN activities a ON a.id = s.activity_id
+    WHERE s.groups_formed = false
+      AND a.status = 'active'
+      AND (s.date || ' ' || COALESCE(s.time, '00:00'))::timestamp        
+          BETWEEN NOW() + INTERVAL '23 hours'
+          AND NOW() + INTERVAL '24 hours 30 minutes'
+  LOOP
+    BEGIN
       v_result := form_groups_intelligent_v2(v_slot.id);
+      
+      -- Logger le résultat
+      INSERT INTO group_formation_logs (slot_id, activity_id, status, groups_created, participants_count, triggered_by)
+      VALUES (
+        v_slot.id, 
+        v_slot.activity_id,
+        CASE WHEN (v_result->>'success')::boolean THEN 'success' ELSE 'failed' END,
+        COALESCE((v_result->>'groups_created')::integer, 0),
+        COALESCE((v_result->>'total_participants')::integer, 0),
+        'cron'
+      );
+      
       IF (v_result->>'success')::boolean THEN
         v_count := v_count + 1;
       END IF;
-    END LOOP;
+      
+    EXCEPTION WHEN OTHERS THEN
+      -- Logger l'erreur
+      INSERT INTO group_formation_logs (slot_id, activity_id, status, error_message, triggered_by)
+      VALUES (v_slot.id, v_slot.activity_id, 'failed', SQLERRM, 'cron');
+    END;
+  END LOOP;
 
-    RETURN v_count;
-  END;
-  $$;
+  RETURN v_count;
+END;
+$$;
 
 
 --
@@ -1629,7 +1653,9 @@ CREATE TABLE public.activity_slots (
     max_groups integer DEFAULT 1,
     participants_per_group integer,
     groups_formed boolean DEFAULT false,
-    groups_formed_at timestamp with time zone
+    groups_formed_at timestamp with time zone,
+    is_locked boolean DEFAULT false,
+    locked_at timestamp with time zone
 );
 
 
@@ -1869,6 +1895,23 @@ CREATE VIEW public.friends_with_profiles AS
 
 
 --
+-- Name: group_formation_logs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.group_formation_logs (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    slot_id uuid,
+    activity_id uuid,
+    status text NOT NULL,
+    groups_created integer DEFAULT 0,
+    participants_count integer DEFAULT 0,
+    error_message text,
+    triggered_by text,
+    created_at timestamp with time zone DEFAULT now()
+);
+
+
+--
 -- Name: met_people_hidden; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1994,6 +2037,37 @@ CREATE TABLE public.slot_participants (
     user_id uuid NOT NULL,
     joined_at timestamp with time zone DEFAULT now()
 );
+
+
+--
+-- Name: v_slots_pending_group_formation; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.v_slots_pending_group_formation AS
+ SELECT s.id AS slot_id,
+    a.id AS activity_id,
+    a.nom AS activity_name,
+    s.date,
+    s."time",
+    (((s.date || ' '::text) || COALESCE(s."time", '00:00:00'::time without time zone)))::timestamp without time zone AS slot_datetime,
+    ((((s.date || ' '::text) || COALESCE(s."time", '00:00:00'::time without time zone)))::timestamp without time zone - '24:00:00'::interval) AS formation_due_at,
+    s.groups_formed,
+    s.is_locked,
+    s.max_groups,
+    s.participants_per_group,
+    ( SELECT count(*) AS count
+           FROM public.slot_participants sp
+          WHERE (sp.slot_id = s.id)) AS current_participants,
+        CASE
+            WHEN s.groups_formed THEN 'already_formed'::text
+            WHEN ((((s.date || ' '::text) || COALESCE(s."time", '00:00:00'::time without time zone)))::timestamp without time zone < now()) THEN 'past'::text
+            WHEN (((((s.date || ' '::text) || COALESCE(s."time", '00:00:00'::time without time zone)))::timestamp without time zone - '24:00:00'::interval) <= now()) THEN 'ready_to_form'::text
+            ELSE 'waiting'::text
+        END AS formation_status
+   FROM (public.activity_slots s
+     JOIN public.activities a ON ((a.id = s.activity_id)))
+  WHERE ((a.status)::text = 'active'::text)
+  ORDER BY s.date, s."time";
 
 
 --
@@ -2146,6 +2220,14 @@ ALTER TABLE ONLY public.friendships
 
 ALTER TABLE ONLY public.friendships
     ADD CONSTRAINT friendships_user_id_friend_id_key UNIQUE (user_id, friend_id);
+
+
+--
+-- Name: group_formation_logs group_formation_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.group_formation_logs
+    ADD CONSTRAINT group_formation_logs_pkey PRIMARY KEY (id);
 
 
 --
@@ -2704,6 +2786,20 @@ CREATE INDEX idx_friendships_user ON public.friendships USING btree (user_id);
 --
 
 CREATE INDEX idx_friendships_user_id ON public.friendships USING btree (user_id);
+
+
+--
+-- Name: idx_group_formation_logs_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_group_formation_logs_created ON public.group_formation_logs USING btree (created_at DESC);
+
+
+--
+-- Name: idx_group_formation_logs_slot; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_group_formation_logs_slot ON public.group_formation_logs USING btree (slot_id);
 
 
 --
@@ -3316,6 +3412,22 @@ ALTER TABLE ONLY public.friendships
 
 
 --
+-- Name: group_formation_logs group_formation_logs_activity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.group_formation_logs
+    ADD CONSTRAINT group_formation_logs_activity_id_fkey FOREIGN KEY (activity_id) REFERENCES public.activities(id) ON DELETE CASCADE;
+
+
+--
+-- Name: group_formation_logs group_formation_logs_slot_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.group_formation_logs
+    ADD CONSTRAINT group_formation_logs_slot_id_fkey FOREIGN KEY (slot_id) REFERENCES public.activity_slots(id) ON DELETE CASCADE;
+
+
+--
 -- Name: messages messages_conversation_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3477,6 +3589,13 @@ CREATE POLICY "Anyone can view slots" ON public.activity_slots FOR SELECT USING 
 --
 
 CREATE POLICY "Authenticated users can add slots" ON public.activity_slots FOR INSERT WITH CHECK ((auth.uid() = created_by));
+
+
+--
+-- Name: group_formation_logs Authenticated users can view logs; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Authenticated users can view logs" ON public.group_formation_logs FOR SELECT TO authenticated USING (true);
 
 
 --
@@ -3871,6 +3990,12 @@ ALTER TABLE public.friend_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.friendships ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: group_formation_logs; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.group_formation_logs ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: messages; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -3985,5 +4110,5 @@ ALTER TABLE public.slot_participants ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict RqnAgKEkd177Ax7IaXXuDDbaeOLuvyMrncBHo8PPURzMZjPWeGxZMNofeoIlMkR
+\unrestrict uewEf6V6A28i4fAET8E7Nq75P50ygXhJUfPlqaorawWLOWrhovtwPcHL2DZdOpV
 

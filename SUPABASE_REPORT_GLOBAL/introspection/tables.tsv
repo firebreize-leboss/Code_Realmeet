@@ -12,6 +12,7 @@ public	friend_requests
 public	friend_requests_with_profiles
 public	friends_with_profiles
 public	friendships
+public	group_formation_logs
 public	messages
 public	met_people_hidden
 public	profiles
@@ -21,5 +22,6 @@ public	slot_group_members
 public	slot_groups
 public	slot_groups_backup
 public	slot_participants
+public	v_slots_pending_group_formation
 public	v_slow_queries
-(23 rows)
+(25 rows)

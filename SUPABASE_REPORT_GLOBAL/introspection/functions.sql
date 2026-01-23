@@ -557,8 +557,8 @@ DECLARE
   v_participant_count INT;
   v_first_user_id UUID;
 BEGIN
-  -- 1. Vérifier si déjà formé
-  IF EXISTS (SELECT 1 FROM activity_slots WHERE id = p_slot_id AND groups_formed = true) THEN
+  -- 1. Vérifier si déjà formé (vérifier les DEUX flags)
+  IF EXISTS (SELECT 1 FROM activity_slots WHERE id = p_slot_id AND (groups_formed = true OR is_locked = true)) THEN
     RETURN jsonb_build_object('success', false, 'error', 'Groupes déjà formés');
   END IF;
 
@@ -577,9 +577,12 @@ BEGIN
   FROM slot_participants WHERE slot_id = p_slot_id;
 
   IF v_participant_count = 0 THEN
-    -- Marquer comme formé même sans participants
+    -- Marquer comme formé même sans participants (synchroniser les deux flags)
     UPDATE activity_slots 
-    SET groups_formed = true, groups_formed_at = NOW() 
+    SET groups_formed = true, 
+        groups_formed_at = NOW(),
+        is_locked = true,
+        locked_at = NOW()
     WHERE id = p_slot_id;
     RETURN jsonb_build_object('success', true, 'groups_created', 0, 'message', 'Aucun participant');
   END IF;
@@ -597,39 +600,41 @@ BEGIN
   RETURNING id INTO v_group_id;
 
   -- 6. Ajouter tous les participants au groupe
-  FOR v_participant IN 
-    SELECT user_id FROM slot_participants WHERE slot_id = p_slot_id
-  LOOP
-    INSERT INTO slot_group_members (group_id, user_id, compatibility_score)
-    VALUES (v_group_id, v_participant.user_id, 0.5);
-    
-    -- Garder le premier user_id pour le message système
-    IF v_first_user_id IS NULL THEN
-      v_first_user_id := v_participant.user_id;
-    END IF;
-  END LOOP;
+  INSERT INTO slot_group_members (group_id, user_id, compatibility_score)
+  SELECT v_group_id, sp.user_id, 0.5
+  FROM slot_participants sp
+  WHERE sp.slot_id = p_slot_id;
 
-  -- 7. Créer la conversation
+  -- 7. Récupérer le premier user pour le message système
+  SELECT user_id INTO v_first_user_id
+  FROM slot_participants WHERE slot_id = p_slot_id LIMIT 1;
+
+  -- 8. Créer la conversation
   INSERT INTO conversations (slot_id, name, image_url, is_group)
   VALUES (p_slot_id, v_activity_name || ' - Groupe 1', v_activity_image, true)
   RETURNING id INTO v_conversation_id;
 
-  -- 8. Ajouter les participants à la conversation
+  -- 9. Ajouter les participants à la conversation
   INSERT INTO conversation_participants (conversation_id, user_id)
-  SELECT v_conversation_id, user_id FROM slot_participants WHERE slot_id = p_slot_id;
+  SELECT v_conversation_id, sp.user_id
+  FROM slot_participants sp
+  WHERE sp.slot_id = p_slot_id;
 
-  -- 9. Lier le groupe à la conversation
+  -- 10. Lier le groupe à la conversation
   UPDATE slot_groups SET conversation_id = v_conversation_id WHERE id = v_group_id;
 
-  -- 10. Message système
+  -- 11. Message système
   INSERT INTO messages (conversation_id, sender_id, content, message_type)
   VALUES (v_conversation_id, v_first_user_id, 
           '🎉 Groupe créé avec ' || v_participant_count || ' participant(s). L''activité commence bientôt !', 
           'system');
 
-  -- 11. Marquer le créneau comme formé
+  -- 12. Marquer le créneau comme formé ET verrouillé (synchroniser les deux flags)
   UPDATE activity_slots 
-  SET groups_formed = true, groups_formed_at = NOW() 
+  SET groups_formed = true, 
+      groups_formed_at = NOW(),
+      is_locked = true,
+      locked_at = NOW()
   WHERE id = p_slot_id;
 
   RETURN jsonb_build_object(
@@ -1304,30 +1309,49 @@ public|process_slots_due_for_grouping|CREATE OR REPLACE FUNCTION public.process_
  LANGUAGE plpgsql
  SECURITY DEFINER
 AS $function$
-  DECLARE
-    v_slot RECORD;
-    v_count INTEGER := 0;
-    v_result JSONB;
-  BEGIN
-    FOR v_slot IN
-      SELECT s.id, s.date, s.time
-      FROM activity_slots s
-      JOIN activities a ON a.id = s.activity_id
-      WHERE s.is_locked = false
-        AND a.status = 'active'
-        AND (s.date || ' ' || COALESCE(s.time, '00:00'))::timestamp        
-            BETWEEN NOW() + INTERVAL '23 hours 55 minutes'
-            AND NOW() + INTERVAL '24 hours 5 minutes'
-    LOOP
+DECLARE
+  v_slot RECORD;
+  v_count INTEGER := 0;
+  v_result JSONB;
+BEGIN
+  FOR v_slot IN
+    SELECT s.id, s.activity_id, s.date, s.time
+    FROM activity_slots s
+    JOIN activities a ON a.id = s.activity_id
+    WHERE s.groups_formed = false
+      AND a.status = 'active'
+      AND (s.date || ' ' || COALESCE(s.time, '00:00'))::timestamp        
+          BETWEEN NOW() + INTERVAL '23 hours'
+          AND NOW() + INTERVAL '24 hours 30 minutes'
+  LOOP
+    BEGIN
       v_result := form_groups_intelligent_v2(v_slot.id);
+      
+      -- Logger le résultat
+      INSERT INTO group_formation_logs (slot_id, activity_id, status, groups_created, participants_count, triggered_by)
+      VALUES (
+        v_slot.id, 
+        v_slot.activity_id,
+        CASE WHEN (v_result->>'success')::boolean THEN 'success' ELSE 'failed' END,
+        COALESCE((v_result->>'groups_created')::integer, 0),
+        COALESCE((v_result->>'total_participants')::integer, 0),
+        'cron'
+      );
+      
       IF (v_result->>'success')::boolean THEN
         v_count := v_count + 1;
       END IF;
-    END LOOP;
+      
+    EXCEPTION WHEN OTHERS THEN
+      -- Logger l'erreur
+      INSERT INTO group_formation_logs (slot_id, activity_id, status, error_message, triggered_by)
+      VALUES (v_slot.id, v_slot.activity_id, 'failed', SQLERRM, 'cron');
+    END;
+  END LOOP;
 
-    RETURN v_count;
-  END;
-  $function$
+  RETURN v_count;
+END;
+$function$
 
 public|search_activities|CREATE OR REPLACE FUNCTION public.search_activities(p_search_text text DEFAULT NULL::text, p_category text DEFAULT NULL::text, p_ville text DEFAULT NULL::text, p_min_price numeric DEFAULT NULL::numeric, p_max_price numeric DEFAULT NULL::numeric, p_user_lat double precision DEFAULT NULL::double precision, p_user_lng double precision DEFAULT NULL::double precision, p_max_distance_km numeric DEFAULT NULL::numeric, p_limit integer DEFAULT 50, p_offset integer DEFAULT 0)
  RETURNS TABLE(id uuid, host_id uuid, nom character varying, titre character varying, description text, categorie character varying, categorie2 text, image_url text, ville character varying, latitude double precision, longitude double precision, prix numeric, max_participants integer, participants integer, places_restantes integer, status character varying, created_at timestamp with time zone, slot_count bigint, earliest_slot_date date, remaining_places bigint, distance_km numeric)
