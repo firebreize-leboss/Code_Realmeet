@@ -298,7 +298,7 @@ export default function EditActivityScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <IconSymbol name="xmark" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Modifier l'activité</Text>
+        <View style={{ flex: 1 }} />
         <TouchableOpacity
           style={styles.saveHeaderButton}
           onPress={handleSave}
@@ -615,11 +615,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
   },
   saveHeaderButton: {
     paddingHorizontal: 12,

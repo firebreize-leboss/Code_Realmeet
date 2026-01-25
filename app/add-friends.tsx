@@ -1,5 +1,6 @@
 // app/add-friends.tsx
 // Page de recherche et ajout d'amis avec contacts des activités passées
+// Design Glassmorphism comme profile.tsx
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -11,13 +12,13 @@ import {
   Image,
   FlatList,
   ActivityIndicator,
-  SectionList,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
-import { colors } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
+import { LinearGradient } from 'expo-linear-gradient';
 
 interface UserSearchResult {
   id: string;
@@ -26,8 +27,8 @@ interface UserSearchResult {
   city?: string;
   is_friend: boolean;
   request_sent: boolean;
-  from_activity?: boolean; // Indique si c'est un contact d'activité
-  activity_name?: string; // Nom de la dernière activité partagée
+  from_activity?: boolean;
+  activity_name?: string;
 }
 
 export default function AddFriendsScreen() {
@@ -37,12 +38,10 @@ export default function AddFriendsScreen() {
   const [loadingContacts, setLoadingContacts] = useState(true);
   const [sendingRequest, setSendingRequest] = useState<string | null>(null);
 
-  // Charger les contacts des activités passées au montage
   useEffect(() => {
     loadActivityContacts();
   }, []);
 
-  // Charger les personnes avec qui on a fait des activités
   const loadActivityContacts = async () => {
     try {
       setLoadingContacts(true);
@@ -54,7 +53,6 @@ export default function AddFriendsScreen() {
 
       const currentUserId = userData.user.id;
 
-      // Récupérer les activités auxquelles l'utilisateur a participé
       const { data: myParticipations } = await supabase
         .from('slot_participants')
         .select('slot_id, activity_id')
@@ -69,7 +67,6 @@ export default function AddFriendsScreen() {
       const slotIds = myParticipations.map(p => p.slot_id);
       const activityIds = [...new Set(myParticipations.map(p => p.activity_id))];
 
-      // Récupérer les noms des activités
       const { data: activitiesData } = await supabase
         .from('activities')
         .select('id, nom')
@@ -77,7 +74,6 @@ export default function AddFriendsScreen() {
 
       const activityNames = new Map(activitiesData?.map(a => [a.id, a.nom]) || []);
 
-      // Récupérer les autres participants de ces mêmes créneaux
       const { data: otherParticipants } = await supabase
         .from('slot_participants')
         .select(`
@@ -99,7 +95,6 @@ export default function AddFriendsScreen() {
         return;
       }
 
-      // Récupérer les amis et demandes en attente
       const { data: friendships } = await supabase
         .from('friendships')
         .select('friend_id')
@@ -114,7 +109,6 @@ export default function AddFriendsScreen() {
       const friendIds = new Set(friendships?.map(f => f.friend_id) || []);
       const pendingIds = new Set(requests?.map(r => r.receiver_id) || []);
 
-      // Dédupliquer par user_id et construire les contacts
       const uniqueContacts = new Map<string, UserSearchResult>();
       otherParticipants.forEach((p: any) => {
         if (p.profiles && !uniqueContacts.has(p.user_id)) {
@@ -139,7 +133,6 @@ export default function AddFriendsScreen() {
     }
   };
 
-  // Filtrer les contacts d'activités selon la recherche
   const getFilteredActivityContacts = () => {
     if (searchQuery.trim().length === 0) {
       return activityContacts;
@@ -148,8 +141,6 @@ export default function AddFriendsScreen() {
       contact.full_name.toLowerCase().includes(searchQuery.toLowerCase())
     );
   };
-
-
 
   const handleSendFriendRequest = async (userId: string) => {
     setSendingRequest(userId);
@@ -168,12 +159,6 @@ export default function AddFriendsScreen() {
         throw error;
       }
 
-      // Mettre à jour les deux listes
-      setSearchResults(prev =>
-        prev.map(user =>
-          user.id === userId ? { ...user, request_sent: true } : user
-        )
-      );
       setActivityContacts(prev =>
         prev.map(user =>
           user.id === userId ? { ...user, request_sent: true } : user
@@ -192,54 +177,56 @@ export default function AddFriendsScreen() {
 
   const renderUserItem = ({ item }: { item: UserSearchResult }) => (
     <TouchableOpacity
-      style={styles.userItem}
+      style={styles.glassCard}
       onPress={() => handleViewProfile(item.id)}
       activeOpacity={0.7}
     >
-      <Image 
-        source={{ uri: item.avatar_url || 'https://via.placeholder.com/56' }} 
-        style={styles.userAvatar} 
-      />
-      <View style={styles.userInfo}>
-        <Text style={styles.userName}>{item.full_name}</Text>
-        {item.from_activity && item.activity_name && (
-          <View style={styles.activityBadge}>
-            <IconSymbol name="figure.run" size={12} color={colors.primary} />
-            <Text style={styles.activityBadgeText}>{item.activity_name}</Text>
+      <View style={styles.userItemContent}>
+        <Image
+          source={{ uri: item.avatar_url || 'https://via.placeholder.com/56' }}
+          style={styles.userAvatar}
+        />
+        <View style={styles.userInfo}>
+          <Text style={styles.userName}>{item.full_name}</Text>
+          {item.from_activity && item.activity_name && (
+            <View style={styles.activityBadge}>
+              <IconSymbol name="figure.run" size={12} color="#FFFFFF" />
+              <Text style={styles.activityBadgeText}>{item.activity_name}</Text>
+            </View>
+          )}
+          {item.city && !item.from_activity && (
+            <View style={styles.locationRow}>
+              <IconSymbol name="location.fill" size={14} color="rgba(255,255,255,0.8)" />
+              <Text style={styles.userCity}>{item.city}</Text>
+            </View>
+          )}
+        </View>
+        {item.is_friend ? (
+          <View style={styles.friendBadge}>
+            <IconSymbol name="checkmark" size={16} color="#FFFFFF" />
+            <Text style={styles.friendBadgeText}>Ami</Text>
           </View>
-        )}
-        {item.city && !item.from_activity && (
-          <View style={styles.locationRow}>
-            <IconSymbol name="location.fill" size={14} color={colors.textSecondary} />
-            <Text style={styles.userCity}>{item.city}</Text>
+        ) : item.request_sent ? (
+          <View style={styles.pendingBadge}>
+            <Text style={styles.pendingBadgeText}>Envoyé</Text>
           </View>
+        ) : (
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => handleSendFriendRequest(item.id)}
+            disabled={sendingRequest === item.id}
+          >
+            {sendingRequest === item.id ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <IconSymbol name="plus" size={16} color="#FFFFFF" />
+                <Text style={styles.addButtonText}>Ajouter</Text>
+              </>
+            )}
+          </TouchableOpacity>
         )}
       </View>
-      {item.is_friend ? (
-        <View style={styles.friendBadge}>
-          <IconSymbol name="checkmark" size={16} color={colors.primary} />
-          <Text style={styles.friendBadgeText}>Ami</Text>
-        </View>
-      ) : item.request_sent ? (
-        <View style={styles.pendingBadge}>
-          <Text style={styles.pendingBadgeText}>Envoyé</Text>
-        </View>
-      ) : (
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => handleSendFriendRequest(item.id)}
-          disabled={sendingRequest === item.id}
-        >
-          {sendingRequest === item.id ? (
-            <ActivityIndicator size="small" color={colors.background} />
-          ) : (
-            <>
-              <IconSymbol name="plus" size={16} color={colors.background} />
-              <Text style={styles.addButtonText}>Ajouter</Text>
-            </>
-          )}
-        </TouchableOpacity>
-      )}
     </TouchableOpacity>
   );
 
@@ -248,47 +235,55 @@ export default function AddFriendsScreen() {
   const isSearching = searchQuery.trim().length > 0;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <IconSymbol name="chevron.left" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Ajouter des amis</Text>
-        <View style={styles.placeholder} />
-      </View>
-
-      <View style={styles.searchContainer}>
-        <IconSymbol name="magnifyingglass" size={20} color={colors.textSecondary} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Rechercher par pseudo..."
-          placeholderTextColor={colors.textSecondary}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          autoFocus={false}
-        />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <IconSymbol name="xmark" size={18} color={colors.textSecondary} />
+    <LinearGradient
+      colors={['#60A5FA', '#818CF8', '#C084FC']}
+      style={styles.container}
+    >
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.headerButton} onPress={() => router.back()}>
+            <IconSymbol name="chevron.left" size={22} color="#FFFFFF" />
           </TouchableOpacity>
-        )}
-      </View>
-
-      {loadingContacts ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
         </View>
-      ) : (
-        <FlatList
-          data={[]} // On utilise ListHeaderComponent et ListFooterComponent
-          renderItem={null}
-          ListHeaderComponent={
-            <>
-              {/* Section: Contacts des activités passées */}
-              {hasActivityResults && (
-                <View style={styles.sectionContainer}>
-                  <View style={styles.sectionHeader}>
-                    <IconSymbol name="person.2.fill" size={18} color={colors.primary} />
+
+        {/* Search Bar */}
+        <View style={styles.searchContainer}>
+          <View style={styles.searchBar}>
+            <IconSymbol name="magnifyingglass" size={20} color="rgba(255,255,255,0.7)" />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Rechercher par pseudo..."
+              placeholderTextColor="rgba(255,255,255,0.6)"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoFocus={false}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <IconSymbol name="xmark" size={18} color="rgba(255,255,255,0.7)" />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        {loadingContacts ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#FFFFFF" />
+            <Text style={styles.loadingText}>Chargement...</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={filteredActivityContacts}
+            renderItem={renderUserItem}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.listContainer}
+            showsVerticalScrollIndicator={false}
+            ListHeaderComponent={
+              hasActivityResults ? (
+                <View style={styles.sectionHeader}>
+                  <View style={styles.sectionTitleRow}>
+                    <IconSymbol name="person.2.fill" size={18} color="#FFFFFF" />
                     <Text style={styles.sectionTitle}>
                       {isSearching ? 'Résultats dans vos activités' : 'Personnes rencontrées'}
                     </Text>
@@ -296,154 +291,144 @@ export default function AddFriendsScreen() {
                   <Text style={styles.sectionSubtitle}>
                     Ajoutez les personnes avec qui vous avez partagé une activité
                   </Text>
-                  {filteredActivityContacts.map(item => (
-                    <View key={item.id}>
-                      {renderUserItem({ item })}
-                    </View>
-                  ))}
                 </View>
-              )}
-
-              {/* État vide: Aucun contact d'activité */}
-              {!hasActivityResults && !isSearching && (
-                <View style={styles.emptyState}>
-                  <IconSymbol name="person.2.fill" size={64} color={colors.textSecondary} />
-                  <Text style={styles.emptyText}>Aucun contact pour l'instant</Text>
+              ) : null
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <View style={styles.glassCard}>
+                  <IconSymbol
+                    name={isSearching ? "magnifyingglass" : "person.2.fill"}
+                    size={64}
+                    color="rgba(255,255,255,0.9)"
+                  />
+                  <Text style={styles.emptyText}>
+                    {isSearching ? 'Aucun résultat' : 'Aucun contact pour l\'instant'}
+                  </Text>
                   <Text style={styles.emptySubtext}>
-                    Participez à des activités pour rencontrer des personnes et les ajouter en amis
+                    {isSearching
+                      ? 'Aucun contact ne correspond à cette recherche'
+                      : 'Participez à des activités pour rencontrer des personnes et les ajouter en amis'}
                   </Text>
                 </View>
-              )}
-
-              {/* État vide: Recherche sans résultat dans les contacts */}
-              {isSearching && !hasActivityResults && (
-                <View style={styles.emptyState}>
-                  <IconSymbol name="magnifyingglass" size={64} color={colors.textSecondary} />
-                  <Text style={styles.emptyText}>Aucun résultat</Text>
-                  <Text style={styles.emptySubtext}>
-                    Aucun contact ne correspond à cette recherche
-                  </Text>
-                </View>
-              )}
-            </>
-          }
-          contentContainerStyle={styles.listContainer}
-          showsVerticalScrollIndicator={false}
-          keyExtractor={() => 'main'}
-        />
-      )}
-    </SafeAreaView>
+              </View>
+            }
+          />
+        )}
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
+  safeArea: {
+    flex: 1,
+  },
+
+  // Header
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  backButton: {
+  headerButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.card,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  placeholder: {
-    width: 40,
-  },
+
+  // Search
   searchContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.card,
-    marginHorizontal: 20,
-    marginVertical: 16,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderRadius: 12,
     gap: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: colors.text,
+    color: '#FFFFFF',
   },
+
+  // Loading
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 12,
   },
+  loadingText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+
+  // Liste
   listContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingHorizontal: 16,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 60,
+    gap: 12,
   },
-  sectionContainer: {
-    marginBottom: 24,
-  },
+
+  // Section header
   sectionHeader: {
+    marginBottom: 16,
+  },
+  sectionTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginBottom: 4,
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   sectionSubtitle: {
     fontSize: 14,
-    color: colors.textSecondary,
-    marginBottom: 12,
+    color: 'rgba(255,255,255,0.8)',
     marginLeft: 26,
   },
 
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 40,
-    paddingTop: 60,
+  // Glass Card
+  glassCard: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
-  emptyText: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: colors.text,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptySubtext: {
-    fontSize: 16,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  userItem: {
+
+  // User item
+  userItemContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
     gap: 12,
   },
   userAvatar: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: colors.border,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.4)',
   },
   userInfo: {
     flex: 1,
@@ -452,7 +437,7 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text,
+    color: '#FFFFFF',
   },
   locationRow: {
     flexDirection: 'row',
@@ -461,60 +446,85 @@ const styles = StyleSheet.create({
   },
   userCity: {
     fontSize: 14,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.8)',
   },
   activityBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: colors.primary + '20',
+    backgroundColor: 'rgba(255,255,255,0.2)',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: 8,
     alignSelf: 'flex-start',
   },
   activityBadgeText: {
     fontSize: 12,
-    color: colors.primary,
+    color: '#FFFFFF',
     fontWeight: '500',
   },
+
+  // Badges
   friendBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: colors.primary + '20',
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.25)',
   },
   friendBadgeText: {
     fontSize: 14,
     fontWeight: '500',
-    color: colors.primary,
+    color: '#FFFFFF',
   },
   pendingBadge: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: colors.border,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   pendingBadgeText: {
     fontSize: 14,
     fontWeight: '500',
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.8)',
   },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: colors.primary,
+    backgroundColor: 'rgba(255,255,255,0.3)',
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 8,
+    borderRadius: 12,
   },
   addButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.background,
+    color: '#FFFFFF',
   },
-}); 
+
+  // Empty state
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 60,
+  },
+  emptyText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.9)',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+});

@@ -28,6 +28,7 @@ import { BottomTabBarHeightContext } from '@react-navigation/bottom-tabs';
 import { PREDEFINED_CATEGORIES } from '@/constants/categories';
 import { useDataCache } from '@/contexts/DataCacheContext';
 import ActivityCard from '@/components/ActivityCard';
+import { useMapView } from '@/contexts/MapViewContext';
 
 
 const PROTOMAPS_KEY = process.env.EXPO_PUBLIC_PROTOMAPS_KEY || '';
@@ -111,8 +112,14 @@ export default function BrowseScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { cache, loading: cacheLoading, refreshActivities } = useDataCache();
+  const { setIsMapViewActive } = useMapView();
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('liste');
+
+  // Notifier le contexte quand le mode de vue change
+  useEffect(() => {
+    setIsMapViewActive(viewMode === 'maps');
+  }, [viewMode, setIsMapViewActive]);
   const [selectedActivity, setSelectedActivity] = useState<SelectedActivity | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
@@ -127,15 +134,15 @@ export default function BrowseScreen() {
 
   // Utiliser les données du cache
   const activities = cache.activities;
-  const latestSlotDateByActivity = Object.fromEntries(
+  const latestSlotDateByActivity = useMemo(() => Object.fromEntries(
     Object.entries(cache.slotDataByActivity).map(([id, data]) => [id, data.latestDate])
-  );
-  const slotCountByActivity = Object.fromEntries(
+  ), [cache.slotDataByActivity]);
+  const slotCountByActivity = useMemo(() => Object.fromEntries(
     Object.entries(cache.slotDataByActivity).map(([id, data]) => [id, data.slotCount])
-  );
-  const remainingPlacesByActivity = Object.fromEntries(
+  ), [cache.slotDataByActivity]);
+  const remainingPlacesByActivity = useMemo(() => Object.fromEntries(
     Object.entries(cache.slotDataByActivity).map(([id, data]) => [id, data.remainingPlaces])
-  );
+  ), [cache.slotDataByActivity]);
   const loading = cacheLoading;
 
   // États pour les filtres
@@ -248,11 +255,17 @@ export default function BrowseScreen() {
   // Les données viennent du cache, pas besoin de loadActivities
   // Le cache est géré globalement par DataCacheProvider
 
+  // Mettre à jour la carte avec les activités filtrées
   useEffect(() => {
-    if (viewMode === 'maps' && activities.length > 0 && !params.selectedActivityId) {
-      sendActivitiesToMap(activities, !hasCenteredOnActivity.current);
+    if (viewMode === 'maps' && !params.selectedActivityId) {
+      // Toujours envoyer les activités filtrées, pas toutes les activités
+      const shouldCenter = !hasCenteredOnActivity.current && filteredActivities.length > 0;
+      sendActivitiesToMap(filteredActivities, latestSlotDateByActivity, shouldCenter);
+      if (shouldCenter) {
+        hasCenteredOnActivity.current = true;
+      }
     }
-  }, [viewMode, activities, params.selectedActivityId]);
+  }, [filteredActivities, viewMode, params.selectedActivityId]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -693,8 +706,12 @@ export default function BrowseScreen() {
               style={styles.map}
               onMessage={handleWebViewMessage}
               onLoadEnd={() => {
-                if (activities.length > 0) {
-                  sendActivitiesToMap(activities, !hasCenteredOnActivity.current);
+                if (filteredActivities.length > 0) {
+                  const shouldCenter = !hasCenteredOnActivity.current;
+                  sendActivitiesToMap(filteredActivities, latestSlotDateByActivity, shouldCenter);
+                  if (shouldCenter) {
+                    hasCenteredOnActivity.current = true;
+                  }
                 }
               }}
               javaScriptEnabled

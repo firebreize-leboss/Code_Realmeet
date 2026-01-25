@@ -108,23 +108,21 @@ export default function RootLayout() {
               <SystemBars style="auto" />
               <GestureHandlerRootView style={{ flex: 1 }}>
                 <WidgetProvider>
-                  <Stack>
+                  <Stack screenOptions={{ headerShown: false }}>
                   {/* Main app with tabs */}
-                  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                  <Stack.Screen name="(tabs)" />
 
                   {/* Modal Demo Screens */}
                   <Stack.Screen
                     name="modal"
                     options={{
                       presentation: "modal",
-                      title: "Standard Modal",
                     }}
                   />
                   <Stack.Screen
                     name="formsheet"
                     options={{
                       presentation: "formSheet",
-                      title: "Form Sheet Modal",
                       sheetGrabberVisible: true,
                       sheetAllowedDetents: [0.5, 0.8, 1.0],
                       sheetCornerRadius: 20,
@@ -134,13 +132,6 @@ export default function RootLayout() {
                     name="transparent-modal"
                     options={{
                       presentation: "transparentModal",
-                      headerShown: false,
-                    }}
-                  />
-                  <Stack.Screen
-                    name="category-activities"
-                    options={{
-                      headerShown: false,
                     }}
                   />
                   </Stack>

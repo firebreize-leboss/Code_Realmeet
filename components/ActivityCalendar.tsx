@@ -14,8 +14,6 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
-  NativeSyntheticEvent,
-  NativeScrollEvent,
 } from 'react-native';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
@@ -96,10 +94,9 @@ export default function ActivityCalendar({
   const [weekOffset, setWeekOffset] = useState(initialWeekOffset);
   const [weekDays, setWeekDays] = useState<DaySlots[]>([]);
 
-  // Utilisateur (select) : jours futurs avec créneaux -> pagination par pages de 7
+  // Utilisateur (select) : jours futurs avec créneaux -> pagination par pages de 3
   const [userDays, setUserDays] = useState<DaySlots[]>([]);
   const [pageIndex, setPageIndex] = useState(0);
-  const scrollRef = useRef<ScrollView | null>(null);
 
   // UI / ajout créneau
   const [loading, setLoading] = useState(true);
@@ -112,6 +109,8 @@ export default function ActivityCalendar({
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [addingSlot, setAddingSlot] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<SelectedSlot | null>(null);
+  const initialLoadDone = useRef(false);
+  const scrollRef = useRef<ScrollView>(null);
 
   
  
@@ -282,16 +281,48 @@ export default function ActivityCalendar({
 
           let countBySlotId: Record<string, number> = {};
           if (slotIds.length > 0) {
+            // Récupérer les participants de slot_participants
             const { data: participants, error: pErr } = await supabase
               .from('slot_participants')
-              .select('slot_id')
+              .select('slot_id, user_id')
               .in('slot_id', slotIds);
 
+            // Récupérer aussi les membres des groupes (slot_group_members via slot_groups)
+            const { data: slotGroupsWithMembers } = await supabase
+              .from('slot_groups')
+              .select(`
+                slot_id,
+                slot_group_members (
+                  user_id
+                )
+              `)
+              .in('slot_id', slotIds);
+
+            // Compter les participants uniques par slot (user_id + slot_id)
+            const seenUserSlotCombos = new Set<string>();
+
+            // D'abord les participants de slot_participants
             if (!pErr && participants) {
-              countBySlotId = participants.reduce((acc: Record<string, number>, row: any) => {
-                acc[row.slot_id] = (acc[row.slot_id] || 0) + 1;
-                return acc;
-              }, {});
+              participants.forEach((row: any) => {
+                const key = `${row.user_id}-${row.slot_id}`;
+                if (!seenUserSlotCombos.has(key)) {
+                  seenUserSlotCombos.add(key);
+                  countBySlotId[row.slot_id] = (countBySlotId[row.slot_id] || 0) + 1;
+                }
+              });
+            }
+
+            // Ensuite les membres des groupes qui ne sont pas déjà comptés
+            if (slotGroupsWithMembers) {
+              slotGroupsWithMembers.forEach((group: any) => {
+                (group.slot_group_members || []).forEach((member: any) => {
+                  const key = `${member.user_id}-${group.slot_id}`;
+                  if (!seenUserSlotCombos.has(key)) {
+                    seenUserSlotCombos.add(key);
+                    countBySlotId[group.slot_id] = (countBySlotId[group.slot_id] || 0) + 1;
+                  }
+                });
+              });
             }
           }
 
@@ -328,38 +359,77 @@ export default function ActivityCalendar({
             grouped.set(s.date, list);
           });
 
-          const days: DaySlots[] = await Promise.all(
-            Array.from(grouped.entries())
-              .sort(([a], [b]) => a.localeCompare(b))
-              .map(async ([dateStr, slotsRaw]) => {
-                const slots: TimeSlot[] = await Promise.all(
-                  slotsRaw.map(async slot => {
-                    const { count } = await supabase
-                      .from('slot_participants')
-                      .select('*', { count: 'exact', head: true })
-                      .eq('slot_id', slot.id);
+          // Récupérer tous les slotIds pour compter les participants
+          const allSlotIds = (data || []).map(s => s.id);
 
-                    return {
-                      id: slot.id,
-                      time: slot.time.slice(0, 5),
-                      duration: slot.duration || 60,
-                      createdBy: slot.created_by,
-                      date: slot.date,
-                      participantCount: count || 0,
-                      maxParticipants: slot.max_participants || maxParticipants,
-                    };
-                  })
-                );
+          // Compter les participants (slot_participants + slot_group_members) pour chaque slot
+          let countBySlotIdSelect: Record<string, number> = {};
+          if (allSlotIds.length > 0) {
+            const { data: participants } = await supabase
+              .from('slot_participants')
+              .select('slot_id, user_id')
+              .in('slot_id', allSlotIds);
 
-                return buildDaySlotsFromDateStr(dateStr, slots);
-              })
-          );
+            const { data: slotGroupsWithMembers } = await supabase
+              .from('slot_groups')
+              .select(`
+                slot_id,
+                slot_group_members (
+                  user_id
+                )
+              `)
+              .in('slot_id', allSlotIds);
+
+            const seenUserSlotCombos = new Set<string>();
+
+            if (participants) {
+              participants.forEach((row: any) => {
+                const key = `${row.user_id}-${row.slot_id}`;
+                if (!seenUserSlotCombos.has(key)) {
+                  seenUserSlotCombos.add(key);
+                  countBySlotIdSelect[row.slot_id] = (countBySlotIdSelect[row.slot_id] || 0) + 1;
+                }
+              });
+            }
+
+            if (slotGroupsWithMembers) {
+              slotGroupsWithMembers.forEach((group: any) => {
+                (group.slot_group_members || []).forEach((member: any) => {
+                  const key = `${member.user_id}-${group.slot_id}`;
+                  if (!seenUserSlotCombos.has(key)) {
+                    seenUserSlotCombos.add(key);
+                    countBySlotIdSelect[group.slot_id] = (countBySlotIdSelect[group.slot_id] || 0) + 1;
+                  }
+                });
+              });
+            }
+          }
+
+          const days: DaySlots[] = Array.from(grouped.entries())
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([dateStr, slotsRaw]) => {
+              const slots: TimeSlot[] = slotsRaw.map(slot => ({
+                id: slot.id,
+                time: slot.time.slice(0, 5),
+                duration: slot.duration || 60,
+                createdBy: slot.created_by,
+                date: slot.date,
+                participantCount: countBySlotIdSelect[slot.id] || 0,
+                maxParticipants: slot.max_participants || maxParticipants,
+              }));
+
+              return buildDaySlotsFromDateStr(dateStr, slots);
+            });
 
           setUserDays(days);
-          setPageIndex(0);
-          requestAnimationFrame(() => {
-            scrollRef.current?.scrollTo({ x: 0, animated: false });
-          });
+          // Only reset page index on initial load, not on subsequent updates
+          if (!initialLoadDone.current) {
+            setPageIndex(0);
+            requestAnimationFrame(() => {
+              scrollRef.current?.scrollTo({ x: 0, animated: false });
+            });
+            initialLoadDone.current = true;
+          }
         }
       } catch (e) {
         console.error('Erreur chargement créneaux:', e);
@@ -376,30 +446,23 @@ export default function ActivityCalendar({
     return mode === 'edit' ? weekDays : userDays;
   }, [mode, weekDays, userDays]);
 
+  // En mode select, on pagine par 3 jours pour garder tout sur une ligne
+  const DAYS_PER_PAGE = mode === 'edit' ? 7 : 3;
+
   const dayPages: DaySlots[][] = useMemo(() => {
     if (mode === 'edit') return [weekDays];
 
     const pages: DaySlots[][] = [];
-    for (let i = 0; i < userDays.length; i += 7) {
-      pages.push(userDays.slice(i, i + 7));
+    for (let i = 0; i < userDays.length; i += DAYS_PER_PAGE) {
+      pages.push(userDays.slice(i, i + DAYS_PER_PAGE));
     }
     return pages.length ? pages : [[]];
-  }, [mode, weekDays, userDays]);
-
-  const canScrollDays = mode !== 'edit' && dayPages.length > 1;
+  }, [mode, weekDays, userDays, DAYS_PER_PAGE]);
 
   const currentPage = useMemo(() => {
     if (mode === 'edit') return dayPages[0] || [];
     return dayPages[Math.min(pageIndex, dayPages.length - 1)] || [];
   }, [mode, dayPages, pageIndex]);
-
-  const onHorizontalScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (!canScrollDays) return;
-    const x = e.nativeEvent.contentOffset.x;
-    const w = e.nativeEvent.layoutMeasurement.width || 1;
-    const idx = Math.round(x / w);
-    if (idx !== pageIndex) setPageIndex(idx);
-  };
 
   // ---------- Header title ----------
   const getWeekTitle = () => {
@@ -425,6 +488,9 @@ export default function ActivityCalendar({
   };
 
   // ---------- Actions ----------
+  const canGoLeft = mode === 'edit' || pageIndex > 0;
+  const canGoRight = mode === 'edit' || pageIndex < dayPages.length - 1;
+
   const navigate = (direction: number) => {
     if (mode === 'edit') {
       setWeekOffset(prev => prev + direction);
@@ -435,19 +501,7 @@ export default function ActivityCalendar({
     if (next < 0 || next > dayPages.length - 1) return;
 
     setPageIndex(next);
-    requestAnimationFrame(() => {
-      // sera recalé via scrollWidth ensuite
-      scrollRef.current?.scrollTo({ x: next * 99999, animated: true });
-    });
   };
-
-  // hack: scrollTo avec vraie largeur
-  const [scrollWidth, setScrollWidth] = useState(0);
-  useEffect(() => {
-    if (!canScrollDays) return;
-    if (scrollWidth <= 0) return;
-    scrollRef.current?.scrollTo({ x: pageIndex * scrollWidth, animated: true });
-  }, [pageIndex, scrollWidth, canScrollDays]);
 
   const handleAddSlot = (date: Date) => {
     const today = new Date();
@@ -633,8 +687,8 @@ export default function ActivityCalendar({
   };
 
   // ---------- Render helpers ----------
-  const renderDayColumn = (day: DaySlots, key: string) => (
-    <View key={key} style={styles.dayColumn}>
+  const renderDayColumn = (day: DaySlots, key: string, isEditMode: boolean = false) => (
+    <View key={key} style={isEditMode ? styles.dayColumnEdit : styles.dayColumn}>
       <View style={styles.dayHeader}>
         <Text style={styles.dayName}>{day.dayName}</Text>
         <Text style={styles.dayNumber}>{day.dayNumber}</Text>
@@ -748,9 +802,9 @@ export default function ActivityCalendar({
           <TouchableOpacity
             onPress={() => navigate(-1)}
             style={styles.navButton}
-            disabled={mode !== 'edit' && pageIndex === 0}
+            disabled={!canGoLeft}
           >
-            <IconSymbol name="chevron.left" size={20} color={colors.text} />
+            <IconSymbol name="chevron.left" size={20} color={canGoLeft ? colors.text : colors.border} />
           </TouchableOpacity>
 
           <Text style={styles.weekTitle}>{getWeekTitle()}</Text>
@@ -758,9 +812,9 @@ export default function ActivityCalendar({
           <TouchableOpacity
             onPress={() => navigate(1)}
             style={styles.navButton}
-            disabled={mode !== 'edit' && pageIndex >= dayPages.length - 1}
+            disabled={!canGoRight}
           >
-            <IconSymbol name="chevron.right" size={20} color={colors.text} />
+            <IconSymbol name="chevron.right" size={20} color={canGoRight ? colors.text : colors.border} />
           </TouchableOpacity>
         </View>
       </View>
@@ -775,33 +829,14 @@ export default function ActivityCalendar({
         </View>
       ) : mode === 'edit' ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={styles.weekContainer}>
-            <View style={styles.daysRow}>{weekDays.map((day, i) => renderDayColumn(day, `edit-${i}`))}</View>
+          <View style={styles.weekContainerEdit}>
+            <View style={styles.daysRowEdit}>{weekDays.map((day, i) => renderDayColumn(day, `edit-${i}`, true))}</View>
           </View>
-        </ScrollView>
-      ) : canScrollDays ? (
-        <ScrollView
-          ref={r => {
-            scrollRef.current = r;
-          }}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          onLayout={e => setScrollWidth(e.nativeEvent.layout.width)}
-          onMomentumScrollEnd={onHorizontalScrollEnd}
-        >
-          {dayPages.map((page, pIdx) => (
-            <View key={`page-${pIdx}`} style={styles.weekPage}>
-              <View style={styles.weekContainer}>
-                <View style={styles.daysRow}>{page.map((day, i) => renderDayColumn(day, `p${pIdx}-${i}`))}</View>
-              </View>
-            </View>
-          ))}
         </ScrollView>
       ) : (
         <View style={styles.weekPageNoScroll}>
           <View style={styles.weekContainer}>
-            <View style={styles.daysRow}>{dayPages[0].map((day, i) => renderDayColumn(day, `nos-${i}`))}</View>
+            <View style={styles.daysRow}>{currentPage.map((day, i) => renderDayColumn(day, `sel-${i}`))}</View>
           </View>
         </View>
       )}
@@ -973,12 +1008,25 @@ const styles = StyleSheet.create({
   },
 
   weekContainer: {
+    width: '100%',
+  },
+  weekContainerEdit: {
     minWidth: '100%',
   },
   daysRow: {
     flexDirection: 'row',
+    justifyContent: 'flex-start',
+    gap: 8,
+  },
+  daysRowEdit: {
+    flexDirection: 'row',
   },
   dayColumn: {
+    flex: 1,
+    maxWidth: '31%', // ~1/3 moins les gaps (toujours 3 colonnes même si moins de dates)
+    minWidth: '31%',
+  },
+  dayColumnEdit: {
     width: 80,
     marginRight: 8,
   },
@@ -1083,12 +1131,9 @@ const styles = StyleSheet.create({
 
   weekPage: {
     width: '100%',
-    flexDirection: 'row',
   },
   weekPageNoScroll: {
     width: '100%',
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
   },
 
   slotParticipantBadge: {

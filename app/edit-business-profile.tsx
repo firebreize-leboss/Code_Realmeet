@@ -280,7 +280,7 @@ export default function EditBusinessProfileScreen() {
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <IconSymbol name="chevron.left" size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Modifier le profil</Text>
+          <View style={{ flex: 1 }} />
           <TouchableOpacity
             onPress={handleSave}
             disabled={saving}
@@ -639,20 +639,12 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   backButton: {
     padding: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
   },
   saveButton: {
     padding: 8,

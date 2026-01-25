@@ -493,7 +493,7 @@ export default function UserProfileScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <IconSymbol name="chevron.left" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Profil</Text>
+        <View style={{ flex: 1 }} />
         <TouchableOpacity onPress={() => setShowOptionsModal(true)} style={styles.optionsButton}>
           <IconSymbol name="ellipsis" size={24} color={colors.text} />
         </TouchableOpacity>
@@ -812,17 +812,11 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
   backButton: {
     padding: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
   },
   optionsButton: {
     padding: 8,

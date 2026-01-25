@@ -294,7 +294,7 @@ export default function MyActivitiesScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <IconSymbol name="chevron.left" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Mes activités</Text>
+        <View style={{ flex: 1 }} />
         <TouchableOpacity
           onPress={() => router.push('/create-activity')}
           style={styles.addButton}
@@ -370,18 +370,12 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
   backButton: {
     padding: 8,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.text,
   },
   addButton: {
     padding: 8,

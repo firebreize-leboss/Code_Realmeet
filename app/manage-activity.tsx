@@ -100,6 +100,7 @@ export default function ManageActivityScreen() {
 
       const slotIds = slotsData?.map(s => s.id) || [];
 
+      // Récupérer les participants depuis slot_participants
       const { data: participantsData, error: participantsError } = await supabase
         .from('slot_participants')
         .select(`
@@ -117,7 +118,59 @@ export default function ManageActivityScreen() {
         `)
         .in('slot_id', slotIds.length > 0 ? slotIds : ['00000000-0000-0000-0000-000000000000']);
 
-      console.log('Participants chargés:', participantsData?.length, participantsError);
+      // Récupérer aussi les membres des groupes (slot_group_members via slot_groups)
+      // Car les inscriptions au planning peuvent être stockées directement dans slot_group_members
+      const { data: slotGroupsWithMembers } = await supabase
+        .from('slot_groups')
+        .select(`
+          id,
+          slot_id,
+          slot_group_members (
+            id,
+            user_id,
+            created_at,
+            profiles:user_id (
+              full_name,
+              avatar_url
+            )
+          )
+        `)
+        .in('slot_id', slotIds.length > 0 ? slotIds : ['00000000-0000-0000-0000-000000000000']);
+
+      // Fusionner les participants de slot_participants et slot_group_members
+      // en évitant les doublons (basé sur user_id + slot_id)
+      const participantsFromSlotParticipants = participantsData || [];
+      const participantsFromGroups: any[] = [];
+      const seenUserSlotCombos = new Set<string>();
+
+      // D'abord ajouter les participants de slot_participants
+      participantsFromSlotParticipants.forEach(p => {
+        seenUserSlotCombos.add(`${p.user_id}-${p.slot_id}`);
+      });
+
+      // Ensuite ajouter les membres de groupes qui ne sont pas déjà dans slot_participants
+      (slotGroupsWithMembers || []).forEach(group => {
+        (group.slot_group_members || []).forEach((member: any) => {
+          const key = `${member.user_id}-${group.slot_id}`;
+          if (!seenUserSlotCombos.has(key)) {
+            seenUserSlotCombos.add(key);
+            participantsFromGroups.push({
+              id: member.id,
+              user_id: member.user_id,
+              slot_id: group.slot_id,
+              created_at: member.created_at,
+              profiles: member.profiles,
+              activity_slots: { date: slotsData?.find(s => s.id === group.slot_id)?.date },
+            });
+          }
+        });
+      });
+
+      const allParticipantsData = [...participantsFromSlotParticipants, ...participantsFromGroups];
+
+      console.log('Participants chargés (slot_participants):', participantsData?.length, participantsError);
+      console.log('Participants chargés (slot_group_members):', participantsFromGroups.length);
+      console.log('Total participants:', allParticipantsData.length);
       
       const { data: conversations } = await supabase
         .from('conversations')
@@ -134,7 +187,7 @@ export default function ManageActivityScreen() {
       const slotsWithGroups = new Set(slotGroupsData?.map(sg => sg.slot_id) || []);
 
       const slots: SlotStats[] = (slotsData || []).map(slot => {
-        const slotParticipants = participantsData?.filter(p => p.slot_id === slot.id) || [];
+        const slotParticipants = allParticipantsData.filter(p => p.slot_id === slot.id);
         return {
           id: slot.id,
           date: new Date(slot.date).toLocaleDateString('fr-FR', { 
@@ -152,7 +205,7 @@ export default function ManageActivityScreen() {
         };
       });
 
-      const totalParticipants = participantsData?.length || 0;
+      const totalParticipants = allParticipantsData.length;
       const totalRevenue = totalParticipants * (activityData.prix || 0);
 
       setActivity({
@@ -170,7 +223,7 @@ export default function ManageActivityScreen() {
         slots,
       });
 
-      const formattedParticipants: Participant[] = (participantsData || []).map((p: any) => ({
+      const formattedParticipants: Participant[] = allParticipantsData.map((p: any) => ({
         id: p.id, // Utiliser l'ID de l'inscription, pas l'user_id, pour permettre plusieurs entrées du même utilisateur
         userId: p.user_id, // Garder l'userId pour naviguer vers le profil
         name: p.profiles?.full_name || 'Participant',
@@ -330,7 +383,7 @@ export default function ManageActivityScreen() {
         <TouchableOpacity style={styles.headerButton} onPress={() => router.back()}>
           <IconSymbol name="chevron.left" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Gestion</Text>
+        <View style={{ flex: 1 }} />
         <TouchableOpacity style={styles.headerButton} onPress={handleEditActivity}>
           <IconSymbol name="pencil" size={20} color={colors.text} />
         </TouchableOpacity>
@@ -652,7 +705,6 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -664,11 +716,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
   },
   scrollView: {
     flex: 1,

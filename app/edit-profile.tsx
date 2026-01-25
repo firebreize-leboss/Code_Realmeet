@@ -1,5 +1,6 @@
 // app/edit-profile.tsx
 // Écran d'édition de profil avec intention et personality_tags
+// Design Glassmorphism comme profile.tsx
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -12,6 +13,7 @@ import {
   Image,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -19,11 +21,11 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { InterestSelector } from '@/components/InterestSelector';
 import { IntentionSelector } from '@/components/IntentionSelector';
 import { PersonalityTagsSelector } from '@/components/PersonalityTagsSelector';
-import { colors, commonStyles } from '@/styles/commonStyles';
 import { useAuth } from '@/contexts/AuthContext';
 import { userService } from '@/services/user.service';
 import { storageService } from '@/services/storage.service';
 import { UserIntention } from '@/lib/database.types';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function EditProfileScreen() {
   const { user, profile, refreshProfile } = useAuth();
@@ -111,45 +113,49 @@ export default function EditProfileScreen() {
   };
 
   return (
-    <SafeAreaView style={commonStyles.container} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <IconSymbol name="chevron.left" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Modifier le profil</Text>
-        <View style={styles.placeholder} />
-      </View>
-
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* Avatar */}
-        <View style={styles.avatarSection}>
-          <TouchableOpacity onPress={handleImagePick}>
-            <Image
-              source={{ uri: profileImage || 'https://via.placeholder.com/120' }}
-              style={styles.avatar}
-            />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={handleImagePick} style={styles.changePhotoButton}>
-            <IconSymbol name="camera.fill" size={18} color={colors.primary} />
-            <Text style={styles.changePhotoText}>Changer la photo</Text>
+    <LinearGradient
+      colors={['#60A5FA', '#818CF8', '#C084FC']}
+      style={styles.container}
+    >
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
+            <IconSymbol name="chevron.left" size={22} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
 
-        <View style={styles.form}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Avatar */}
+          <View style={styles.avatarSection}>
+            <TouchableOpacity onPress={handleImagePick}>
+              <Image
+                source={{ uri: profileImage || 'https://via.placeholder.com/120' }}
+                style={styles.avatar}
+              />
+              <View style={styles.cameraOverlay}>
+                <IconSymbol name="camera.fill" size={24} color="#FFFFFF" />
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleImagePick} style={styles.changePhotoButton}>
+              <Text style={styles.changePhotoText}>Changer la photo</Text>
+            </TouchableOpacity>
+          </View>
+
           {/* FULL NAME */}
-          <View style={styles.inputGroup}>
+          <View style={styles.glassCard}>
             <Text style={styles.label}>Nom complet</Text>
             <View style={styles.inputContainer}>
-              <IconSymbol name="person.fill" size={20} color={colors.textSecondary} />
+              <IconSymbol name="person.fill" size={20} color="rgba(255,255,255,0.7)" />
               <TextInput
-                style={styles.inputInside}
+                style={styles.input}
                 placeholder="John Doe"
-                placeholderTextColor={colors.textSecondary}
+                placeholderTextColor="rgba(255,255,255,0.5)"
                 value={fullName}
                 onChangeText={setFullName}
               />
@@ -157,12 +163,12 @@ export default function EditProfileScreen() {
           </View>
 
           {/* BIO */}
-          <View style={styles.inputGroup}>
+          <View style={styles.glassCard}>
             <Text style={styles.label}>Bio</Text>
             <TextInput
-              style={[styles.inputContainer, styles.textArea, styles.textInput]}
+              style={[styles.inputContainer, styles.textArea]}
               placeholder="Parlez-nous de vous..."
-              placeholderTextColor={colors.textSecondary}
+              placeholderTextColor="rgba(255,255,255,0.5)"
               value={bio}
               onChangeText={setBio}
               multiline
@@ -172,14 +178,14 @@ export default function EditProfileScreen() {
           </View>
 
           {/* CITY */}
-          <View style={styles.inputGroup}>
+          <View style={styles.glassCard}>
             <Text style={styles.label}>Ville</Text>
             <View style={styles.inputContainer}>
-              <IconSymbol name="location.fill" size={20} color={colors.textSecondary} />
+              <IconSymbol name="location.fill" size={20} color="rgba(255,255,255,0.7)" />
               <TextInput
-                style={styles.inputInside}
+                style={styles.input}
                 placeholder="Paris"
-                placeholderTextColor={colors.textSecondary}
+                placeholderTextColor="rgba(255,255,255,0.5)"
                 value={city}
                 onChangeText={setCity}
               />
@@ -187,14 +193,14 @@ export default function EditProfileScreen() {
           </View>
 
           {/* PHONE */}
-          <View style={styles.inputGroup}>
+          <View style={styles.glassCard}>
             <Text style={styles.label}>Téléphone</Text>
             <View style={styles.inputContainer}>
-              <IconSymbol name="phone.fill" size={20} color={colors.textSecondary} />
+              <IconSymbol name="phone.fill" size={20} color="rgba(255,255,255,0.7)" />
               <TextInput
-                style={styles.inputInside}
+                style={styles.input}
                 placeholder="+33 6 12 34 56 78"
-                placeholderTextColor={colors.textSecondary}
+                placeholderTextColor="rgba(255,255,255,0.5)"
                 value={phone}
                 onChangeText={setPhone}
                 keyboardType="phone-pad"
@@ -203,7 +209,7 @@ export default function EditProfileScreen() {
           </View>
 
           {/* INTENTION */}
-          <View style={styles.inputGroup}>
+          <View style={styles.glassCard}>
             <Text style={styles.label}>Je recherche sur RealMeet</Text>
             <IntentionSelector
               selectedIntention={intention}
@@ -212,7 +218,7 @@ export default function EditProfileScreen() {
           </View>
 
           {/* PERSONALITY TAGS */}
-          <View style={styles.inputGroup}>
+          <View style={styles.glassCard}>
             <Text style={styles.label}>Personnalité</Text>
             <PersonalityTagsSelector
               selectedTags={personalityTags}
@@ -222,7 +228,7 @@ export default function EditProfileScreen() {
           </View>
 
           {/* INTERESTS */}
-          <View style={styles.inputGroup}>
+          <View style={styles.glassCard}>
             <Text style={styles.label}>Centres d'intérêt</Text>
             <InterestSelector
               selectedInterests={interests}
@@ -230,121 +236,151 @@ export default function EditProfileScreen() {
               maxSelection={5}
             />
           </View>
-        </View>
 
-        {/* SAVE BUTTON */}
-        <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={loading}>
-          {loading ? (
-            <ActivityIndicator color={colors.background} />
-          ) : (
-            <Text style={styles.saveButtonText}>Enregistrer</Text>
-          )}
-        </TouchableOpacity>
-      </ScrollView>
-    </SafeAreaView>
+          {/* SAVE BUTTON */}
+          <TouchableOpacity
+            style={[styles.saveButton, loading && styles.saveButtonDisabled]}
+            onPress={handleSave}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#818CF8" />
+            ) : (
+              <Text style={styles.saveButtonText}>Enregistrer</Text>
+            )}
+          </TouchableOpacity>
+        </ScrollView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  safeArea: {
+    flex: 1,
+  },
+
+  // Header
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  backButton: {
+  headerButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.card,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  placeholder: {
-    width: 40,
-  },
+
+  // ScrollView
   scrollView: {
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
+    paddingHorizontal: 16,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 60,
+    gap: 16,
   },
+
+  // Avatar
   avatarSection: {
     alignItems: 'center',
-    paddingVertical: 24,
+    paddingVertical: 20,
   },
   avatar: {
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: colors.border,
-    marginBottom: 16,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.4)',
+  },
+  cameraOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.5)',
   },
   changePhotoButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    marginTop: 12,
   },
   changePhotoText: {
     fontSize: 15,
-    color: colors.primary,
+    color: '#FFFFFF',
     fontWeight: '600',
   },
-  form: {
-    gap: 20,
-  },
-  inputGroup: {
-    gap: 8,
+
+  // Glass Card
+  glassCard: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   label: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text,
+    color: '#FFFFFF',
+    marginBottom: 12,
   },
+
+  // Input
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.card,
-    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 4,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(255,255,255,0.2)',
     gap: 12,
   },
-  inputInside: {
+  input: {
     flex: 1,
     fontSize: 16,
-    color: colors.text,
+    color: '#FFFFFF',
     paddingVertical: 12,
-  },
-  textInput: {
-    fontSize: 16,
-    color: colors.text,
-    paddingHorizontal: 16,
   },
   textArea: {
     height: 100,
     alignItems: 'flex-start',
-    paddingVertical: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: '#FFFFFF',
+    textAlignVertical: 'top',
   },
+
+  // Save button
   saveButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
     paddingVertical: 16,
     alignItems: 'center',
-    marginTop: 32,
+    marginTop: 8,
+  },
+  saveButtonDisabled: {
+    opacity: 0.7,
   },
   saveButtonText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: colors.background,
+    fontWeight: '700',
+    color: '#818CF8',
   },
 });

@@ -241,8 +241,6 @@ export default function CreateActivityScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <IconSymbol name="xmark" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Créer une activité</Text>
-        <View style={styles.placeholder} />
       </View>
 
       <ScrollView
@@ -528,12 +526,9 @@ export default function CreateActivityScreen() {
 const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   backButton: {
     width: 40,
@@ -542,14 +537,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  placeholder: {
-    width: 40,
   },
   scrollView: {
     flex: 1,

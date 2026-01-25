@@ -9,6 +9,7 @@ import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
 import SwipeableTabView from '@/components/SwipeableTabView';
 import { useAuth } from '@/contexts/AuthContext';
 import { colors } from '@/styles/commonStyles';
+import { MapViewProvider, useMapView } from '@/contexts/MapViewContext';
 
 // Import des écrans
 import ProfileScreen from './profile';
@@ -86,14 +87,19 @@ const businessTabs: TabBarItem[] = [
   },
 ];
 
-export default function TabLayout() {
+// Composant interne qui utilise le contexte MapView
+function TabLayoutContent() {
   const { user, profile, loading } = useAuth();
   const router = useRouter();
+  const { isMapViewActive } = useMapView();
   const [currentTabIndex, setCurrentTabIndex] = useState(0);
   const [isRedirecting, setIsRedirecting] = useState(false);
 
   const isBusiness = profile?.account_type === 'business';
   const tabs = isBusiness ? businessTabs : userTabs;
+
+  // Désactiver le swipe quand on est sur le tab browse (index 1) et que la vue maps est active
+  const isSwipeEnabled = !(currentTabIndex === 1 && isMapViewActive);
 
   // Mémoiser les écrans pour éviter les re-renders inutiles
   const tabScreens = useMemo(() => {
@@ -150,7 +156,7 @@ export default function TabLayout() {
       <SwipeableTabView
         currentIndex={currentTabIndex}
         onIndexChange={handleIndexChange}
-        enabled={true}
+        enabled={isSwipeEnabled}
       >
         {tabScreens}
       </SwipeableTabView>
@@ -161,5 +167,14 @@ export default function TabLayout() {
         onTabPress={handleTabPress}
       />
     </View>
+  );
+}
+
+// Composant principal qui fournit le contexte MapView
+export default function TabLayout() {
+  return (
+    <MapViewProvider>
+      <TabLayoutContent />
+    </MapViewProvider>
   );
 }

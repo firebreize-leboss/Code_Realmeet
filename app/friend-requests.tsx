@@ -1,5 +1,6 @@
 // app/friend-requests.tsx
 // Page des demandes d'amis avec protection entreprise
+// Design Glassmorphism comme profile.tsx
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -11,13 +12,14 @@ import {
   Image,
   ActivityIndicator,
   Alert,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
-import { colors } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
 import { useBusinessRestrictions } from '@/hooks/useBusinessRestrictions';
+import { LinearGradient } from 'expo-linear-gradient';
 
 interface FriendRequest {
   id: string;
@@ -31,7 +33,7 @@ interface FriendRequest {
 export default function FriendRequestsScreen() {
   const router = useRouter();
   const { isBusiness } = useBusinessRestrictions();
-  
+
   const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<string | null>(null);
@@ -107,9 +109,9 @@ export default function FriendRequestsScreen() {
         .from('friend_requests')
         .update({ status: 'rejected' })
         .eq('id', requestId);
-        
+
       if (error) throw error;
-      
+
       setRequests(prev => prev.filter(req => req.id !== requestId));
     } catch (error) {
       console.error('Error rejecting friend request:', error);
@@ -124,7 +126,7 @@ export default function FriendRequestsScreen() {
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - date.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays === 1) return "Aujourd'hui";
     if (diffDays === 2) return 'Hier';
     if (diffDays <= 7) return `Il y a ${diffDays} jours`;
@@ -134,52 +136,57 @@ export default function FriendRequestsScreen() {
   // Écran de blocage pour les entreprises
   if (isBusiness) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <IconSymbol name="chevron.left" size={24} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Demandes d'amis</Text>
-          <View style={styles.placeholder} />
-        </View>
-        
-        <View style={styles.restrictedContainer}>
-          <IconSymbol name="building.2.fill" size={64} color={colors.textSecondary} />
-          <Text style={styles.restrictedTitle}>Fonctionnalité non disponible</Text>
-          <Text style={styles.restrictedText}>
-            Les comptes entreprise ne peuvent pas recevoir de demandes d'amis.
-            Les utilisateurs peuvent découvrir votre entreprise via vos activités.
-          </Text>
-        </View>
-      </SafeAreaView>
+      <LinearGradient
+        colors={['#60A5FA', '#818CF8', '#C084FC']}
+        style={styles.container}
+      >
+        <SafeAreaView style={styles.safeArea} edges={['top']}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
+              <IconSymbol name="chevron.left" size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.restrictedContainer}>
+            <View style={styles.glassCard}>
+              <IconSymbol name="building.2.fill" size={64} color="rgba(255,255,255,0.9)" />
+              <Text style={styles.restrictedTitle}>Fonctionnalité non disponible</Text>
+              <Text style={styles.restrictedText}>
+                Les comptes entreprise ne peuvent pas recevoir de demandes d'amis.
+                Les utilisateurs peuvent découvrir votre entreprise via vos activités.
+              </Text>
+            </View>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
     );
   }
 
   const renderRequestItem = ({ item }: { item: FriendRequest }) => {
     const isProcessing = processing === item.id;
-    
+
     return (
-      <View style={styles.requestItem}>
+      <View style={styles.glassCard}>
         <TouchableOpacity
           onPress={() => router.push(`/user-profile?id=${item.sender_id}`)}
           style={styles.userInfo}
         >
-          <Image 
-            source={{ uri: item.sender_avatar || 'https://via.placeholder.com/56' }} 
-            style={styles.userAvatar} 
+          <Image
+            source={{ uri: item.sender_avatar || 'https://via.placeholder.com/56' }}
+            style={styles.userAvatar}
           />
           <View style={styles.userDetails}>
             <Text style={styles.userName}>{item.sender_name}</Text>
             {item.sender_city && (
               <View style={styles.locationRow}>
-                <IconSymbol name="location.fill" size={14} color={colors.textSecondary} />
+                <IconSymbol name="location.fill" size={14} color="rgba(255,255,255,0.8)" />
                 <Text style={styles.userCity}>{item.sender_city}</Text>
               </View>
             )}
             <Text style={styles.requestDate}>{formatDate(item.created_at)}</Text>
           </View>
         </TouchableOpacity>
-        
+
         <View style={styles.actionButtons}>
           <TouchableOpacity
             style={[styles.rejectButton, isProcessing && styles.buttonDisabled]}
@@ -187,19 +194,19 @@ export default function FriendRequestsScreen() {
             disabled={isProcessing}
           >
             {isProcessing ? (
-              <ActivityIndicator size="small" color={colors.text} />
+              <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
               <Text style={styles.rejectButtonText}>Refuser</Text>
             )}
           </TouchableOpacity>
-          
+
           <TouchableOpacity
             style={[styles.acceptButton, isProcessing && styles.buttonDisabled]}
             onPress={() => handleAcceptRequest(item.id)}
             disabled={isProcessing}
           >
             {isProcessing ? (
-              <ActivityIndicator size="small" color={colors.background} />
+              <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
               <Text style={styles.acceptButtonText}>Accepter</Text>
             )}
@@ -210,92 +217,107 @@ export default function FriendRequestsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <IconSymbol name="chevron.left" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Demandes d'amis</Text>
-        <View style={styles.placeholder} />
-      </View>
-
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      ) : requests.length === 0 ? (
-        <View style={styles.emptyState}>
-          <IconSymbol name="person.crop.circle.badge.checkmark" size={64} color={colors.textSecondary} />
-          <Text style={styles.emptyText}>Aucune demande</Text>
-          <Text style={styles.emptySubtext}>
-            Vous n'avez pas de demandes d'amis en attente
-          </Text>
-          <TouchableOpacity 
-            style={styles.addFriendsButton}
-            onPress={() => router.push('/add-friends')}
-          >
-            <IconSymbol name="person.badge.plus" size={20} color={colors.background} />
-            <Text style={styles.addFriendsButtonText}>Ajouter des amis</Text>
+    <LinearGradient
+      colors={['#60A5FA', '#818CF8', '#C084FC']}
+      style={styles.container}
+    >
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
+            <IconSymbol name="chevron.left" size={22} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
-      ) : (
-        <FlatList
-          data={requests}
-          renderItem={renderRequestItem}
-          keyExtractor={item => item.id}
-          contentContainerStyle={styles.listContainer}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
-    </SafeAreaView>
+
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#FFFFFF" />
+            <Text style={styles.loadingText}>Chargement...</Text>
+          </View>
+        ) : requests.length === 0 ? (
+          <View style={styles.emptyState}>
+            <View style={styles.glassCard}>
+              <IconSymbol name="person.crop.circle.badge.checkmark" size={64} color="rgba(255,255,255,0.9)" />
+              <Text style={styles.emptyText}>Aucune demande</Text>
+              <Text style={styles.emptySubtext}>
+                Vous n'avez pas de demandes d'amis en attente
+              </Text>
+              <TouchableOpacity
+                style={styles.addFriendsButton}
+                onPress={() => router.push('/add-friends')}
+              >
+                <IconSymbol name="person.badge.plus" size={20} color="#FFFFFF" />
+                <Text style={styles.addFriendsButtonText}>Ajouter des amis</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <FlatList
+            data={requests}
+            renderItem={renderRequestItem}
+            keyExtractor={item => item.id}
+            contentContainerStyle={styles.listContainer}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
+  safeArea: {
+    flex: 1,
+  },
+
+  // Header
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  placeholder: {
+  headerButton: {
     width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
+
+  // Loading
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 12,
   },
+  loadingText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+
+  // Empty state
   emptyState: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 40,
+    paddingHorizontal: 20,
   },
   emptyText: {
     fontSize: 20,
-    fontWeight: '600',
-    color: colors.text,
+    fontWeight: '700',
+    color: '#FFFFFF',
     marginTop: 16,
   },
   emptySubtext: {
     fontSize: 15,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.9)',
     textAlign: 'center',
     marginTop: 8,
     lineHeight: 22,
@@ -304,27 +326,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: colors.primary,
+    backgroundColor: 'rgba(255,255,255,0.25)',
     paddingHorizontal: 24,
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: 18,
     marginTop: 24,
   },
   addFriendsButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.background,
+    color: '#FFFFFF',
   },
+
+  // Liste
   listContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 60,
+    gap: 16,
   },
-  requestItem: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
+
+  // Glass Card
+  glassCard: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
+
+  // User info
   userInfo: {
     flexDirection: 'row',
     gap: 14,
@@ -333,7 +364,9 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: colors.border,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.4)',
   },
   userDetails: {
     flex: 1,
@@ -343,7 +376,7 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text,
+    color: '#FFFFFF',
   },
   locationRow: {
     flexDirection: 'row',
@@ -352,13 +385,15 @@ const styles = StyleSheet.create({
   },
   userCity: {
     fontSize: 13,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.8)',
   },
   requestDate: {
     fontSize: 12,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.7)',
     marginTop: 2,
   },
+
+  // Action buttons
   actionButtons: {
     flexDirection: 'row',
     gap: 12,
@@ -366,52 +401,53 @@ const styles = StyleSheet.create({
   },
   rejectButton: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: 'rgba(255,255,255,0.15)',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(255,255,255,0.3)',
     paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   rejectButtonText: {
     fontSize: 15,
     fontWeight: '600',
-    color: colors.text,
+    color: '#FFFFFF',
   },
   acceptButton: {
     flex: 1,
-    backgroundColor: colors.primary,
+    backgroundColor: 'rgba(255,255,255,0.3)',
     paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   acceptButtonText: {
     fontSize: 15,
     fontWeight: '600',
-    color: colors.background,
+    color: '#FFFFFF',
   },
   buttonDisabled: {
     opacity: 0.5,
   },
-  // Styles pour l'écran restreint
+
+  // Restricted
   restrictedContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 40,
+    paddingHorizontal: 20,
   },
   restrictedTitle: {
     fontSize: 20,
-    fontWeight: '600',
-    color: colors.text,
+    fontWeight: '700',
+    color: '#FFFFFF',
     marginTop: 20,
     textAlign: 'center',
   },
   restrictedText: {
     fontSize: 15,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.9)',
     textAlign: 'center',
     marginTop: 12,
     lineHeight: 22,

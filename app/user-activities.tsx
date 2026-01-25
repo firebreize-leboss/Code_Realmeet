@@ -113,10 +113,6 @@ export default function UserActivitiesScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <IconSymbol name="chevron.left" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>
-          {name ? `Activités de ${decodeURIComponent(name as string)}` : 'Activités'}
-        </Text>
-        <View style={{ width: 40 }} />
       </View>
 
       {loading ? (
@@ -145,24 +141,14 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   backButton: {
     width: 40,
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
-    flex: 1,
-    textAlign: 'center',
   },
   loadingContainer: {
     flex: 1,

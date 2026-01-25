@@ -241,8 +241,6 @@ export default function SettingsScreen() {
           >
             <IconSymbol name="chevron.left" size={22} color="#FFFFFF" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Paramètres</Text>
-          <View style={styles.placeholder} />
         </View>
 
         <ScrollView
@@ -395,7 +393,6 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 16,
@@ -407,14 +404,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  placeholder: {
-    width: 40,
   },
   scrollView: {
     flex: 1,

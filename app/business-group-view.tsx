@@ -353,15 +353,8 @@ export default function BusinessGroupViewScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <IconSymbol name="chevron.left" size={24} color={colors.text} />
         </TouchableOpacity>
-        
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {decodeURIComponent(activityName as string || 'Groupe')}
-          </Text>
-          <Text style={styles.headerSubtitle}>{participants.length} participants</Text>
-        </View>
-
-        <TouchableOpacity 
+        <View style={{ flex: 1 }} />
+        <TouchableOpacity
           onPress={() => setShowParticipants(!showParticipants)}
           style={styles.participantsButton}
         >
@@ -471,24 +464,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   backButton: {
     padding: 8,
-  },
-  headerCenter: {
-    flex: 1,
-    marginHorizontal: 12,
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: colors.textSecondary,
   },
   participantsButton: {
     padding: 8,

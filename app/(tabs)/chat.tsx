@@ -481,9 +481,7 @@ export default function ChatScreen() {
       <View style={styles.friendAvatarContainer}>
         <Image source={{ uri: item.avatar }} style={styles.friendAvatar} />
         {item.is_online && (
-          <View style={styles.friendOnlineIndicator}>
-            <OnlinePulse size={14} />
-          </View>
+          <View style={styles.friendOnlineIndicator} />
         )}
       </View>
       <View style={styles.friendInfo}>
@@ -753,78 +751,107 @@ export default function ChatScreen() {
         )}
       </ScrollView>
 
-      {/* Modal de sélection d'ami */}
+      {/* Modal de sélection d'ami - Style Glassmorphism */}
       <Modal
         visible={showFriendsModal}
         animationType="slide"
         presentationStyle="pageSheet"
         onRequestClose={() => setShowFriendsModal(false)}
       >
-        <SafeAreaView style={styles.modalContainer} edges={['top', 'bottom']}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Nouvelle conversation</Text>
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => setShowFriendsModal(false)}
-            >
-              <IconSymbol name="xmark" size={24} color="#374151" />
-            </TouchableOpacity>
-          </View>
+        <LinearGradient
+          colors={['#60A5FA', '#818CF8', '#C084FC']}
+          style={styles.modalGradient}
+        >
+          <SafeAreaView style={styles.modalContainer} edges={['top', 'bottom']}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Nouvelle conversation</Text>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setShowFriendsModal(false)}
+              >
+                <IconSymbol name="xmark" size={22} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
 
-          {friendsLoading ? (
-            <View style={styles.emptyState}>
-              <ActivityIndicator size="large" color="#818CF8" />
-              <Text style={styles.emptyText}>Chargement...</Text>
-            </View>
-          ) : friends.length === 0 ? (
-            <View style={styles.emptyState}>
-              <IconSymbol name="person.2.fill" size={64} color="#D1D5DB" />
-              <Text style={styles.emptyText}>Aucun ami</Text>
-              <Text style={styles.emptySubtext}>
-                Ajoutez des amis pour démarrer une conversation
-              </Text>
-            </View>
-          ) : (
-            <>
-              <View style={styles.modalSearchContainer}>
-                <IconSymbol name="magnifyingglass" size={20} color="#9CA3AF" />
-                <TextInput
-                  style={styles.modalSearchInput}
-                  placeholder="Rechercher un contact..."
-                  placeholderTextColor="#9CA3AF"
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
+            {friendsLoading ? (
+              <View style={styles.modalEmptyState}>
+                <ActivityIndicator size="large" color="#FFFFFF" />
+                <Text style={styles.modalEmptyText}>Chargement...</Text>
+              </View>
+            ) : friends.length === 0 ? (
+              <View style={styles.modalEmptyState}>
+                <View style={styles.glassCard}>
+                  <IconSymbol name="person.2.fill" size={64} color="rgba(255,255,255,0.9)" />
+                  <Text style={styles.modalEmptyText}>Aucun ami</Text>
+                  <Text style={styles.modalEmptySubtext}>
+                    Ajoutez des amis pour démarrer une conversation
+                  </Text>
+                </View>
+              </View>
+            ) : (
+              <>
+                <View style={styles.modalSearchContainer}>
+                  <IconSymbol name="magnifyingglass" size={20} color="rgba(255,255,255,0.7)" />
+                  <TextInput
+                    style={styles.modalSearchInput}
+                    placeholder="Rechercher un contact..."
+                    placeholderTextColor="rgba(255,255,255,0.6)"
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                  />
+                </View>
+
+                <View style={styles.modalInfoBar}>
+                  <IconSymbol name="info.circle.fill" size={14} color="#FFFFFF" />
+                  <Text style={styles.modalInfoBarText}>
+                    Vous pouvez contacter les personnes avec qui vous avez fait une activité
+                  </Text>
+                </View>
+
+                <FlatList
+                  data={friends.filter(c =>
+                    c.name.toLowerCase().includes(searchQuery.toLowerCase())
+                  )}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={styles.glassFriendItem}
+                      onPress={() => handleCreateConversation(item.id)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.glassFriendAvatarContainer}>
+                        <Image source={{ uri: item.avatar }} style={styles.glassFriendAvatar} />
+                        {item.is_online && (
+                          <View style={styles.glassFriendOnlineIndicator} />
+                        )}
+                      </View>
+                      <View style={styles.glassFriendInfo}>
+                        <Text style={styles.glassFriendName}>{item.name}</Text>
+                        <Text style={styles.glassFriendStatus}>
+                          {item.is_online ? 'En ligne' : 'Hors ligne'}
+                        </Text>
+                      </View>
+                      <IconSymbol name="chevron.right" size={20} color="rgba(255,255,255,0.7)" />
+                    </TouchableOpacity>
+                  )}
+                  keyExtractor={item => item.id}
+                  contentContainerStyle={styles.glassFriendsList}
+                  showsVerticalScrollIndicator={false}
+                  ListEmptyComponent={
+                    <View style={styles.modalEmptyState}>
+                      <View style={styles.glassCard}>
+                        <IconSymbol name="person.2" size={48} color="rgba(255,255,255,0.9)" />
+                        <Text style={styles.modalEmptyText}>Aucun ami trouvé</Text>
+                        <Text style={styles.modalEmptySubtext}>
+                          Ajoutez des amis pour démarrer une conversation
+                        </Text>
+                      </View>
+                    </View>
+                  }
                 />
-              </View>
-
-              <View style={styles.modalInfoBar}>
-                <IconSymbol name="info.circle.fill" size={14} color="#818CF8" />
-                <Text style={styles.modalInfoBarText}>
-                  Vous pouvez contacter les personnes avec qui vous avez fait une activité
-                </Text>
-              </View>
-
-              <FlatList
-                data={friends.filter(c =>
-                  c.name.toLowerCase().includes(searchQuery.toLowerCase())
-                )}
-                renderItem={renderFriendItem}
-                keyExtractor={item => item.id}
-                contentContainerStyle={styles.friendsList}
-                showsVerticalScrollIndicator={false}
-                ListEmptyComponent={
-                  <View style={styles.emptyState}>
-                    <IconSymbol name="person.2" size={48} color="#D1D5DB" />
-                    <Text style={styles.emptyText}>Aucun ami trouvé</Text>
-                    <Text style={styles.emptySubtext}>
-                      Ajoutez des amis pour démarrer une conversation
-                    </Text>
-                  </View>
-                }
-              />
-            </>
-          )}
-        </SafeAreaView>
+              </>
+            )}
+          </SafeAreaView>
+        </LinearGradient>
       </Modal>
     </SafeAreaView>
   );
@@ -1147,10 +1174,12 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
-  // Modal styles
+  // Modal styles - Glassmorphism
+  modalGradient: {
+    flex: 1,
+  },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1158,54 +1187,133 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 16,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1F2937',
+    color: '#FFFFFF',
   },
   closeButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#F3F4F6',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalSearchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F3F4F6',
+    backgroundColor: 'rgba(255,255,255,0.18)',
     marginHorizontal: 16,
     marginVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 16,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   modalSearchInput: {
     flex: 1,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: '#374151',
+    fontSize: 16,
+    color: '#FFFFFF',
   },
   modalInfoBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EFF6FF',
+    backgroundColor: 'rgba(255,255,255,0.15)',
     marginHorizontal: 16,
     marginBottom: 12,
-    padding: 12,
-    borderRadius: 10,
-    gap: 8,
+    padding: 14,
+    borderRadius: 14,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   modalInfoBarText: {
     flex: 1,
     fontSize: 13,
-    color: '#818CF8',
+    color: '#FFFFFF',
     fontWeight: '500',
+  },
+  modalEmptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  modalEmptyText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginTop: 16,
+  },
+  modalEmptySubtext: {
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.9)',
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 22,
+  },
+  glassCard: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 20,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+    alignItems: 'center',
+  },
+  glassFriendsList: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    gap: 10,
+  },
+  glassFriendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 18,
+    gap: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  glassFriendAvatarContainer: {
+    position: 'relative',
+  },
+  glassFriendAvatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.4)',
+  },
+  glassFriendOnlineIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#22C55E',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.5)',
+  },
+  glassFriendInfo: {
+    flex: 1,
+  },
+  glassFriendName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  glassFriendStatus: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 2,
   },
   friendsList: {
     paddingHorizontal: 16,
