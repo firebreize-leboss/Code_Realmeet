@@ -186,18 +186,42 @@ export default function ManageActivityScreen() {
       
       const slotsWithGroups = new Set(slotGroupsData?.map(sg => sg.slot_id) || []);
 
+      // Compter les participants uniques par slot (comme dans ActivityCalendar.tsx)
+      // en utilisant un Set<string> pour dédupliquer user_id + slot_id
+      const countBySlotId: Record<string, number> = {};
+      const seenUserSlotCombosForCount = new Set<string>();
+
+      // D'abord les participants de slot_participants
+      (participantsData || []).forEach((p: any) => {
+        const key = `${p.user_id}-${p.slot_id}`;
+        if (!seenUserSlotCombosForCount.has(key)) {
+          seenUserSlotCombosForCount.add(key);
+          countBySlotId[p.slot_id] = (countBySlotId[p.slot_id] || 0) + 1;
+        }
+      });
+
+      // Ensuite les membres des groupes (slot_id vient de slot_groups, pas du membre)
+      (slotGroupsWithMembers || []).forEach((group: any) => {
+        (group.slot_group_members || []).forEach((member: any) => {
+          const key = `${member.user_id}-${group.slot_id}`;
+          if (!seenUserSlotCombosForCount.has(key)) {
+            seenUserSlotCombosForCount.add(key);
+            countBySlotId[group.slot_id] = (countBySlotId[group.slot_id] || 0) + 1;
+          }
+        });
+      });
+
       const slots: SlotStats[] = (slotsData || []).map(slot => {
-        const slotParticipants = allParticipantsData.filter(p => p.slot_id === slot.id);
         return {
           id: slot.id,
-          date: new Date(slot.date).toLocaleDateString('fr-FR', { 
-            weekday: 'short', 
-            day: 'numeric', 
-            month: 'short' 
+          date: new Date(slot.date).toLocaleDateString('fr-FR', {
+            weekday: 'short',
+            day: 'numeric',
+            month: 'short'
           }),
           timeStart: slot.time_start?.slice(0, 5) || slot.time?.slice(0, 5) || '',
           timeEnd: slot.time_end?.slice(0, 5) || '',
-          participants: slotParticipants.length,
+          participants: countBySlotId[slot.id] || 0,
           maxParticipants: slot.max_participants || activityData.max_participants,
           hasGroup: convMap.has(slot.id),
           groupId: convMap.get(slot.id),
