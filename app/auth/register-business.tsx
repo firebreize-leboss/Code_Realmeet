@@ -17,8 +17,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
-import { colors, commonStyles } from '@/styles/commonStyles';
+import { colors } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const BUSINESS_CATEGORIES = [
   'Sport & Fitness',
@@ -63,7 +64,7 @@ export default function RegisterBusinessScreen() {
 
   const validateStep1 = () => {
     const cleanedEmail = email.trim().toLowerCase();
-    
+
     if (!cleanedEmail) {
       Alert.alert('Erreur', 'L\'email est requis');
       return false;
@@ -118,7 +119,7 @@ export default function RegisterBusinessScreen() {
     try {
       // Nettoyer l'email
       const cleanedEmail = email.trim().toLowerCase();
-      
+
       // 1. Create auth account
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: cleanedEmail,
@@ -192,7 +193,7 @@ export default function RegisterBusinessScreen() {
             ]}
           >
             {step > s ? (
-              <IconSymbol name="checkmark" size={14} color={colors.background} />
+              <IconSymbol name="checkmark" size={14} color="#818CF8" />
             ) : (
               <Text style={[styles.stepNumber, step >= s && styles.stepNumberActive]}>
                 {s}
@@ -217,13 +218,13 @@ export default function RegisterBusinessScreen() {
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>Email professionnel</Text>
         <View style={styles.inputWrapper}>
-          <IconSymbol name="envelope.fill" size={20} color={colors.textSecondary} />
+          <IconSymbol name="envelope.fill" size={20} color="rgba(255,255,255,0.7)" />
           <TextInput
             style={styles.input}
             value={email}
             onChangeText={setEmail}
             placeholder="contact@entreprise.com"
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor="rgba(255,255,255,0.5)"
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
@@ -234,20 +235,20 @@ export default function RegisterBusinessScreen() {
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>Mot de passe</Text>
         <View style={styles.inputWrapper}>
-          <IconSymbol name="lock.fill" size={20} color={colors.textSecondary} />
+          <IconSymbol name="lock.fill" size={20} color="rgba(255,255,255,0.7)" />
           <TextInput
             style={styles.input}
             value={password}
             onChangeText={setPassword}
             placeholder="••••••••"
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor="rgba(255,255,255,0.5)"
             secureTextEntry={!showPassword}
           />
           <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
             <IconSymbol
               name={showPassword ? 'eye.slash.fill' : 'eye.fill'}
               size={20}
-              color={colors.textSecondary}
+              color="rgba(255,255,255,0.7)"
             />
           </TouchableOpacity>
         </View>
@@ -256,13 +257,13 @@ export default function RegisterBusinessScreen() {
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>Confirmer le mot de passe</Text>
         <View style={styles.inputWrapper}>
-          <IconSymbol name="lock.fill" size={20} color={colors.textSecondary} />
+          <IconSymbol name="lock.fill" size={20} color="rgba(255,255,255,0.7)" />
           <TextInput
             style={styles.input}
             value={confirmPassword}
             onChangeText={setConfirmPassword}
             placeholder="••••••••"
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor="rgba(255,255,255,0.5)"
             secureTextEntry={!showPassword}
           />
         </View>
@@ -273,7 +274,7 @@ export default function RegisterBusinessScreen() {
           <IconSymbol
             name={password.length >= 6 ? 'checkmark.circle.fill' : 'circle'}
             size={16}
-            color={password.length >= 6 ? '#10B981' : colors.textSecondary}
+            color={password.length >= 6 ? '#10B981' : 'rgba(255,255,255,0.5)'}
           />
           <Text style={styles.hintText}>Au moins 6 caractères</Text>
         </View>
@@ -281,7 +282,7 @@ export default function RegisterBusinessScreen() {
           <IconSymbol
             name={password === confirmPassword && password.length > 0 ? 'checkmark.circle.fill' : 'circle'}
             size={16}
-            color={password === confirmPassword && password.length > 0 ? '#10B981' : colors.textSecondary}
+            color={password === confirmPassword && password.length > 0 ? '#10B981' : 'rgba(255,255,255,0.5)'}
           />
           <Text style={styles.hintText}>Les mots de passe correspondent</Text>
         </View>
@@ -299,13 +300,13 @@ export default function RegisterBusinessScreen() {
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>Nom de l'entreprise *</Text>
         <View style={styles.inputWrapper}>
-          <IconSymbol name="building.2.fill" size={20} color={colors.textSecondary} />
+          <IconSymbol name="building.2.fill" size={20} color="rgba(255,255,255,0.7)" />
           <TextInput
             style={styles.input}
             value={businessName}
             onChangeText={setBusinessName}
             placeholder="Nom de votre entreprise"
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor="rgba(255,255,255,0.5)"
           />
         </View>
       </View>
@@ -316,24 +317,24 @@ export default function RegisterBusinessScreen() {
           style={styles.selectWrapper}
           onPress={() => setShowCategoryPicker(true)}
         >
-          <IconSymbol name="square.stack.3d.up.fill" size={20} color={colors.textSecondary} />
+          <IconSymbol name="square.stack.3d.up.fill" size={20} color="rgba(255,255,255,0.7)" />
           <Text style={businessCategory ? styles.selectText : styles.selectPlaceholder}>
             {businessCategory || 'Sélectionner une catégorie'}
           </Text>
-          <IconSymbol name="chevron.down" size={20} color={colors.textSecondary} />
+          <IconSymbol name="chevron.down" size={20} color="rgba(255,255,255,0.7)" />
         </TouchableOpacity>
       </View>
 
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>Numéro SIRET (optionnel)</Text>
         <View style={styles.inputWrapper}>
-          <IconSymbol name="doc.text.fill" size={20} color={colors.textSecondary} />
+          <IconSymbol name="doc.text.fill" size={20} color="rgba(255,255,255,0.7)" />
           <TextInput
             style={styles.input}
             value={siret}
             onChangeText={setSiret}
             placeholder="123 456 789 01234"
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor="rgba(255,255,255,0.5)"
             keyboardType="default"
             maxLength={20}
           />
@@ -355,13 +356,13 @@ export default function RegisterBusinessScreen() {
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>Nom du contact principal *</Text>
         <View style={styles.inputWrapper}>
-          <IconSymbol name="person.fill" size={20} color={colors.textSecondary} />
+          <IconSymbol name="person.fill" size={20} color="rgba(255,255,255,0.7)" />
           <TextInput
             style={styles.input}
             value={contactName}
             onChangeText={setContactName}
             placeholder="Prénom Nom"
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor="rgba(255,255,255,0.5)"
           />
         </View>
       </View>
@@ -369,13 +370,13 @@ export default function RegisterBusinessScreen() {
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>Téléphone</Text>
         <View style={styles.inputWrapper}>
-          <IconSymbol name="phone.fill" size={20} color={colors.textSecondary} />
+          <IconSymbol name="phone.fill" size={20} color="rgba(255,255,255,0.7)" />
           <TextInput
             style={styles.input}
             value={phone}
             onChangeText={setPhone}
             placeholder="+33 X XX XX XX XX"
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor="rgba(255,255,255,0.5)"
             keyboardType="phone-pad"
           />
         </View>
@@ -384,13 +385,13 @@ export default function RegisterBusinessScreen() {
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>Adresse</Text>
         <View style={styles.inputWrapper}>
-          <IconSymbol name="location.fill" size={20} color={colors.textSecondary} />
+          <IconSymbol name="location.fill" size={20} color="rgba(255,255,255,0.7)" />
           <TextInput
             style={styles.input}
             value={address}
             onChangeText={setAddress}
             placeholder="Adresse de l'établissement"
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor="rgba(255,255,255,0.5)"
           />
         </View>
       </View>
@@ -398,13 +399,13 @@ export default function RegisterBusinessScreen() {
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>Ville</Text>
         <View style={styles.inputWrapper}>
-          <IconSymbol name="map.fill" size={20} color={colors.textSecondary} />
+          <IconSymbol name="map.fill" size={20} color="rgba(255,255,255,0.7)" />
           <TextInput
             style={styles.input}
             value={city}
             onChangeText={setCity}
             placeholder="Ville"
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor="rgba(255,255,255,0.5)"
           />
         </View>
       </View>
@@ -421,118 +422,129 @@ export default function RegisterBusinessScreen() {
   );
 
   return (
-    <SafeAreaView style={commonStyles.container} edges={['top']}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => (step > 1 ? setStep(step - 1) : router.back())}
-            style={styles.backButton}
-          >
-            <IconSymbol name="chevron.left" size={24} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Inscription Entreprise</Text>
-          <View style={styles.placeholder} />
-        </View>
-
-        {renderStepIndicator()}
-
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.contentContainer}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
+    <LinearGradient
+      colors={['#60A5FA', '#818CF8', '#C084FC']}
+      style={styles.container}
+    >
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
         >
-          {step === 1 && renderStep1()}
-          {step === 2 && renderStep2()}
-          {step === 3 && renderStep3()}
-        </ScrollView>
-
-        {/* Bottom Actions */}
-        <View style={styles.bottomActions}>
-          <TouchableOpacity
-            style={styles.nextButton}
-            onPress={handleNextStep}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color={colors.background} />
-            ) : (
-              <>
-                <Text style={styles.nextButtonText}>
-                  {step === 3 ? 'Créer mon compte' : 'Continuer'}
-                </Text>
-                {step < 3 && (
-                  <IconSymbol name="chevron.right" size={20} color={colors.background} />
-                )}
-              </>
-            )}
-          </TouchableOpacity>
-
-          {step === 1 && (
-            <View style={styles.loginPrompt}>
-              <Text style={styles.loginPromptText}>Déjà un compte ?</Text>
-              <TouchableOpacity onPress={() => router.push('/auth/login-business')}>
-                <Text style={styles.loginLink}>Se connecter</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-
-        {/* Category Picker Modal */}
-        {showCategoryPicker && (
-          <View style={styles.modalOverlay}>
+          {/* Header */}
+          <View style={styles.header}>
             <TouchableOpacity
-              style={styles.modalBackdrop}
-              activeOpacity={1}
-              onPress={() => setShowCategoryPicker(false)}
-            />
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Catégorie d'activité</Text>
-                <TouchableOpacity onPress={() => setShowCategoryPicker(false)}>
-                  <IconSymbol name="xmark" size={24} color={colors.text} />
+              onPress={() => (step > 1 ? setStep(step - 1) : router.back())}
+              style={styles.backButton}
+            >
+              <IconSymbol name="chevron.left" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Inscription Entreprise</Text>
+            <View style={styles.placeholder} />
+          </View>
+
+          {renderStepIndicator()}
+
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.contentContainer}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {step === 1 && renderStep1()}
+            {step === 2 && renderStep2()}
+            {step === 3 && renderStep3()}
+          </ScrollView>
+
+          {/* Bottom Actions */}
+          <View style={styles.bottomActions}>
+            <TouchableOpacity
+              style={styles.nextButton}
+              onPress={handleNextStep}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#818CF8" />
+              ) : (
+                <>
+                  <Text style={styles.nextButtonText}>
+                    {step === 3 ? 'Créer mon compte' : 'Continuer'}
+                  </Text>
+                  {step < 3 && (
+                    <IconSymbol name="chevron.right" size={20} color="#818CF8" />
+                  )}
+                </>
+              )}
+            </TouchableOpacity>
+
+            {step === 1 && (
+              <View style={styles.loginPrompt}>
+                <Text style={styles.loginPromptText}>Déjà un compte ?</Text>
+                <TouchableOpacity onPress={() => router.push('/auth/login-business')}>
+                  <Text style={styles.loginLink}>Se connecter</Text>
                 </TouchableOpacity>
               </View>
-              <ScrollView style={styles.modalScroll}>
-                {BUSINESS_CATEGORIES.map((cat) => (
-                  <TouchableOpacity
-                    key={cat}
-                    style={[
-                      styles.categoryOption,
-                      businessCategory === cat && styles.categoryOptionSelected,
-                    ]}
-                    onPress={() => {
-                      setBusinessCategory(cat);
-                      setShowCategoryPicker(false);
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.categoryOptionText,
-                        businessCategory === cat && styles.categoryOptionTextSelected,
-                      ]}
-                    >
-                      {cat}
-                    </Text>
-                    {businessCategory === cat && (
-                      <IconSymbol name="checkmark" size={20} color={colors.secondary} />
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
+            )}
           </View>
-        )}
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+
+          {/* Category Picker Modal */}
+          {showCategoryPicker && (
+            <View style={styles.modalOverlay}>
+              <TouchableOpacity
+                style={styles.modalBackdrop}
+                activeOpacity={1}
+                onPress={() => setShowCategoryPicker(false)}
+              />
+              <View style={styles.modalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Catégorie d'activité</Text>
+                  <TouchableOpacity onPress={() => setShowCategoryPicker(false)}>
+                    <IconSymbol name="xmark" size={24} color={colors.text} />
+                  </TouchableOpacity>
+                </View>
+                <ScrollView style={styles.modalScroll}>
+                  {BUSINESS_CATEGORIES.map((cat) => (
+                    <TouchableOpacity
+                      key={cat}
+                      style={[
+                        styles.categoryOption,
+                        businessCategory === cat && styles.categoryOptionSelected,
+                      ]}
+                      onPress={() => {
+                        setBusinessCategory(cat);
+                        setShowCategoryPicker(false);
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.categoryOptionText,
+                          businessCategory === cat && styles.categoryOptionTextSelected,
+                        ]}
+                      >
+                        {cat}
+                      </Text>
+                      {businessCategory === cat && (
+                        <IconSymbol name="checkmark" size={20} color="#818CF8" />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            </View>
+          )}
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  safeArea: {
+    flex: 1,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -541,15 +553,22 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   backButton: {
-    padding: 8,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: colors.text,
+    color: '#FFFFFF',
   },
   placeholder: {
-    width: 40,
+    width: 44,
   },
   stepIndicator: {
     flexDirection: 'row',
@@ -562,36 +581,36 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: colors.card,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     borderWidth: 2,
-    borderColor: colors.border,
+    borderColor: 'rgba(255,255,255,0.3)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   stepDotActive: {
-    backgroundColor: colors.secondary,
-    borderColor: colors.secondary,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderColor: 'rgba(255,255,255,0.95)',
   },
   stepDotCurrent: {
-    borderColor: colors.secondary,
+    borderColor: '#FFFFFF',
     borderWidth: 3,
   },
   stepNumber: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.7)',
   },
   stepNumberActive: {
-    color: colors.background,
+    color: '#818CF8',
   },
   stepLine: {
     flex: 1,
     height: 2,
-    backgroundColor: colors.border,
+    backgroundColor: 'rgba(255,255,255,0.3)',
     marginHorizontal: 8,
   },
   stepLineActive: {
-    backgroundColor: colors.secondary,
+    backgroundColor: 'rgba(255,255,255,0.95)',
   },
   scrollView: {
     flex: 1,
@@ -606,12 +625,12 @@ const styles = StyleSheet.create({
   stepTitle: {
     fontSize: 28,
     fontWeight: '700',
-    color: colors.text,
+    color: '#FFFFFF',
     marginBottom: 8,
   },
   stepSubtitle: {
     fontSize: 16,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.8)',
     marginBottom: 32,
   },
   inputGroup: {
@@ -620,57 +639,59 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.text,
+    color: '#FFFFFF',
     marginBottom: 8,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.card,
+    backgroundColor: 'rgba(255,255,255,0.18)',
     borderRadius: 12,
     paddingHorizontal: 16,
     gap: 12,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   input: {
     flex: 1,
     paddingVertical: 16,
     fontSize: 16,
-    color: colors.text,
+    color: '#FFFFFF',
   },
   inputHint: {
     fontSize: 12,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.7)',
     marginTop: 6,
     marginLeft: 4,
   },
   selectWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.card,
+    backgroundColor: 'rgba(255,255,255,0.18)',
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 16,
     gap: 12,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   selectText: {
     flex: 1,
     fontSize: 16,
-    color: colors.text,
+    color: '#FFFFFF',
   },
   selectPlaceholder: {
     flex: 1,
     fontSize: 16,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.5)',
   },
   passwordHints: {
-    backgroundColor: colors.card,
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: 12,
     padding: 16,
     gap: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   hintRow: {
     flexDirection: 'row',
@@ -679,32 +700,31 @@ const styles = StyleSheet.create({
   },
   hintText: {
     fontSize: 14,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.8)',
   },
   termsContainer: {
     marginTop: 8,
     padding: 16,
-    backgroundColor: colors.card,
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   termsText: {
     fontSize: 14,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.8)',
     lineHeight: 20,
   },
   termsLink: {
-    color: colors.secondary,
+    color: '#FFFFFF',
     fontWeight: '600',
   },
   bottomActions: {
     padding: 20,
     paddingBottom: Platform.OS === 'ios' ? 34 : 20,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.background,
   },
   nextButton: {
-    backgroundColor: colors.secondary,
+    backgroundColor: 'rgba(255,255,255,0.95)',
     borderRadius: 12,
     paddingVertical: 16,
     flexDirection: 'row',
@@ -715,7 +735,7 @@ const styles = StyleSheet.create({
   nextButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.background,
+    color: '#818CF8',
   },
   loginPrompt: {
     flexDirection: 'row',
@@ -726,12 +746,12 @@ const styles = StyleSheet.create({
   },
   loginPromptText: {
     fontSize: 15,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.8)',
   },
   loginLink: {
     fontSize: 15,
     fontWeight: '600',
-    color: colors.secondary,
+    color: '#FFFFFF',
   },
   modalOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -772,7 +792,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   categoryOptionSelected: {
-    backgroundColor: colors.secondary + '10',
+    backgroundColor: '#818CF8' + '10',
     marginHorizontal: -20,
     paddingHorizontal: 20,
   },
@@ -781,7 +801,7 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   categoryOptionTextSelected: {
-    color: colors.secondary,
+    color: '#818CF8',
     fontWeight: '600',
   },
 });

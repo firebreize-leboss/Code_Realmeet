@@ -1,6 +1,6 @@
 // app/activity-detail.tsx
 // Page de détail d'une activité avec restrictions entreprise
-// Design Glassmorphism comme profile.tsx
+// Design épuré fond blanc avec accents bleu-mauve
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -16,7 +16,7 @@ import {
   Modal,
   Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase';
@@ -25,6 +25,13 @@ import { useBusinessRestrictions } from '@/hooks/useBusinessRestrictions';
 import { LinearGradient } from 'expo-linear-gradient';
 import ReportModal from '@/components/ReportModal';
 import LeaveReviewModal from '@/components/LeaveReviewModal';
+
+// Couleurs caractéristiques bleu-mauve de l'appli
+const ACCENT_COLORS = {
+  primary: '#818CF8', // Mauve/indigo
+  secondary: '#60A5FA', // Bleu
+  gradient: ['#60A5FA', '#818CF8', '#C084FC'] as const,
+};
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -57,6 +64,7 @@ interface ActivityDetail {
 
 export default function ActivityDetailScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { id, from, slotId } = useLocalSearchParams();
   const origin = typeof from === 'string' ? from : '';
   const passedSlotId = typeof slotId === 'string' ? slotId : '';
@@ -521,35 +529,27 @@ export default function ActivityDetailScreen() {
   // Loading
   if (loading) {
     return (
-      <LinearGradient
-        colors={['#60A5FA', '#818CF8', '#C084FC']}
-        style={styles.container}
-      >
-        <SafeAreaView style={styles.loadingContainer} edges={['top']}>
-          <ActivityIndicator size="large" color="#FFFFFF" />
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={ACCENT_COLORS.primary} />
           <Text style={styles.loadingText}>Chargement...</Text>
-        </SafeAreaView>
-      </LinearGradient>
+        </View>
+      </SafeAreaView>
     );
   }
 
   // Erreur
   if (!activity) {
     return (
-      <LinearGradient
-        colors={['#60A5FA', '#818CF8', '#C084FC']}
-        style={styles.container}
-      >
-        <SafeAreaView style={styles.errorContainer} edges={['top']}>
-          <View style={styles.glassCard}>
-            <IconSymbol name="exclamationmark.triangle" size={64} color="rgba(255,255,255,0.9)" />
-            <Text style={styles.errorText}>Activité non trouvée</Text>
-            <TouchableOpacity style={styles.backButtonError} onPress={() => router.back()}>
-              <Text style={styles.backButtonErrorText}>Retour</Text>
-            </TouchableOpacity>
-          </View>
-        </SafeAreaView>
-      </LinearGradient>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.errorContainer}>
+          <IconSymbol name="exclamationmark.triangle" size={64} color={ACCENT_COLORS.primary} />
+          <Text style={styles.errorText}>Activité non trouvée</Text>
+          <TouchableOpacity style={styles.backButtonError} onPress={() => router.back()}>
+            <Text style={styles.backButtonErrorText}>Retour</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -558,292 +558,287 @@ export default function ActivityDetailScreen() {
   const isCompetitorActivity = isBusiness && activity.host.id !== currentUserId;
 
   return (
-    <LinearGradient
-      colors={['#60A5FA', '#818CF8', '#C084FC']}
-      style={styles.container}
-    >
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
-        {/* Header */}
-        <View style={styles.header}>
+    <View style={styles.container}>
+      {/* Header avec image pleine largeur */}
+      <View style={styles.heroContainer}>
+        <Image source={{ uri: activity.image || 'https://via.placeholder.com/400' }} style={styles.heroImage} />
+        <LinearGradient
+          colors={['rgba(0,0,0,0.4)', 'transparent', 'transparent']}
+          style={styles.heroGradient}
+        />
+
+        {/* Header buttons overlaid on image */}
+        <SafeAreaView style={styles.headerOverlay} edges={['top']}>
           <TouchableOpacity style={styles.headerButton} onPress={() => router.back()}>
             <IconSymbol name="chevron.left" size={22} color="#FFFFFF" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.headerButton} onPress={() => setShowOptionsModal(true)}>
             <IconSymbol name="ellipsis" size={22} color="#FFFFFF" />
           </TouchableOpacity>
-        </View>
+        </SafeAreaView>
 
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={[
-            styles.contentContainer,
-            { paddingBottom: (!isHost || (isHost && isBusiness)) ? 160 : 40 },
-          ]}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Hero Image */}
-          <View style={styles.heroContainer}>
-            <Image source={{ uri: activity.image || 'https://via.placeholder.com/400' }} style={styles.heroImage} />
-            <LinearGradient
-              colors={['transparent', 'rgba(0,0,0,0.5)']}
-              style={styles.heroGradient}
-            />
-
-            {isCompetitorActivity && (
-              <View style={styles.competitorBadge}>
-                <IconSymbol name="eye.fill" size={14} color="#FFFFFF" />
-                <Text style={styles.competitorBadgeText}>Veille concurrentielle</Text>
-              </View>
-            )}
+        {isCompetitorActivity && (
+          <View style={styles.competitorBadge}>
+            <IconSymbol name="eye.fill" size={14} color="#FFFFFF" />
+            <Text style={styles.competitorBadgeText}>Veille concurrentielle</Text>
           </View>
+        )}
+      </View>
 
-          {/* Badge activité terminée */}
-          {isActivityPast && (
-            <View style={styles.pastActivityBanner}>
-              <IconSymbol name="checkmark.circle.fill" size={20} color="#FFFFFF" />
-              <Text style={styles.pastActivityBannerText}>Activité terminée</Text>
-            </View>
-          )}
-
-          {/* Titre et catégorie */}
-          <View style={styles.glassCard}>
-            <View style={styles.titleSection}>
-              <View style={styles.titleContainer}>
-                <Text style={styles.title}>{activity.title}</Text>
-                <Text style={styles.subtitle}>{activity.host.type}</Text>
-                {activityRating && activityRating.count > 0 && (
-                  <View style={styles.activityRatingRow}>
-                    <IconSymbol name="star.fill" size={16} color="#FFD700" />
-                    <Text style={styles.activityRatingText}>
-                      {activityRating.average.toFixed(1)}
-                    </Text>
-                    <Text style={styles.activityRatingCount}>
-                      ({activityRating.count} avis)
-                    </Text>
-                  </View>
-                )}
-              </View>
-              <View style={styles.categoryBadge}>
-                <Text style={styles.categoryText}>{activity.category}</Text>
-              </View>
-            </View>
-
-            {/* Prix */}
-            <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Prix</Text>
-              <Text style={styles.priceValue}>{activity.price}</Text>
-            </View>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[
+          styles.contentContainer,
+          { paddingBottom: (!isHost || (isHost && isBusiness)) ? 100 : 24 },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Badge activité terminée */}
+        {isActivityPast && (
+          <View style={styles.pastActivityBanner}>
+            <IconSymbol name="checkmark.circle.fill" size={20} color="#FFFFFF" />
+            <Text style={styles.pastActivityBannerText}>Activité terminée</Text>
           </View>
+        )}
 
-          {/* Organisateur */}
-          <TouchableOpacity style={styles.glassCard} onPress={handleOrganizerPress} activeOpacity={0.7}>
-            <View style={styles.hostSection}>
-              <Image
-                source={{ uri: activity.host.avatar || 'https://via.placeholder.com/48' }}
-                style={styles.hostAvatar}
-              />
-              <View style={styles.hostInfo}>
-                <View style={styles.hostNameRow}>
-                  <Text style={styles.hostName}>{activity.host.name}</Text>
-                  {activity.host.isVerified && (
-                    <IconSymbol name="checkmark.seal.fill" size={18} color="#FFFFFF" />
-                  )}
-                </View>
-                <Text style={styles.hostLabel}>Organisateur</Text>
-              </View>
-              {activity.host.accountType === 'business' && (
-                <View style={styles.proBadge}>
-                  <Text style={styles.proBadgeText}>PRO</Text>
-                </View>
-              )}
-              <IconSymbol name="chevron.right" size={20} color="rgba(255,255,255,0.7)" />
-            </View>
-          </TouchableOpacity>
-
-          {/* Lieu */}
-          <TouchableOpacity
-            style={styles.glassCard}
-            onPress={() => router.push(`/(tabs)/browse?viewMode=maps&selectedActivityId=${activity.id}`)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.detailRow}>
-              <IconSymbol name="location.fill" size={20} color="#FFFFFF" />
-              <View style={styles.detailContent}>
-                <Text style={styles.detailLabel}>Lieu</Text>
-                <Text style={styles.detailValue}>{activity.location}</Text>
-                <Text style={styles.detailSubvalue}>{activity.city}</Text>
-              </View>
-              <IconSymbol name="map.fill" size={20} color="rgba(255,255,255,0.7)" />
-            </View>
-          </TouchableOpacity>
-
-          {/* Calendrier de sélection */}
-          {!isActivityPast && (
-            <View style={styles.glassCard}>
-              <Text style={styles.sectionTitle}>Choisir un créneau</Text>
-              <ActivityCalendar
-                activityId={activity.id}
-                onSlotSelect={(isBusiness || isJoined) ? undefined : (slot) => setSelectedSlot(slot)}
-                externalSelectedSlot={selectedSlot}
-                mode="select"
-                readOnly={isBusiness || isJoined}
-                userJoinedSlotId={isJoined ? selectedSlot?.id : undefined}
-                maxParticipants={activity.capacity}
-              />
-            </View>
-          )}
-
-          {/* Description */}
-          <View style={styles.glassCard}>
-            <Text style={styles.sectionTitle}>À propos</Text>
-            <Text style={styles.description}>{activity.description}</Text>
-          </View>
-
-          {/* Inclus */}
-          {!isActivityPast && activity.includes.length > 0 && (
-            <View style={styles.glassCard}>
-              <Text style={styles.sectionTitle}>Ce qui est inclus</Text>
-              {activity.includes.map((item: string, index: number) => (
-                <View key={index} style={styles.listItem}>
-                  <IconSymbol name="checkmark.circle.fill" size={20} color="#10b981" />
-                  <Text style={styles.listItemText}>{item}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* Règles */}
-          {!isActivityPast && activity.rules.length > 0 && (
-            <View style={styles.glassCard}>
-              <Text style={styles.sectionTitle}>Informations importantes</Text>
-              {activity.rules.map((rule: string, index: number) => (
-                <View key={index} style={styles.listItem}>
-                  <IconSymbol name="info.circle.fill" size={20} color="#FFFFFF" />
-                  <Text style={styles.listItemText}>{rule}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* Participants */}
-          {shouldShowParticipants && (
-            <View style={styles.glassCard}>
-              <Text style={styles.sectionTitle}>
-                Participants ({participantsList.length})
-              </Text>
-
-              {participantsList.length === 0 ? (
-                <View style={styles.emptyParticipants}>
-                  <IconSymbol name="person.2" size={48} color="rgba(255,255,255,0.7)" />
-                  <Text style={styles.emptyParticipantsText}>
-                    Aucun participant sur votre créneau
+        {/* Titre et catégorie */}
+        <View style={styles.card}>
+          <View style={styles.titleSection}>
+            <View style={styles.titleContainer}>
+              <Text style={styles.title}>{activity.title}</Text>
+              <Text style={styles.subtitle}>{activity.host.type}</Text>
+              {activityRating && activityRating.count > 0 && (
+                <View style={styles.activityRatingRow}>
+                  <IconSymbol name="star.fill" size={16} color="#FFD700" />
+                  <Text style={styles.activityRatingText}>
+                    {activityRating.average.toFixed(1)}
+                  </Text>
+                  <Text style={styles.activityRatingCount}>
+                    ({activityRating.count} avis)
                   </Text>
                 </View>
-              ) : (
-                <View style={styles.participantsList}>
-                  {participantsList.map((participant) => (
-                    <TouchableOpacity
-                      key={participant.id}
-                      style={styles.participantItem}
-                      onPress={() => router.push(`/user-profile?id=${participant.id}`)}
-                    >
-                      <Image
-                        source={{ uri: participant.avatar || 'https://via.placeholder.com/44' }}
-                        style={styles.participantAvatar}
-                      />
-                      <Text style={styles.participantName}>{participant.name}</Text>
-                      <IconSymbol name="chevron.right" size={16} color="rgba(255,255,255,0.7)" />
-                    </TouchableOpacity>
-                  ))}
-                </View>
               )}
             </View>
-          )}
-
-          {/* Section Review */}
-          {isActivityPast && !isHost && !isBusiness && (
-            <View style={styles.glassCard}>
-              <Text style={styles.sectionTitle}>Votre avis</Text>
-
-              {canReview ? (
-                <TouchableOpacity
-                  style={styles.reviewButton}
-                  onPress={() => setShowReviewModal(true)}
-                >
-                  <IconSymbol name="star.fill" size={20} color="#FFFFFF" />
-                  <Text style={styles.reviewButtonText}>Noter cette activité</Text>
-                </TouchableOpacity>
-              ) : hasAlreadyReviewed ? (
-                <View style={styles.alreadyReviewedBadge}>
-                  <IconSymbol name="checkmark.circle.fill" size={16} color="#FFFFFF" />
-                  <Text style={styles.alreadyReviewedText}>Vous avez déjà noté cette activité</Text>
-                </View>
-              ) : null}
+            <View style={styles.categoryBadge}>
+              <Text style={styles.categoryText}>{activity.category}</Text>
             </View>
-          )}
-        </ScrollView>
+          </View>
 
-        {/* Footer */}
-        {!isHost && !isActivityPast && (
-          <View style={styles.footer}>
-            {isBusiness ? (
-              <View style={styles.businessFooter}>
-                <View style={styles.businessFooterInfo}>
-                  <IconSymbol name="eye.fill" size={20} color="#FFFFFF" />
-                  <Text style={styles.businessFooterText}>Mode observation</Text>
-                </View>
-                <Text style={styles.businessFooterHint}>
-                  Les entreprises ne peuvent pas participer aux activités
+          {/* Prix */}
+          <View style={styles.priceRow}>
+            <Text style={styles.priceLabel}>Prix</Text>
+            <Text style={styles.priceValue}>{activity.price}</Text>
+          </View>
+        </View>
+
+        {/* Organisateur */}
+        <TouchableOpacity style={styles.card} onPress={handleOrganizerPress} activeOpacity={0.7}>
+          <View style={styles.hostSection}>
+            <Image
+              source={{ uri: activity.host.avatar || 'https://via.placeholder.com/48' }}
+              style={styles.hostAvatar}
+            />
+            <View style={styles.hostInfo}>
+              <View style={styles.hostNameRow}>
+                <Text style={styles.hostName}>{activity.host.name}</Text>
+                {activity.host.isVerified && (
+                  <IconSymbol name="checkmark.seal.fill" size={18} color={ACCENT_COLORS.primary} />
+                )}
+              </View>
+              <Text style={styles.hostLabel}>Organisateur</Text>
+            </View>
+            {activity.host.accountType === 'business' && (
+              <View style={styles.proBadge}>
+                <Text style={styles.proBadgeText}>PRO</Text>
+              </View>
+            )}
+            <IconSymbol name="chevron.right" size={20} color="#999" />
+          </View>
+        </TouchableOpacity>
+
+        {/* Lieu */}
+        <TouchableOpacity
+          style={styles.card}
+          onPress={() => router.push(`/(tabs)/browse?viewMode=maps&selectedActivityId=${activity.id}`)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.detailRow}>
+            <IconSymbol name="location.fill" size={20} color={ACCENT_COLORS.primary} />
+            <View style={styles.detailContent}>
+              <Text style={styles.detailLabel}>Lieu</Text>
+              <Text style={styles.detailValue}>{activity.location}</Text>
+              <Text style={styles.detailSubvalue}>{activity.city}</Text>
+            </View>
+            <IconSymbol name="map.fill" size={20} color="#999" />
+          </View>
+        </TouchableOpacity>
+
+        {/* Calendrier de sélection */}
+        {!isActivityPast && (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Choisir un créneau</Text>
+            <ActivityCalendar
+              activityId={activity.id}
+              onSlotSelect={(isBusiness || isJoined) ? undefined : (slot) => setSelectedSlot(slot)}
+              externalSelectedSlot={selectedSlot}
+              mode="select"
+              readOnly={isBusiness || isJoined}
+              userJoinedSlotId={isJoined ? selectedSlot?.id : undefined}
+              maxParticipants={activity.capacity}
+            />
+          </View>
+        )}
+
+        {/* Description */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>À propos</Text>
+          <Text style={styles.description}>{activity.description}</Text>
+        </View>
+
+        {/* Inclus */}
+        {!isActivityPast && activity.includes.length > 0 && (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Ce qui est inclus</Text>
+            {activity.includes.map((item: string, index: number) => (
+              <View key={index} style={styles.listItem}>
+                <IconSymbol name="checkmark.circle.fill" size={20} color="#10b981" />
+                <Text style={styles.listItemText}>{item}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Règles */}
+        {!isActivityPast && activity.rules.length > 0 && (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Informations importantes</Text>
+            {activity.rules.map((rule: string, index: number) => (
+              <View key={index} style={styles.listItem}>
+                <IconSymbol name="info.circle.fill" size={20} color={ACCENT_COLORS.primary} />
+                <Text style={styles.listItemText}>{rule}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Participants */}
+        {shouldShowParticipants && (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>
+              Participants ({participantsList.length})
+            </Text>
+
+            {participantsList.length === 0 ? (
+              <View style={styles.emptyParticipants}>
+                <IconSymbol name="person.2" size={48} color="#CCC" />
+                <Text style={styles.emptyParticipantsText}>
+                  Aucun participant sur votre créneau
                 </Text>
               </View>
             ) : (
-              <>
-                <View style={styles.footerInfo}>
-                  <Text style={styles.footerPrice}>{activity.price}</Text>
-                  <Text style={styles.footerLabel}>par personne</Text>
-                </View>
-                <TouchableOpacity
-                  style={[
-                    styles.actionButton,
-                    isJoined && styles.actionButtonLeave,
-                    !isJoined && !selectedSlot && styles.actionButtonDisabled,
-                    isFull && !isJoined && styles.actionButtonDisabled,
-                  ]}
-                  onPress={handleJoinLeave}
-                  disabled={(!isJoined && !selectedSlot) || (isFull && !isJoined) || joiningInProgress}
-                >
-                  {joiningInProgress ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <Text style={styles.actionButtonText}>
-                      {isFull && !isJoined
-                        ? 'Complet'
-                        : isJoined
-                        ? 'Se désinscrire'
-                        : !selectedSlot
-                        ? 'Choisir un créneau'
-                        : 'Rejoindre'}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </>
+              <View style={styles.participantsList}>
+                {participantsList.map((participant) => (
+                  <TouchableOpacity
+                    key={participant.id}
+                    style={styles.participantItem}
+                    onPress={() => router.push(`/user-profile?id=${participant.id}`)}
+                  >
+                    <Image
+                      source={{ uri: participant.avatar || 'https://via.placeholder.com/44' }}
+                      style={styles.participantAvatar}
+                    />
+                    <Text style={styles.participantName}>{participant.name}</Text>
+                    <IconSymbol name="chevron.right" size={16} color="#999" />
+                  </TouchableOpacity>
+                ))}
+              </View>
             )}
           </View>
         )}
 
-        {/* Footer hôte entreprise */}
-        {isHost && isBusiness && (
-          <View style={styles.footer}>
-            <TouchableOpacity
-              style={styles.manageButton}
-              onPress={() => router.push(`/manage-activity?id=${activity.id}`)}
-            >
-              <IconSymbol name="chart.bar.fill" size={20} color="#FFFFFF" />
-              <Text style={styles.manageButtonText}>Gérer cette activité</Text>
-            </TouchableOpacity>
+        {/* Section Review */}
+        {isActivityPast && !isHost && !isBusiness && (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Votre avis</Text>
+
+            {canReview ? (
+              <TouchableOpacity
+                style={styles.reviewButton}
+                onPress={() => setShowReviewModal(true)}
+              >
+                <IconSymbol name="star.fill" size={20} color="#FFFFFF" />
+                <Text style={styles.reviewButtonText}>Noter cette activité</Text>
+              </TouchableOpacity>
+            ) : hasAlreadyReviewed ? (
+              <View style={styles.alreadyReviewedBadge}>
+                <IconSymbol name="checkmark.circle.fill" size={16} color={ACCENT_COLORS.primary} />
+                <Text style={styles.alreadyReviewedText}>Vous avez déjà noté cette activité</Text>
+              </View>
+            ) : null}
           </View>
         )}
-      </SafeAreaView>
+      </ScrollView>
+
+      {/* Footer */}
+      {!isHost && !isActivityPast && (
+        <SafeAreaView style={styles.footer} edges={['bottom']}>
+          {isBusiness ? (
+            <View style={styles.businessFooter}>
+              <View style={styles.businessFooterInfo}>
+                <IconSymbol name="eye.fill" size={20} color={ACCENT_COLORS.primary} />
+                <Text style={styles.businessFooterText}>Mode observation</Text>
+              </View>
+              <Text style={styles.businessFooterHint}>
+                Les entreprises ne peuvent pas participer aux activités
+              </Text>
+            </View>
+          ) : (
+            <>
+              <View style={styles.footerInfo}>
+                <Text style={styles.footerPrice}>{activity.price}</Text>
+                <Text style={styles.footerLabel}>par personne</Text>
+              </View>
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  isJoined && styles.actionButtonLeave,
+                  !isJoined && !selectedSlot && styles.actionButtonDisabled,
+                  isFull && !isJoined && styles.actionButtonDisabled,
+                ]}
+                onPress={handleJoinLeave}
+                disabled={(!isJoined && !selectedSlot) || (isFull && !isJoined) || joiningInProgress}
+              >
+                {joiningInProgress ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.actionButtonText}>
+                    {isFull && !isJoined
+                      ? 'Complet'
+                      : isJoined
+                      ? 'Se désinscrire'
+                      : !selectedSlot
+                      ? 'Choisir un créneau'
+                      : 'Rejoindre'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </>
+          )}
+        </SafeAreaView>
+      )}
+
+      {/* Footer hôte entreprise */}
+      {isHost && isBusiness && (
+        <SafeAreaView style={styles.footer} edges={['bottom']}>
+          <TouchableOpacity
+            style={styles.manageButton}
+            onPress={() => router.push(`/manage-activity?id=${activity.id}`)}
+          >
+            <IconSymbol name="chart.bar.fill" size={20} color="#FFFFFF" />
+            <Text style={styles.manageButtonText}>Gérer cette activité</Text>
+          </TouchableOpacity>
+        </SafeAreaView>
+      )}
 
       {/* Modal Review */}
       <LeaveReviewModal
@@ -909,16 +904,14 @@ export default function ActivityDetailScreen() {
         targetId={activity?.id || ''}
         targetName={activity?.title}
       />
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  safeArea: {
-    flex: 1,
+    backgroundColor: '#FFFFFF',
   },
 
   // Loading
@@ -930,7 +923,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 16,
-    color: '#FFFFFF',
+    color: '#666',
     fontWeight: '600',
   },
 
@@ -943,12 +936,12 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 18,
-    color: '#FFFFFF',
+    color: '#333',
     fontWeight: '600',
     marginTop: 16,
   },
   backButtonError: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: ACCENT_COLORS.primary,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 14,
@@ -959,8 +952,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Header
-  header: {
+  // Header overlay on hero image
+  headerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
@@ -970,7 +967,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(0,0,0,0.3)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -980,31 +977,30 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 16,
+    paddingTop: 20,
     gap: 16,
   },
 
-  // Hero
+  // Hero - Full width
   heroContainer: {
     position: 'relative',
-    borderRadius: 20,
-    overflow: 'hidden',
+    width: SCREEN_WIDTH,
   },
   heroImage: {
     width: '100%',
-    height: 220,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    height: 280,
+    backgroundColor: '#F0F0F0',
   },
   heroGradient: {
     position: 'absolute',
-    bottom: 0,
+    top: 0,
     left: 0,
     right: 0,
     height: 100,
   },
   competitorBadge: {
     position: 'absolute',
-    top: 16,
+    bottom: 16,
     right: 16,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1025,9 +1021,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(16, 185, 129, 0.3)',
+    backgroundColor: '#10b981',
     paddingVertical: 14,
     paddingHorizontal: 20,
+    marginHorizontal: 16,
     borderRadius: 16,
     gap: 8,
   },
@@ -1037,13 +1034,17 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
-  // Glass Card
-  glassCard: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
+  // Card (replaces glassCard)
+  card: {
+    backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    marginHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
   },
 
   // Title section
@@ -1060,12 +1061,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#1A1A1A',
     marginBottom: 4,
   },
   subtitle: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
+    color: '#666',
   },
   activityRatingRow: {
     flexDirection: 'row',
@@ -1076,14 +1077,14 @@ const styles = StyleSheet.create({
   activityRatingText: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#1A1A1A',
   },
   activityRatingCount: {
     fontSize: 13,
-    color: 'rgba(255,255,255,0.8)',
+    color: '#666',
   },
   categoryBadge: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: ACCENT_COLORS.primary + '20',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
@@ -1091,7 +1092,7 @@ const styles = StyleSheet.create({
   categoryText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: ACCENT_COLORS.primary,
   },
 
   // Price
@@ -1101,16 +1102,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.2)',
+    borderTopColor: '#F0F0F0',
   },
   priceLabel: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
+    color: '#666',
   },
   priceValue: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: ACCENT_COLORS.primary,
   },
 
   // Host section
@@ -1122,9 +1123,9 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: '#F0F0F0',
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.4)',
+    borderColor: '#F0F0F0',
   },
   hostInfo: {
     flex: 1,
@@ -1138,15 +1139,15 @@ const styles = StyleSheet.create({
   hostName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: '#1A1A1A',
   },
   hostLabel: {
     fontSize: 13,
-    color: 'rgba(255,255,255,0.8)',
+    color: '#666',
     marginTop: 2,
   },
   proBadge: {
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: ACCENT_COLORS.primary,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
@@ -1169,17 +1170,17 @@ const styles = StyleSheet.create({
   },
   detailLabel: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.7)',
+    color: '#999',
     marginBottom: 2,
   },
   detailValue: {
     fontSize: 15,
     fontWeight: '500',
-    color: '#FFFFFF',
+    color: '#1A1A1A',
   },
   detailSubvalue: {
     fontSize: 13,
-    color: 'rgba(255,255,255,0.8)',
+    color: '#666',
     marginTop: 2,
   },
 
@@ -1187,12 +1188,12 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#1A1A1A',
     marginBottom: 12,
   },
   description: {
     fontSize: 15,
-    color: 'rgba(255,255,255,0.95)',
+    color: '#333',
     lineHeight: 24,
   },
   listItem: {
@@ -1204,7 +1205,7 @@ const styles = StyleSheet.create({
   listItemText: {
     flex: 1,
     fontSize: 15,
-    color: 'rgba(255,255,255,0.95)',
+    color: '#333',
   },
 
   // Participants
@@ -1214,7 +1215,7 @@ const styles = StyleSheet.create({
   },
   emptyParticipantsText: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
+    color: '#666',
     marginTop: 8,
   },
   participantsList: {
@@ -1223,7 +1224,7 @@ const styles = StyleSheet.create({
   participantItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: '#F8F8F8',
     padding: 12,
     borderRadius: 14,
     gap: 12,
@@ -1232,15 +1233,15 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: '#F0F0F0',
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: '#F0F0F0',
   },
   participantName: {
     flex: 1,
     fontSize: 16,
     fontWeight: '500',
-    color: '#FFFFFF',
+    color: '#1A1A1A',
   },
 
   // Review
@@ -1248,7 +1249,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: ACCENT_COLORS.primary,
     paddingVertical: 14,
     paddingHorizontal: 24,
     borderRadius: 14,
@@ -1263,7 +1264,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: '#F0F0F0',
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 12,
@@ -1271,7 +1272,7 @@ const styles = StyleSheet.create({
   },
   alreadyReviewedText: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.9)',
+    color: '#666',
     fontWeight: '500',
   },
 
@@ -1280,12 +1281,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: '#FFFFFF',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    paddingBottom: Platform.OS === 'ios' ? 32 : 20,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.2)',
+    borderTopColor: '#F0F0F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 5,
   },
   footerInfo: {
     flex: 1,
@@ -1293,14 +1298,14 @@ const styles = StyleSheet.create({
   footerPrice: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#1A1A1A',
   },
   footerLabel: {
     fontSize: 13,
-    color: 'rgba(255,255,255,0.8)',
+    color: '#666',
   },
   actionButton: {
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: ACCENT_COLORS.primary,
     paddingHorizontal: 32,
     paddingVertical: 16,
     borderRadius: 16,
@@ -1308,10 +1313,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   actionButtonLeave: {
-    backgroundColor: 'rgba(239, 68, 68, 0.6)',
+    backgroundColor: '#EF4444',
   },
   actionButtonDisabled: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: '#E0E0E0',
   },
   actionButtonText: {
     fontSize: 16,
@@ -1326,7 +1331,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: ACCENT_COLORS.primary + '15',
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 20,
@@ -1334,11 +1339,11 @@ const styles = StyleSheet.create({
   businessFooterText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: ACCENT_COLORS.primary,
   },
   businessFooterHint: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.7)',
+    color: '#666',
     marginTop: 8,
   },
   manageButton: {
@@ -1347,7 +1352,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: ACCENT_COLORS.primary,
     paddingVertical: 16,
     borderRadius: 16,
   },
@@ -1364,7 +1369,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: 'rgba(96, 165, 250, 0.95)',
+    backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 20,
@@ -1373,7 +1378,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#1A1A1A',
     textAlign: 'center',
     marginBottom: 20,
   },
@@ -1383,12 +1388,12 @@ const styles = StyleSheet.create({
     gap: 14,
     padding: 16,
     borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: '#F8F8F8',
     marginBottom: 10,
   },
   modalOptionText: {
     fontSize: 16,
-    color: '#FFFFFF',
+    color: '#1A1A1A',
   },
   cancelOption: {
     justifyContent: 'center',
@@ -1398,7 +1403,7 @@ const styles = StyleSheet.create({
   cancelText: {
     fontSize: 16,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.8)',
+    color: '#666',
     textAlign: 'center',
   },
 });

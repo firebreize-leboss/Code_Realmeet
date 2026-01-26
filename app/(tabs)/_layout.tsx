@@ -4,7 +4,7 @@
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { View, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, usePathname, useLocalSearchParams } from 'expo-router';
 import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
 import SwipeableTabView from '@/components/SwipeableTabView';
 import { useAuth } from '@/contexts/AuthContext';
@@ -91,12 +91,32 @@ const businessTabs: TabBarItem[] = [
 function TabLayoutContent() {
   const { user, profile, loading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+  const params = useLocalSearchParams();
   const { isMapViewActive } = useMapView();
   const [currentTabIndex, setCurrentTabIndex] = useState(0);
   const [isRedirecting, setIsRedirecting] = useState(false);
 
   const isBusiness = profile?.account_type === 'business';
   const tabs = isBusiness ? businessTabs : userTabs;
+
+  // Synchroniser l'index du tab avec la route actuelle
+  useEffect(() => {
+    // Vérifier si on navigue vers browse avec des paramètres (ex: viewMode=maps)
+    if (params.viewMode === 'maps' || params.selectedActivityId) {
+      const browseIndex = tabs.findIndex(tab => tab.name === 'browse');
+      if (browseIndex !== -1 && browseIndex !== currentTabIndex) {
+        setCurrentTabIndex(browseIndex);
+        return;
+      }
+    }
+
+    // Sinon, synchroniser via le pathname
+    const tabIndex = tabs.findIndex(tab => pathname.includes(tab.name));
+    if (tabIndex !== -1 && tabIndex !== currentTabIndex) {
+      setCurrentTabIndex(tabIndex);
+    }
+  }, [pathname, params, tabs]);
 
   // Désactiver le swipe quand on est sur le tab browse (index 1) et que la vue maps est active
   const isSwipeEnabled = !(currentTabIndex === 1 && isMapViewActive);

@@ -436,7 +436,7 @@ const styles = StyleSheet.create({
   // COMPACT VARIANT STYLES (Design TooGoodToGo)
   // =============================================
   compactCard: {
-    width: SCREEN_WIDTH - 32,
+    width: '100%',
     borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: '#FFFFFF',

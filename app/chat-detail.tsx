@@ -19,7 +19,10 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
-import { colors, commonStyles } from '@/styles/commonStyles';
+// Les couleurs utilisées: #60A5FA (bleu), #818CF8 (violet), #C084FC (rose/violet) pour le dégradé
+// #1F2937 (texte principal), #6B7280 (texte secondaire), #9CA3AF (texte tertiaire)
+// #F3F4F6 (fond clair), #FFFFFF (fond blanc)
+import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 // ✅ MODIFICATION : Ajouter useConversations pour markAsRead
@@ -166,8 +169,10 @@ export default function ChatDetailScreen() {
           setPendingInvitation(null);
         }
 
-        const isGroupConv = convData.is_group === true || !convData.name;
-        setIsGroup(isGroupConv);
+        // Une conversation est un groupe seulement si is_group=true ET elle a une activité associée
+        // Les conversations privées 1-1 n'ont pas de nom mais ne sont pas des groupes
+        const isActivityGroup = convData.is_group === true && (convData.activity_id || convData.slot_id);
+        setIsGroup(isActivityGroup);
 
         // REQUÊTE GROUPÉE 2: Charger slot et participants en parallèle si nécessaire
         const requests: any[] = [];
@@ -657,7 +662,7 @@ useEffect(() => {
                 <IconSymbol
                   name={playingVoiceId === msg.id ? 'pause.fill' : 'play.fill'}
                   size={16}
-                  color={isOwnMessage ? colors.primary : colors.background}
+                  color={isOwnMessage ? '#818CF8' : '#FFFFFF'}
                 />
               </View>
               <View style={styles.waveformContainer}>
@@ -678,15 +683,15 @@ useEffect(() => {
             <Text style={[styles.messageTime, isOwnMessage && styles.messageTimeOwn]}>{msg.timestamp}</Text>
             {isOwnMessage && msg.status && (
               <View style={styles.statusContainer}>
-                {msg.status === 'sending' && <ActivityIndicator size="small" color={colors.textSecondary} />}
-                {msg.status === 'sent' && <IconSymbol name="checkmark" size={14} color={colors.textSecondary} />}
+                {msg.status === 'sending' && <ActivityIndicator size="small" color="rgba(255,255,255,0.7)" />}
+                {msg.status === 'sent' && <IconSymbol name="checkmark" size={14} color="rgba(255,255,255,0.8)" />}
                 {msg.status === 'delivered' && (
                   <View style={styles.doubleCheck}>
-                    <IconSymbol name="checkmark" size={14} color={colors.textSecondary} />
-                    <IconSymbol name="checkmark" size={14} color={colors.textSecondary} />
+                    <IconSymbol name="checkmark" size={14} color="rgba(255,255,255,0.8)" />
+                    <IconSymbol name="checkmark" size={14} color="rgba(255,255,255,0.8)" />
                   </View>
                 )}
-                {msg.status === 'failed' && <IconSymbol name="exclamationmark.circle" size={14} color={colors.error} />}
+                {msg.status === 'failed' && <IconSymbol name="exclamationmark.circle" size={14} color="#EF4444" />}
               </View>
             )}
           </View>
@@ -698,38 +703,46 @@ useEffect(() => {
   const inputWarning = getInputWarning();
 
   return (
-    <SafeAreaView style={commonStyles.container} edges={['top']}>
-      {/* Header */}
-      <View style={styles.header}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header avec dégradé */}
+      <LinearGradient
+        colors={['#60A5FA', '#818CF8', '#C084FC']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.header}
+      >
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <IconSymbol name="chevron.left" size={24} color={colors.text} />
+          <IconSymbol name="chevron.left" size={24} color="#FFFFFF" />
         </TouchableOpacity>
 
         <TouchableOpacity
-  style={styles.headerCenter}
-  onPress={() => {
-    if (isGroup) {
-      router.push(`/group-info?id=${conversationId}`);
-    } else if (otherUserId) {
-      router.push(`/user-profile?id=${otherUserId}`);
-    }
-  }}
->
-  {convImage && (
-    <Image
-      source={{ uri: convImage }}
-      style={styles.headerActivityImage}
-    />
-  )}
+          style={styles.headerCenter}
+          onPress={() => {
+            if (isGroup) {
+              router.push(`/group-info?id=${conversationId}`);
+            } else if (otherUserId) {
+              router.push(`/user-profile?id=${otherUserId}`);
+            }
+          }}
+        >
+          {convImage ? (
+            <Image
+              source={{ uri: convImage }}
+              style={styles.headerActivityImage}
+            />
+          ) : (
+            <View style={styles.headerAvatarPlaceholder}>
+              <IconSymbol name={isGroup ? "person.2.fill" : "person.fill"} size={20} color="rgba(255,255,255,0.8)" />
+            </View>
+          )}
 
-  <View style={styles.headerTitleContainer}>
-    <Text style={styles.headerTitle} numberOfLines={1}>{convName}</Text>
-    {isGroup && (
-      <Text style={styles.headerSubtitle}>Groupe</Text>
-    )}
-  </View>
-</TouchableOpacity>
-
+          <View style={styles.headerTitleContainer}>
+            <Text style={styles.headerTitle} numberOfLines={1}>{convName}</Text>
+            {isGroup && (
+              <Text style={styles.headerSubtitle}>Groupe</Text>
+            )}
+          </View>
+        </TouchableOpacity>
 
         {/* Bouton Voir l'activité pour les groupes d'activité */}
         {isGroup && activityId && (
@@ -737,7 +750,6 @@ useEffect(() => {
             style={styles.viewActivityButton}
             onPress={async () => {
               try {
-                // Vérifier si l'activité existe toujours avant de naviguer
                 const { data: activityExists, error } = await supabase
                   .from('activities')
                   .select('id')
@@ -761,21 +773,21 @@ useEffect(() => {
               }
             }}
           >
-            <IconSymbol name="calendar" size={20} color={colors.primary} />
+            <IconSymbol name="calendar" size={20} color="#FFFFFF" />
           </TouchableOpacity>
         )}
 
         <TouchableOpacity style={styles.moreButton} onPress={() => setShowOptionsModal(true)}>
-          <IconSymbol name="ellipsis" size={24} color={colors.text} />
+          <IconSymbol name="ellipsis" size={24} color="#FFFFFF" />
         </TouchableOpacity>
-      </View>
+      </LinearGradient>
 
       {/* Messages */}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
         <ScrollView ref={scrollViewRef} style={styles.messagesContainer} contentContainerStyle={styles.messagesContent} showsVerticalScrollIndicator={false}>
           {conversationStatus.isClosed && (
             <View style={styles.closedBanner}>
-              <IconSymbol name="info.circle.fill" size={20} color={colors.textSecondary} />
+              <IconSymbol name="info.circle.fill" size={20} color="#9CA3AF" />
               <Text style={styles.closedBannerText}>
                 {conversationStatus.closedReason === 'activity_ended'
                   ? "L'activité est terminée. Cette conversation est maintenant en lecture seule."
@@ -786,7 +798,7 @@ useEffect(() => {
 
           {(messagesLoading || !currentUserId) ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={colors.primary} />
+              <ActivityIndicator size="large" color="#818CF8" />
             </View>
           ) : (
             messages.map(renderMessage)
@@ -806,7 +818,7 @@ useEffect(() => {
           {pendingInvitation?.isRecipient && (
             <View style={styles.invitationBanner}>
               <View style={styles.invitationBannerContent}>
-                <IconSymbol name="person.badge.plus" size={20} color={colors.primary} />
+                <IconSymbol name="person.badge.plus" size={20} color="#818CF8" />
                 <Text style={styles.invitationBannerText}>
                   {pendingInvitation.senderName} souhaite vous ajouter en ami
                 </Text>
@@ -818,7 +830,7 @@ useEffect(() => {
                   disabled={processingInvitation}
                 >
                   {processingInvitation ? (
-                    <ActivityIndicator size="small" color={colors.text} />
+                    <ActivityIndicator size="small" color="#6B7280" />
                   ) : (
                     <Text style={styles.invitationRejectText}>Refuser</Text>
                   )}
@@ -829,7 +841,7 @@ useEffect(() => {
                   disabled={processingInvitation}
                 >
                   {processingInvitation ? (
-                    <ActivityIndicator size="small" color={colors.background} />
+                    <ActivityIndicator size="small" color="#FFFFFF" />
                   ) : (
                     <Text style={styles.invitationAcceptText}>Accepter</Text>
                   )}
@@ -840,7 +852,7 @@ useEffect(() => {
 
           {inputWarning && (
             <View style={styles.warningBanner}>
-              <IconSymbol name="exclamationmark.triangle.fill" size={16} color={colors.warning} />
+              <IconSymbol name="exclamationmark.triangle.fill" size={16} color="#D97706" />
               <Text style={styles.warningText}>{inputWarning}</Text>
             </View>
           )}
@@ -852,19 +864,19 @@ useEffect(() => {
                 <Text style={styles.recordingTime}>{formatRecordingTime(recordingTime)}</Text>
               </View>
               <TouchableOpacity style={styles.stopRecordingButton} onPress={handleStopRecording}>
-                <IconSymbol name="stop.fill" size={24} color={colors.error} />
+                <IconSymbol name="stop.fill" size={24} color="#EF4444" />
               </TouchableOpacity>
             </View>
           ) : (
             <View style={styles.inputRow}>
               <TouchableOpacity style={styles.iconButton} onPress={handleImagePick} disabled={!canSendMessages()}>
-                <IconSymbol name="photo" size={24} color={canSendMessages() ? colors.primary : colors.textSecondary} />
+                <IconSymbol name="photo" size={24} color={canSendMessages() ? '#818CF8' : '#9CA3AF'} />
               </TouchableOpacity>
 
               <TextInput
                 style={styles.input}
                 placeholder="Message..."
-                placeholderTextColor={colors.textSecondary}
+                placeholderTextColor="#9CA3AF"
                 value={message}
                 onChangeText={setMessage}
                 multiline
@@ -874,11 +886,11 @@ useEffect(() => {
 
               {message.trim() ? (
                 <TouchableOpacity style={styles.sendButton} onPress={handleSend} disabled={!canSendMessages()}>
-                  <IconSymbol name="arrow.up.circle.fill" size={32} color={colors.primary} />
+                  <IconSymbol name="arrow.up.circle.fill" size={32} color="#818CF8" />
                 </TouchableOpacity>
               ) : (
                 <TouchableOpacity style={styles.iconButton} onPress={handleStartRecording} disabled={!canSendMessages()}>
-                  <IconSymbol name="mic.fill" size={24} color={canSendMessages() ? colors.primary : colors.textSecondary} />
+                  <IconSymbol name="mic.fill" size={24} color={canSendMessages() ? '#818CF8' : '#9CA3AF'} />
                 </TouchableOpacity>
               )}
             </View>
@@ -893,20 +905,20 @@ useEffect(() => {
             <Text style={styles.modalTitle}>Options</Text>
 
             <TouchableOpacity style={styles.modalOption} onPress={handleToggleMute}>
-              <IconSymbol name={isMuted ? 'bell.fill' : 'bell.slash.fill'} size={20} color={isMuted ? colors.primary : colors.textSecondary} />
+              <IconSymbol name={isMuted ? 'bell.fill' : 'bell.slash.fill'} size={20} color={isMuted ? '#818CF8' : '#9CA3AF'} />
               <Text style={styles.modalOptionText}>{isMuted ? 'Réactiver les notifications' : 'Mettre en sourdine'}</Text>
             </TouchableOpacity>
 
             {/* Option Signaler - seulement pour les conversations privées */}
             {!isGroup && otherUserId && (
               <TouchableOpacity style={styles.modalOption} onPress={handleReportUser}>
-                <IconSymbol name="flag.fill" size={20} color={colors.error} />
-                <Text style={[styles.modalOptionText, { color: colors.error }]}>Signaler cet utilisateur</Text>
+                <IconSymbol name="flag.fill" size={20} color="#EF4444" />
+                <Text style={[styles.modalOptionText, { color: '#EF4444' }]}>Signaler cet utilisateur</Text>
               </TouchableOpacity>
             )}
 
             <TouchableOpacity style={styles.modalOption} onPress={() => setShowOptionsModal(false)}>
-              <IconSymbol name="xmark" size={20} color={colors.textSecondary} />
+              <IconSymbol name="xmark" size={20} color="#9CA3AF" />
               <Text style={styles.modalOptionText}>Annuler</Text>
             </TouchableOpacity>
           </View>
@@ -928,21 +940,22 @@ useEffect(() => {
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.card,
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.background,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -958,43 +971,53 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
   },
+  headerAvatarPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.4)',
+  },
   headerName: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text,
+    color: '#FFFFFF',
   },
   closedBadge: {
     fontSize: 12,
-    color: colors.textSecondary,
+    color: 'rgba(255,255,255,0.8)',
   },
   groupSubtitle: {
     fontSize: 12,
-    color: colors.primary,
+    color: 'rgba(255,255,255,0.9)',
     marginTop: 2,
   },
   headerCenter: {
-  flex: 1,
-  flexDirection: 'row',
-  alignItems: 'center',
-  marginHorizontal: 12,
-  gap: 10,
-},
-
-headerActivityImage: {
-  width: 40,
-  height: 40,
-  borderRadius: 20, // rond
-  borderWidth: 2,
-  borderColor: colors.background,
-},
-headerTitleContainer: {
-  flex: 1,
-  justifyContent: 'center',
-},
-
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 12,
+    gap: 10,
+  },
+  headerActivityImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.4)',
+  },
+  headerTitleContainer: {
+    flex: 1,
+    justifyContent: 'center',
+  },
   moreButton: {
     width: 40,
     height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1002,13 +1025,14 @@ headerTitleContainer: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.primary + '15',
+    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 8,
   },
   messagesContainer: {
     flex: 1,
+    backgroundColor: '#FFFFFF',
   },
   messagesContent: {
     padding: 16,
@@ -1023,7 +1047,7 @@ headerTitleContainer: {
   closedBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.card,
+    backgroundColor: '#F3F4F6',
     padding: 12,
     borderRadius: 12,
     marginBottom: 16,
@@ -1032,7 +1056,7 @@ headerTitleContainer: {
   closedBannerText: {
     flex: 1,
     fontSize: 14,
-    color: colors.textSecondary,
+    color: '#6B7280',
   },
   systemMessageContainer: {
     alignItems: 'center',
@@ -1040,7 +1064,7 @@ headerTitleContainer: {
   },
   systemMessageText: {
     fontSize: 13,
-    color: colors.textSecondary,
+    color: '#9CA3AF',
     fontStyle: 'italic',
   },
   messageRow: {
@@ -1056,32 +1080,33 @@ headerTitleContainer: {
     height: 32,
     borderRadius: 16,
     marginRight: 8,
+    backgroundColor: '#E5E7EB',
   },
   messageBubble: {
     maxWidth: '75%',
-    backgroundColor: colors.card,
-    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 18,
     borderBottomLeftRadius: 4,
     padding: 12,
   },
   ownMessageBubble: {
-    backgroundColor: colors.primary,
-    borderBottomLeftRadius: 16,
+    backgroundColor: '#818CF8',
+    borderBottomLeftRadius: 18,
     borderBottomRightRadius: 4,
   },
   senderName: {
     fontSize: 12,
     fontWeight: '600',
-    color: colors.text,
+    color: '#6B7280',
     marginBottom: 4,
   },
   messageText: {
     fontSize: 15,
-    color: colors.text,
+    color: '#1F2937',
     lineHeight: 20,
   },
   ownMessageText: {
-    color: colors.background,
+    color: '#FFFFFF',
   },
   messageImage: {
     width: 200,
@@ -1099,12 +1124,12 @@ headerTitleContainer: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: colors.primary,
+    backgroundColor: '#818CF8',
     justifyContent: 'center',
     alignItems: 'center',
   },
   voicePlayButtonOwn: {
-    backgroundColor: colors.background,
+    backgroundColor: 'rgba(255,255,255,0.3)',
   },
   waveformContainer: {
     flexDirection: 'row',
@@ -1114,18 +1139,18 @@ headerTitleContainer: {
   },
   waveformBar: {
     width: 3,
-    backgroundColor: colors.textSecondary,
+    backgroundColor: '#9CA3AF',
     borderRadius: 2,
   },
   waveformBarOwn: {
-    backgroundColor: colors.background,
+    backgroundColor: 'rgba(255,255,255,0.7)',
   },
   voiceDuration: {
     fontSize: 12,
-    color: colors.textSecondary,
+    color: '#9CA3AF',
   },
   voiceDurationOwn: {
-    color: colors.background,
+    color: 'rgba(255,255,255,0.9)',
   },
   messageFooter: {
     flexDirection: 'row',
@@ -1135,11 +1160,10 @@ headerTitleContainer: {
   },
   messageTime: {
     fontSize: 11,
-    color: colors.textSecondary,
+    color: '#9CA3AF',
   },
   messageTimeOwn: {
-    color: colors.background,
-    opacity: 0.7,
+    color: 'rgba(255,255,255,0.8)',
   },
   statusContainer: {
     marginLeft: 4,
@@ -1149,26 +1173,25 @@ headerTitleContainer: {
     marginLeft: -8,
   },
   inputContainer: {
-  backgroundColor: colors.card,
-  borderTopWidth: 1,
-  borderTopColor: colors.border,
-  paddingHorizontal: 16,
-  paddingTop: 12,
-},
-
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
   warningBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.warning + '20',
+    backgroundColor: '#FEF3C7',
     padding: 10,
-    borderRadius: 8,
+    borderRadius: 10,
     marginBottom: 10,
     gap: 8,
   },
   warningText: {
     flex: 1,
     fontSize: 13,
-    color: colors.warning,
+    color: '#D97706',
   },
   inputRow: {
     flexDirection: 'row',
@@ -1183,12 +1206,12 @@ headerTitleContainer: {
   },
   input: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#F3F4F6',
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 10,
     fontSize: 15,
-    color: colors.text,
+    color: '#1F2937',
     maxHeight: 100,
   },
   sendButton: {
@@ -1211,18 +1234,18 @@ headerTitleContainer: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: colors.error,
+    backgroundColor: '#EF4444',
   },
   recordingTime: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text,
+    color: '#1F2937',
   },
   stopRecordingButton: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: colors.error + '20',
+    backgroundColor: '#FEE2E2',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1232,51 +1255,50 @@ headerTitleContainer: {
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     padding: 20,
     paddingBottom: 40,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: colors.text,
+    color: '#1F2937',
     textAlign: 'center',
     marginBottom: 20,
   },
   headerTitle: {
-  fontSize: 17,
-  fontWeight: '700',
-  color: colors.text,         // ou '#fff' si ton header est sombre
-  letterSpacing: 0.2,
-},
-headerSubtitle: {
-  fontSize: 12,
-  fontWeight: '600',
-  color: colors.primary,      // petit accent couleur
-  opacity: 0.9,
-},
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.2,
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.9)',
+  },
   modalOption: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: '#F3F4F6',
   },
   modalOptionText: {
     fontSize: 16,
-    color: colors.text,
+    color: '#1F2937',
   },
   // Styles pour l'invitation en attente
   invitationBanner: {
-    backgroundColor: colors.primary + '10',
-    borderRadius: 12,
+    backgroundColor: 'rgba(129, 140, 252, 0.1)',
+    borderRadius: 14,
     padding: 14,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: colors.primary + '30',
+    borderColor: 'rgba(129, 140, 252, 0.3)',
   },
   invitationBannerContent: {
     flexDirection: 'row',
@@ -1287,7 +1309,7 @@ headerSubtitle: {
   invitationBannerText: {
     flex: 1,
     fontSize: 14,
-    color: colors.text,
+    color: '#1F2937',
     fontWeight: '500',
   },
   invitationActions: {
@@ -1296,30 +1318,30 @@ headerSubtitle: {
   },
   invitationRejectButton: {
     flex: 1,
-    backgroundColor: colors.card,
+    backgroundColor: '#F3F4F6',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#E5E7EB',
     paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   invitationRejectText: {
     fontSize: 15,
     fontWeight: '600',
-    color: colors.text,
+    color: '#6B7280',
   },
   invitationAcceptButton: {
     flex: 1,
-    backgroundColor: colors.primary,
+    backgroundColor: '#818CF8',
     paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   invitationAcceptText: {
     fontSize: 15,
     fontWeight: '600',
-    color: colors.background,
+    color: '#FFFFFF',
   },
 });

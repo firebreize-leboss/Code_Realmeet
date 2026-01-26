@@ -12,152 +12,178 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
-import { colors, commonStyles } from '@/styles/commonStyles';
+import { colors } from '@/styles/commonStyles';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 
 export default function AccountTypeScreen() {
   const router = useRouter();
 
   return (
-    <SafeAreaView style={commonStyles.container} edges={['top', 'bottom']}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.header}>
-          <Text style={styles.title}>Bienvenue sur RealMeet</Text>
-          <Text style={styles.subtitle}>
-            Choisissez votre type de compte pour continuer
-          </Text>
-        </View>
-
-        {/* Card Particulier */}
-        <TouchableOpacity
-          style={styles.card}
-          onPress={() => router.push('/auth/login')}
-          activeOpacity={0.8}
+    <LinearGradient
+      colors={['#60A5FA', '#818CF8', '#C084FC']}
+      style={styles.container}
+    >
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
         >
-          <View style={[styles.iconContainer, { backgroundColor: colors.primary + '20' }]}>
-            <IconSymbol name="person.fill" size={48} color={colors.primary} />
-          </View>
-          <Text style={styles.cardTitle}>Particulier</Text>
-          <Text style={styles.cardDescription}>
-            Rejoignez des activités et rencontrez de nouvelles personnes
-          </Text>
-          <View style={styles.cardFeatures}>
-            <View style={styles.feature}>
-              <IconSymbol name="checkmark.circle.fill" size={20} color={colors.primary} />
-              <Text style={styles.featureText}>Rejoindre des activités</Text>
-            </View>
-            <View style={styles.feature}>
-              <IconSymbol name="checkmark.circle.fill" size={20} color={colors.primary} />
-              <Text style={styles.featureText}>Créer vos événements</Text>
-            </View>
-            <View style={styles.feature}>
-              <IconSymbol name="checkmark.circle.fill" size={20} color={colors.primary} />
-              <Text style={styles.featureText}>Messagerie intégrée</Text>
-            </View>
-          </View>
-          <View style={styles.continueButton}>
-            <Text style={styles.continueButtonText}>Continuer</Text>
-            <IconSymbol name="chevron.right" size={20} color={colors.background} />
-          </View>
-        </TouchableOpacity>
+          <Animated.View
+            entering={FadeInDown.delay(100).springify()}
+            style={styles.header}
+          >
+            <Text style={styles.title}>Bienvenue sur RealMeet</Text>
+            <Text style={styles.subtitle}>
+              Choisissez votre type de compte pour continuer
+            </Text>
+          </Animated.View>
 
-        {/* Card Entreprise */}
-        <TouchableOpacity
-          style={styles.card}
-          onPress={() => router.push('/auth/login-business')}
-          activeOpacity={0.8}
-        >
-          <View style={[styles.iconContainer, { backgroundColor: colors.secondary + '20' }]}>
-            <IconSymbol name="building.2.fill" size={48} color={colors.secondary} />
-          </View>
-          <Text style={styles.cardTitle}>Entreprise</Text>
-          <Text style={styles.cardDescription}>
-            Développez votre activité avec des événements professionnels
-          </Text>
-          <View style={styles.cardFeatures}>
-            <View style={styles.feature}>
-              <IconSymbol name="checkmark.circle.fill" size={20} color={colors.secondary} />
-              <Text style={styles.featureText}>Créer des événements pro</Text>
-            </View>
-            <View style={styles.feature}>
-              <IconSymbol name="checkmark.circle.fill" size={20} color={colors.secondary} />
-              <Text style={styles.featureText}>Analytics avancés</Text>
-            </View>
-            <View style={styles.feature}>
-              <IconSymbol name="checkmark.circle.fill" size={20} color={colors.secondary} />
-              <Text style={styles.featureText}>Gestion des participants</Text>
-            </View>
-          </View>
-          <View style={[styles.continueButton, { backgroundColor: colors.secondary }]}>
-            <Text style={styles.continueButtonText}>Continuer</Text>
-            <IconSymbol name="chevron.right" size={20} color={colors.background} />
-          </View>
-        </TouchableOpacity>
-      </ScrollView>
-    </SafeAreaView>
+          {/* Card Particulier */}
+          <Animated.View entering={FadeInDown.delay(200).springify()}>
+            <TouchableOpacity
+              style={styles.card}
+              onPress={() => router.push('/auth/login')}
+              activeOpacity={0.8}
+            >
+              <View style={styles.iconContainer}>
+                <IconSymbol name="person.fill" size={48} color="#FFFFFF" />
+              </View>
+              <Text style={styles.cardTitle}>Particulier</Text>
+              <Text style={styles.cardDescription}>
+                Rejoignez des activités et rencontrez de nouvelles personnes
+              </Text>
+              <View style={styles.cardFeatures}>
+                <View style={styles.feature}>
+                  <IconSymbol name="checkmark.circle.fill" size={20} color="rgba(255,255,255,0.9)" />
+                  <Text style={styles.featureText}>Rejoindre des activités</Text>
+                </View>
+                <View style={styles.feature}>
+                  <IconSymbol name="checkmark.circle.fill" size={20} color="rgba(255,255,255,0.9)" />
+                  <Text style={styles.featureText}>Créer vos événements</Text>
+                </View>
+                <View style={styles.feature}>
+                  <IconSymbol name="checkmark.circle.fill" size={20} color="rgba(255,255,255,0.9)" />
+                  <Text style={styles.featureText}>Messagerie intégrée</Text>
+                </View>
+              </View>
+              <View style={styles.continueButton}>
+                <Text style={styles.continueButtonText}>Continuer</Text>
+                <IconSymbol name="chevron.right" size={20} color="#818CF8" />
+              </View>
+            </TouchableOpacity>
+          </Animated.View>
+
+          {/* Card Entreprise */}
+          <Animated.View entering={FadeInDown.delay(300).springify()}>
+            <TouchableOpacity
+              style={styles.card}
+              onPress={() => router.push('/auth/login-business')}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.iconContainer, styles.iconContainerBusiness]}>
+                <IconSymbol name="building.2.fill" size={48} color="#FFFFFF" />
+              </View>
+              <Text style={styles.cardTitle}>Entreprise</Text>
+              <Text style={styles.cardDescription}>
+                Développez votre activité avec des événements professionnels
+              </Text>
+              <View style={styles.cardFeatures}>
+                <View style={styles.feature}>
+                  <IconSymbol name="checkmark.circle.fill" size={20} color="rgba(255,255,255,0.9)" />
+                  <Text style={styles.featureText}>Créer des événements pro</Text>
+                </View>
+                <View style={styles.feature}>
+                  <IconSymbol name="checkmark.circle.fill" size={20} color="rgba(255,255,255,0.9)" />
+                  <Text style={styles.featureText}>Analytics avancés</Text>
+                </View>
+                <View style={styles.feature}>
+                  <IconSymbol name="checkmark.circle.fill" size={20} color="rgba(255,255,255,0.9)" />
+                  <Text style={styles.featureText}>Gestion des participants</Text>
+                </View>
+              </View>
+              <View style={[styles.continueButton, styles.continueButtonBusiness]}>
+                <Text style={styles.continueButtonText}>Continuer</Text>
+                <IconSymbol name="chevron.right" size={20} color="#C084FC" />
+              </View>
+            </TouchableOpacity>
+          </Animated.View>
+        </ScrollView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  safeArea: {
+    flex: 1,
+  },
   scrollView: {
     flex: 1,
   },
   contentContainer: {
     padding: 20,
+    paddingTop: 40,
   },
   header: {
-    marginBottom: 32,
+    marginBottom: 40,
     alignItems: 'center',
   },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: '700',
-    color: colors.text,
-    marginBottom: 8,
+    color: '#FFFFFF',
+    marginBottom: 12,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 16,
-    color: colors.textSecondary,
+    fontSize: 17,
+    color: 'rgba(255,255,255,0.85)',
     textAlign: 'center',
+    lineHeight: 24,
   },
   card: {
-    backgroundColor: colors.card,
-    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 24,
     padding: 24,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   iconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
     alignSelf: 'center',
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  iconContainerBusiness: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
   },
   cardTitle: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '700',
-    color: colors.text,
+    color: '#FFFFFF',
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   cardDescription: {
-    fontSize: 14,
-    color: colors.textSecondary,
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.8)',
     textAlign: 'center',
-    marginBottom: 20,
-    lineHeight: 20,
+    marginBottom: 24,
+    lineHeight: 22,
   },
   cardFeatures: {
-    gap: 12,
-    marginBottom: 20,
+    gap: 14,
+    marginBottom: 24,
   },
   feature: {
     flexDirection: 'row',
@@ -166,20 +192,24 @@ const styles = StyleSheet.create({
   },
   featureText: {
     fontSize: 15,
-    color: colors.text,
+    color: '#FFFFFF',
+    fontWeight: '500',
   },
   continueButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingVertical: 16,
     gap: 8,
   },
+  continueButtonBusiness: {
+    backgroundColor: 'rgba(255,255,255,0.95)',
+  },
   continueButtonText: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
-    color: colors.background,
+    color: '#818CF8',
   },
 });

@@ -107,7 +107,7 @@ export default function ManageActivityScreen() {
           id,
           user_id,
           slot_id,
-          created_at,
+          joined_at,
           profiles:user_id (
             full_name,
             avatar_url
@@ -120,7 +120,7 @@ export default function ManageActivityScreen() {
 
       // Récupérer aussi les membres des groupes (slot_group_members via slot_groups)
       // Car les inscriptions au planning peuvent être stockées directement dans slot_group_members
-      const { data: slotGroupsWithMembers } = await supabase
+      const { data: slotGroupsWithMembers, error: slotGroupsError } = await supabase
         .from('slot_groups')
         .select(`
           id,
@@ -136,6 +136,8 @@ export default function ManageActivityScreen() {
           )
         `)
         .in('slot_id', slotIds.length > 0 ? slotIds : ['00000000-0000-0000-0000-000000000000']);
+
+      console.log('slotGroupsWithMembers query result:', slotGroupsWithMembers, 'error:', slotGroupsError);
 
       // Fusionner les participants de slot_participants et slot_group_members
       // en évitant les doublons (basé sur user_id + slot_id)
@@ -158,7 +160,7 @@ export default function ManageActivityScreen() {
               id: member.id,
               user_id: member.user_id,
               slot_id: group.slot_id,
-              created_at: member.created_at,
+              joined_at: member.created_at || new Date().toISOString(),
               profiles: member.profiles,
               activity_slots: { date: slotsData?.find(s => s.id === group.slot_id)?.date },
             });
@@ -188,6 +190,7 @@ export default function ManageActivityScreen() {
 
       // Compter les participants uniques par slot (comme dans ActivityCalendar.tsx)
       // en utilisant un Set<string> pour dédupliquer user_id + slot_id
+      console.log('participantsData:', participantsData, 'slotGroupsWithMembers:', slotGroupsWithMembers);
       const countBySlotId: Record<string, number> = {};
       const seenUserSlotCombosForCount = new Set<string>();
 
@@ -252,7 +255,7 @@ export default function ManageActivityScreen() {
         userId: p.user_id, // Garder l'userId pour naviguer vers le profil
         name: p.profiles?.full_name || 'Participant',
         avatar: p.profiles?.avatar_url || '',
-        joinedAt: new Date(p.created_at).toLocaleDateString('fr-FR'),
+        joinedAt: p.joined_at ? new Date(p.joined_at).toLocaleDateString('fr-FR') : '',
         slotDate: p.activity_slots?.date
           ? new Date(p.activity_slots.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
           : '',

@@ -9,7 +9,6 @@ import {
   TouchableOpacity,
   Platform,
   TextInput,
-  PanResponder,
   ActivityIndicator,
   RefreshControl,
   Modal,
@@ -23,12 +22,12 @@ import { WebView } from 'react-native-webview';
 import { supabase } from '@/lib/supabase';
 import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BottomTabBarHeightContext } from '@react-navigation/bottom-tabs';
 import { PREDEFINED_CATEGORIES } from '@/constants/categories';
 import { useDataCache } from '@/contexts/DataCacheContext';
 import ActivityCard from '@/components/ActivityCard';
 import { useMapView } from '@/contexts/MapViewContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { FLOATING_TAB_BAR_HEIGHT } from '@/components/FloatingTabBar';
 
 
 const PROTOMAPS_KEY = process.env.EXPO_PUBLIC_PROTOMAPS_KEY || '';
@@ -87,6 +86,9 @@ interface SelectedActivity {
   image_url?: string;
   latitude: number;
   longitude: number;
+  allDates?: string[];
+  totalParticipants?: number;
+  totalMaxPlaces?: number;
 }
 
 interface UserLocation {
@@ -113,6 +115,7 @@ export default function BrowseScreen() {
   const params = useLocalSearchParams();
   const { cache, loading: cacheLoading, refreshActivities } = useDataCache();
   const { setIsMapViewActive } = useMapView();
+  const insets = useSafeAreaInsets();
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('liste');
 
@@ -128,9 +131,6 @@ export default function BrowseScreen() {
   const hasCenteredOnActivity = useRef(false);
   const isFirstFocus = useRef(true);
   const [isBusiness, setIsBusiness] = useState(false);
-  const [detailFooterHeight, setDetailFooterHeight] = useState(0);
-  const insets = useSafeAreaInsets();
-  const tabBarHeight = useContext(BottomTabBarHeightContext) ?? 0;
 
   // Utiliser les données du cache
   const activities = cache.activities;
@@ -207,40 +207,69 @@ export default function BrowseScreen() {
 
 
   useEffect(() => {
-    if (hasHandledParams.current) return;
-    if (activities.length === 0) return;
+    console.log('[SCROLL DEBUG] useEffect params triggered', {
+      hasHandledParams: hasHandledParams.current,
+      activitiesLength: activities.length,
+      viewMode: params.viewMode,
+      selectedActivityId: params.selectedActivityId,
+    });
+
+    if (hasHandledParams.current) {
+      console.log('[SCROLL DEBUG] Already handled params, returning');
+      return;
+    }
+    if (activities.length === 0) {
+      console.log('[SCROLL DEBUG] No activities, returning');
+      return;
+    }
 
     if (params.viewMode === 'maps') {
+      console.log('[SCROLL DEBUG] Setting viewMode to maps');
       setViewMode('maps');
     }
 
     if (params.selectedActivityId) {
+      console.log('[SCROLL DEBUG] Looking for activity with id:', params.selectedActivityId);
       const activity = activities.find(a => a.id === params.selectedActivityId);
+      console.log('[SCROLL DEBUG] Found activity:', activity ? { id: activity.id, nom: activity.nom, lat: activity.latitude, lng: activity.longitude } : 'NOT FOUND');
+
       if (activity && activity.latitude && activity.longitude) {
         hasHandledParams.current = true;
         hasCenteredOnActivity.current = true;
+        console.log('[SCROLL DEBUG] Setting timeout to center on activity');
         setTimeout(() => {
+          console.log('[SCROLL DEBUG] Inside timeout, webViewRef.current:', !!webViewRef.current);
           if (webViewRef.current) {
-            webViewRef.current.postMessage(JSON.stringify({
+            const message = JSON.stringify({
               type: 'centerOnActivity',
               activityId: activity.id,
               latitude: activity.latitude,
               longitude: activity.longitude,
-            }));
+            });
+            console.log('[SCROLL DEBUG] Posting message to WebView:', message);
+            webViewRef.current.postMessage(message);
           }
+          console.log('[SCROLL DEBUG] Setting selectedActivity');
+          const slotData = cache.slotDataByActivity[activity.id];
           setSelectedActivity({
             id: activity.id,
             nom: activity.nom,
             categorie: activity.categorie,
-            date: activity.date,
+            date: slotData?.latestDate || activity.date,
             adresse: activity.adresse,
             participants: activity.participants || 0,
             max_participants: activity.max_participants,
             image_url: activity.image_url,
             latitude: activity.latitude,
             longitude: activity.longitude,
+            allDates: slotData?.allDates || [],
+            totalParticipants: slotData ? (slotData.totalMaxPlaces - slotData.remainingPlaces) : activity.participants,
+            totalMaxPlaces: slotData?.totalMaxPlaces || activity.max_participants,
           });
+          console.log('[SCROLL DEBUG] selectedActivity set successfully');
         }, 1500);
+      } else {
+        console.log('[SCROLL DEBUG] Activity not found or missing coordinates');
       }
     }
   }, [params.viewMode, params.selectedActivityId, activities]);
@@ -278,6 +307,11 @@ export default function BrowseScreen() {
   latestMap: Record<string, string | null> = latestSlotDateByActivity,
   shouldCenter: boolean = true
 ) => {
+    console.log('[SCROLL DEBUG] sendActivitiesToMap called', {
+      activitiesCount: activitiesData.length,
+      shouldCenter,
+      webViewRefExists: !!webViewRef.current,
+    });
 
     if (webViewRef.current) {
       const activitiesWithCoords = activitiesData.filter(a => a.latitude && a.longitude);
@@ -376,27 +410,32 @@ export default function BrowseScreen() {
   }, [activities, searchQuery, tempFilters, userLocation, latestSlotDateByActivity, remainingPlacesByActivity]);
 
   const closeActivity = () => {
+    console.log('[SCROLL DEBUG] closeActivity called');
     setSelectedActivity(null);
     if (webViewRef.current) {
       webViewRef.current.postMessage(JSON.stringify({ type: 'deselectMarker' }));
     }
   };
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, g) => g.dy > 5,
-      onPanResponderRelease: (_, g) => { if (g.dy > 50) closeActivity(); },
-    })
-  ).current;
 
   const handleWebViewMessage = (event: any) => {
+    console.log('[SCROLL DEBUG] handleWebViewMessage received:', event.nativeEvent.data);
     try {
       const data = JSON.parse(event.nativeEvent.data);
+      console.log('[SCROLL DEBUG] Parsed message data:', data);
       if (data.type === 'markerClicked') {
-        setSelectedActivity(data.activity);
+        console.log('[SCROLL DEBUG] markerClicked - setting selectedActivity:', data.activity);
+        const slotData = cache.slotDataByActivity[data.activity.id];
+        setSelectedActivity({
+          ...data.activity,
+          allDates: slotData?.allDates || [],
+          totalParticipants: slotData ? (slotData.totalMaxPlaces - slotData.remainingPlaces) : data.activity.participants,
+          totalMaxPlaces: slotData?.totalMaxPlaces || data.activity.max_participants,
+        });
       }
-    } catch (e) { console.error('Error parsing message:', e); }
+    } catch (e) {
+      console.error('[SCROLL DEBUG] Error parsing message:', e);
+    }
   };
 
   const defaultCenter = userLocation
@@ -416,20 +455,20 @@ export default function BrowseScreen() {
     body, html { height: 100%; overflow: hidden; }
     #map { position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
     .custom-marker {
-      width: 40px; height: 40px; background: #ef4444;
-      border: 4px solid white; border-radius: 50%; cursor: pointer;
-      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.5);
-      transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, #818CF8 0%, #A78BFA 100%);
+      border: 3px solid white; border-radius: 50%; cursor: pointer;
+      box-shadow: 0 3px 8px rgba(129, 140, 248, 0.4);
     }
-    .custom-marker:hover { transform: scale(1.2); }
     .custom-marker.selected {
-      background: #10b981; transform: scale(1.3);
-      box-shadow: 0 6px 20px rgba(16, 185, 129, 0.6);
+      background: linear-gradient(135deg, #60A5FA 0%, #818CF8 100%);
+      box-shadow: 0 4px 12px rgba(96, 165, 250, 0.5);
+      border-width: 4px;
     }
     .user-marker {
-      width: 20px; height: 20px; background: #3B82F6;
+      width: 18px; height: 18px; background: #3B82F6;
       border: 3px solid white; border-radius: 50%;
-      box-shadow: 0 0 0 8px rgba(59, 130, 246, 0.3);
+      box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.25);
     }
     .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right { display: none; }
   </style>
@@ -454,19 +493,24 @@ export default function BrowseScreen() {
     }
 
     function handleMessage(event) {
+      console.log('[MAP DEBUG] handleMessage received:', event.data);
       try {
         const data = JSON.parse(event.data);
+        console.log('[MAP DEBUG] Parsed data type:', data.type);
+
         if (data.type === 'updateUserLocation') {
+          console.log('[MAP DEBUG] Updating user location');
           if (userMarker) userMarker.remove();
           const userEl = document.createElement('div');
           userEl.className = 'user-marker';
-          userMarker = new maplibregl.Marker({ element: userEl })
+          userMarker = new maplibregl.Marker({ element: userEl, anchor: 'center' })
             .setLngLat([data.userLocation.longitude, data.userLocation.latitude])
             .addTo(map);
         }
-        
+
         if (data.type === 'loadActivities') {
           const activities = data.activities || [];
+          console.log('[MAP DEBUG] loadActivities - count:', activities.length);
           Object.values(markers).forEach(m => m.remove());
           markers = {};
 
@@ -475,6 +519,7 @@ export default function BrowseScreen() {
             el.className = 'custom-marker';
             el.id = 'marker-' + a.id;
             el.onclick = () => {
+              console.log('[MAP DEBUG] Marker clicked:', a.id, a.nom);
               if (selectedMarkerId) {
                 const prev = document.getElementById('marker-' + selectedMarkerId);
                 if (prev) prev.classList.remove('selected');
@@ -483,37 +528,58 @@ export default function BrowseScreen() {
               selectedMarkerId = a.id;
               sendMessage('markerClicked', { activity: a });
             };
-            markers[a.id] = new maplibregl.Marker({ element: el })
+            markers[a.id] = new maplibregl.Marker({ element: el, anchor: 'center' })
               .setLngLat([a.longitude, a.latitude])
               .addTo(map);
           });
+          console.log('[MAP DEBUG] Created', Object.keys(markers).length, 'markers');
 
           if (data.userLocation) {
             if (userMarker) userMarker.remove();
             const userEl = document.createElement('div');
             userEl.className = 'user-marker';
-            userMarker = new maplibregl.Marker({ element: userEl })
+            userMarker = new maplibregl.Marker({ element: userEl, anchor: 'center' })
               .setLngLat([data.userLocation.longitude, data.userLocation.latitude])
               .addTo(map);
           }
 
           if (data.shouldCenter !== false) {
             if (data.userLocation) {
+              console.log('[MAP DEBUG] Centering on user location');
               map.setCenter([data.userLocation.longitude, data.userLocation.latitude]);
             } else if (activities.length > 0) {
+              console.log('[MAP DEBUG] Centering on first activity');
               map.setCenter([activities[0].longitude, activities[0].latitude]);
             }
           }
         } else if (data.type === 'deselectMarker' && selectedMarkerId) {
+          console.log('[MAP DEBUG] Deselecting marker:', selectedMarkerId);
           const m = document.getElementById('marker-' + selectedMarkerId);
           if (m) m.classList.remove('selected');
           selectedMarkerId = null;
         } else if (data.type === 'centerOnUser') {
+          console.log('[MAP DEBUG] centerOnUser:', data.longitude, data.latitude);
           map.flyTo({ center: [data.longitude, data.latitude], zoom: 15, duration: 1000 });
         } else if (data.type === 'centerOnActivity') {
+          console.log('[MAP DEBUG] centerOnActivity:', data.activityId, data.longitude, data.latitude);
           map.flyTo({ center: [data.longitude, data.latitude], zoom: 15, duration: 1000 });
+          // Sélectionner visuellement le marker
+          if (data.activityId) {
+            if (selectedMarkerId) {
+              const prev = document.getElementById('marker-' + selectedMarkerId);
+              if (prev) prev.classList.remove('selected');
+            }
+            const targetMarker = document.getElementById('marker-' + data.activityId);
+            if (targetMarker) {
+              console.log('[MAP DEBUG] Selecting marker visually:', data.activityId);
+              targetMarker.classList.add('selected');
+              selectedMarkerId = data.activityId;
+            } else {
+              console.log('[MAP DEBUG] Target marker not found:', data.activityId);
+            }
+          }
         }
-      } catch(e) { console.error(e); }
+      } catch(e) { console.error('[MAP DEBUG] Error:', e); }
     }
     document.addEventListener('message', handleMessage);
     window.addEventListener('message', handleMessage);
@@ -538,62 +604,116 @@ export default function BrowseScreen() {
     };
   };
 
+  // Fonction pour formater une date courte
+  const formatDateShort = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('fr-FR', {
+      day: 'numeric',
+      month: 'short'
+    }).replace('.', '');
+  };
+
+  // Calculer la distance entre l'utilisateur et une activité
+  const getDistanceText = (activityLat: number, activityLng: number) => {
+    if (!userLocation) return null;
+    const distance = calculateDistance(
+      userLocation.latitude,
+      userLocation.longitude,
+      activityLat,
+      activityLng
+    );
+    if (distance < 1) {
+      return `${Math.round(distance * 1000)} m`;
+    }
+    return `${distance.toFixed(1)} km`;
+  };
+
   const renderSelectedActivity = () => {
     if (!selectedActivity) return null;
-    const isFull = selectedActivity.participants >= selectedActivity.max_participants;
+
+    const participants = selectedActivity.totalParticipants ?? selectedActivity.participants;
+    const maxPlaces = selectedActivity.totalMaxPlaces ?? selectedActivity.max_participants;
+    const isFull = participants >= maxPlaces;
+    const distanceText = getDistanceText(selectedActivity.latitude, selectedActivity.longitude);
+    const dates = selectedActivity.allDates?.slice(0, 3) || [];
+
+    // Calculer le bottom dynamiquement: hauteur de la tab bar + safe area bottom + marge
+    const activityPreviewBottom = FLOATING_TAB_BAR_HEIGHT + Math.max(insets.bottom, Platform.OS === 'android' ? 16 : 0) + 16;
+
     return (
-      <Animated.View entering={FadeInDown} exiting={FadeOutDown} style={styles.activityDetail}>
-        <View style={styles.dragHandleArea} {...panResponder.panHandlers}>
-  <View style={styles.dragHandle} />
-</View>
-       <ScrollView
-  showsVerticalScrollIndicator={false}
-  nestedScrollEnabled
-  contentContainerStyle={{
-    paddingBottom: detailFooterHeight + insets.bottom+tabBarHeight+20,
-  }}
->
-          <Image source={{ uri: selectedActivity.image_url || 'https://via.placeholder.com/400' }} style={styles.detailImage} />
-          <View style={styles.detailContent}>
-            <View style={styles.detailHeader}>
-              <Text style={styles.detailTitle}>{selectedActivity.nom}</Text>
-              <View style={[styles.detailBadge, isFull && styles.detailFullBadge]}>
-                <Text style={styles.detailBadgeText}>{selectedActivity.categorie}</Text>
-              </View>
-            </View>
-            <View style={styles.detailRow}>
-              <IconSymbol name="calendar" size={18} color={colors.textSecondary} />
-              <Text style={styles.detailText}>{selectedActivity.date}</Text>
-            </View>
-            <View style={styles.detailRow}>
-              <IconSymbol name="location.fill" size={18} color={colors.textSecondary} />
-              <Text style={styles.detailText}>{selectedActivity.adresse}</Text>
-            </View>
-            <View style={styles.detailRow}>
-              <IconSymbol name="person.2.fill" size={18} color={colors.textSecondary} />
-              <Text style={styles.detailText}>
-                {selectedActivity.participants}/{selectedActivity.max_participants} participants
-                {isFull && ' (Complet)'}
-              </Text>
-            </View>
-            <View onLayout={e => setDetailFooterHeight(e.nativeEvent.layout.height)}>
-  <TouchableOpacity
-    style={styles.viewDetailButton}
-    onPress={() => { closeActivity(); router.push(`/activity-detail?id=${selectedActivity.id}`); }}
-  >
-    <Text style={styles.viewDetailButtonText}>Voir les détails complets</Text>
-    <IconSymbol name="arrow.right" size={20} color="#FFFFFF" />
-  </TouchableOpacity>
-</View>
-</View>
-
-        </ScrollView>
+      <Animated.View entering={FadeInDown} exiting={FadeOutDown} style={[styles.activityPreview, { bottom: activityPreviewBottom }]}>
         <TouchableOpacity
-  style={styles.closeButton}
-  onPress={closeActivity}
->
+          activeOpacity={0.95}
+          onPress={() => { closeActivity(); router.push(`/activity-detail?id=${selectedActivity.id}`); }}
+          style={styles.activityPreviewTouchable}
+        >
+          {/* Image */}
+          <Image
+            source={{ uri: selectedActivity.image_url || 'https://via.placeholder.com/400' }}
+            style={styles.previewImage}
+          />
 
-          <IconSymbol name="xmark" size={20} color={colors.text} />
+          {/* Contenu */}
+          <View style={styles.previewContent}>
+            {/* Titre */}
+            <Text style={styles.previewTitle} numberOfLines={1}>{selectedActivity.nom}</Text>
+
+            {/* Distance */}
+            {distanceText && (
+              <View style={styles.previewDistanceRow}>
+                <IconSymbol name="location.fill" size={14} color="#818CF8" />
+                <Text style={styles.previewDistanceText}>{distanceText}</Text>
+              </View>
+            )}
+
+            {/* Dates */}
+            {dates.length > 0 ? (
+              <View style={styles.previewDatesRow}>
+                <IconSymbol name="calendar" size={14} color="#818CF8" />
+                <View style={styles.previewDateBubbles}>
+                  {dates.map((dateStr, index) => (
+                    <View key={index} style={styles.previewDateBubble}>
+                      <Text style={styles.previewDateBubbleText}>{formatDateShort(dateStr)}</Text>
+                    </View>
+                  ))}
+                  {selectedActivity.allDates && selectedActivity.allDates.length > 3 && (
+                    <Text style={styles.previewMoreDates}>+{selectedActivity.allDates.length - 3}</Text>
+                  )}
+                </View>
+              </View>
+            ) : (
+              <View style={styles.previewDatesRow}>
+                <IconSymbol name="calendar" size={14} color="#818CF8" />
+                <Text style={styles.previewSingleDate}>{selectedActivity.date || 'Date à définir'}</Text>
+              </View>
+            )}
+
+            {/* Participants */}
+            <View style={styles.previewParticipantsRow}>
+              <IconSymbol name="person.2.fill" size={14} color={isFull ? '#EF4444' : '#818CF8'} />
+              <Text style={[styles.previewParticipantsText, isFull && styles.previewParticipantsFull]}>
+                {participants}/{maxPlaces} inscrits
+              </Text>
+              {isFull && (
+                <View style={styles.previewFullBadge}>
+                  <Text style={styles.previewFullBadgeText}>Complet</Text>
+                </View>
+              )}
+            </View>
+          </View>
+
+          {/* Bouton fermer */}
+          <TouchableOpacity
+            style={styles.previewCloseButton}
+            onPress={(e) => { e.stopPropagation(); closeActivity(); }}
+          >
+            <IconSymbol name="xmark" size={16} color="#6B7280" />
+          </TouchableOpacity>
+
+          {/* Indicateur cliquable */}
+          <View style={styles.previewArrow}>
+            <IconSymbol name="chevron.right" size={20} color="#818CF8" />
+          </View>
         </TouchableOpacity>
       </Animated.View>
     );
@@ -706,8 +826,13 @@ export default function BrowseScreen() {
               style={styles.map}
               onMessage={handleWebViewMessage}
               onLoadEnd={() => {
+                console.log('[SCROLL DEBUG] WebView onLoadEnd triggered', {
+                  filteredActivitiesCount: filteredActivities.length,
+                  hasCenteredOnActivity: hasCenteredOnActivity.current,
+                });
                 if (filteredActivities.length > 0) {
                   const shouldCenter = !hasCenteredOnActivity.current;
+                  console.log('[SCROLL DEBUG] Calling sendActivitiesToMap from onLoadEnd, shouldCenter:', shouldCenter);
                   sendActivitiesToMap(filteredActivities, latestSlotDateByActivity, shouldCenter);
                   if (shouldCenter) {
                     hasCenteredOnActivity.current = true;
@@ -1174,106 +1299,127 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  activityDetail: {
+  // Widget de prévisualisation compact (sans scroll)
+  // Note: La valeur 'bottom' est calculée dynamiquement dans le composant
+  activityPreview: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '60%',
+    left: 16,
+    right: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
     elevation: 8,
+    zIndex: 1001,
   },
-  dragHandle: { 
-    width: 40, 
-    height: 4, 
-    backgroundColor: colors.border, 
-    borderRadius: 2, 
-    alignSelf: 'center', 
-    marginTop: 12 
+  activityPreviewTouchable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
   },
-  detailImage: { 
-    width: '100%', 
-    height: 150 
+  previewImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
   },
-  detailContent: { 
-    padding: 20, 
-    gap: 12 
+  previewContent: {
+    flex: 1,
+    marginLeft: 12,
+    marginRight: 8,
+    gap: 4,
   },
-  detailHeader: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'flex-start' 
+  previewTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 2,
   },
-  detailTitle: { 
-    fontSize: 20, 
-    fontWeight: '700', 
-    color: colors.text, 
-    flex: 1 
+  previewDistanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
-  detailBadge: { 
-    backgroundColor: colors.primary + '20', 
-    paddingHorizontal: 10, 
-    paddingVertical: 4, 
-    borderRadius: 8 
+  previewDistanceText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#818CF8',
   },
-  detailFullBadge: { 
-    backgroundColor: '#FF6B6B20' 
+  previewDatesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
-  detailBadgeText: { 
-    fontSize: 12, 
-    fontWeight: '600', 
-    color: colors.primary 
+  previewDateBubbles: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flexWrap: 'wrap',
+    flex: 1,
   },
-  detailRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    gap: 10 
+  previewDateBubble: {
+    backgroundColor: '#EDE9FE',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
   },
-  detailText: { 
-    fontSize: 15, 
-    color: colors.textSecondary, 
-    flex: 1 
+  previewDateBubbleText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#818CF8',
   },
-  detailDivider: { 
-    height: 1, 
-    backgroundColor: colors.border, 
-    marginVertical: 8 
+  previewMoreDates: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#9CA3AF',
   },
-  viewDetailButton: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    backgroundColor: colors.primary, 
-    paddingVertical: 14, 
-    borderRadius: 12, 
-    gap: 8 
+  previewSingleDate: {
+    fontSize: 13,
+    color: '#6B7280',
   },
-  dragHandleArea: {
-  paddingTop: 12,
-  paddingBottom: 8,
-  alignItems: 'center',
-},
-  viewDetailButtonText: { 
-    fontSize: 16, 
-    fontWeight: '600', 
-    color: '#FFFFFF' 
+  previewParticipantsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
-  closeButton: {
+  previewParticipantsText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#818CF8',
+  },
+  previewParticipantsFull: {
+    color: '#EF4444',
+  },
+  previewFullBadge: {
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginLeft: 4,
+  },
+  previewFullBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#EF4444',
+  },
+  previewCloseButton: {
     position: 'absolute',
-    top: 20,
-    right: 20,
+    top: 8,
+    right: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  previewArrow: {
     width: 32,
     height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.border,
     justifyContent: 'center',
-    alignItems: 'center'
+    alignItems: 'center',
   },
 
   // =====================================================

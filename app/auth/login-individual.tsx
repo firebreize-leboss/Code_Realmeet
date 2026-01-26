@@ -12,9 +12,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
-import { colors, commonStyles, borderRadius, spacing, shadows, typography } from '@/styles/commonStyles';
-import { authService } from '@/services/auth.service';
 import { supabase } from '@/lib/supabase';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function LoginIndividualScreen() {
   const router = useRouter();
@@ -24,189 +23,201 @@ export default function LoginIndividualScreen() {
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-  if (!email || !password) {
-    Alert.alert('Erreur', 'Veuillez remplir tous les champs');
-    return;
-  }
-
-  setLoading(true);
-
-  try {
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-      email: email.trim().toLowerCase(),
-      password,
-    });
-
-    if (authError) throw new Error('Identifiants incorrects');
-    if (!authData.user) throw new Error('Erreur de connexion');
-
-    // Vérifier le type de compte
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('account_type')
-      .eq('id', authData.user.id)
-      .single();
-
-    if (profile?.account_type === 'business') {
-      await supabase.auth.signOut();
-      Alert.alert(
-        'Type de compte incorrect',
-        'Ce compte est un compte entreprise. Veuillez utiliser la connexion "Entreprise".',
-        [
-          { text: 'Aller vers Entreprise', onPress: () => router.replace('/auth/login-business') },
-          { text: 'OK', style: 'cancel' }
-        ]
-      );
+    if (!email || !password) {
+      Alert.alert('Erreur', 'Veuillez remplir tous les champs');
       return;
     }
 
-    router.replace('/(tabs)/browse');
-  } catch (error: any) {
-    Alert.alert('Erreur', error.message);
-  } finally {
-    setLoading(false);
-  }
-};
+    setLoading(true);
+
+    try {
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+
+      if (authError) throw new Error('Identifiants incorrects');
+      if (!authData.user) throw new Error('Erreur de connexion');
+
+      // Vérifier le type de compte
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('account_type')
+        .eq('id', authData.user.id)
+        .single();
+
+      if (profile?.account_type === 'business') {
+        await supabase.auth.signOut();
+        Alert.alert(
+          'Type de compte incorrect',
+          'Ce compte est un compte entreprise. Veuillez utiliser la connexion "Entreprise".',
+          [
+            { text: 'Aller vers Entreprise', onPress: () => router.replace('/auth/login-business') },
+            { text: 'OK', style: 'cancel' }
+          ]
+        );
+        return;
+      }
+
+      router.replace('/(tabs)/browse');
+    } catch (error: any) {
+      Alert.alert('Erreur', error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <SafeAreaView style={commonStyles.container} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-        >
-          <IconSymbol name="chevron.left" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Connexion</Text>
-        <View style={styles.placeholder} />
-      </View>
-
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.welcomeSection}>
-          <Text style={styles.welcomeTitle}>Bon retour !</Text>
-          <Text style={styles.welcomeSubtitle}>
-            Connectez-vous pour retrouver vos activités
-          </Text>
-        </View>
-
-        <View style={styles.form}>
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email</Text>
-            <View style={styles.inputContainer}>
-              <IconSymbol name="envelope" size={20} color={colors.textSecondary} />
-              <TextInput
-                style={styles.input}
-                placeholder="votre.email@exemple.com"
-                placeholderTextColor={colors.textSecondary}
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-            </View>
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Mot de passe</Text>
-            <View style={styles.inputContainer}>
-              <IconSymbol name="lock.fill" size={20} color={colors.textSecondary} />
-              <TextInput
-                style={styles.input}
-                placeholder="••••••••"
-                placeholderTextColor={colors.textSecondary}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-              />
-              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                <IconSymbol
-                  name={showPassword ? "eye.slash.fill" : "eye.fill"}
-                  size={20}
-                  color={colors.textSecondary}
-                />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <TouchableOpacity style={styles.forgotPassword}>
-            <Text style={styles.forgotPasswordText}>Mot de passe oublié ?</Text>
-          </TouchableOpacity>
-
+    <LinearGradient
+      colors={['#60A5FA', '#818CF8', '#C084FC']}
+      style={styles.container}
+    >
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <View style={styles.header}>
           <TouchableOpacity
-            style={styles.loginButton}
-            onPress={handleLogin}
-            disabled={loading}
+            style={styles.backButton}
+            onPress={() => router.back()}
           >
-            {loading ? (
-              <ActivityIndicator color={colors.background} />
-            ) : (
-              <Text style={styles.loginButtonText}>Se connecter</Text>
-            )}
+            <IconSymbol name="chevron.left" size={24} color="#FFFFFF" />
           </TouchableOpacity>
+          <Text style={styles.headerTitle}>Connexion</Text>
+          <View style={styles.placeholder} />
         </View>
 
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>OU</Text>
-          <View style={styles.dividerLine} />
-        </View>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.welcomeSection}>
+            <Text style={styles.welcomeTitle}>Bon retour !</Text>
+            <Text style={styles.welcomeSubtitle}>
+              Connectez-vous pour retrouver vos activités
+            </Text>
+          </View>
 
-        <View style={styles.socialButtons}>
-          <TouchableOpacity style={styles.socialButton}>
-            <IconSymbol name="logo.apple" size={24} color={colors.text} />
-            <Text style={styles.socialButtonText}>Continuer avec Apple</Text>
+          <View style={styles.form}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Email</Text>
+              <View style={styles.inputContainer}>
+                <IconSymbol name="envelope" size={20} color="rgba(255,255,255,0.7)" />
+                <TextInput
+                  style={styles.input}
+                  placeholder="votre.email@exemple.com"
+                  placeholderTextColor="rgba(255,255,255,0.5)"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Mot de passe</Text>
+              <View style={styles.inputContainer}>
+                <IconSymbol name="lock.fill" size={20} color="rgba(255,255,255,0.7)" />
+                <TextInput
+                  style={styles.input}
+                  placeholder="••••••••"
+                  placeholderTextColor="rgba(255,255,255,0.5)"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                />
+                <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                  <IconSymbol
+                    name={showPassword ? "eye.slash.fill" : "eye.fill"}
+                    size={20}
+                    color="rgba(255,255,255,0.7)"
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <TouchableOpacity style={styles.forgotPassword}>
+              <Text style={styles.forgotPasswordText}>Mot de passe oublié ?</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.loginButton}
+              onPress={handleLogin}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#818CF8" />
+              ) : (
+                <Text style={styles.loginButtonText}>Se connecter</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>OU</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <View style={styles.socialButtons}>
+            <TouchableOpacity style={styles.socialButton}>
+              <IconSymbol name="logo.apple" size={24} color="#FFFFFF" />
+              <Text style={styles.socialButtonText}>Continuer avec Apple</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.socialButton}>
+              <IconSymbol name="logo.google" size={24} color="#FFFFFF" />
+              <Text style={styles.socialButtonText}>Continuer avec Google</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.signupSection}>
+            <Text style={styles.signupText}>Vous n'avez pas de compte RealMeet ?</Text>
+          </View>
+          <TouchableOpacity onPress={() => router.push('/auth/signup-individual')}>
+            <Text style={styles.signupLink}>Créez un compte</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.socialButton}>
-            <IconSymbol name="logo.google" size={24} color={colors.text} />
-            <Text style={styles.socialButtonText}>Continuer avec Google</Text>
-          </TouchableOpacity>
-        </View>
+          <View style={styles.switchSection}>
+            <Text style={styles.switchText}>Vous êtes une entreprise ?</Text>
+            <TouchableOpacity onPress={() => router.replace('/auth/login-business')}>
+              <Text style={styles.switchLink}>Se connecter ici</Text>
+            </TouchableOpacity>
+          </View>
 
-        <View style={styles.signupSection}>
-          <Text style={styles.signupText}>Vous n'avez pas de compte RealMeet ?</Text>
-        </View>
-        <TouchableOpacity onPress={() => router.push('/auth/signup-individual')}>
-          <Text style={styles.signupLink}>Créez un compte</Text>
-        </TouchableOpacity>
-
-        <View style={styles.switchSection}>
-          <Text style={styles.switchText}>Vous êtes une entreprise ?</Text>
-          <TouchableOpacity onPress={() => router.replace('/auth/login-business')}>
-            <Text style={styles.switchLink}>Se connecter ici</Text>
-          </TouchableOpacity>
-        </View>
-
-      </ScrollView>
-    </SafeAreaView>
+        </ScrollView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  safeArea: {
+    flex: 1,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
   },
   backButton: {
     width: 44,
     height: 44,
-    borderRadius: borderRadius.full,
-    backgroundColor: colors.backgroundAccent,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    ...shadows.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   headerTitle: {
-    fontSize: typography.xl,
-    fontWeight: typography.semibold,
-    color: colors.text,
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   placeholder: {
     width: 44,
@@ -215,144 +226,142 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.xxxxl,
+    paddingHorizontal: 20,
+    paddingBottom: 40,
   },
   welcomeSection: {
-    paddingVertical: spacing.xxxl,
+    paddingVertical: 32,
     alignItems: 'center',
   },
   welcomeTitle: {
     fontSize: 36,
-    fontWeight: typography.bold,
-    color: colors.text,
-    marginBottom: spacing.sm,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 8,
     letterSpacing: -1,
   },
   welcomeSubtitle: {
-    fontSize: typography.base,
-    color: colors.textSecondary,
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.8)',
     textAlign: 'center',
-    lineHeight: typography.base * 1.5,
+    lineHeight: 24,
   },
   form: {
-    gap: spacing.xl,
-    marginBottom: spacing.xxl,
+    gap: 20,
+    marginBottom: 24,
   },
   inputGroup: {
-    gap: spacing.sm,
+    gap: 8,
   },
   label: {
-    fontSize: typography.sm,
-    fontWeight: typography.semibold,
-    color: colors.text,
-    marginBottom: spacing.xs,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 4,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.inputBackground,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.xs,
-    borderWidth: 1.5,
-    borderColor: colors.inputBorder,
-    gap: spacing.md,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+    gap: 12,
   },
   input: {
     flex: 1,
-    fontSize: typography.base,
-    color: colors.text,
-    paddingVertical: spacing.md,
+    fontSize: 16,
+    color: '#FFFFFF',
+    paddingVertical: 14,
   },
   forgotPassword: {
     alignSelf: 'flex-end',
-    marginTop: -spacing.sm,
+    marginTop: -8,
   },
   forgotPasswordText: {
-    fontSize: typography.sm,
-    color: colors.primary,
-    fontWeight: typography.semibold,
+    fontSize: 14,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   loginButton: {
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.lg,
-    paddingVertical: spacing.lg,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 12,
+    paddingVertical: 16,
     alignItems: 'center',
-    marginTop: spacing.md,
-    ...shadows.md,
+    marginTop: 8,
   },
   loginButtonText: {
-    fontSize: typography.base,
-    fontWeight: typography.semibold,
-    color: colors.textOnPrimary,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#818CF8',
   },
   switchSection: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: spacing.xxl,
-    gap: spacing.sm,
+    marginTop: 24,
+    gap: 8,
   },
   switchText: {
-    fontSize: typography.sm,
-    color: colors.textSecondary,
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
   },
   switchLink: {
-    fontSize: typography.sm,
-    color: colors.secondary,
-    fontWeight: typography.semibold,
+    fontSize: 14,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: spacing.xxl,
-    gap: spacing.lg,
+    marginVertical: 24,
+    gap: 16,
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: colors.divider,
+    backgroundColor: 'rgba(255,255,255,0.3)',
   },
   dividerText: {
-    fontSize: typography.sm,
-    color: colors.textSecondary,
-    fontWeight: typography.medium,
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+    fontWeight: '500',
   },
   socialButtons: {
-    gap: spacing.md,
-    marginBottom: spacing.xxxl,
+    gap: 12,
+    marginBottom: 32,
   },
   socialButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    paddingVertical: spacing.lg,
-    gap: spacing.md,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    ...shadows.sm,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 12,
+    paddingVertical: 16,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   socialButtonText: {
-    fontSize: typography.base,
-    fontWeight: typography.medium,
-    color: colors.text,
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#FFFFFF',
   },
   signupSection: {
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: 8,
   },
   signupText: {
-    fontSize: typography.base,
-    color: colors.textSecondary,
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.8)',
     textAlign: 'center',
   },
   signupLink: {
-    fontSize: typography.base,
-    color: colors.primary,
-    fontWeight: typography.semibold,
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '600',
     textAlign: 'center',
   },
 });

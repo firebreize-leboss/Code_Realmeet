@@ -8,7 +8,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/IconSymbol';
 import { BlurView } from 'expo-blur';
 import { useTheme } from '@react-navigation/native';
@@ -20,8 +20,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { colors, borderRadius, spacing, shadows } from '@/styles/commonStyles';
 
-
-
+// Constante exportée pour la hauteur de la tab bar (utilisée par d'autres composants pour le positionnement)
+export const FLOATING_TAB_BAR_HEIGHT = 60;
 
 export interface TabBarItem {
   name: string;
@@ -52,6 +52,7 @@ export default function FloatingTabBar({
   const theme = useTheme();
   const animatedValue = useSharedValue(0);
   const { width: screenWidth } = Dimensions.get('window');
+  const insets = useSafeAreaInsets();
 
   // Utiliser currentIndex si fourni, sinon détecter via pathname (mode legacy)
   const activeTabIndex = React.useMemo(() => {
@@ -152,16 +153,21 @@ export default function FloatingTabBar({
     },
   };
 
+  // Calculer le bottom margin de manière stable
+  const safeAreaBottom = Math.max(insets.bottom, Platform.OS === 'android' ? 16 : 0);
+  const finalBottomMargin = (bottomMargin ?? 0) + safeAreaBottom;
+
   return (
-    <SafeAreaView
-      style={styles.safeArea}
-      edges={['bottom']}
+    <View
+      style={[
+        styles.safeArea,
+        { paddingBottom: finalBottomMargin }
+      ]}
     >
       <View style={[
         styles.container,
         {
           width: containerWidth,
-          marginBottom: bottomMargin ?? 0
         }
       ]}>
         <BlurView
@@ -207,23 +213,21 @@ export default function FloatingTabBar({
           </View>
         </BlurView>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: {
     position: 'absolute',
-    bottom: Platform.OS === 'android' ? 8 : 0,
+    bottom: 0,
     left: 0,
     right: 0,
     zIndex: 1000,
-    alignItems: 'center', // Center the content
+    alignItems: 'center',
   },
   container: {
     alignSelf: 'center',
-    marginBottom: Platform.OS === 'android' ? 8 : 0,
-    // width handled dynamically via props
   },
   blurContainer: {
     overflow: 'hidden',
