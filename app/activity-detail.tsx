@@ -87,6 +87,7 @@ export default function ActivityDetailScreen() {
   const [showReportModal, setShowReportModal] = useState(false);
   const [isActivityPast, setIsActivityPast] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
+  const [calendarRefreshTrigger, setCalendarRefreshTrigger] = useState(0);
   const [hasAlreadyReviewed, setHasAlreadyReviewed] = useState(false);
   const [canReview, setCanReview] = useState(false);
   const [pastSlotInfo, setPastSlotInfo] = useState<{ date: string; time: string } | null>(null);
@@ -441,6 +442,9 @@ export default function ActivityDetailScreen() {
           placesRestantes: activity.capacity - newCount,
         });
 
+        // Rafraîchir le calendrier pour mettre à jour les compteurs
+        setCalendarRefreshTrigger(prev => prev + 1);
+
         Alert.alert('Succès', 'Vous vous êtes désinscrit de cette activité.');
       } else {
         if (!selectedSlot) return;
@@ -487,6 +491,9 @@ export default function ActivityDetailScreen() {
           participants: newCount,
           placesRestantes: activity.capacity - newCount,
         });
+
+        // Rafraîchir le calendrier pour mettre à jour les compteurs
+        setCalendarRefreshTrigger(prev => prev + 1);
 
         try {
           const { intelligentGroupsService } = await import('@/services/intelligent-groups.service');
@@ -685,6 +692,7 @@ export default function ActivityDetailScreen() {
               readOnly={isBusiness || isJoined}
               userJoinedSlotId={isJoined ? selectedSlot?.id : undefined}
               maxParticipants={activity.capacity}
+              refreshTrigger={calendarRefreshTrigger}
             />
           </View>
         )}

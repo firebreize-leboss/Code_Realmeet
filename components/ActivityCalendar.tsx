@@ -65,6 +65,7 @@ interface ActivityCalendarProps {
   userJoinedSlotId?: string;
   maxParticipants?: number;
   initialWeekOffset?: number;
+  refreshTrigger?: number;
 }
 
 const dayNames = ['LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM', 'DIM'];
@@ -89,6 +90,7 @@ export default function ActivityCalendar({
   userJoinedSlotId,
   maxParticipants,
   initialWeekOffset = 0,
+  refreshTrigger = 0,
 }: ActivityCalendarProps) {
   // Entreprise (edit) : navigation semaine -> weekOffset
   const [weekOffset, setWeekOffset] = useState(initialWeekOffset);
@@ -439,7 +441,7 @@ export default function ActivityCalendar({
     };
 
     load();
-  }, [activityId, mode, weekOffset, currentUserId]);
+  }, [activityId, mode, weekOffset, currentUserId, refreshTrigger]);
 
   // ---------- Pagination (select mode) ----------
   const visibleDays: DaySlots[] = useMemo(() => {
