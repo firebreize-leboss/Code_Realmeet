@@ -389,6 +389,21 @@ export default function ActivityDetailScreen() {
           await supabase.from('conversations').delete().eq('id', conv.id);
         }
       }
+
+      // Supprimer l'utilisateur de slot_group_members pour éviter les fantômes
+      const { data: slotGroups } = await supabase
+        .from('slot_groups')
+        .select('id')
+        .eq('slot_id', slotId);
+
+      if (slotGroups && slotGroups.length > 0) {
+        const groupIds = slotGroups.map(g => g.id);
+        await supabase
+          .from('slot_group_members')
+          .delete()
+          .in('group_id', groupIds)
+          .eq('user_id', currentUserId);
+      }
     } catch (error) {
       console.error('Erreur retrait du groupe créneau:', error);
     }

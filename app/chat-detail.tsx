@@ -15,6 +15,7 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -27,7 +28,6 @@ import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 // ✅ MODIFICATION : Ajouter useConversations pour markAsRead
 import { useMessages, useConversations, TransformedMessage } from '@/hooks/useMessaging';
-import { Keyboard } from 'react-native';
 import { messageStorageService } from '@/services/message-storage.service';
 import { voiceMessageService } from '@/services/voice-message.service';
 import { blockService } from '@/services/block.service';
@@ -94,9 +94,7 @@ export default function ChatDetailScreen() {
   // ✅ MODIFICATION : Récupérer markAsRead depuis useConversations
   const { markAsRead } = useConversations();
 
-  const [keyboardExtraOffset, setKeyboardExtraOffset] = useState(0);
 
-  
   // ✅ NOUVEAU : Marquer la conversation comme lue quand on l'ouvre
   useEffect(() => {
     if (conversationId) {
@@ -283,24 +281,18 @@ export default function ChatDetailScreen() {
     Keyboard.dismiss();
   }, [conversationId]);
 
+// Scroll vers le bas quand le clavier s'ouvre sur Android
 useEffect(() => {
-  const sub = Keyboard.addListener('keyboardDidChangeFrame', e => {
-    if (!e.endCoordinates) {
-      setKeyboardExtraOffset(0);
-      return;
-    }
+  if (Platform.OS !== 'android') return;
 
-    // petite marge visuelle constante
-    setKeyboardExtraOffset(10);
-  });
-
-  const hideSub = Keyboard.addListener('keyboardDidHide', () => {
-    setKeyboardExtraOffset(0);
+  const showSub = Keyboard.addListener('keyboardDidShow', () => {
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 100);
   });
 
   return () => {
-    sub.remove();
-    hideSub.remove();
+    showSub.remove();
   };
 }, []);
 
@@ -782,9 +774,19 @@ useEffect(() => {
         </TouchableOpacity>
       </LinearGradient>
 
-      {/* Messages */}
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
-        <ScrollView ref={scrollViewRef} style={styles.messagesContainer} contentContainerStyle={styles.messagesContent} showsVerticalScrollIndicator={false}>
+      {/* Messages - KeyboardAvoidingView pour iOS et Android */}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior="padding"
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      >
+        <ScrollView
+          ref={scrollViewRef}
+          style={styles.messagesContainer}
+          contentContainerStyle={styles.messagesContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           {conversationStatus.isClosed && (
             <View style={styles.closedBanner}>
               <IconSymbol name="info.circle.fill" size={20} color="#9CA3AF" />
@@ -806,12 +808,12 @@ useEffect(() => {
         </ScrollView>
 
         {/* Zone de saisie */}
-       <View
-  style={[
-    styles.inputContainer,
-    { paddingBottom: Math.max(insets.bottom, 12) + keyboardExtraOffset },
-  ]}
->
+        <View
+          style={[
+            styles.inputContainer,
+            { paddingBottom: Math.max(insets.bottom, 12) },
+          ]}
+        >
 
 
           {/* Bannière d'invitation en attente pour le destinataire */}

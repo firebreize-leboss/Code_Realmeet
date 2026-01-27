@@ -428,7 +428,7 @@ export default function ProfileScreen() {
               </View>
               <View style={styles.statsContent}>
                 <Text style={styles.statsValue}>{activitiesJoined}</Text>
-                <Text style={styles.statsLabel}>Activités rejointes</Text>
+                <Text style={styles.statsLabel}>Activités faites</Text>
               </View>
               <IconSymbol name="chevron.right" size={18} color="rgba(255,255,255,0.7)" />
             </View>

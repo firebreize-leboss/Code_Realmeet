@@ -30,6 +30,7 @@ interface GroupInfo {
   name: string;
   image: string;
   activityId: string | null;
+  slotId: string | null;
   memberCount: number;
 }
 
@@ -61,7 +62,7 @@ export default function GroupInfoScreen() {
       // Récupérer les infos de la conversation
       const { data: convData, error: convError } = await supabase
         .from('conversations')
-        .select('id, name, image_url, activity_id')
+        .select('id, name, image_url, activity_id, slot_id')
         .eq('id', conversationId)
         .single();
 
@@ -102,6 +103,7 @@ export default function GroupInfoScreen() {
         name: convData.name || 'Groupe',
         image: convData.image_url || '',
         activityId: convData.activity_id,
+        slotId: convData.slot_id,
         memberCount: formattedMembers.length,
       });
 
@@ -152,6 +154,23 @@ export default function GroupInfoScreen() {
                 .delete()
                 .eq('conversation_id', groupInfo.id)
                 .eq('user_id', currentUserId);
+
+              // Supprimer l'utilisateur de slot_group_members pour éviter les fantômes
+              if (groupInfo.slotId) {
+                const { data: slotGroups } = await supabase
+                  .from('slot_groups')
+                  .select('id')
+                  .eq('slot_id', groupInfo.slotId);
+
+                if (slotGroups && slotGroups.length > 0) {
+                  const groupIds = slotGroups.map(g => g.id);
+                  await supabase
+                    .from('slot_group_members')
+                    .delete()
+                    .in('group_id', groupIds)
+                    .eq('user_id', currentUserId);
+                }
+              }
 
               // Si c'est un groupe d'activité, désinscrire aussi de l'activité
               if (groupInfo.activityId) {
