@@ -2,7 +2,7 @@
 // Navigation avec swipe entre les tabs (style Instagram)
 // Avec guard d'authentification pour rediriger vers /auth/account-type si non connecté
 
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { useRouter, usePathname, useLocalSearchParams } from 'expo-router';
 import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
@@ -96,12 +96,16 @@ function TabLayoutContent() {
   const { isMapViewActive } = useMapView();
   const [currentTabIndex, setCurrentTabIndex] = useState(0);
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const isSwipeNavigation = useRef(false);
 
   const isBusiness = profile?.account_type === 'business';
   const tabs = isBusiness ? businessTabs : userTabs;
 
   // Synchroniser l'index du tab avec la route actuelle
   useEffect(() => {
+    // Ignorer la synchronisation si on vient d'un swipe
+    if (isSwipeNavigation.current) return;
+
     // Vérifier si on navigue vers browse avec des paramètres (ex: viewMode=maps)
     if (params.viewMode === 'maps' || params.selectedActivityId) {
       const browseIndex = tabs.findIndex(tab => tab.name === 'browse');
@@ -155,7 +159,11 @@ function TabLayoutContent() {
   }, [isBusiness]);
 
   const handleIndexChange = useCallback((index: number) => {
+    isSwipeNavigation.current = true;
     setCurrentTabIndex(index);
+    setTimeout(() => {
+      isSwipeNavigation.current = false;
+    }, 100);
   }, []);
 
   const handleTabPress = useCallback((index: number) => {

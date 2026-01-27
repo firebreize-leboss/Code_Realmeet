@@ -46,7 +46,7 @@ export default function RootLayout() {
   useEffect(() => {
     if (!__DEV__) {
       notificationService.initialize();
-      
+
       return () => {
         notificationService.cleanup();
       };

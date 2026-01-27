@@ -15,8 +15,9 @@ import { useTheme } from '@react-navigation/native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
+  withTiming,
   interpolate,
+  Easing,
 } from 'react-native-reanimated';
 import { colors, borderRadius, spacing, shadows } from '@/styles/commonStyles';
 
@@ -90,11 +91,7 @@ export default function FloatingTabBar({
 
   React.useEffect(() => {
     if (activeTabIndex >= 0) {
-      animatedValue.value = withSpring(activeTabIndex, {
-        damping: 20,
-        stiffness: 120,
-        mass: 1,
-      });
+      animatedValue.value = activeTabIndex;
     }
   }, [activeTabIndex, animatedValue]);
 
