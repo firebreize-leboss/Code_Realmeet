@@ -23,7 +23,7 @@ import { colors, commonStyles } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
 import { getIntentionInfo } from '@/lib/database.types';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
+import { useFonts, Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold } from '@expo-google-fonts/manrope';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -81,6 +81,12 @@ interface DashboardData {
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const [fontsLoaded] = useFonts({
+    Manrope_400Regular,
+    Manrope_500Medium,
+    Manrope_600SemiBold,
+    Manrope_700Bold,
+  });
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -318,12 +324,12 @@ export default function ProfileScreen() {
   if (loading) {
     return (
       <LinearGradient
-        colors={['#60A5FA', '#818CF8', '#C084FC']}
+        colors={['#FFFFFF', '#FFFFFF', '#FFF8F5', '#FFEEE6']}
         style={styles.container}
       >
         <SafeAreaView style={styles.loadingContainer} edges={['top']}>
-          <ActivityIndicator size="large" color="#FFFFFF" />
-          <Text style={styles.loadingText}>Chargement...</Text>
+          <ActivityIndicator size="large" color="#FF8A65" />
+          <Text style={styles.userLoadingText}>Chargement...</Text>
         </SafeAreaView>
       </LinearGradient>
     );
@@ -333,21 +339,27 @@ export default function ProfileScreen() {
   if (!profile) {
     return (
       <LinearGradient
-        colors={['#60A5FA', '#818CF8', '#C084FC']}
+        colors={['#FFFFFF', '#FFFFFF', '#FFF8F5', '#FFEEE6']}
         style={styles.container}
       >
         <SafeAreaView style={styles.notConnectedContainer} edges={['top']}>
-          <IconSymbol name="person.crop.circle" size={80} color="rgba(255,255,255,0.9)" />
-          <Text style={styles.notConnectedTitle}>Non connecté</Text>
-          <Text style={styles.notConnectedText}>
+          <IconSymbol name="person.crop.circle" size={80} color="#FF8A65" />
+          <Text style={styles.userNotConnectedTitle}>Non connecté</Text>
+          <Text style={styles.userNotConnectedText}>
             Connectez-vous pour accéder à votre profil
           </Text>
           <TouchableOpacity
             onPress={() => router.push('/auth/account-type')}
-            style={styles.connectButton}
             activeOpacity={0.8}
           >
-            <Text style={styles.connectButtonText}>Se connecter</Text>
+            <LinearGradient
+              colors={['#FF8A65', '#FF7043']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.userConnectButton}
+            >
+              <Text style={styles.userConnectButtonText}>Se connecter</Text>
+            </LinearGradient>
           </TouchableOpacity>
         </SafeAreaView>
       </LinearGradient>
@@ -370,142 +382,116 @@ export default function ProfileScreen() {
     );
   }
 
-  // Render user profile (Glassmorphism design)
+  // Render user profile (Clean peach gradient design)
+  const intentionInfo = profile.intention ? getIntentionInfo(profile.intention) : null;
+
   return (
     <LinearGradient
-      colors={['#60A5FA', '#818CF8', '#C084FC']}
+      colors={['#FFFFFF', '#FFFFFF', '#FFF8F5', '#FFEEE6']}
       style={styles.container}
     >
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         {/* Header minimaliste */}
-        <View style={styles.header}>
+        <View style={styles.userHeader}>
           <TouchableOpacity
             onPress={() => router.push('/settings')}
-            style={styles.headerButton}
+            style={styles.userHeaderButton}
           >
-            <IconSymbol name="gear" size={22} color="#FFFFFF" />
+            <IconSymbol name="gear" size={22} color="#6B7280" />
           </TouchableOpacity>
         </View>
 
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={styles.contentContainer}
+          contentContainerStyle={styles.userContentContainer}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FFFFFF" />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF8A65" />
           }
         >
-        {/* Carte Profil avec effet verre */}
-        <View style={styles.glassCard}>
-          <View style={styles.profileSection}>
-            <View style={styles.avatarContainer}>
+          {/* Profile Header Section */}
+          <View style={styles.userProfileHeader}>
+            <View style={styles.userAvatarContainer}>
               <Image
-                source={{ uri: profile.avatar_url || 'https://via.placeholder.com/90' }}
-                style={styles.avatar}
+                source={{ uri: profile.avatar_url || 'https://via.placeholder.com/100' }}
+                style={styles.userAvatar}
               />
               <TouchableOpacity
-                style={styles.editBadge}
+                style={styles.userEditBadge}
                 onPress={() => router.push('/edit-profile')}
               >
-                <IconSymbol name="pencil" size={11} color="#FFFFFF" />
+                <IconSymbol name="pencil" size={12} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.userName}>{profile.full_name || profile.username}</Text>
+            <Text style={styles.userProfileName}>{profile.full_name || profile.username}</Text>
 
             {profile.city && (
-              <View style={styles.locationRow}>
-                <IconSymbol name="location.fill" size={13} color="rgba(255,255,255,0.95)" />
-                <Text style={styles.locationText}>{profile.city}</Text>
+              <View style={styles.userLocationRow}>
+                <IconSymbol name="location.fill" size={14} color="#6B7280" />
+                <Text style={styles.userLocationText}>{profile.city}</Text>
               </View>
             )}
+
+            {/* Bouton modifier le profil */}
+            <TouchableOpacity
+              style={styles.userEditProfileButton}
+              onPress={() => router.push('/edit-profile')}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={['#FF8A65', '#FF7043']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.userEditProfileGradient}
+              >
+                <Text style={styles.userEditProfileText}>Modifier le profil</Text>
+              </LinearGradient>
+            </TouchableOpacity>
           </View>
 
-          {/* Bouton modifier */}
-          <TouchableOpacity
-            style={styles.editButton}
-            onPress={() => router.push('/edit-profile')}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.editButtonText}>Modifier le profil</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Stats Card Glass */}
-        {loadingStats ? (
-          <View style={styles.glassCard}>
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          </View>
-        ) : (
-          <TouchableOpacity
-            style={styles.glassCard}
-            onPress={() => router.push('/my-participated-activities')}
-            activeOpacity={0.7}
-          >
-            <View style={styles.statsRow}>
-              <View style={styles.statsIcon}>
-                <IconSymbol name="calendar" size={22} color="#FFFFFF" />
-              </View>
-              <View style={styles.statsContent}>
-                <Text style={styles.statsValue}>{activitiesJoined}</Text>
-                <Text style={styles.statsLabel}>Activités faites</Text>
-              </View>
-              <IconSymbol name="chevron.right" size={18} color="rgba(255,255,255,0.7)" />
+          {/* Stats & Intention Row */}
+          {loadingStats ? (
+            <View style={styles.userStatsIntentionRow}>
+              <ActivityIndicator size="small" color="#FF7043" />
             </View>
-          </TouchableOpacity>
-        )}
+          ) : (
+            <TouchableOpacity
+              style={styles.userStatsIntentionRow}
+              onPress={() => router.push('/my-participated-activities')}
+              activeOpacity={0.7}
+            >
+              <View style={styles.userStatItem}>
+                <Text style={styles.userStatValue}>{activitiesJoined}</Text>
+                <Text style={styles.userStatLabel}>Activités</Text>
+              </View>
 
-        {/* Bio */}
-        {profile.bio && (
-          <View style={styles.glassCard}>
-            <Text style={styles.sectionTitle}>Ma Bio</Text>
-            <Text style={styles.bioText}>{profile.bio}</Text>
-          </View>
-        )}
+              <View style={styles.userStatSeparator} />
 
-        {/* Personnalité */}
-        {profile.personality_tags && profile.personality_tags.length > 0 && (
-          <View style={styles.glassCard}>
-            <Text style={styles.sectionTitle}>Personnalité</Text>
-            <View style={styles.tagsContainer}>
-              {profile.personality_tags.map((tag, index) => (
-                <View key={index} style={styles.tag}>
-                  <Text style={styles.tagText}>{tag}</Text>
+              {intentionInfo && (
+                <View style={styles.userIntentionItem}>
+                  <IconSymbol name={intentionInfo.icon as any} size={18} color="#FF7043" />
+                  <Text style={styles.userIntentionLabel}>{intentionInfo.label}</Text>
                 </View>
-              ))}
-            </View>
-          </View>
-        )}
+              )}
+            </TouchableOpacity>
+          )}
 
-        {/* Intention */}
-        {profile.intention && (() => {
-          const intentionInfo = getIntentionInfo(profile.intention);
-          return intentionInfo ? (
-            <View style={styles.glassCard}>
-              <Text style={styles.sectionTitle}>Recherche</Text>
-              <View style={styles.intentionRow}>
-                <View style={styles.intentionIcon}>
-                  <IconSymbol name={intentionInfo.icon as any} size={18} color="#FFFFFF" />
-                </View>
-                <Text style={styles.intentionText}>{intentionInfo.label}</Text>
-              </View>
-            </View>
-          ) : null;
-        })()}
+          {/* Bio */}
+          {profile.bio && (
+            <Text style={styles.userBioText}>{profile.bio}</Text>
+          )}
 
-        {/* Intérêts */}
-        {profile.interests && profile.interests.length > 0 && (
-          <View style={styles.glassCard}>
-            <Text style={styles.sectionTitle}>Centres d'intérêt</Text>
-            <View style={styles.tagsContainer}>
+          {/* Intérêts */}
+          {profile.interests && profile.interests.length > 0 && (
+            <View style={styles.userInterestsContainer}>
               {profile.interests.map((interest, index) => (
-                <View key={index} style={styles.tag}>
-                  <Text style={styles.tagText}>{interest}</Text>
+                <View key={index} style={styles.userInterestTag}>
+                  <Text style={styles.userInterestText}>{interest}</Text>
                 </View>
               ))}
             </View>
-          </View>
-        )}
+          )}
         </ScrollView>
       </SafeAreaView>
     </LinearGradient>
@@ -1301,5 +1287,205 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textAlign: 'center',
     paddingVertical: 8,
+  },
+
+  // ============================================
+  // USER PROFILE STYLES (Clean Peach Design)
+  // ============================================
+  userHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    alignItems: 'flex-end',
+  },
+  userHeaderButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(107, 114, 128, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  userContentContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 6,
+    paddingBottom: Platform.OS === 'ios' ? 100 : 120,
+    alignItems: 'center',
+  },
+  userProfileHeader: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  userAvatarContainer: {
+    position: 'relative',
+    marginBottom: 12,
+  },
+  userAvatar: {
+    width: 216,
+    height: 216,
+    borderRadius: 108,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 3,
+    borderColor: '#FF8A65',
+    shadowColor: '#FF8A65',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  userEditBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FF8A65',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  userProfileName: {
+    fontSize: 20,
+    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
+    color: '#1F2937',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  userLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 10,
+  },
+  userLocationText: {
+    fontSize: 14,
+    fontFamily: 'Manrope_500Medium',
+    color: '#6B7280',
+  },
+  userEditProfileButton: {
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  userEditProfileGradient: {
+    paddingVertical: 8,
+    paddingHorizontal: 22,
+    borderRadius: 18,
+  },
+  userEditProfileText: {
+    fontSize: 13,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#FFFFFF',
+  },
+  userStatsIntentionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginBottom: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    width: '100%',
+    minHeight: 44,
+  },
+  userStatItem: {
+    alignItems: 'center',
+    paddingHorizontal: 12,
+  },
+  userStatValue: {
+    fontSize: 16,
+    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
+    color: '#FF7043',
+  },
+  userStatLabel: {
+    fontSize: 11,
+    fontFamily: 'Manrope_500Medium',
+    color: '#6B7280',
+    marginTop: 1,
+  },
+  userStatSeparator: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#E5E7EB',
+    marginHorizontal: 12,
+  },
+  userIntentionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+  },
+  userIntentionLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
+    color: '#FF7043',
+  },
+  userBioText: {
+    fontSize: 13,
+    fontFamily: 'Manrope_400Regular',
+    color: '#4B5563',
+    lineHeight: 20,
+    textAlign: 'center',
+    marginBottom: 14,
+    paddingHorizontal: 8,
+  },
+  userInterestsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  userInterestTag: {
+    backgroundColor: 'rgba(255, 138, 101, 0.08)',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+  },
+  userInterestText: {
+    fontSize: 13,
+    fontFamily: 'Manrope_500Medium',
+    color: '#6B7280',
+  },
+  userLoadingText: {
+    fontSize: 16,
+    color: '#6B7280',
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+  },
+  userNotConnectedTitle: {
+    fontSize: 26,
+    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
+    color: '#1F2937',
+    marginTop: 16,
+  },
+  userNotConnectedText: {
+    fontSize: 16,
+    fontFamily: 'Manrope_400Regular',
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  userConnectButton: {
+    borderRadius: 24,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    marginTop: 8,
+  },
+  userConnectButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#FFFFFF',
   },
 });

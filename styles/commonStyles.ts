@@ -1,72 +1,89 @@
 
 import { StyleSheet, ViewStyle, TextStyle } from 'react-native';
 
-// Modern 2025 Light Theme Color Palette
-// Inspired by Tinder, Bumble BFF, Timeleft, Meetup
+// ============================================================
+// PREMIUM DESIGN SYSTEM - Orange Accent Only
+// Inspired by Airbnb, Revolut, premium apps
+// Palette: White, Grays (multiple levels), Black, Desaturated Orange
+// ============================================================
+
 export const colors = {
-  // Primary brand color - Vibrant Coral/Pink gradient feel
-  primary: '#FF6B9D', // Vibrant coral-pink (main accent)
-  primaryLight: '#FFB3D9', // Light pink for hover/pressed states
-  primaryDark: '#E63E7A', // Darker pink for emphasis
+  // Primary accent - Desaturated Orange (guide visuel, pas dominant)
+  primary: '#D97B4A', // Orange désaturé principal (chaleureux mais calme)
+  primaryMuted: '#C4886A', // Orange encore plus doux pour éléments secondaires
+  primaryLight: '#F5E6DE', // Orange très pâle pour fonds subtils
+  primaryDark: '#B8623A', // Orange foncé pour emphase
 
-  // Secondary accent - Complementary turquoise/teal
-  secondary: '#3ABFEF', // Bright turquoise blue
-  secondaryLight: '#7DD3F7', // Light turquoise
-  secondaryDark: '#2196D4', // Darker blue
+  // Pas de couleur secondaire - Orange uniquement comme accent
+  secondary: '#D97B4A', // Même que primary (pas de bleu/violet)
+  secondaryLight: '#F5E6DE',
+  secondaryDark: '#B8623A',
 
-  // Backgrounds - Light & Airy
-  background: '#FAFAFA', // Very light gray (main background)
-  backgroundAlt: '#FFFFFF', // Pure white (cards, modals)
-  backgroundAccent: '#F5F5F5', // Slightly darker for contrast
+  // Backgrounds - Blanc et nuances de gris très subtiles
+  background: '#FAFAFA', // Gris très clair (fond principal)
+  backgroundAlt: '#FFFFFF', // Blanc pur (cartes, modales)
+  backgroundAccent: '#F5F5F5', // Gris légèrement plus foncé
+  backgroundWarm: '#FFFBF8', // Blanc chaud très subtil
 
-  // Text colors - High contrast on light backgrounds
-  text: '#1A1A1A', // Very dark gray (almost black) for primary text
-  textSecondary: '#666666', // Medium gray for secondary text
-  textTertiary: '#999999', // Light gray for tertiary text/placeholders
-  textOnPrimary: '#FFFFFF', // White text on colored backgrounds
+  // Text colors - Hiérarchie claire
+  text: '#1C1C1E', // Noir/gris très foncé (titres)
+  textSecondary: '#48484A', // Gris foncé (descriptions)
+  textTertiary: '#8E8E93', // Gris moyen (métadonnées, lieux)
+  textMuted: '#AEAEB2', // Gris clair (placeholders, hints)
+  textOnPrimary: '#FFFFFF', // Blanc sur fonds colorés
 
   // Card & Surface
-  card: '#FFFFFF', // White cards
-  cardBorder: '#E8E8E8', // Subtle border
-  cardShadow: 'rgba(0, 0, 0, 0.08)', // Soft shadow
+  card: '#FFFFFF', // Blanc pur
+  cardBorder: '#E5E5EA', // Gris très subtil
+  cardShadow: 'rgba(0, 0, 0, 0.06)', // Ombre très douce
 
-  // Borders & Dividers
-  border: '#E0E0E0', // Light border
-  borderLight: '#F0F0F0', // Very light border
-  divider: '#EEEEEE', // Divider lines
+  // Borders & Dividers - Gamme de gris
+  border: '#D1D1D6', // Gris bordure standard
+  borderLight: '#E5E5EA', // Gris bordure léger
+  borderSubtle: '#F2F2F7', // Gris bordure très subtil
+  divider: '#E5E5EA', // Lignes de séparation
 
-  // Status colors
-  success: '#4CAF50', // Green for success
-  successLight: '#81C784', // Light green
-  error: '#EF5350', // Red for errors
-  errorLight: '#E57373', // Light red
-  warning: '#FFA726', // Orange for warnings
-  warningLight: '#FFB74D', // Light orange
-  info: '#42A5F5', // Blue for info
-  infoLight: '#64B5F6', // Light blue
+  // Status colors - Tons naturels
+  success: '#34C759', // Vert iOS
+  successLight: '#E8F9ED',
+  error: '#FF3B30', // Rouge iOS
+  errorLight: '#FFE5E5',
+  warning: '#D97B4A', // Orange (notre accent)
+  warningLight: '#FFF3ED',
+  info: '#8E8E93', // Gris (pas de bleu)
+  infoLight: '#F2F2F7',
 
   // Special UI elements
-  badge: '#FF6B9D', // Badge color (primary)
-  badgeText: '#FFFFFF', // Badge text
-  highlight: '#FFF3E0', // Highlight background (very light orange)
-  overlay: 'rgba(0, 0, 0, 0.5)', // Dark overlay for modals
-  overlayLight: 'rgba(0, 0, 0, 0.3)', // Lighter overlay
+  badge: '#F2F2F7', // Fond gris très clair pour badges discrets
+  badgeText: '#48484A', // Texte gris foncé
+  badgeAccent: '#D97B4A', // Orange pour badges actifs
+  highlight: '#FFFBF8', // Fond blanc chaud
+  overlay: 'rgba(0, 0, 0, 0.4)', // Overlay sombre
+  overlayLight: 'rgba(0, 0, 0, 0.2)', // Overlay léger
+  imageOverlay: 'rgba(0, 0, 0, 0.25)', // Overlay sur images
 
   // Input fields
-  inputBackground: '#F7F7F7', // Light gray input background
-  inputBorder: '#DDDDDD', // Input border
-  inputFocus: '#FF6B9D', // Primary color on focus
-  inputPlaceholder: '#AAAAAA', // Placeholder text
+  inputBackground: '#F2F2F7', // Gris très clair
+  inputBorder: '#D1D1D6', // Gris bordure
+  inputFocus: '#D97B4A', // Orange au focus
+  inputPlaceholder: '#AEAEB2', // Gris placeholder
 
-  // Category colors (softened pastels for light theme)
-  categoryRomance: '#FFB3D9', // Soft pink
-  categoryFood: '#FFD580', // Soft orange
-  categoryFestival: '#D1A3E6', // Soft purple
-  categoryBar: '#FFB380', // Soft coral
-  categoryLeisure: '#80E6D9', // Soft teal
-  categorySport: '#A8E6A3', // Soft green
-  categoryParty: '#C880E6', // Soft violet
-  categoryCulture: '#80C8FF', // Soft blue
+  // Prix - Gris foncé ou orange désaturé (pas de bleu)
+  price: '#48484A', // Gris foncé par défaut
+  priceAccent: '#C4886A', // Orange désaturé (non aguicheur)
+
+  // Category colors - Tous en nuances de gris/orange
+  categoryRomance: '#E8D5CE', // Beige rosé
+  categoryFood: '#F0E0D0', // Beige chaud
+  categoryFestival: '#E5E0E8', // Gris lavande
+  categoryBar: '#F0DDD5', // Beige corail
+  categoryLeisure: '#E0E8E5', // Gris-vert
+  categorySport: '#E0E8E0', // Gris-vert clair
+  categoryParty: '#E8E0E8', // Gris-violet
+  categoryCulture: '#E0E5E8', // Gris-bleu
+
+  // Accent (legacy compatibility)
+  accent: '#D97B4A',
 };
 
 // Typography scale

@@ -188,15 +188,15 @@ export default function FloatingTabBar({
                   <View style={styles.tabContent}>
                     <IconSymbol
                       name={tab.icon}
-                      size={24}
-                      color={isActive ? '#1E40AF' : 'rgba(0, 0, 0, 0.6)'}
+                      size={22}
+                      color={isActive ? colors.primary : colors.textTertiary}
                     />
                     <Text
                       style={[
                         styles.tabLabel,
-                        { color: 'rgba(0, 0, 0, 0.6)' },
+                        { color: colors.textTertiary },
                         isActive && {
-                          color: '#1E40AF',
+                          color: colors.primary,
                           fontWeight: '600'
                         },
                       ]}

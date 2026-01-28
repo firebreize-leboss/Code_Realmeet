@@ -21,13 +21,13 @@ import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
 import { WebView } from 'react-native-webview';
 import { supabase } from '@/lib/supabase';
 import * as Location from 'expo-location';
-import { LinearGradient } from 'expo-linear-gradient';
 import { PREDEFINED_CATEGORIES } from '@/constants/categories';
 import { useDataCache } from '@/contexts/DataCacheContext';
 import ActivityCard from '@/components/ActivityCard';
 import { useMapView } from '@/contexts/MapViewContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FLOATING_TAB_BAR_HEIGHT } from '@/components/FloatingTabBar';
+import { useFonts, Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold } from '@expo-google-fonts/manrope';
 
 
 const PROTOMAPS_KEY = process.env.EXPO_PUBLIC_PROTOMAPS_KEY || '';
@@ -113,6 +113,12 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 export default function BrowseScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const [fontsLoaded] = useFonts({
+    Manrope_400Regular,
+    Manrope_500Medium,
+    Manrope_600SemiBold,
+    Manrope_700Bold,
+  });
   const { cache, loading: cacheLoading, refreshActivities } = useDataCache();
   const { setIsMapViewActive } = useMapView();
   const insets = useSafeAreaInsets();
@@ -455,20 +461,21 @@ export default function BrowseScreen() {
     body, html { height: 100%; overflow: hidden; }
     #map { position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
     .custom-marker {
-      width: 32px; height: 32px;
-      background: linear-gradient(135deg, #818CF8 0%, #A78BFA 100%);
+      width: 28px; height: 28px;
+      background: #D97B4A;
       border: 3px solid white; border-radius: 50%; cursor: pointer;
-      box-shadow: 0 3px 8px rgba(129, 140, 248, 0.4);
+      box-shadow: 0 2px 6px rgba(217, 123, 74, 0.35);
     }
     .custom-marker.selected {
-      background: linear-gradient(135deg, #60A5FA 0%, #818CF8 100%);
-      box-shadow: 0 4px 12px rgba(96, 165, 250, 0.5);
+      background: #B8623A;
+      box-shadow: 0 3px 10px rgba(184, 98, 58, 0.45);
       border-width: 4px;
+      transform: scale(1.15);
     }
     .user-marker {
-      width: 18px; height: 18px; background: #3B82F6;
+      width: 16px; height: 16px; background: #48484A;
       border: 3px solid white; border-radius: 50%;
-      box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.25);
+      box-shadow: 0 0 0 5px rgba(72, 72, 74, 0.2);
     }
     .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right { display: none; }
   </style>
@@ -661,7 +668,7 @@ export default function BrowseScreen() {
             {/* Distance */}
             {distanceText && (
               <View style={styles.previewDistanceRow}>
-                <IconSymbol name="location.fill" size={14} color="#818CF8" />
+                <IconSymbol name="location.fill" size={14} color={colors.primary} />
                 <Text style={styles.previewDistanceText}>{distanceText}</Text>
               </View>
             )}
@@ -669,7 +676,7 @@ export default function BrowseScreen() {
             {/* Dates */}
             {dates.length > 0 ? (
               <View style={styles.previewDatesRow}>
-                <IconSymbol name="calendar" size={14} color="#818CF8" />
+                <IconSymbol name="calendar" size={14} color={colors.textTertiary} />
                 <View style={styles.previewDateBubbles}>
                   {dates.map((dateStr, index) => (
                     <View key={index} style={styles.previewDateBubble}>
@@ -683,14 +690,14 @@ export default function BrowseScreen() {
               </View>
             ) : (
               <View style={styles.previewDatesRow}>
-                <IconSymbol name="calendar" size={14} color="#818CF8" />
+                <IconSymbol name="calendar" size={14} color={colors.textTertiary} />
                 <Text style={styles.previewSingleDate}>{selectedActivity.date || 'Date à définir'}</Text>
               </View>
             )}
 
             {/* Participants */}
             <View style={styles.previewParticipantsRow}>
-              <IconSymbol name="person.2.fill" size={14} color={isFull ? '#EF4444' : '#818CF8'} />
+              <IconSymbol name="person.2.fill" size={14} color={isFull ? colors.error : colors.textTertiary} />
               <Text style={[styles.previewParticipantsText, isFull && styles.previewParticipantsFull]}>
                 {participants}/{maxPlaces} inscrits
               </Text>
@@ -707,12 +714,12 @@ export default function BrowseScreen() {
             style={styles.previewCloseButton}
             onPress={(e) => { e.stopPropagation(); closeActivity(); }}
           >
-            <IconSymbol name="xmark" size={16} color="#6B7280" />
+            <IconSymbol name="xmark" size={16} color={colors.textTertiary} />
           </TouchableOpacity>
 
           {/* Indicateur cliquable */}
           <View style={styles.previewArrow}>
-            <IconSymbol name="chevron.right" size={20} color="#818CF8" />
+            <IconSymbol name="chevron.right" size={20} color={colors.textTertiary} />
           </View>
         </TouchableOpacity>
       </Animated.View>
@@ -721,40 +728,34 @@ export default function BrowseScreen() {
 
   if (loading) {
     return (
-      <LinearGradient
-        colors={['#60A5FA', '#818CF8', '#C084FC']}
-        style={styles.container}
-      >
+      <View style={styles.container}>
         <SafeAreaView style={styles.loadingContainer} edges={['top']}>
-          <ActivityIndicator size="large" color="#FFFFFF" />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Chargement des activités...</Text>
         </SafeAreaView>
-      </LinearGradient>
+      </View>
     );
   }
 
   return (
-    <LinearGradient
-      colors={['#60A5FA', '#818CF8', '#C084FC']}
-      style={styles.container}
-    >
+    <View style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Découvrir</Text>
           <View style={styles.headerActions}>
             <View style={styles.toggleContainer}>
               <TouchableOpacity style={[styles.toggleButton, viewMode === 'liste' && styles.toggleButtonActive]} onPress={() => setViewMode('liste')}>
-                <IconSymbol name="list.bullet" size={20} color={viewMode === 'liste' ? '#FFFFFF' : 'rgba(255,255,255,0.7)'} />
+                <IconSymbol name="list.bullet" size={18} color={viewMode === 'liste' ? colors.primary : colors.textTertiary} />
                 <Text style={[styles.toggleText, viewMode === 'liste' && styles.toggleTextActive]}>Liste</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.toggleButton, viewMode === 'maps' && styles.toggleButtonActive]} onPress={() => setViewMode('maps')}>
-                <IconSymbol name="map.fill" size={20} color={viewMode === 'maps' ? '#FFFFFF' : 'rgba(255,255,255,0.7)'} />
+                <IconSymbol name="map.fill" size={18} color={viewMode === 'maps' ? colors.primary : colors.textTertiary} />
                 <Text style={[styles.toggleText, viewMode === 'maps' && styles.toggleTextActive]}>Maps</Text>
               </TouchableOpacity>
             </View>
             {isBusiness && (
               <TouchableOpacity onPress={() => router.push('/create-activity')} style={styles.createButton}>
-                <IconSymbol name="plus" size={24} color="#FFFFFF" />
+                <IconSymbol name="plus" size={22} color="#FFFFFF" />
               </TouchableOpacity>
             )}
           </View>
@@ -764,11 +765,11 @@ export default function BrowseScreen() {
           <>
             <View style={styles.searchRow}>
               <View style={styles.searchContainer}>
-                <IconSymbol name="magnifyingglass" size={20} color="rgba(255,255,255,0.9)" />
+                <IconSymbol name="magnifyingglass" size={18} color={colors.textTertiary} />
                 <TextInput
                   style={styles.searchInput}
                   placeholder="Rechercher des activités..."
-                  placeholderTextColor="rgba(255,255,255,0.6)"
+                  placeholderTextColor={colors.textMuted}
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                 />
@@ -780,7 +781,7 @@ export default function BrowseScreen() {
                   setShowFilters(true);
                 }}
               >
-                <IconSymbol name="line.3.horizontal.decrease.circle" size={22} color={activeFiltersCount > 0 ? '#FFFFFF' : 'rgba(255,255,255,0.9)'} />
+                <IconSymbol name="line.3.horizontal.decrease.circle" size={20} color={activeFiltersCount > 0 ? colors.primary : colors.textTertiary} />
                 {activeFiltersCount > 0 && (
                   <View style={styles.filterBadge}>
                     <Text style={styles.filterBadgeText}>{activeFiltersCount}</Text>
@@ -792,7 +793,7 @@ export default function BrowseScreen() {
               style={styles.scrollView}
               contentContainerStyle={[styles.contentContainer, Platform.OS !== 'ios' && styles.contentContainerWithTabBar]}
               showsVerticalScrollIndicator={false}
-              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#FFFFFF" />}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
             >
               {filteredActivities.length > 0 ? (
                 <View style={styles.gridContainer}>
@@ -811,7 +812,7 @@ export default function BrowseScreen() {
                 </View>
               ) : (
                 <View style={styles.emptyState}>
-                  <IconSymbol name="calendar" size={64} color="rgba(255,255,255,0.7)" />
+                  <IconSymbol name="calendar" size={64} color={colors.primary} />
                   <Text style={styles.emptyText}>Aucune activité trouvée</Text>
                   <Text style={styles.emptySubtext}>{searchQuery ? 'Essayez une autre recherche' : 'Créez la première activité !'}</Text>
                 </View>
@@ -846,7 +847,7 @@ export default function BrowseScreen() {
             />
             {userLocation && (
               <TouchableOpacity style={styles.locationButton} onPress={centerOnUser}>
-                <IconSymbol name="location.fill" size={22} color="#FFFFFF" />
+                <IconSymbol name="location.fill" size={20} color={colors.primary} />
               </TouchableOpacity>
             )}
             {renderSelectedActivity()}
@@ -1113,112 +1114,137 @@ export default function BrowseScreen() {
           </View>
         </Modal>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 
+// =====================================================
+// STYLES PREMIUM - Design calme, cohérent, orange accent
+// =====================================================
 const styles = StyleSheet.create({
+  // CONTAINER & LAYOUT
   container: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   safeArea: {
     flex: 1,
   },
+
+  // HEADER - Épuré
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 14,
+    backgroundColor: colors.backgroundAlt,
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '700',
-    color: '#FFFFFF',
+    fontFamily: 'Manrope_700Bold',
+    color: colors.text,
+    letterSpacing: -0.3,
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
+
+  // TOGGLE LISTE/MAPS - Style discret (fond gris, orange pour actif)
   toggleContainer: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 12,
-    padding: 4,
+    backgroundColor: colors.borderSubtle,
+    borderRadius: 10,
+    padding: 3,
   },
   toggleButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: 8,
-    gap: 6,
+    gap: 5,
   },
   toggleButtonActive: {
-    backgroundColor: 'rgba(255,255,255,0.35)',
+    backgroundColor: colors.backgroundAlt,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    elevation: 1,
   },
   toggleText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.7)',
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.textTertiary,
   },
   toggleTextActive: {
-    color: '#FFFFFF',
+    color: colors.primary,
   },
+
+  // BOUTON CREATE - Seul élément CTA fort
   createButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
   },
+
+  // SEARCH & FILTERS
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    marginBottom: 16,
+    paddingBottom: 12,
+    backgroundColor: colors.backgroundAlt,
     gap: 10,
   },
   searchContainer: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: colors.borderSubtle,
     borderRadius: 12,
-    paddingHorizontal: 16,
-    gap: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    paddingHorizontal: 14,
+    gap: 10,
   },
   searchInput: {
     flex: 1,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: '#FFFFFF',
+    paddingVertical: 12,
+    fontSize: 15,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.text,
   },
   filterButton: {
-    width: 48,
-    height: 48,
+    width: 44,
+    height: 44,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: colors.borderSubtle,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
   },
   filterButtonActive: {
-    backgroundColor: 'rgba(255,255,255,0.35)',
+    backgroundColor: colors.primaryLight,
   },
   filterBadge: {
     position: 'absolute',
     top: 6,
     right: 6,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: colors.error,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1227,16 +1253,21 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
   },
-  scrollView: { 
-    flex: 1 
+
+  // SCROLL & CONTENT
+  scrollView: {
+    flex: 1,
   },
-  contentContainer: { 
-    paddingHorizontal: 20, 
-    paddingBottom: 20 
+  contentContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 20,
   },
-  contentContainerWithTabBar: { 
-    paddingBottom: 100 
+  contentContainerWithTabBar: {
+    paddingBottom: 100,
   },
+
+  // LOADING & EMPTY
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -1244,26 +1275,32 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   loadingText: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    fontWeight: '600',
+    fontSize: 15,
+    color: colors.textTertiary,
+    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
   },
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 60,
+    paddingVertical: 80,
   },
   emptyText: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: '600',
-    color: '#FFFFFF',
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.text,
     marginTop: 16,
   },
   emptySubtext: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.9)',
+    fontSize: 14,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textTertiary,
     textAlign: 'center',
+    marginTop: 4,
   },
+
+  // GRID
   gridContainer: {
     flexDirection: 'column',
     gap: 12,
@@ -1272,14 +1309,12 @@ const styles = StyleSheet.create({
     width: '100%',
   },
 
-  // =====================================================
-  // STYLES POUR LA VUE MAP
-  // =====================================================
-  mapContainer: { 
-    flex: 1 
+  // MAP VIEW
+  mapContainer: {
+    flex: 1,
   },
-  map: { 
-    flex: 1 
+  map: {
+    flex: 1,
   },
   locationButton: {
     position: 'absolute',
@@ -1288,30 +1323,30 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: colors.backgroundAlt,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 3,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
   },
-  // Widget de prévisualisation compact (sans scroll)
-  // Note: La valeur 'bottom' est calculée dynamiquement dans le composant
+
+  // ACTIVITY PREVIEW - Design premium calme
   activityPreview: {
     position: 'absolute',
     left: 16,
     right: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.backgroundAlt,
     borderRadius: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.1,
     shadowRadius: 12,
-    elevation: 8,
+    elevation: 6,
     zIndex: 1001,
   },
   activityPreviewTouchable: {
@@ -1320,21 +1355,22 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   previewImage: {
-    width: 80,
-    height: 80,
+    width: 72,
+    height: 72,
     borderRadius: 12,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: colors.borderSubtle,
   },
   previewContent: {
     flex: 1,
     marginLeft: 12,
     marginRight: 8,
-    gap: 4,
+    gap: 3,
   },
   previewTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
-    color: '#111827',
+    fontFamily: 'Manrope_700Bold',
+    color: colors.text,
     marginBottom: 2,
   },
   previewDistanceRow: {
@@ -1343,14 +1379,15 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   previewDistanceText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
-    color: '#818CF8',
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.primary,
   },
   previewDatesRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
   },
   previewDateBubbles: {
     flexDirection: 'row',
@@ -1360,24 +1397,27 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   previewDateBubble: {
-    backgroundColor: '#EDE9FE',
-    paddingHorizontal: 8,
+    backgroundColor: colors.borderSubtle,
+    paddingHorizontal: 7,
     paddingVertical: 3,
-    borderRadius: 12,
+    borderRadius: 6,
   },
   previewDateBubbleText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
-    color: '#818CF8',
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.textSecondary,
   },
   previewMoreDates: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#9CA3AF',
+    fontSize: 10,
+    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
+    color: colors.textMuted,
   },
   previewSingleDate: {
-    fontSize: 13,
-    color: '#6B7280',
+    fontSize: 12,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textTertiary,
   },
   previewParticipantsRow: {
     flexDirection: 'row',
@@ -1385,53 +1425,53 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   previewParticipantsText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#818CF8',
+    fontSize: 12,
+    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
+    color: colors.textTertiary,
   },
   previewParticipantsFull: {
-    color: '#EF4444',
+    color: colors.error,
   },
   previewFullBadge: {
-    backgroundColor: '#FEE2E2',
-    paddingHorizontal: 8,
+    backgroundColor: colors.errorLight,
+    paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 8,
+    borderRadius: 4,
     marginLeft: 4,
   },
   previewFullBadgeText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
-    color: '#EF4444',
+    fontFamily: 'Manrope_700Bold',
+    color: colors.error,
   },
   previewCloseButton: {
     position: 'absolute',
     top: 8,
     right: 8,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#F3F4F6',
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.borderSubtle,
     justifyContent: 'center',
     alignItems: 'center',
   },
   previewArrow: {
-    width: 32,
-    height: 32,
+    width: 28,
+    height: 28,
     justifyContent: 'center',
     alignItems: 'center',
   },
 
-  // =====================================================
-  // STYLES POUR LE MODAL DE FILTRES
-  // =====================================================
+  // FILTER MODAL - Design premium cohérent
   filterModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: colors.overlay,
     justifyContent: 'flex-end',
   },
   filterModalContent: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.backgroundAlt,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: '90%',
@@ -1443,11 +1483,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: colors.borderLight,
   },
   filterModalTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     color: colors.text,
   },
   filterScrollView: {
@@ -1456,72 +1497,77 @@ const styles = StyleSheet.create({
   filterSection: {
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: colors.borderLight,
   },
   filterSectionTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: colors.text,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   categoryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
   },
   categoryChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: colors.card,
-    gap: 8,
+    backgroundColor: colors.borderSubtle,
+    gap: 6,
   },
   categoryChipText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: colors.text,
+    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
+    color: colors.textSecondary,
   },
   distanceOptions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
   },
   distanceChip: {
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 20,
-    backgroundColor: colors.card,
+    backgroundColor: colors.borderSubtle,
   },
   distanceChipActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryLight,
   },
   distanceChipText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: colors.text,
+    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
+    color: colors.textSecondary,
   },
   distanceChipTextActive: {
-    color: colors.background,
+    color: colors.primary,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
   },
   filterWarning: {
     marginTop: 10,
     fontSize: 12,
-    color: colors.accent,
+    color: colors.primary,
     fontStyle: 'italic',
   },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   priceInputContainer: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.card,
+    backgroundColor: colors.borderSubtle,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 4,
@@ -1529,7 +1575,7 @@ const styles = StyleSheet.create({
   },
   priceLabel: {
     fontSize: 12,
-    color: colors.textSecondary,
+    color: colors.textTertiary,
   },
   priceInput: {
     flex: 1,
@@ -1541,98 +1587,102 @@ const styles = StyleSheet.create({
   },
   priceCurrency: {
     fontSize: 16,
-    fontWeight: '600',
-    color: colors.textSecondary,
+    fontWeight: '500',
+    color: colors.textTertiary,
   },
   priceSeparator: {
     fontSize: 16,
-    color: colors.textSecondary,
+    color: colors.textMuted,
     marginHorizontal: 12,
   },
   quickPriceButtons: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
   },
   quickPriceBtn: {
     flex: 1,
     paddingVertical: 10,
     borderRadius: 12,
-    backgroundColor: colors.card,
+    backgroundColor: colors.borderSubtle,
     alignItems: 'center',
   },
   quickPriceBtnActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryLight,
   },
   quickPriceBtnText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: colors.text,
+    fontWeight: '500',
+    color: colors.textSecondary,
   },
   quickPriceBtnTextActive: {
-    color: colors.background,
+    color: colors.primary,
+    fontWeight: '600',
   },
   dateQuickButtons: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
   },
   dateQuickBtn: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 20,
-    backgroundColor: colors.card,
+    backgroundColor: colors.borderSubtle,
   },
   dateQuickBtnActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryLight,
   },
   dateQuickBtnText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: colors.text,
+    fontWeight: '500',
+    color: colors.textSecondary,
   },
   dateQuickBtnTextActive: {
-    color: colors.background,
+    color: colors.primary,
+    fontWeight: '600',
   },
   placesOptions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
   },
   placesChip: {
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 20,
-    backgroundColor: colors.card,
+    backgroundColor: colors.borderSubtle,
   },
   placesChipActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryLight,
   },
   placesChipText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: colors.text,
+    fontWeight: '500',
+    color: colors.textSecondary,
   },
   placesChipTextActive: {
-    color: colors.background,
+    color: colors.primary,
+    fontWeight: '600',
   },
   filterActions: {
     flexDirection: 'row',
     padding: 20,
     gap: 12,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: colors.borderLight,
   },
   resetButton: {
     flex: 1,
     paddingVertical: 14,
     borderRadius: 12,
-    backgroundColor: colors.card,
+    backgroundColor: colors.borderSubtle,
     alignItems: 'center',
   },
   resetButtonText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
-    color: colors.text,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.textSecondary,
   },
   applyButton: {
     flex: 2,
@@ -1642,8 +1692,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   applyButtonText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
-    color: colors.background,
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#FFFFFF',
   },
 });
