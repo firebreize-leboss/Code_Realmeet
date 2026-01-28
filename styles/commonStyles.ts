@@ -8,16 +8,18 @@ import { StyleSheet, ViewStyle, TextStyle } from 'react-native';
 // ============================================================
 
 export const colors = {
-  // Primary accent - Desaturated Orange (guide visuel, pas dominant)
-  primary: '#D97B4A', // Orange désaturé principal (chaleureux mais calme)
-  primaryMuted: '#C4886A', // Orange encore plus doux pour éléments secondaires
-  primaryLight: '#F5E6DE', // Orange très pâle pour fonds subtils
-  primaryDark: '#B8623A', // Orange foncé pour emphase
+  // Primary accent - Premium Intermediate Orange (guide visuel, pas dominant)
+  // Teinte principale: #F2994A - équilibre entre énergie et douceur
+  primary: '#F2994A', // Orange intermédiaire premium (chaleureux, énergique mais pas criard)
+  primaryMuted: '#D4A574', // Orange désaturé ~70% pour icônes et badges secondaires
+  primaryDesaturated: 'rgba(242, 153, 74, 0.70)', // Orange atténué pour accents subtils
+  primaryLight: '#FEF4EB', // Orange très pâle pour fonds subtils (léger réchauffement)
+  primaryDark: '#D97B2F', // Orange plus sombre pour états press/active
 
   // Pas de couleur secondaire - Orange uniquement comme accent
-  secondary: '#D97B4A', // Même que primary (pas de bleu/violet)
-  secondaryLight: '#F5E6DE',
-  secondaryDark: '#B8623A',
+  secondary: '#F2994A', // Même que primary (cohérence totale)
+  secondaryLight: '#FEF4EB',
+  secondaryDark: '#D97B2F',
 
   // Backgrounds - Blanc et nuances de gris très subtiles
   background: '#FAFAFA', // Gris très clair (fond principal)
@@ -48,15 +50,15 @@ export const colors = {
   successLight: '#E8F9ED',
   error: '#FF3B30', // Rouge iOS
   errorLight: '#FFE5E5',
-  warning: '#D97B4A', // Orange (notre accent)
-  warningLight: '#FFF3ED',
+  warning: '#F2994A', // Orange premium (notre accent)
+  warningLight: '#FEF4EB',
   info: '#8E8E93', // Gris (pas de bleu)
   infoLight: '#F2F2F7',
 
   // Special UI elements
   badge: '#F2F2F7', // Fond gris très clair pour badges discrets
   badgeText: '#48484A', // Texte gris foncé
-  badgeAccent: '#D97B4A', // Orange pour badges actifs
+  badgeAccent: '#F2994A', // Orange premium pour badges actifs
   highlight: '#FFFBF8', // Fond blanc chaud
   overlay: 'rgba(0, 0, 0, 0.4)', // Overlay sombre
   overlayLight: 'rgba(0, 0, 0, 0.2)', // Overlay léger
@@ -65,12 +67,12 @@ export const colors = {
   // Input fields
   inputBackground: '#F2F2F7', // Gris très clair
   inputBorder: '#D1D1D6', // Gris bordure
-  inputFocus: '#D97B4A', // Orange au focus
+  inputFocus: '#F2994A', // Orange premium au focus
   inputPlaceholder: '#AEAEB2', // Gris placeholder
 
-  // Prix - Gris foncé ou orange désaturé (pas de bleu)
+  // Prix - Orange premium pour attirer l'attention sur les prix clés
   price: '#48484A', // Gris foncé par défaut
-  priceAccent: '#C4886A', // Orange désaturé (non aguicheur)
+  priceAccent: '#D4A574', // Orange muted pour prix secondaires
 
   // Category colors - Tous en nuances de gris/orange
   categoryRomance: '#E8D5CE', // Beige rosé
@@ -83,7 +85,7 @@ export const colors = {
   categoryCulture: '#E0E5E8', // Gris-bleu
 
   // Accent (legacy compatibility)
-  accent: '#D97B4A',
+  accent: '#F2994A',
 };
 
 // Typography scale

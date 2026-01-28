@@ -22,8 +22,8 @@ import { IconSymbol } from '@/components/IconSymbol';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Design tokens - Orange uniquement comme accent
-const ACCENT_ORANGE = colors.primary; // #D97B4A
-const ACCENT_MUTED = colors.primaryMuted; // #C4886A (prix, non-aguicheur)
+const ACCENT_ORANGE = colors.primary; // #F2994A
+const ACCENT_MUTED = colors.primaryMuted; // #D4A574 (prix, badges secondaires)
 const TEXT_PRIMARY = colors.text; // #1C1C1E (titres)
 const TEXT_SECONDARY = colors.textSecondary; // #48484A (descriptions)
 const TEXT_TERTIARY = colors.textTertiary; // #8E8E93 (lieu, participants)
@@ -432,7 +432,7 @@ const styles = StyleSheet.create({
   },
   compactImageContainer: {
     width: '100%',
-    height: 130,
+    height: 115,
     position: 'relative',
   },
   compactImage: {
@@ -442,7 +442,7 @@ const styles = StyleSheet.create({
   },
   compactImageOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.22)',
+    backgroundColor: 'rgba(28, 28, 30, 0.28)',
   },
   compactSpotsLeftBadge: {
     position: 'absolute',
@@ -456,6 +456,7 @@ const styles = StyleSheet.create({
   compactSpotsLeftText: {
     fontSize: 11,
     fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: '#FFFFFF',
   },
   compactFullBadge: {
@@ -470,6 +471,7 @@ const styles = StyleSheet.create({
   compactFullText: {
     fontSize: 11,
     fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: '#FFFFFF',
   },
   compactLikeButton: {
@@ -498,6 +500,7 @@ const styles = StyleSheet.create({
   compactCompetitorText: {
     fontSize: 10,
     fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: '#FFFFFF',
   },
   compactHostRow: {
@@ -521,6 +524,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: '#FFFFFF',
     textShadowColor: 'rgba(0,0,0,0.4)',
     textShadowOffset: { width: 0, height: 1 },
@@ -529,19 +533,21 @@ const styles = StyleSheet.create({
   compactContent: {
     padding: 12,
   },
-  // 1. Titre - noir/gris foncé (priorité 1)
+  // 1. Titre - noir/gris foncé (priorité 1) - LA STAR
   compactTitle: {
     fontSize: 15,
     fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     color: TEXT_PRIMARY,
-    marginBottom: 4,
+    marginBottom: 5,
     letterSpacing: -0.2,
   },
-  // 2. Prix - orange désaturé (priorité 2)
+  // 2. Prix - orange très désaturé (priorité 2) - Moins dominant
   compactPrice: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: ACCENT_MUTED,
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.primaryMuted,
     marginBottom: 8,
   },
   // 3. Dates - badges discrets (priorité 3)
@@ -563,12 +569,14 @@ const styles = StyleSheet.create({
   compactDateBubbleText: {
     fontSize: 11,
     fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
     color: TEXT_TERTIARY,
   },
   compactMoreDates: {
     fontSize: 11,
     color: TEXT_MUTED,
     fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
   },
   compactDateRow: {
     flexDirection: 'row',
@@ -578,6 +586,7 @@ const styles = StyleSheet.create({
   },
   compactDateText: {
     fontSize: 12,
+    fontFamily: 'Manrope_400Regular',
     color: TEXT_TERTIARY,
   },
   // 4. Lieu + participants - gris clair (priorité 4)
@@ -593,6 +602,7 @@ const styles = StyleSheet.create({
   },
   compactLocationText: {
     fontSize: 12,
+    fontFamily: 'Manrope_400Regular',
     color: TEXT_MUTED,
     maxWidth: 120,
   },
@@ -604,6 +614,7 @@ const styles = StyleSheet.create({
   compactParticipantsText: {
     fontSize: 12,
     fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
     color: TEXT_MUTED,
   },
 
@@ -627,7 +638,7 @@ const styles = StyleSheet.create({
   },
   listOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.25)',
+    backgroundColor: 'rgba(28, 28, 30, 0.32)',
   },
   listCategoryBadge: {
     position: 'absolute',
@@ -641,6 +652,7 @@ const styles = StyleSheet.create({
   listCategoryText: {
     fontSize: 11,
     fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: TEXT_PRIMARY,
   },
   listLikeButton: {
@@ -666,6 +678,7 @@ const styles = StyleSheet.create({
   listTitle: {
     fontSize: 15,
     fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     color: TEXT_PRIMARY,
     marginBottom: 8,
     letterSpacing: -0.2,
@@ -687,6 +700,7 @@ const styles = StyleSheet.create({
   listMetaText: {
     fontSize: 11,
     fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
     color: TEXT_TERTIARY,
   },
   listRightColumn: {
@@ -706,12 +720,14 @@ const styles = StyleSheet.create({
   listParticipantsText: {
     fontSize: 11,
     fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: TEXT_TERTIARY,
   },
   listPrice: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: ACCENT_MUTED,
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.primaryMuted,
   },
   listFullBadge: {
     position: 'absolute',
@@ -725,6 +741,7 @@ const styles = StyleSheet.create({
   listFullBadgeText: {
     fontSize: 10,
     fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: '#FFFFFF',
   },
 
@@ -755,7 +772,7 @@ const styles = StyleSheet.create({
   },
   fullImageOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.22)',
+    backgroundColor: 'rgba(28, 28, 30, 0.30)',
   },
   fullTopBadges: {
     position: 'absolute',
@@ -773,6 +790,7 @@ const styles = StyleSheet.create({
   fullCategoryText: {
     fontSize: 11,
     fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: TEXT_PRIMARY,
   },
   fullLikeButton: {
@@ -798,6 +816,7 @@ const styles = StyleSheet.create({
   fullFullBadgeText: {
     fontSize: 10,
     fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: '#FFFFFF',
   },
   fullCompetitorBadge: {
@@ -815,24 +834,27 @@ const styles = StyleSheet.create({
   fullCompetitorText: {
     fontSize: 10,
     fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: '#FFFFFF',
   },
   fullContent: {
     padding: 14,
   },
-  // 1. Titre - priorité 1
+  // 1. Titre - priorité 1 - LA STAR
   fullTitle: {
     fontSize: 16,
     fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     color: TEXT_PRIMARY,
-    marginBottom: 4,
+    marginBottom: 5,
     letterSpacing: -0.2,
   },
-  // 2. Prix - priorité 2
+  // 2. Prix - priorité 2 - Moins dominant
   fullPrice: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: ACCENT_MUTED,
+    fontSize: 15,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.primaryMuted,
     marginBottom: 10,
   },
   // 3. Métadonnées - priorité 3
@@ -848,6 +870,7 @@ const styles = StyleSheet.create({
   },
   fullMetaText: {
     fontSize: 12,
+    fontFamily: 'Manrope_400Regular',
     color: TEXT_TERTIARY,
   },
   fullMetaParticipants: {
@@ -856,6 +879,7 @@ const styles = StyleSheet.create({
   fullMetaParticipantsText: {
     fontSize: 12,
     fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
     color: TEXT_MUTED,
   },
 });

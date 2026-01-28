@@ -27,7 +27,6 @@ import ActivityCard from '@/components/ActivityCard';
 import { useMapView } from '@/contexts/MapViewContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FLOATING_TAB_BAR_HEIGHT } from '@/components/FloatingTabBar';
-import { useFonts, Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold } from '@expo-google-fonts/manrope';
 
 
 const PROTOMAPS_KEY = process.env.EXPO_PUBLIC_PROTOMAPS_KEY || '';
@@ -113,12 +112,6 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
 export default function BrowseScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const [fontsLoaded] = useFonts({
-    Manrope_400Regular,
-    Manrope_500Medium,
-    Manrope_600SemiBold,
-    Manrope_700Bold,
-  });
   const { cache, loading: cacheLoading, refreshActivities } = useDataCache();
   const { setIsMapViewActive } = useMapView();
   const insets = useSafeAreaInsets();
@@ -462,13 +455,13 @@ export default function BrowseScreen() {
     #map { position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
     .custom-marker {
       width: 28px; height: 28px;
-      background: #D97B4A;
+      background: #F2994A;
       border: 3px solid white; border-radius: 50%; cursor: pointer;
-      box-shadow: 0 2px 6px rgba(217, 123, 74, 0.35);
+      box-shadow: 0 2px 6px rgba(242, 153, 74, 0.35);
     }
     .custom-marker.selected {
-      background: #B8623A;
-      box-shadow: 0 3px 10px rgba(184, 98, 58, 0.45);
+      background: #D97B2F;
+      box-shadow: 0 3px 10px rgba(217, 123, 47, 0.45);
       border-width: 4px;
       transform: scale(1.15);
     }
@@ -741,15 +734,18 @@ export default function BrowseScreen() {
     <View style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Découvrir</Text>
+          <View>
+            <Text style={styles.headerTitle}>Découvrir</Text>
+            <View style={styles.headerTitleAccent} />
+          </View>
           <View style={styles.headerActions}>
             <View style={styles.toggleContainer}>
               <TouchableOpacity style={[styles.toggleButton, viewMode === 'liste' && styles.toggleButtonActive]} onPress={() => setViewMode('liste')}>
-                <IconSymbol name="list.bullet" size={18} color={viewMode === 'liste' ? colors.primary : colors.textTertiary} />
+                <IconSymbol name="list.bullet" size={16} color={viewMode === 'liste' ? colors.primary : colors.textMuted} />
                 <Text style={[styles.toggleText, viewMode === 'liste' && styles.toggleTextActive]}>Liste</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.toggleButton, viewMode === 'maps' && styles.toggleButtonActive]} onPress={() => setViewMode('maps')}>
-                <IconSymbol name="map.fill" size={18} color={viewMode === 'maps' ? colors.primary : colors.textTertiary} />
+                <IconSymbol name="map.fill" size={16} color={viewMode === 'maps' ? colors.primary : colors.textMuted} />
                 <Text style={[styles.toggleText, viewMode === 'maps' && styles.toggleTextActive]}>Maps</Text>
               </TouchableOpacity>
             </View>
@@ -765,11 +761,11 @@ export default function BrowseScreen() {
           <>
             <View style={styles.searchRow}>
               <View style={styles.searchContainer}>
-                <IconSymbol name="magnifyingglass" size={18} color={colors.textTertiary} />
+                <IconSymbol name="magnifyingglass" size={18} color={colors.textSecondary} />
                 <TextInput
                   style={styles.searchInput}
                   placeholder="Rechercher des activités..."
-                  placeholderTextColor={colors.textMuted}
+                  placeholderTextColor={colors.textTertiary}
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                 />
@@ -1131,14 +1127,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  // HEADER - Épuré
+  // HEADER - Premium avec micro-accent orange discret
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingTop: 16,
+    paddingBottom: 18,
     backgroundColor: colors.backgroundAlt,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderSubtle,
   },
   headerTitle: {
     fontSize: 26,
@@ -1147,43 +1146,53 @@ const styles = StyleSheet.create({
     color: colors.text,
     letterSpacing: -0.3,
   },
+  headerTitleAccent: {
+    width: 24,
+    height: 2,
+    backgroundColor: colors.primary,
+    borderRadius: 1,
+    marginTop: 4,
+    opacity: 0.7,
+  },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
 
-  // TOGGLE LISTE/MAPS - Style discret (fond gris, orange pour actif)
+  // TOGGLE LISTE/MAPS - Premium secondaire (fond blanc/gris très clair, contour léger)
   toggleContainer: {
     flexDirection: 'row',
-    backgroundColor: colors.borderSubtle,
+    backgroundColor: '#FFFFFF',
     borderRadius: 10,
     padding: 3,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
   },
   toggleButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 8,
-    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 7,
+    gap: 4,
   },
   toggleButtonActive: {
-    backgroundColor: colors.backgroundAlt,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 2,
-    elevation: 1,
+    backgroundColor: colors.borderSubtle,
   },
   toggleText: {
-    fontSize: 13,
-    fontWeight: '600',
-    fontFamily: 'Manrope_600SemiBold',
-    color: colors.textTertiary,
+    fontSize: 12,
+    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
+    color: colors.textMuted,
   },
   toggleTextActive: {
     color: colors.primary,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+  },
+  toggleIconInactive: {
+    opacity: 0.5,
   },
 
   // BOUTON CREATE - Seul élément CTA fort
@@ -1201,12 +1210,13 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
 
-  // SEARCH & FILTERS
+  // SEARCH & FILTERS - Champ de recherche plus actif/invitant
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingBottom: 12,
+    paddingTop: 4,
+    paddingBottom: 14,
     backgroundColor: colors.backgroundAlt,
     gap: 10,
   },
@@ -1214,10 +1224,12 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.borderSubtle,
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     paddingHorizontal: 14,
     gap: 10,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
   },
   searchInput: {
     flex: 1,
@@ -1252,6 +1264,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 10,
     fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
   },
 
   // SCROLL & CONTENT
@@ -1554,6 +1567,7 @@ const styles = StyleSheet.create({
   filterWarning: {
     marginTop: 10,
     fontSize: 12,
+    fontFamily: 'Manrope_400Regular',
     color: colors.primary,
     fontStyle: 'italic',
   },
@@ -1575,12 +1589,14 @@ const styles = StyleSheet.create({
   },
   priceLabel: {
     fontSize: 12,
+    fontFamily: 'Manrope_400Regular',
     color: colors.textTertiary,
   },
   priceInput: {
     flex: 1,
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: colors.text,
     paddingVertical: 10,
     textAlign: 'center',
@@ -1588,6 +1604,7 @@ const styles = StyleSheet.create({
   priceCurrency: {
     fontSize: 16,
     fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
     color: colors.textTertiary,
   },
   priceSeparator: {
@@ -1612,11 +1629,13 @@ const styles = StyleSheet.create({
   quickPriceBtnText: {
     fontSize: 14,
     fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
     color: colors.textSecondary,
   },
   quickPriceBtnTextActive: {
     color: colors.primary,
     fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
   },
   dateQuickButtons: {
     flexDirection: 'row',
@@ -1635,11 +1654,13 @@ const styles = StyleSheet.create({
   dateQuickBtnText: {
     fontSize: 14,
     fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
     color: colors.textSecondary,
   },
   dateQuickBtnTextActive: {
     color: colors.primary,
     fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
   },
   placesOptions: {
     flexDirection: 'row',
@@ -1658,11 +1679,13 @@ const styles = StyleSheet.create({
   placesChipText: {
     fontSize: 14,
     fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
     color: colors.textSecondary,
   },
   placesChipTextActive: {
     color: colors.primary,
     fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
   },
   filterActions: {
     flexDirection: 'row',

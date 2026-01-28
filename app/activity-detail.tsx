@@ -1,6 +1,6 @@
 // app/activity-detail.tsx
-// Page de détail d'une activité avec restrictions entreprise
-// Design épuré fond blanc avec accents bleu-mauve
+// Page de détail d'une activité - Design Too Good To Go
+// Sections verticales pleine largeur, séparateurs fins, typographie Manrope
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -25,13 +25,8 @@ import { useBusinessRestrictions } from '@/hooks/useBusinessRestrictions';
 import { LinearGradient } from 'expo-linear-gradient';
 import ReportModal from '@/components/ReportModal';
 import LeaveReviewModal from '@/components/LeaveReviewModal';
-
-// Couleurs caractéristiques bleu-mauve de l'appli
-const ACCENT_COLORS = {
-  primary: '#818CF8', // Mauve/indigo
-  secondary: '#60A5FA', // Bleu
-  gradient: ['#60A5FA', '#818CF8', '#C084FC'] as const,
-};
+import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
+import { useFonts, Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold } from '@expo-google-fonts/manrope';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -71,6 +66,13 @@ export default function ActivityDetailScreen() {
   const shouldShowParticipants = origin === 'past' && !!passedSlotId;
 
   const { isBusiness, showJoinRestriction } = useBusinessRestrictions();
+
+  const [fontsLoaded] = useFonts({
+    Manrope_400Regular,
+    Manrope_500Medium,
+    Manrope_600SemiBold,
+    Manrope_700Bold,
+  });
 
   const [activity, setActivity] = useState<ActivityDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -185,7 +187,7 @@ export default function ActivityDetailScreen() {
               ? hostProfile?.business_name
               : hostProfile?.full_name || 'Organisateur',
             avatar: hostProfile?.avatar_url || '',
-            type: isHostBusiness ? 'Entreprise' : 'Particulier',
+            type: isHostBusiness ? 'Professionnel' : 'Particulier',
             accountType: hostProfile?.account_type || 'user',
             isVerified: hostProfile?.business_verified || false,
           },
@@ -390,7 +392,6 @@ export default function ActivityDetailScreen() {
         }
       }
 
-      // Supprimer l'utilisateur de slot_group_members pour éviter les fantômes
       const { data: slotGroups } = await supabase
         .from('slot_groups')
         .select('id')
@@ -457,7 +458,6 @@ export default function ActivityDetailScreen() {
           placesRestantes: activity.capacity - newCount,
         });
 
-        // Rafraîchir le calendrier pour mettre à jour les compteurs
         setCalendarRefreshTrigger(prev => prev + 1);
 
         Alert.alert('Succès', 'Vous vous êtes désinscrit de cette activité.');
@@ -507,7 +507,6 @@ export default function ActivityDetailScreen() {
           placesRestantes: activity.capacity - newCount,
         });
 
-        // Rafraîchir le calendrier pour mettre à jour les compteurs
         setCalendarRefreshTrigger(prev => prev + 1);
 
         try {
@@ -553,7 +552,7 @@ export default function ActivityDetailScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={ACCENT_COLORS.primary} />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Chargement...</Text>
         </View>
       </SafeAreaView>
@@ -565,7 +564,7 @@ export default function ActivityDetailScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.errorContainer}>
-          <IconSymbol name="exclamationmark.triangle" size={64} color={ACCENT_COLORS.primary} />
+          <IconSymbol name="exclamationmark.triangle" size={64} color={colors.primaryMuted} />
           <Text style={styles.errorText}>Activité non trouvée</Text>
           <TouchableOpacity style={styles.backButtonError} onPress={() => router.back()}>
             <Text style={styles.backButtonErrorText}>Retour</Text>
@@ -584,9 +583,12 @@ export default function ActivityDetailScreen() {
       {/* Header avec image pleine largeur */}
       <View style={styles.heroContainer}>
         <Image source={{ uri: activity.image || 'https://via.placeholder.com/400' }} style={styles.heroImage} />
+        {/* Overlay noir 5% */}
+        <View style={styles.heroOverlay} />
+        {/* Dégradé léger en haut pour lisibilité des boutons */}
         <LinearGradient
-          colors={['rgba(0,0,0,0.4)', 'transparent', 'transparent']}
-          style={styles.heroGradient}
+          colors={['rgba(0,0,0,0.4)', 'rgba(0,0,0,0.15)', 'transparent']}
+          style={styles.heroGradientTop}
         />
 
         {/* Header buttons overlaid on image */}
@@ -598,6 +600,14 @@ export default function ActivityDetailScreen() {
             <IconSymbol name="ellipsis" size={22} color="#FFFFFF" />
           </TouchableOpacity>
         </SafeAreaView>
+
+        {/* Titre en bas à gauche */}
+        <Text style={styles.heroTitle}>{activity.title}</Text>
+
+        {/* Catégorie en bas à droite */}
+        <View style={styles.heroCategoryBadge}>
+          <Text style={styles.heroCategoryText}>{activity.category}</Text>
+        </View>
 
         {isCompetitorActivity && (
           <View style={styles.competitorBadge}>
@@ -611,9 +621,12 @@ export default function ActivityDetailScreen() {
         style={styles.scrollView}
         contentContainerStyle={[
           styles.contentContainer,
-          { paddingBottom: (!isHost || (isHost && isBusiness)) ? 100 : 24 },
+          // Padding en bas pour le footer CTA fixe (hauteur footer ~70px sans extra)
+          { paddingBottom: (!isHost && !isActivityPast) || (isHost && isBusiness) ? 70 : 0 },
         ]}
         showsVerticalScrollIndicator={false}
+        overScrollMode="never"
+        bounces={false}
       >
         {/* Badge activité terminée */}
         {isActivityPast && (
@@ -623,165 +636,179 @@ export default function ActivityDetailScreen() {
           </View>
         )}
 
-        {/* Titre et catégorie */}
-        <View style={styles.card}>
-          <View style={styles.titleSection}>
-            <View style={styles.titleContainer}>
-              <Text style={styles.title}>{activity.title}</Text>
-              <Text style={styles.subtitle}>{activity.host.type}</Text>
-              {activityRating && activityRating.count > 0 && (
-                <View style={styles.activityRatingRow}>
-                  <IconSymbol name="star.fill" size={16} color="#FFD700" />
-                  <Text style={styles.activityRatingText}>
-                    {activityRating.average.toFixed(1)}
-                  </Text>
-                  <Text style={styles.activityRatingCount}>
-                    ({activityRating.count} avis)
+        {/* SECTION: Rating */}
+        {activityRating && activityRating.count > 0 && (
+          <>
+            <View style={styles.section}>
+              <View style={styles.infoRow}>
+                <IconSymbol name="star.fill" size={20} color="#F59E0B" />
+                <View style={styles.infoContent}>
+                  <Text style={styles.infoValue}>
+                    {activityRating.average.toFixed(1)} ({activityRating.count} avis)
                   </Text>
                 </View>
-              )}
+              </View>
             </View>
-            <View style={styles.categoryBadge}>
-              <Text style={styles.categoryText}>{activity.category}</Text>
-            </View>
-          </View>
+            <View style={styles.sectionDivider} />
+          </>
+        )}
 
-          {/* Prix */}
-          <View style={styles.priceRow}>
-            <Text style={styles.priceLabel}>Prix</Text>
-            <Text style={styles.priceValue}>{activity.price}</Text>
-          </View>
-        </View>
-
-        {/* Organisateur */}
-        <TouchableOpacity style={styles.card} onPress={handleOrganizerPress} activeOpacity={0.7}>
-          <View style={styles.hostSection}>
+        {/* SECTION: Organisateur */}
+        <TouchableOpacity
+          style={styles.section}
+          onPress={handleOrganizerPress}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.sectionLabel}>Organisateur</Text>
+          <View style={styles.infoRow}>
             <Image
               source={{ uri: activity.host.avatar || 'https://via.placeholder.com/48' }}
               style={styles.hostAvatar}
             />
-            <View style={styles.hostInfo}>
+            <View style={styles.infoContent}>
               <View style={styles.hostNameRow}>
-                <Text style={styles.hostName}>{activity.host.name}</Text>
+                <Text style={styles.infoValue}>{activity.host.name}</Text>
                 {activity.host.isVerified && (
-                  <IconSymbol name="checkmark.seal.fill" size={18} color={ACCENT_COLORS.primary} />
+                  <IconSymbol name="checkmark.seal.fill" size={18} color={colors.primary} />
+                )}
+                {activity.host.accountType === 'business' && (
+                  <View style={styles.proBadge}>
+                    <Text style={styles.proBadgeText}>PRO</Text>
+                  </View>
                 )}
               </View>
-              <Text style={styles.hostLabel}>Organisateur</Text>
+              <Text style={styles.hostType}>{activity.host.type}</Text>
             </View>
-            {activity.host.accountType === 'business' && (
-              <View style={styles.proBadge}>
-                <Text style={styles.proBadgeText}>PRO</Text>
+            <IconSymbol name="chevron.right" size={20} color={colors.textMuted} />
+          </View>
+        </TouchableOpacity>
+        <View style={styles.sectionDivider} />
+
+        {/* SECTION: Lieu */}
+        {(activity.location || activity.city) && (
+          <>
+            <TouchableOpacity
+              style={styles.section}
+              onPress={() => router.push(`/(tabs)/browse?viewMode=maps&selectedActivityId=${activity.id}`)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.sectionLabel}>Lieu</Text>
+              <View style={styles.infoRow}>
+                <IconSymbol name="location.fill" size={20} color={colors.textTertiary} />
+                <View style={styles.infoContent}>
+                  {activity.location && <Text style={styles.infoValue}>{activity.location}</Text>}
+                  {activity.city && <Text style={styles.infoSubvalue}>{activity.city}</Text>}
+                </View>
+                <IconSymbol name="map.fill" size={18} color={colors.textMuted} />
               </View>
-            )}
-            <IconSymbol name="chevron.right" size={20} color="#999" />
-          </View>
-        </TouchableOpacity>
-
-        {/* Lieu */}
-        <TouchableOpacity
-          style={styles.card}
-          onPress={() => router.push(`/(tabs)/browse?viewMode=maps&selectedActivityId=${activity.id}`)}
-          activeOpacity={0.7}
-        >
-          <View style={styles.detailRow}>
-            <IconSymbol name="location.fill" size={20} color={ACCENT_COLORS.primary} />
-            <View style={styles.detailContent}>
-              <Text style={styles.detailLabel}>Lieu</Text>
-              <Text style={styles.detailValue}>{activity.location}</Text>
-              <Text style={styles.detailSubvalue}>{activity.city}</Text>
-            </View>
-            <IconSymbol name="map.fill" size={20} color="#999" />
-          </View>
-        </TouchableOpacity>
-
-        {/* Calendrier de sélection */}
-        {!isActivityPast && (
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Choisir un créneau</Text>
-            <ActivityCalendar
-              activityId={activity.id}
-              onSlotSelect={(isBusiness || isJoined) ? undefined : (slot) => setSelectedSlot(slot)}
-              externalSelectedSlot={selectedSlot}
-              mode="select"
-              readOnly={isBusiness || isJoined}
-              userJoinedSlotId={isJoined ? selectedSlot?.id : undefined}
-              maxParticipants={activity.capacity}
-              refreshTrigger={calendarRefreshTrigger}
-            />
-          </View>
+            </TouchableOpacity>
+            <View style={styles.sectionDivider} />
+          </>
         )}
 
-        {/* Description */}
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>À propos</Text>
+        {/* SECTION: Calendrier de sélection */}
+        {!isActivityPast && (
+          <>
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Choisir un créneau</Text>
+              <ActivityCalendar
+                activityId={activity.id}
+                onSlotSelect={(isBusiness || isJoined) ? undefined : (slot) => setSelectedSlot(slot)}
+                externalSelectedSlot={selectedSlot}
+                mode="select"
+                readOnly={isBusiness || isJoined}
+                userJoinedSlotId={isJoined ? selectedSlot?.id : undefined}
+                maxParticipants={activity.capacity}
+                refreshTrigger={calendarRefreshTrigger}
+              />
+            </View>
+            <View style={styles.sectionDivider} />
+          </>
+        )}
+
+        {/* SECTION: Description */}
+        <View style={styles.sectionAbout}>
+          <Text style={styles.sectionTitleAbout}>À propos</Text>
           <Text style={styles.description}>{activity.description}</Text>
         </View>
+        <View style={styles.sectionDivider} />
 
-        {/* Inclus */}
+        {/* SECTION: Inclus */}
         {!isActivityPast && activity.includes.length > 0 && (
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Ce qui est inclus</Text>
-            {activity.includes.map((item: string, index: number) => (
-              <View key={index} style={styles.listItem}>
-                <IconSymbol name="checkmark.circle.fill" size={20} color="#10b981" />
-                <Text style={styles.listItemText}>{item}</Text>
-              </View>
-            ))}
-          </View>
+          <>
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Ce qui est inclus</Text>
+              {activity.includes.map((item: string, index: number) => (
+                <View key={index} style={styles.listItem}>
+                  <IconSymbol name="checkmark.circle.fill" size={20} color={colors.success} />
+                  <Text style={styles.listItemText}>{item}</Text>
+                </View>
+              ))}
+            </View>
+            <View style={styles.sectionDivider} />
+          </>
         )}
 
-        {/* Règles */}
+        {/* SECTION: Règles */}
         {!isActivityPast && activity.rules.length > 0 && (
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Informations importantes</Text>
-            {activity.rules.map((rule: string, index: number) => (
-              <View key={index} style={styles.listItem}>
-                <IconSymbol name="info.circle.fill" size={20} color={ACCENT_COLORS.primary} />
-                <Text style={styles.listItemText}>{rule}</Text>
-              </View>
-            ))}
-          </View>
+          <>
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Informations importantes</Text>
+              {activity.rules.map((rule: string, index: number) => (
+                <View key={index} style={styles.listItem}>
+                  <IconSymbol name="info.circle.fill" size={20} color={colors.textTertiary} />
+                  <Text style={styles.listItemText}>{rule}</Text>
+                </View>
+              ))}
+            </View>
+            <View style={styles.sectionDivider} />
+          </>
         )}
 
-        {/* Participants */}
+        {/* SECTION: Participants */}
         {shouldShowParticipants && (
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>
-              Participants ({participantsList.length})
-            </Text>
+          <>
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>
+                Participants ({participantsList.length})
+              </Text>
 
-            {participantsList.length === 0 ? (
-              <View style={styles.emptyParticipants}>
-                <IconSymbol name="person.2" size={48} color="#CCC" />
-                <Text style={styles.emptyParticipantsText}>
-                  Aucun participant sur votre créneau
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.participantsList}>
-                {participantsList.map((participant) => (
-                  <TouchableOpacity
-                    key={participant.id}
-                    style={styles.participantItem}
-                    onPress={() => router.push(`/user-profile?id=${participant.id}`)}
-                  >
-                    <Image
-                      source={{ uri: participant.avatar || 'https://via.placeholder.com/44' }}
-                      style={styles.participantAvatar}
-                    />
-                    <Text style={styles.participantName}>{participant.name}</Text>
-                    <IconSymbol name="chevron.right" size={16} color="#999" />
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-          </View>
+              {participantsList.length === 0 ? (
+                <View style={styles.emptyParticipants}>
+                  <IconSymbol name="person.2" size={48} color={colors.textMuted} />
+                  <Text style={styles.emptyParticipantsText}>
+                    Aucun participant sur votre créneau
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.participantsList}>
+                  {participantsList.map((participant, index) => (
+                    <React.Fragment key={participant.id}>
+                      <TouchableOpacity
+                        style={styles.participantItem}
+                        onPress={() => router.push(`/user-profile?id=${participant.id}`)}
+                      >
+                        <Image
+                          source={{ uri: participant.avatar || 'https://via.placeholder.com/44' }}
+                          style={styles.participantAvatar}
+                        />
+                        <Text style={styles.participantName}>{participant.name}</Text>
+                        <IconSymbol name="chevron.right" size={16} color={colors.textMuted} />
+                      </TouchableOpacity>
+                      {index < participantsList.length - 1 && (
+                        <View style={styles.participantDivider} />
+                      )}
+                    </React.Fragment>
+                  ))}
+                </View>
+              )}
+            </View>
+          </>
         )}
 
-        {/* Section Review */}
+        {/* SECTION: Review */}
         {isActivityPast && !isHost && !isBusiness && (
-          <View style={styles.card}>
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>Votre avis</Text>
 
             {canReview ? (
@@ -794,7 +821,7 @@ export default function ActivityDetailScreen() {
               </TouchableOpacity>
             ) : hasAlreadyReviewed ? (
               <View style={styles.alreadyReviewedBadge}>
-                <IconSymbol name="checkmark.circle.fill" size={16} color={ACCENT_COLORS.primary} />
+                <IconSymbol name="checkmark.circle.fill" size={16} color={colors.primary} />
                 <Text style={styles.alreadyReviewedText}>Vous avez déjà noté cette activité</Text>
               </View>
             ) : null}
@@ -808,7 +835,7 @@ export default function ActivityDetailScreen() {
           {isBusiness ? (
             <View style={styles.businessFooter}>
               <View style={styles.businessFooterInfo}>
-                <IconSymbol name="eye.fill" size={20} color={ACCENT_COLORS.primary} />
+                <IconSymbol name="eye.fill" size={20} color={colors.primaryMuted} />
                 <Text style={styles.businessFooterText}>Mode observation</Text>
               </View>
               <Text style={styles.businessFooterHint}>
@@ -832,9 +859,9 @@ export default function ActivityDetailScreen() {
                 disabled={(!isJoined && !selectedSlot) || (isFull && !isJoined) || joiningInProgress}
               >
                 {joiningInProgress ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <ActivityIndicator size="small" color={isJoined ? colors.textSecondary : '#FFFFFF'} />
                 ) : (
-                  <Text style={styles.actionButtonText}>
+                  <Text style={[styles.actionButtonText, isJoined && styles.actionButtonTextLeave]}>
                     {isFull && !isJoined
                       ? 'Complet'
                       : isJoined
@@ -896,14 +923,14 @@ export default function ActivityDetailScreen() {
                 setShowOptionsModal(false);
               }}
             >
-              <IconSymbol name="square.and.arrow.up" size={20} color="#FFFFFF" />
+              <IconSymbol name="square.and.arrow.up" size={20} color={colors.text} />
               <Text style={styles.modalOptionText}>Partager</Text>
             </TouchableOpacity>
 
             {!isHost && (
               <TouchableOpacity style={styles.modalOption} onPress={handleReportActivity}>
-                <IconSymbol name="flag.fill" size={20} color="#FF6B6B" />
-                <Text style={[styles.modalOptionText, { color: '#FF6B6B' }]}>
+                <IconSymbol name="flag.fill" size={20} color={colors.textSecondary} />
+                <Text style={[styles.modalOptionText, { color: colors.textSecondary }]}>
                   Signaler cette activité
                 </Text>
               </TouchableOpacity>
@@ -931,6 +958,11 @@ export default function ActivityDetailScreen() {
   );
 }
 
+// ============================================================
+// STYLES - Design Too Good To Go
+// Sections verticales pleine largeur, séparateurs fins, fond blanc
+// ============================================================
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -945,9 +977,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   loadingText: {
-    fontSize: 16,
-    color: '#666',
-    fontWeight: '600',
+    fontSize: typography.base,
+    color: colors.textTertiary,
+    fontFamily: 'Manrope_500Medium',
   },
 
   // Error
@@ -958,21 +990,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   errorText: {
-    fontSize: 18,
-    color: '#333',
-    fontWeight: '600',
+    fontSize: typography.lg,
+    color: colors.text,
+    fontFamily: 'Manrope_600SemiBold',
     marginTop: 16,
   },
   backButtonError: {
-    backgroundColor: ACCENT_COLORS.primary,
+    backgroundColor: colors.primary,
     paddingHorizontal: 24,
     paddingVertical: 12,
-    borderRadius: 14,
+    borderRadius: borderRadius.md,
     marginTop: 20,
   },
   backButtonErrorText: {
     color: '#FFFFFF',
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
   },
 
   // Header overlay on hero image
@@ -990,7 +1022,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: 'rgba(0,0,0,0.25)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -998,13 +1030,14 @@ const styles = StyleSheet.create({
   // ScrollView
   scrollView: {
     flex: 1,
+    backgroundColor: '#FFFFFF',
   },
   contentContainer: {
-    paddingTop: 20,
-    gap: 16,
+    // Pas de flexGrow: 1 - cela causait un bug de scroll infini
+    // Le contenu doit s'arrêter naturellement après la dernière section
   },
 
-  // Hero - Full width
+  // Hero - Full width avec overlay 5%
   heroContainer: {
     position: 'relative',
     width: SCREEN_WIDTH,
@@ -1012,30 +1045,66 @@ const styles = StyleSheet.create({
   heroImage: {
     width: '100%',
     height: 280,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: colors.borderSubtle,
   },
-  heroGradient: {
+  heroOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+  heroGradientTop: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     height: 100,
   },
-  competitorBadge: {
+  heroTitle: {
     position: 'absolute',
     bottom: 16,
+    left: 16,
+    right: 100,
+    fontSize: typography.xxl,
+    fontFamily: 'Manrope_700Bold',
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  heroCategoryBadge: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  heroCategoryText: {
+    fontSize: typography.xs,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.text,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  competitorBadge: {
+    position: 'absolute',
+    bottom: 56,
     right: 16,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#FF9500',
+    backgroundColor: colors.primaryMuted,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
   },
   competitorBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: typography.xs,
+    fontFamily: 'Manrope_600SemiBold',
     color: '#FFFFFF',
   },
 
@@ -1044,227 +1113,178 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#10b981',
+    backgroundColor: colors.success,
     paddingVertical: 14,
     paddingHorizontal: 20,
-    marginHorizontal: 16,
-    borderRadius: 16,
+    marginHorizontal: 20,
+    marginTop: 20,
+    borderRadius: borderRadius.md,
     gap: 8,
   },
   pastActivityBannerText: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: typography.base,
+    fontFamily: 'Manrope_600SemiBold',
     color: '#FFFFFF',
   },
 
-  // Card (replaces glassCard)
-  card: {
+  // Section - Pleine largeur sans card
+  section: {
+    paddingHorizontal: 20,
+    paddingVertical: 24,
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 18,
-    marginHorizontal: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
   },
 
-  // Title section
-  titleSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+  // Section À propos - avec moins d'espace
+  sectionAbout: {
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    backgroundColor: '#FFFFFF',
+  },
+
+  // Séparateur horizontal fin
+  sectionDivider: {
+    height: 1,
+    backgroundColor: '#EBEBEB',
+    marginHorizontal: 20,
+  },
+
+  // Label de section (petit, gris, au-dessus du contenu)
+  sectionLabel: {
+    fontSize: typography.xs,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
     marginBottom: 12,
   },
-  titleContainer: {
+
+  // Titre de section principal (plus marqué)
+  sectionTitle: {
+    fontSize: typography.lg,
+    fontFamily: 'Manrope_700Bold',
+    color: colors.text,
+    marginBottom: 16,
+  },
+
+  // Titre pour la section À propos - moins d'espace en dessous
+  sectionTitleAbout: {
+    fontSize: typography.lg,
+    fontFamily: 'Manrope_700Bold',
+    color: colors.text,
+    marginBottom: 8,
+  },
+
+  // Info rows sans fond
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  infoContent: {
     flex: 1,
-    marginRight: 12,
+    marginLeft: 14,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 4,
+  infoValue: {
+    fontSize: typography.base,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.text,
   },
-  subtitle: {
-    fontSize: 14,
-    color: '#666',
-  },
-  activityRatingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 8,
-  },
-  activityRatingText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1A1A1A',
-  },
-  activityRatingCount: {
-    fontSize: 13,
-    color: '#666',
-  },
-  categoryBadge: {
-    backgroundColor: ACCENT_COLORS.primary + '20',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  categoryText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: ACCENT_COLORS.primary,
+  infoSubvalue: {
+    fontSize: typography.sm,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textTertiary,
+    marginTop: 2,
   },
 
-  // Price
-  priceRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-  },
-  priceLabel: {
-    fontSize: 14,
-    color: '#666',
-  },
-  priceValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: ACCENT_COLORS.primary,
-  },
-
-  // Host section
-  hostSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+  // Host
   hostAvatar: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#F0F0F0',
-    borderWidth: 2,
-    borderColor: '#F0F0F0',
-  },
-  hostInfo: {
-    flex: 1,
-    marginLeft: 12,
+    backgroundColor: colors.borderSubtle,
   },
   hostNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
-  hostName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1A1A1A',
-  },
-  hostLabel: {
-    fontSize: 13,
-    color: '#666',
+  hostType: {
+    fontSize: typography.sm,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textTertiary,
     marginTop: 2,
   },
+
+  // Badge PRO - version neutre grise
   proBadge: {
-    backgroundColor: ACCENT_COLORS.primary,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-    marginRight: 8,
+    backgroundColor: colors.borderSubtle,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
   },
   proBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontSize: 10,
+    fontFamily: 'Manrope_700Bold',
+    color: colors.textSecondary,
   },
 
-  // Detail row
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  detailContent: {
-    flex: 1,
-    marginLeft: 14,
-  },
-  detailLabel: {
-    fontSize: 12,
-    color: '#999',
-    marginBottom: 2,
-  },
-  detailValue: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#1A1A1A',
-  },
-  detailSubvalue: {
-    fontSize: 13,
-    color: '#666',
-    marginTop: 2,
-  },
-
-  // Section
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 12,
-  },
+  // Description
   description: {
-    fontSize: 15,
-    color: '#333',
+    fontSize: typography.base,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textSecondary,
     lineHeight: 24,
   },
+
+  // List items
   listItem: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    gap: 12,
+    alignItems: 'flex-start',
+    paddingVertical: 10,
+    gap: 14,
   },
   listItemText: {
     flex: 1,
-    fontSize: 15,
-    color: '#333',
+    fontSize: typography.base,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textSecondary,
+    lineHeight: 22,
   },
 
   // Participants
   emptyParticipants: {
     alignItems: 'center',
-    paddingVertical: 24,
+    paddingVertical: 32,
   },
   emptyParticipantsText: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 8,
+    fontSize: typography.sm,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textTertiary,
+    marginTop: 12,
   },
   participantsList: {
-    gap: 8,
+    marginTop: 4,
   },
   participantItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8F8F8',
-    padding: 12,
-    borderRadius: 14,
-    gap: 12,
+    paddingVertical: 14,
+    gap: 14,
+  },
+  participantDivider: {
+    height: 1,
+    backgroundColor: '#EBEBEB',
   },
   participantAvatar: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#F0F0F0',
-    borderWidth: 2,
-    borderColor: '#F0F0F0',
+    backgroundColor: colors.borderSubtle,
   },
   participantName: {
     flex: 1,
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#1A1A1A',
+    fontSize: typography.base,
+    fontFamily: 'Manrope_500Medium',
+    color: colors.text,
   },
 
   // Review
@@ -1272,31 +1292,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: ACCENT_COLORS.primary,
-    paddingVertical: 14,
+    backgroundColor: colors.primary,
+    paddingVertical: 16,
     paddingHorizontal: 24,
-    borderRadius: 14,
+    borderRadius: borderRadius.md,
     gap: 10,
   },
   reviewButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: typography.base,
+    fontFamily: 'Manrope_600SemiBold',
     color: '#FFFFFF',
   },
   alreadyReviewedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F0F0F0',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 12,
+    paddingVertical: 12,
     gap: 8,
   },
   alreadyReviewedText: {
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '500',
+    fontSize: typography.sm,
+    fontFamily: 'Manrope_500Medium',
+    color: colors.textTertiary,
   },
 
   // Footer
@@ -1308,43 +1325,46 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 5,
+    borderTopColor: '#EBEBEB',
   },
   footerInfo: {
     flex: 1,
   },
   footerPrice: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#1A1A1A',
+    fontSize: typography.xl,
+    fontFamily: 'Manrope_700Bold',
+    color: colors.text,
   },
   footerLabel: {
-    fontSize: 13,
-    color: '#666',
+    fontSize: typography.sm,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textTertiary,
   },
+  // Bouton Rejoindre - CTA principal orange
   actionButton: {
-    backgroundColor: ACCENT_COLORS.primary,
+    backgroundColor: colors.primary,
     paddingHorizontal: 32,
     paddingVertical: 16,
-    borderRadius: 16,
+    borderRadius: borderRadius.md,
     minWidth: 160,
     alignItems: 'center',
   },
+  // Bouton Se désinscrire - secondaire outline gris
   actionButtonLeave: {
-    backgroundColor: '#EF4444',
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: colors.border,
   },
   actionButtonDisabled: {
-    backgroundColor: '#E0E0E0',
+    backgroundColor: colors.borderLight,
   },
   actionButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: typography.base,
+    fontFamily: 'Manrope_600SemiBold',
     color: '#FFFFFF',
+  },
+  actionButtonTextLeave: {
+    color: colors.textSecondary,
   },
   businessFooter: {
     flex: 1,
@@ -1354,19 +1374,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: ACCENT_COLORS.primary + '15',
+    backgroundColor: colors.primaryLight,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 20,
   },
   businessFooterText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: ACCENT_COLORS.primary,
+    fontSize: typography.sm,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.primaryMuted,
   },
   businessFooterHint: {
-    fontSize: 12,
-    color: '#666',
+    fontSize: typography.xs,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textTertiary,
     marginTop: 8,
   },
   manageButton: {
@@ -1375,33 +1396,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    backgroundColor: ACCENT_COLORS.primary,
+    backgroundColor: colors.primary,
     paddingVertical: 16,
-    borderRadius: 16,
+    borderRadius: borderRadius.md,
   },
   manageButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: typography.base,
+    fontFamily: 'Manrope_600SemiBold',
     color: '#FFFFFF',
   },
 
   // Modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: colors.overlay,
     justifyContent: 'flex-end',
   },
   modalContent: {
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
     padding: 20,
     paddingBottom: 40,
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1A1A1A',
+    fontSize: typography.lg,
+    fontFamily: 'Manrope_700Bold',
+    color: colors.text,
     textAlign: 'center',
     marginBottom: 20,
   },
@@ -1409,24 +1430,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    padding: 16,
-    borderRadius: 14,
-    backgroundColor: '#F8F8F8',
-    marginBottom: 10,
+    paddingVertical: 16,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EBEBEB',
   },
   modalOptionText: {
-    fontSize: 16,
-    color: '#1A1A1A',
+    fontSize: typography.base,
+    fontFamily: 'Manrope_500Medium',
+    color: colors.text,
   },
   cancelOption: {
     justifyContent: 'center',
-    backgroundColor: 'transparent',
-    marginTop: 10,
+    borderBottomWidth: 0,
+    marginTop: 8,
   },
   cancelText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#666',
+    fontSize: typography.base,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.textTertiary,
     textAlign: 'center',
   },
 });

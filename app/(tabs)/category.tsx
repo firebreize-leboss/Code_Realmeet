@@ -75,7 +75,7 @@ export default function CategoryScreen() {
                     activeOpacity={0.85}
                   >
                     <View style={styles.iconContainer}>
-                      <IconSymbol name={category.icon} size={28} color={colors.primary} />
+                      <IconSymbol name={category.icon} size={28} color={colors.primaryDesaturated} />
                     </View>
                     <Text style={styles.categoryName}>{category.name}</Text>
                     <View style={styles.countBadge}>
@@ -99,7 +99,7 @@ export default function CategoryScreen() {
           )}
 
           <View style={styles.infoCard}>
-            <IconSymbol name="info.circle.fill" size={20} color={colors.primary} />
+            <IconSymbol name="info.circle.fill" size={20} color={colors.primaryDesaturated} />
             <Text style={styles.infoText}>
               Sélectionnez une catégorie pour découvrir les activités
             </Text>
@@ -203,16 +203,13 @@ const styles = StyleSheet.create({
   infoCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.backgroundAlt,
+    backgroundColor: colors.borderSubtle,
     padding: 14,
     borderRadius: 12,
     marginTop: 12,
     gap: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
   },
   infoText: {
     flex: 1,

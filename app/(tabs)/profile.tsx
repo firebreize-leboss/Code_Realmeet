@@ -324,11 +324,11 @@ export default function ProfileScreen() {
   if (loading) {
     return (
       <LinearGradient
-        colors={['#FFFFFF', '#FFFFFF', '#FFF8F5', '#FFEEE6']}
+        colors={['#FFFFFF', '#FFFFFF', '#FFFBF7', colors.primaryLight]}
         style={styles.container}
       >
         <SafeAreaView style={styles.loadingContainer} edges={['top']}>
-          <ActivityIndicator size="large" color="#FF8A65" />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.userLoadingText}>Chargement...</Text>
         </SafeAreaView>
       </LinearGradient>
@@ -339,11 +339,11 @@ export default function ProfileScreen() {
   if (!profile) {
     return (
       <LinearGradient
-        colors={['#FFFFFF', '#FFFFFF', '#FFF8F5', '#FFEEE6']}
+        colors={['#FFFFFF', '#FFFFFF', '#FFFBF7', colors.primaryLight]}
         style={styles.container}
       >
         <SafeAreaView style={styles.notConnectedContainer} edges={['top']}>
-          <IconSymbol name="person.crop.circle" size={80} color="#FF8A65" />
+          <IconSymbol name="person.crop.circle" size={80} color={colors.primary} />
           <Text style={styles.userNotConnectedTitle}>Non connecté</Text>
           <Text style={styles.userNotConnectedText}>
             Connectez-vous pour accéder à votre profil
@@ -353,7 +353,7 @@ export default function ProfileScreen() {
             activeOpacity={0.8}
           >
             <LinearGradient
-              colors={['#FF8A65', '#FF7043']}
+              colors={[colors.primary, colors.primaryDark]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.userConnectButton}
@@ -387,7 +387,7 @@ export default function ProfileScreen() {
 
   return (
     <LinearGradient
-      colors={['#FFFFFF', '#FFFFFF', '#FFF8F5', '#FFEEE6']}
+      colors={['#FFFFFF', '#FFFFFF', '#FFFBF7', colors.primaryLight]}
       style={styles.container}
     >
       <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -401,13 +401,8 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.userContentContainer}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF8A65" />
-          }
+        <View
+          style={[styles.scrollView, styles.userContentContainer]}
         >
           {/* Profile Header Section */}
           <View style={styles.userProfileHeader}>
@@ -440,7 +435,7 @@ export default function ProfileScreen() {
               activeOpacity={0.8}
             >
               <LinearGradient
-                colors={['#FF8A65', '#FF7043']}
+                colors={[colors.primary, colors.primaryDark]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.userEditProfileGradient}
@@ -453,7 +448,7 @@ export default function ProfileScreen() {
           {/* Stats & Intention Row */}
           {loadingStats ? (
             <View style={styles.userStatsIntentionRow}>
-              <ActivityIndicator size="small" color="#FF7043" />
+              <ActivityIndicator size="small" color={colors.primary} />
             </View>
           ) : (
             <TouchableOpacity
@@ -470,16 +465,19 @@ export default function ProfileScreen() {
 
               {intentionInfo && (
                 <View style={styles.userIntentionItem}>
-                  <IconSymbol name={intentionInfo.icon as any} size={18} color="#FF7043" />
+                  <IconSymbol name={intentionInfo.icon as any} size={18} color={colors.primary} />
                   <Text style={styles.userIntentionLabel}>{intentionInfo.label}</Text>
                 </View>
               )}
             </TouchableOpacity>
           )}
 
-          {/* Bio */}
+          {/* Bio Card */}
           {profile.bio && (
-            <Text style={styles.userBioText}>{profile.bio}</Text>
+            <View style={styles.userBioCard}>
+              <Text style={styles.userBioTitle}>Ma Bio</Text>
+              <Text style={styles.userBioText}>{profile.bio}</Text>
+            </View>
           )}
 
           {/* Intérêts */}
@@ -492,7 +490,7 @@ export default function ProfileScreen() {
               ))}
             </View>
           )}
-        </ScrollView>
+        </View>
       </SafeAreaView>
     </LinearGradient>
   );
@@ -1320,13 +1318,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   userAvatar: {
-    width: 216,
-    height: 216,
-    borderRadius: 108,
+    width: 175,
+    height: 175,
+    borderRadius: 88,
     backgroundColor: '#F3F4F6',
     borderWidth: 3,
-    borderColor: '#FF8A65',
-    shadowColor: '#FF8A65',
+    borderColor: colors.primary,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
@@ -1339,7 +1337,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#FF8A65',
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
@@ -1385,8 +1383,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
     marginBottom: 14,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -1398,13 +1396,13 @@ const styles = StyleSheet.create({
   },
   userStatItem: {
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 9,
   },
   userStatValue: {
     fontSize: 16,
     fontWeight: '700',
     fontFamily: 'Manrope_700Bold',
-    color: '#FF7043',
+    color: colors.primary,
   },
   userStatLabel: {
     fontSize: 11,
@@ -1428,16 +1426,34 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     fontFamily: 'Manrope_500Medium',
-    color: '#FF7043',
+    color: colors.primary,
+  },
+  userBioCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 8,
+    marginBottom: 14,
+    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: colors.primaryDesaturated.replace('0.70', '0.12'),
+  },
+  userBioTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#1F2937',
+    marginBottom: 10,
   },
   userBioText: {
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: 'Manrope_400Regular',
     color: '#4B5563',
-    lineHeight: 20,
-    textAlign: 'center',
-    marginBottom: 14,
-    paddingHorizontal: 8,
+    lineHeight: 22,
   },
   userInterestsContainer: {
     flexDirection: 'row',
@@ -1446,7 +1462,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   userInterestTag: {
-    backgroundColor: 'rgba(255, 138, 101, 0.08)',
+    backgroundColor: colors.primaryLight,
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 16,
