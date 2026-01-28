@@ -1130,7 +1130,16 @@ AS $function$
 BEGIN
     RETURN QUERY
     SELECT
-        (SELECT COUNT(*) FROM slot_participants WHERE user_id = p_user_id)::BIGINT as activities_joined,
+        (
+            SELECT COUNT(DISTINCT sp.slot_id)
+            FROM slot_participants sp
+            INNER JOIN activity_slots s ON s.id = sp.slot_id
+            WHERE sp.user_id = p_user_id
+              AND (
+                  s.date < CURRENT_DATE
+                  OR (s.date = CURRENT_DATE AND s.time < CURRENT_TIME)
+              )
+        )::BIGINT as activities_joined,
         (SELECT COUNT(*) FROM activities WHERE host_id = p_user_id)::BIGINT as activities_hosted,
         (SELECT COUNT(*) FROM friendships WHERE user_id = p_user_id)::BIGINT as friends_count,
         (SELECT COUNT(*) FROM friend_requests WHERE receiver_id = p_user_id AND status = 'pending')::BIGINT as pending_friend_requests;

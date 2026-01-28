@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict A7ThH8g8xsLppacE1dqjghpTZbXqCAcsD7QmyNHzEGPUShpVNxb7yvMVNbm4CzE
+\restrict 9xStrDxyxX7uHZmWIbRbktCwLO1G6NRQPFc2M2ImAWi718SNDhOgoJ1vG2UqrSE
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.7 (Ubuntu 17.7-0ubuntu0.25.04.1)
@@ -936,7 +936,16 @@ CREATE FUNCTION public.get_user_profile_stats(p_user_id uuid) RETURNS TABLE(acti
 BEGIN
     RETURN QUERY
     SELECT
-        (SELECT COUNT(*) FROM slot_participants WHERE user_id = p_user_id)::BIGINT as activities_joined,
+        (
+            SELECT COUNT(DISTINCT sp.slot_id)
+            FROM slot_participants sp
+            INNER JOIN activity_slots s ON s.id = sp.slot_id
+            WHERE sp.user_id = p_user_id
+              AND (
+                  s.date < CURRENT_DATE
+                  OR (s.date = CURRENT_DATE AND s.time < CURRENT_TIME)
+              )
+        )::BIGINT as activities_joined,
         (SELECT COUNT(*) FROM activities WHERE host_id = p_user_id)::BIGINT as activities_hosted,
         (SELECT COUNT(*) FROM friendships WHERE user_id = p_user_id)::BIGINT as friends_count,
         (SELECT COUNT(*) FROM friend_requests WHERE receiver_id = p_user_id AND status = 'pending')::BIGINT as pending_friend_requests;
@@ -4110,5 +4119,5 @@ ALTER TABLE public.slot_participants ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict A7ThH8g8xsLppacE1dqjghpTZbXqCAcsD7QmyNHzEGPUShpVNxb7yvMVNbm4CzE
+\unrestrict 9xStrDxyxX7uHZmWIbRbktCwLO1G6NRQPFc2M2ImAWi718SNDhOgoJ1vG2UqrSE
 

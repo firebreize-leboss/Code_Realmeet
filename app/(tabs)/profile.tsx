@@ -128,17 +128,37 @@ export default function ProfileScreen() {
 
       if (error) {
         console.error('RPC get_user_profile_stats error:', error);
-        const { count: joined } = await supabase
+        // Fallback: compter uniquement les activités PASSÉES (slot terminé)
+        const now = new Date();
+        const todayStr = now.toISOString().split('T')[0];
+        const nowTime = now.toTimeString().slice(0, 5);
+
+        // Récupérer les participations de l'utilisateur
+        const { data: participations } = await supabase
           .from('slot_participants')
-          .select('*', { count: 'exact', head: true })
+          .select('slot_id')
           .eq('user_id', userId);
+
+        let pastActivitiesCount = 0;
+        if (participations && participations.length > 0) {
+          const slotIds = participations.map(p => p.slot_id);
+
+          // Compter les slots passés
+          const { count } = await supabase
+            .from('activity_slots')
+            .select('*', { count: 'exact', head: true })
+            .in('id', slotIds)
+            .or(`date.lt.${todayStr},and(date.eq.${todayStr},time.lt.${nowTime})`);
+
+          pastActivitiesCount = count || 0;
+        }
 
         const { count: hosted } = await supabase
           .from('activities')
           .select('*', { count: 'exact', head: true })
           .eq('host_id', userId);
 
-        setActivitiesJoined(joined || 0);
+        setActivitiesJoined(pastActivitiesCount);
         setActivitiesHosted(hosted || 0);
       } else if (data && data.length > 0) {
         setActivitiesJoined(data[0].activities_joined || 0);

@@ -79,14 +79,16 @@ export default function MyParticipatedActivitiesScreen() {
           if (participation?.slot_id) {
             const { data: slotData } = await supabase
               .from('activity_slots')
-              .select('date, time')
+              .select('date, time, duration')
               .eq('id', participation.slot_id)
               .single();
 
             if (slotData) {
               slotDate = slotData.date;
               const slotDateTime = new Date(`${slotData.date}T${slotData.time || '00:00'}`);
-              isPast = slotDateTime < now;
+              const durationMinutes = slotData.duration || 0;
+              const slotEndTime = new Date(slotDateTime.getTime() + durationMinutes * 60 * 1000);
+              isPast = slotEndTime < now;
             }
           }
 
