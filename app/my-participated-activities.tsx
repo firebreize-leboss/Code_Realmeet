@@ -101,7 +101,9 @@ export default function MyParticipatedActivitiesScreen() {
         })
       );
 
-      setActivities(activitiesWithSlotInfo);
+      // Filtrer pour ne garder que les activités PASSÉES
+      const pastActivities = activitiesWithSlotInfo.filter(activity => activity.isPast);
+      setActivities(pastActivities);
     } catch (error) {
       console.error('Erreur chargement activités:', error);
     } finally {
@@ -121,13 +123,8 @@ export default function MyParticipatedActivitiesScreen() {
     <TouchableOpacity
       style={styles.activityCard}
       onPress={() => {
-        if (item.isPast && item.slot_id) {
-          // Activité passée -> rediriger vers la page avec notation et participants
-          router.push(`/activity-detail?id=${item.id}&from=past&slotId=${item.slot_id}`);
-        } else {
-          // Activité en cours -> rediriger normalement
-          router.push(`/activity-detail?id=${item.id}&from=myActivities`);
-        }
+        // Toutes les activités ici sont passées
+        router.push(`/activity-detail?id=${item.id}&from=past&slotId=${item.slot_id}`);
       }}
       activeOpacity={0.7}
     >
@@ -138,17 +135,10 @@ export default function MyParticipatedActivitiesScreen() {
       <View style={styles.activityInfo}>
         <View style={styles.activityTitleRow}>
           <Text style={styles.activityName} numberOfLines={2}>{item.nom}</Text>
-          {item.isPast ? (
-            <View style={styles.pastBadge}>
-              <IconSymbol name="checkmark.circle.fill" size={12} color="#10b981" />
-              <Text style={styles.pastBadgeText}>Terminée</Text>
-            </View>
-          ) : (
-            <View style={styles.ongoingBadge}>
-              <View style={styles.ongoingDot} />
-              <Text style={styles.ongoingBadgeText}>En cours</Text>
-            </View>
-          )}
+          <View style={styles.pastBadge}>
+            <IconSymbol name="checkmark.circle.fill" size={12} color="#10b981" />
+            <Text style={styles.pastBadgeText}>Terminée</Text>
+          </View>
         </View>
         <View style={styles.activityMeta}>
           <IconSymbol name="calendar" size={14} color={colors.textSecondary} />
@@ -181,7 +171,9 @@ export default function MyParticipatedActivitiesScreen() {
           <Text style={styles.emptyText}>Aucune activité rejointe</Text>
           <TouchableOpacity
             style={styles.browseButton}
-            onPress={() => router.push('/(tabs)/browse')}
+            onPress={() => {
+              router.replace('/(tabs)/browse?tab=browse');
+            }}
           >
             <Text style={styles.browseButtonText}>Découvrir des activités</Text>
           </TouchableOpacity>
@@ -286,26 +278,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
     color: '#10b981',
-  },
-  ongoingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.primary + '20',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-    gap: 4,
-  },
-  ongoingDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.primary,
-  },
-  ongoingBadgeText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: colors.primary,
   },
   activityMeta: {
     flexDirection: 'row',

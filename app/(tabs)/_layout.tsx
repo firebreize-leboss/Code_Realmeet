@@ -94,21 +94,42 @@ function TabLayoutContent() {
   const pathname = usePathname();
   const params = useLocalSearchParams();
   const { isMapViewActive } = useMapView();
-  const [currentTabIndex, setCurrentTabIndex] = useState(0);
+  const [currentTabIndex, setCurrentTabIndex] = useState(() => {
+    // browse est toujours à l'index 1 dans userTabs et businessTabs
+    if (pathname.includes('browse')) {
+      return 1;
+    }
+    return 0;
+  });
   const [isRedirecting, setIsRedirecting] = useState(false);
   const isSwipeNavigation = useRef(false);
+  const isTabBarNavigation = useRef(false);
 
   const isBusiness = profile?.account_type === 'business';
   const tabs = isBusiness ? businessTabs : userTabs;
 
   // Synchroniser l'index du tab avec la route actuelle
   useEffect(() => {
-    // Ignorer la synchronisation si on vient d'un swipe
-    if (isSwipeNavigation.current) return;
+    console.log('[DEBUG _layout] === SYNC TAB EFFECT ===');
+    console.log('[DEBUG _layout] pathname:', pathname);
+    console.log('[DEBUG _layout] params:', JSON.stringify(params));
+    console.log('[DEBUG _layout] currentTabIndex:', currentTabIndex);
+    console.log('[DEBUG _layout] isSwipeNavigation.current:', isSwipeNavigation.current);
+
+    // Ignorer la synchronisation si on vient d'un swipe ou d'un clic sur la tab bar
+    if (isSwipeNavigation.current) {
+      console.log('[DEBUG _layout] SKIP: isSwipeNavigation est true');
+      return;
+    }
+    if (isTabBarNavigation.current) {
+      console.log('[DEBUG _layout] SKIP: isTabBarNavigation est true');
+      return;
+    }
 
     // Vérifier si on navigue vers browse avec des paramètres (ex: viewMode=maps)
     if (params.viewMode === 'maps' || params.selectedActivityId) {
       const browseIndex = tabs.findIndex(tab => tab.name === 'browse');
+      console.log('[DEBUG _layout] Paramètres maps détectés, browseIndex:', browseIndex);
       if (browseIndex !== -1 && browseIndex !== currentTabIndex) {
         setCurrentTabIndex(browseIndex);
         return;
@@ -117,8 +138,15 @@ function TabLayoutContent() {
 
     // Sinon, synchroniser via le pathname
     const tabIndex = tabs.findIndex(tab => pathname.includes(tab.name));
+    console.log('[DEBUG _layout] Recherche tab par pathname:', pathname);
+    console.log('[DEBUG _layout] tabs.map(name):', tabs.map(t => t.name));
+    console.log('[DEBUG _layout] Match results:', tabs.map(t => ({ name: t.name, includes: pathname.includes(t.name) })));
+    console.log('[DEBUG _layout] tabIndex trouvé:', tabIndex, '(tab:', tabIndex >= 0 ? tabs[tabIndex].name : 'AUCUN', ')');
     if (tabIndex !== -1 && tabIndex !== currentTabIndex) {
+      console.log('[DEBUG _layout] CHANGEMENT de tab:', currentTabIndex, '->', tabIndex);
       setCurrentTabIndex(tabIndex);
+    } else {
+      console.log('[DEBUG _layout] PAS DE CHANGEMENT - tabIndex:', tabIndex, 'currentTabIndex:', currentTabIndex);
     }
   }, [pathname, params, tabs]);
 
@@ -159,16 +187,22 @@ function TabLayoutContent() {
   }, [isBusiness]);
 
   const handleIndexChange = useCallback((index: number) => {
+    console.log('[DEBUG _layout] handleIndexChange (swipe):', index, '(tab:', tabs[index]?.name, ')');
     isSwipeNavigation.current = true;
     setCurrentTabIndex(index);
     setTimeout(() => {
       isSwipeNavigation.current = false;
     }, 100);
-  }, []);
+  }, [tabs]);
 
   const handleTabPress = useCallback((index: number) => {
+    console.log('[DEBUG _layout] handleTabPress:', index, '(tab:', tabs[index]?.name, ')');
+    isTabBarNavigation.current = true;
     setCurrentTabIndex(index);
-  }, []);
+    setTimeout(() => {
+      isTabBarNavigation.current = false;
+    }, 100);
+  }, [tabs]);
 
   // Écran de chargement pendant la vérification du type de compte ou redirection
   if (loading || isRedirecting || !user) {
