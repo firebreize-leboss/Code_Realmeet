@@ -129,13 +129,24 @@ export default function BrowseScreen() {
   const hasHandledParams = useRef(false);
   const hasCenteredOnActivity = useRef(false);
   const isFirstFocus = useRef(true);
+  const hasAnimated = useRef(false);
+  const refreshDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastLatestSlotDateByActivity = useRef<Record<string, string | null>>({});
   const [isBusiness, setIsBusiness] = useState(false);
 
   // Utiliser les données du cache
   const activities = cache.activities;
-  const latestSlotDateByActivity = useMemo(() => Object.fromEntries(
-    Object.entries(cache.slotDataByActivity).map(([id, data]) => [id, data.latestDate])
-  ), [cache.slotDataByActivity]);
+  const latestSlotDateByActivity = useMemo(() => {
+    const newValue = Object.fromEntries(
+      Object.entries(cache.slotDataByActivity).map(([id, data]) => [id, data.latestDate])
+    );
+    // Comparaison profonde pour éviter les re-renders inutiles sur iOS
+    if (JSON.stringify(newValue) === JSON.stringify(lastLatestSlotDateByActivity.current)) {
+      return lastLatestSlotDateByActivity.current;
+    }
+    lastLatestSlotDateByActivity.current = newValue;
+    return newValue;
+  }, [cache.slotDataByActivity]);
   const slotCountByActivity = useMemo(() => Object.fromEntries(
     Object.entries(cache.slotDataByActivity).map(([id, data]) => [id, data.slotCount])
   ), [cache.slotDataByActivity]);
@@ -199,8 +210,18 @@ export default function BrowseScreen() {
         isFirstFocus.current = false;
         return;
       }
-      // Rafraîchir les données quand on revient sur l'écran
-      refreshActivities();
+      // Debounce de 500ms pour éviter les appels multiples rapides sur iOS
+      if (refreshDebounceTimer.current) {
+        clearTimeout(refreshDebounceTimer.current);
+      }
+      refreshDebounceTimer.current = setTimeout(() => {
+        refreshActivities();
+      }, 500);
+      return () => {
+        if (refreshDebounceTimer.current) {
+          clearTimeout(refreshDebounceTimer.current);
+        }
+      };
     }, [refreshActivities])
   );
 
@@ -423,6 +444,8 @@ export default function BrowseScreen() {
       const data = JSON.parse(event.nativeEvent.data);
       console.log('[SCROLL DEBUG] Parsed message data:', data);
       if (data.type === 'markerClicked') {
+        // Guard pour éviter les appels redondants sur iOS
+        if (selectedActivity?.id === data.activity.id) return;
         console.log('[SCROLL DEBUG] markerClicked - setting selectedActivity:', data.activity);
         const slotData = cache.slotDataByActivity[data.activity.id];
         setSelectedActivity({
@@ -796,7 +819,7 @@ export default function BrowseScreen() {
                   {filteredActivities.map((activity, index) => (
                     <Animated.View
                       key={activity.id}
-                      entering={FadeInDown.delay(index * 80).springify()}
+                      entering={hasAnimated.current ? undefined : FadeInDown.delay(index * 80).springify()}
                       style={styles.cardWrapper}
                     >
                       <ActivityCard
@@ -805,6 +828,7 @@ export default function BrowseScreen() {
                       />
                     </Animated.View>
                   ))}
+                  {!hasAnimated.current && (() => { hasAnimated.current = true; return null; })()}
                 </View>
               ) : (
                 <View style={styles.emptyState}>

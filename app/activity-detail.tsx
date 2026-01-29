@@ -727,8 +727,7 @@ export default function ActivityDetailScreen() {
         {/* SECTION: Calendrier de sélection */}
         {!isActivityPast && (
           <>
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Choisir un créneau</Text>
+            <View style={styles.sectionSlots}>
               <ActivityCalendar
                 activityId={activity.id}
                 onSlotSelect={(isBusiness || isJoined) ? undefined : (slot) => setSelectedSlot(slot)}
@@ -845,9 +844,6 @@ export default function ActivityDetailScreen() {
             ) : null}
           </View>
         )}
-
-        {/* Spacer pour le footer fixe */}
-        <View style={{ paddingBottom: (!isHost && !isActivityPast) || (isHost && isBusiness) ? 70 + insets.bottom : 0 }} />
       </ScrollView>
 
       {/* Footer */}
@@ -1159,6 +1155,14 @@ const styles = StyleSheet.create({
   sectionAbout: {
     paddingHorizontal: 20,
     paddingVertical: 20,
+    backgroundColor: '#FFFFFF',
+  },
+
+  // Section Créneaux - compacte
+  sectionSlots: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 20,
     backgroundColor: '#FFFFFF',
   },
 

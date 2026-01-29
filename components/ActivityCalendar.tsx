@@ -720,7 +720,7 @@ export default function ActivityCalendar({
             >
               {isUserJoined && (
                 <View style={styles.joinedIndicator}>
-                  <IconSymbol name="checkmark.circle.fill" size={12} color="#10b981" />
+                  <IconSymbol name="checkmark.circle.fill" size={14} color={colors.primary} />
                 </View>
               )}
 
@@ -749,7 +749,7 @@ export default function ActivityCalendar({
                   styles.slotParticipantBadge,
                   slot.participantCount === slot.maxParticipants && styles.slotParticipantBadgeFull
                 ]}>
-                  <IconSymbol name="person.2.fill" size={10} color={colors.background} />
+                  <IconSymbol name="person.fill" size={8} color={colors.card} />
                   <Text style={styles.slotParticipantText}>
                     {slot.participantCount || 0}/{slot.maxParticipants || maxParticipants || '?'}
                   </Text>
@@ -786,39 +786,40 @@ export default function ActivityCalendar({
       ? 'Gérer les créneaux'
       : readOnly
         ? 'Créneaux disponibles'
-        : "Choix d'une date";
+        : 'Choisir un créneau';
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{headerTitle}</Text>
-
+      {/* Header avec titre et légende sur la même ligne */}
+      <View style={styles.headerRow}>
+        <Text style={styles.mainTitle}>{headerTitle}</Text>
         {userJoinedSlotId && (
           <View style={styles.joinedLegend}>
             <View style={styles.joinedLegendDot} />
-            <Text style={styles.joinedLegendText}>Votre créneau</Text>
+            <Text style={styles.joinedLegendText}>Inscrit</Text>
           </View>
         )}
+      </View>
 
-        <View style={styles.weekNav}>
-          <TouchableOpacity
-            onPress={() => navigate(-1)}
-            style={styles.navButton}
-            disabled={!canGoLeft}
-          >
-            <IconSymbol name="chevron.left" size={20} color={canGoLeft ? colors.text : colors.border} />
-          </TouchableOpacity>
+      {/* Navigation date compacte */}
+      <View style={styles.weekNav}>
+        <TouchableOpacity
+          onPress={() => navigate(-1)}
+          style={styles.navButton}
+          disabled={!canGoLeft}
+        >
+          <IconSymbol name="chevron.left" size={18} color={canGoLeft ? colors.text : colors.borderLight} />
+        </TouchableOpacity>
 
-          <Text style={styles.weekTitle}>{getWeekTitle()}</Text>
+        <Text style={styles.weekTitle}>{getWeekTitle()}</Text>
 
-          <TouchableOpacity
-            onPress={() => navigate(1)}
-            style={styles.navButton}
-            disabled={!canGoRight}
-          >
-            <IconSymbol name="chevron.right" size={20} color={canGoRight ? colors.text : colors.border} />
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          onPress={() => navigate(1)}
+          style={styles.navButton}
+          disabled={!canGoRight}
+        >
+          <IconSymbol name="chevron.right" size={18} color={canGoRight ? colors.text : colors.borderLight} />
+        </TouchableOpacity>
       </View>
 
       {loading ? (
@@ -826,8 +827,9 @@ export default function ActivityCalendar({
           <ActivityIndicator size="small" color={colors.primary} />
         </View>
       ) : visibleDays.length === 0 ? (
-        <View style={styles.loadingContainer}>
-          <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Aucun créneau disponible.</Text>
+        <View style={styles.emptyContainer}>
+          <IconSymbol name="calendar.badge.exclamationmark" size={32} color={colors.textMuted} />
+          <Text style={styles.emptyText}>Aucun créneau disponible</Text>
         </View>
       ) : mode === 'edit' ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -962,51 +964,87 @@ export default function ActivityCalendar({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 16,
+    backgroundColor: 'transparent',
   },
-  header: {
-    marginBottom: 16,
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
   },
-  title: {
-    fontSize: 18,
+  mainTitle: {
+    fontSize: 17,
     fontWeight: '700',
     color: colors.text,
+    letterSpacing: -0.2,
+  },
+  header: {
     marginBottom: 8,
+  },
+  title: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+    marginBottom: 4,
   },
   joinedLegend: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   joinedLegendDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#10b981',
-    marginRight: 6,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.primary,
+    marginRight: 5,
   },
   joinedLegendText: {
-    fontSize: 13,
-    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.primaryMuted,
   },
   weekNav: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    backgroundColor: colors.backgroundAccent,
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    marginBottom: 10,
   },
   navButton: {
-    padding: 8,
+    padding: 4,
+    borderRadius: 6,
   },
   weekTitle: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
     color: colors.text,
+    textTransform: 'capitalize',
   },
   loadingContainer: {
-    padding: 40,
+    paddingVertical: 20,
     alignItems: 'center',
+  },
+  emptyContainer: {
+    paddingVertical: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.backgroundAccent,
+    borderRadius: 12,
+    gap: 8,
+  },
+  emptyText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textTertiary,
   },
 
   weekContainer: {
@@ -1018,116 +1056,120 @@ const styles = StyleSheet.create({
   daysRow: {
     flexDirection: 'row',
     justifyContent: 'flex-start',
-    gap: 8,
+    gap: 6,
   },
   daysRowEdit: {
     flexDirection: 'row',
   },
   dayColumn: {
     flex: 1,
-    maxWidth: '31%', // ~1/3 moins les gaps (toujours 3 colonnes même si moins de dates)
-    minWidth: '31%',
+    maxWidth: '32%',
+    minWidth: '32%',
   },
   dayColumnEdit: {
-    width: 80,
-    marginRight: 8,
+    width: 76,
+    marginRight: 6,
   },
   dayHeader: {
     alignItems: 'center',
-    paddingVertical: 8,
-    backgroundColor: colors.background,
-    borderRadius: 10,
-    marginBottom: 8,
+    paddingVertical: 6,
+    backgroundColor: colors.backgroundAccent,
+    borderRadius: 8,
+    marginBottom: 6,
   },
   dayName: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textSecondary,
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.textTertiary,
+    letterSpacing: 0.3,
   },
   dayNumber: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     color: colors.text,
-    marginVertical: 2,
+    marginVertical: 1,
   },
   monthShort: {
-    fontSize: 11,
-    color: colors.textSecondary,
+    fontSize: 10,
+    color: colors.textTertiary,
+    textTransform: 'capitalize',
   },
 
   slotsContainer: {
-    gap: 6,
+    gap: 4,
   },
   slotBadge: {
-    backgroundColor: colors.background,
+    backgroundColor: '#FAFAFA',
     borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 1.5,
+    borderColor: '#E5E5EA',
     position: 'relative',
   },
   slotBadgeSelected: {
-    backgroundColor: colors.primary,
+    backgroundColor: '#FEF4EB',
     borderColor: colors.primary,
+    borderWidth: 2,
   },
   slotBadgeJoined: {
-    backgroundColor: '#10b981',
-    borderColor: '#10b981',
+    backgroundColor: '#FEF4EB',
+    borderColor: colors.primary,
+    borderWidth: 2,
   },
   slotBadgeEdit: {
     position: 'relative',
   },
   slotBadgeReadOnly: {
-    opacity: 0.7,
+    opacity: 0.6,
   },
   joinedIndicator: {
     position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: colors.background,
-    borderRadius: 8,
+    top: -5,
+    right: -5,
+    backgroundColor: colors.card,
+    borderRadius: 10,
+    padding: 1,
   },
   slotTime: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
     color: colors.text,
   },
   slotTimeSelected: {
-    color: colors.background,
+    color: colors.primary,
   },
   slotTimeJoined: {
-    color: colors.background,
+    color: colors.primary,
   },
   slotDuration: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    marginTop: 2,
+    fontSize: 10,
+    color: colors.textTertiary,
+    marginTop: 1,
+    fontWeight: '500',
   },
   slotDurationSelected: {
-    color: colors.background,
-    opacity: 0.8,
+    color: colors.primaryMuted,
   },
   slotDurationJoined: {
-    color: colors.background,
-    opacity: 0.8,
+    color: colors.primaryMuted,
   },
 
   deleteSlotButton: {
     position: 'absolute',
-    top: -6,
-    right: -6,
+    top: -5,
+    right: -5,
     backgroundColor: colors.background,
     borderRadius: 10,
   },
   addSlotButton: {
-    backgroundColor: colors.primary + '15',
+    backgroundColor: colors.primaryLight,
     borderRadius: 8,
-    paddingVertical: 10,
+    paddingVertical: 8,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.primary + '30',
+    borderWidth: 1.5,
+    borderColor: colors.primary + '40',
     borderStyle: 'dashed',
   },
 
@@ -1142,18 +1184,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    backgroundColor: colors.primary,
-    paddingHorizontal: 6,
+    backgroundColor: colors.textTertiary,
+    paddingHorizontal: 5,
     paddingVertical: 2,
-    borderRadius: 10,
-    marginLeft: 'auto',
+    borderRadius: 6,
+    marginTop: 3,
   },
   slotParticipantBadgeFull: {
-    backgroundColor: '#EF4444',
+    backgroundColor: '#DC2626',
   },
   slotParticipantText: {
-    color: colors.background,
-    fontSize: 10,
+    color: colors.card,
+    fontSize: 9,
     fontWeight: '700',
   },
 
