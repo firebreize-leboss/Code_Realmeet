@@ -108,9 +108,20 @@ function TabLayoutContent() {
 
   const isBusiness = profile?.account_type === 'business';
   const tabs = isBusiness ? businessTabs : userTabs;
+  const prevIsBusiness = useRef<boolean | null>(null);
 
   // Synchroniser l'index du tab avec la route actuelle
   useEffect(() => {
+    // Ignorer les pages modales/détail qui ne doivent pas affecter la navigation par tabs
+    if (
+      pathname.includes('detail') ||
+      pathname.startsWith('/activity-detail') ||
+      pathname.startsWith('/chat-detail') ||
+      pathname.startsWith('/user-profile')
+    ) {
+      return;
+    }
+
     console.log('[DEBUG _layout] === SYNC TAB EFFECT ===');
     console.log('[DEBUG _layout] pathname:', pathname);
     console.log('[DEBUG _layout] params:', JSON.stringify(params));
@@ -184,10 +195,13 @@ function TabLayoutContent() {
     }
   }, [loading, user]);
 
-  // Réinitialiser l'index du tab quand le type de compte change
+  // Réinitialiser l'index du tab quand le type de compte change (pas au montage initial)
   useEffect(() => {
-    prevTabIndexRef.current = 0;
-    setCurrentTabIndex(0);
+    if (prevIsBusiness.current !== null && prevIsBusiness.current !== isBusiness) {
+      prevTabIndexRef.current = 0;
+      setCurrentTabIndex(0);
+    }
+    prevIsBusiness.current = isBusiness;
   }, [isBusiness]);
 
   const handleIndexChange = useCallback((index: number) => {
