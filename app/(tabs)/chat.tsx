@@ -22,12 +22,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
-import { colors, commonStyles } from '@/styles/commonStyles';
+import { colors, commonStyles, typography, spacing, borderRadius } from '@/styles/commonStyles';
 import { useFriendRequests } from '@/hooks/useMessaging';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDataCache } from '@/contexts/DataCacheContext';
 import { supabase } from "@/lib/supabase";
-import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -65,7 +64,6 @@ interface Conversation {
   isActivityGroup?: boolean;
   isPastActivity?: boolean;
   isMuted?: boolean;
-  // Nouveaux champs optionnels
   is_online?: boolean;
   activity_name?: string;
   participants_count?: number;
@@ -82,7 +80,6 @@ export default function ChatScreen() {
   const [activeFilter, setActiveFilter] = useState<ChatFilter>('all');
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
 
-  // Obtenir les données via le cache global
   const { cache, markConversationAsRead, refreshConversations, removeConversationFromCache, toggleMuteConversation } = useDataCache();
   const { pendingCount: pendingRequestsCount } = useFriendRequests();
   const { profile } = useAuth();
@@ -90,14 +87,12 @@ export default function ChatScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [headerSearchQuery, setHeaderSearchQuery] = useState('');
 
-  // Rafraîchir les conversations à chaque fois qu'on revient sur cette page
   useFocusEffect(
     useCallback(() => {
       refreshConversations();
     }, [refreshConversations])
   );
 
-  // Utiliser les données du cache
   const conversations = cache.conversations;
   const friends = cache.friends.map(f => ({
     id: f.friend_id,
@@ -108,11 +103,9 @@ export default function ChatScreen() {
   const convLoading = false;
   const friendsLoading = false;
 
-  // Compteurs pour le header
   const groupsCount = conversations.filter(c => c.isActivityGroup).length;
   const friendsCount = friends.length;
 
-  // Compteurs pour les onglets
   const activitiesCount = conversations.filter(c => c.isActivityGroup && !c.isPastActivity).length;
   const privateCount = conversations.filter(c => !c.isGroup).length;
 
@@ -150,7 +143,6 @@ export default function ChatScreen() {
               .eq('conversation_id', fp.conversation_id);
 
             if (count === 2) {
-              // Réinitialiser is_hidden si la conversation était cachée
               await supabase
                 .from('conversation_participants')
                 .update({ is_hidden: false })
@@ -270,18 +262,15 @@ export default function ChatScreen() {
     loadActivityContacts();
   }, []);
 
-  // Filtrer les conversations selon le filtre actif et la recherche
   const getFilteredConversations = () => {
     let filtered = conversations;
 
-    // Filtre par recherche
     if (headerSearchQuery) {
       filtered = filtered.filter(c =>
         c.name.toLowerCase().includes(headerSearchQuery.toLowerCase())
       );
     }
 
-    // Filtre par onglet
     switch (activeFilter) {
       case 'activities':
         return filtered.filter(c => c.isActivityGroup && !c.isPastActivity);
@@ -292,16 +281,13 @@ export default function ChatScreen() {
     }
   };
 
-  // Supprimer une conversation (la cacher pour l'utilisateur)
   const handleDeleteConversation = async (conversationId: string) => {
     try {
       const { data: currentUser } = await supabase.auth.getUser();
       if (!currentUser?.user?.id) return;
 
-      // Retirer immédiatement du cache (optimistic update)
       removeConversationFromCache(conversationId);
 
-      // Marquer la conversation comme cachée pour cet utilisateur en BDD
       const { error } = await supabase
         .from('conversation_participants')
         .update({ is_hidden: true })
@@ -309,12 +295,10 @@ export default function ChatScreen() {
         .eq('user_id', currentUser.user.id);
 
       if (error) {
-        // En cas d'erreur, rafraîchir pour remettre l'état correct
         await refreshConversations();
         throw error;
       }
 
-      // Désélectionner après suppression
       setSelectedConversation(null);
     } catch (error) {
       console.error('Erreur suppression conversation:', error);
@@ -322,12 +306,10 @@ export default function ChatScreen() {
     }
   };
 
-  // Fermer la barre d'actions
   const handleCloseActionBar = () => {
     setSelectedConversation(null);
   };
 
-  // Actions disponibles dans la barre contextuelle
   const handleMuteConversation = async () => {
     if (!selectedConversation) return;
 
@@ -336,27 +318,23 @@ export default function ChatScreen() {
   };
 
   const handleArchiveConversation = () => {
-    // TODO: Implémenter l'archivage
     Alert.alert('Archiver', `Conversation "${selectedConversation?.name}" archivée`);
     setSelectedConversation(null);
   };
 
-  // Composant pour un item de conversation avec animation fluide
+  // Composant pour un item de conversation
   const ChatItem = ({ chat }: { chat: Conversation }) => {
     const isSelected = selectedConversation?.id === chat.id;
+    const hasUnread = chat.unreadCount !== undefined && chat.unreadCount > 0;
     const scale = useSharedValue(1);
-    const checkOpacity = useSharedValue(0);
     const bgOpacity = useSharedValue(0);
 
-    // Mettre à jour les animations quand la sélection change
     useEffect(() => {
       if (isSelected) {
         scale.value = withSpring(0.98, { damping: 15, stiffness: 300 });
-        checkOpacity.value = withSpring(1, { damping: 15, stiffness: 300 });
         bgOpacity.value = withTiming(1, { duration: 150 });
       } else {
         scale.value = withSpring(1, { damping: 15, stiffness: 300 });
-        checkOpacity.value = withTiming(0, { duration: 150 });
         bgOpacity.value = withTiming(0, { duration: 150 });
       }
     }, [isSelected]);
@@ -367,13 +345,6 @@ export default function ChatScreen() {
 
     const animatedBgStyle = useAnimatedStyle(() => ({
       opacity: bgOpacity.value,
-    }));
-
-    const animatedCheckStyle = useAnimatedStyle(() => ({
-      opacity: checkOpacity.value,
-      transform: [
-        { scale: interpolate(checkOpacity.value, [0, 1], [0.5, 1], Extrapolation.CLAMP) },
-      ],
     }));
 
     const handlePress = () => {
@@ -405,69 +376,66 @@ export default function ChatScreen() {
           {/* Background de sélection animé */}
           <Animated.View style={[styles.chatItemSelectedBg, animatedBgStyle]} />
 
-          {/* Indicateur de sélection animé (position absolute) */}
-          <Animated.View style={[styles.selectionIndicator, animatedCheckStyle]}>
-            <LinearGradient
-              colors={['#60A5FA', '#818CF8', '#C084FC']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.selectionCheckBg}
-            >
-              <IconSymbol name="checkmark" size={14} color="#FFFFFF" />
-            </LinearGradient>
-          </Animated.View>
+          {/* Indicateur non-lu (point orange) */}
+          {hasUnread && !isSelected && (
+            <View style={styles.unreadDot} />
+          )}
 
           {/* Avatar */}
           <Image
-            source={{ uri: chat.image || 'https://via.placeholder.com/56' }}
+            source={{ uri: chat.image || 'https://via.placeholder.com/48' }}
             style={styles.chatAvatar}
           />
 
           {/* Infos conversation */}
           <View style={styles.chatInfo}>
             <View style={styles.chatHeader}>
-              <Text style={styles.chatName} numberOfLines={1}>
+              <Text
+                style={[
+                  styles.chatName,
+                  hasUnread && styles.chatNameUnread
+                ]}
+                numberOfLines={1}
+              >
                 {chat.name}
               </Text>
-              <Text style={styles.chatTime}>{chat.lastMessageTime}</Text>
-            </View>
-            <Text style={styles.lastMessage} numberOfLines={1}>
-              {chat.lastMessage || 'Commencez une conversation...'}
-            </Text>
-          </View>
-
-          {/* Icône de sourdine */}
-          {chat.isMuted && !isSelected && (
-            <TouchableOpacity
-              style={styles.muteIconContainer}
-              onPress={() => {
-                toggleMuteConversation(chat.id);
-              }}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <IconSymbol name="bell.slash.fill" size={18} color="#9CA3AF" />
-            </TouchableOpacity>
-          )}
-
-          {/* Badge non lu */}
-          {chat.unreadCount !== undefined && chat.unreadCount > 0 && !isSelected && (
-            <LinearGradient
-              colors={['#60A5FA', '#818CF8', '#C084FC']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.unreadBadge}
-            >
-              <Text style={styles.unreadText}>
-                {chat.unreadCount > 99 ? '99+' : chat.unreadCount}
+              <Text style={[styles.chatTime, hasUnread && styles.chatTimeUnread]}>
+                {chat.lastMessageTime}
               </Text>
-            </LinearGradient>
-          )}
+            </View>
+
+            <View style={styles.chatSubline}>
+              <Text
+                style={[
+                  styles.lastMessage,
+                  hasUnread && styles.lastMessageUnread
+                ]}
+                numberOfLines={1}
+              >
+                {chat.lastMessage || 'Commencez une conversation...'}
+              </Text>
+
+              {/* Icône de sourdine discrète */}
+              {chat.isMuted && !isSelected && (
+                <IconSymbol name="bell.slash.fill" size={14} color={colors.textMuted} style={styles.muteIcon} />
+              )}
+            </View>
+
+            {/* Contexte léger (activité liée) */}
+            {chat.isActivityGroup && chat.activity_name && (
+              <View style={styles.contextRow}>
+                <IconSymbol name="calendar" size={12} color={colors.textTertiary} />
+                <Text style={styles.contextText} numberOfLines={1}>
+                  {chat.activity_name}
+                </Text>
+              </View>
+            )}
+          </View>
         </Pressable>
       </Animated.View>
     );
   };
 
-  // Render d'un item de conversation
   const renderChatItem = (chat: Conversation) => {
     return <ChatItem key={chat.id} chat={chat} />;
   };
@@ -490,46 +458,86 @@ export default function ChatScreen() {
           {item.is_online ? 'En ligne' : 'Hors ligne'}
         </Text>
       </View>
-      <IconSymbol name="chevron.right" size={20} color={colors.textSecondary} />
+      <IconSymbol name="chevron.right" size={18} color={colors.textMuted} />
     </TouchableOpacity>
   );
 
+  // Empty state component
+  const EmptyState = () => {
+    const getEmptyContent = () => {
+      switch (activeFilter) {
+        case 'activities':
+          return {
+            icon: 'calendar' as const,
+            title: 'Aucun groupe d\'activité',
+            subtitle: 'Rejoignez une activité pour discuter avec les autres participants.',
+            cta: 'Explorer les activités',
+            onPress: () => router.push('/(tabs)/browse'),
+          };
+        case 'friends':
+          return {
+            icon: 'person.2' as const,
+            title: 'Aucune conversation',
+            subtitle: 'Commencez à échanger avec vos amis dès maintenant.',
+            cta: 'Nouvelle conversation',
+            onPress: () => setShowFriendsModal(true),
+          };
+        default:
+          return {
+            icon: 'bubble.left.and.bubble.right' as const,
+            title: 'Pas encore de messages',
+            subtitle: 'Vos conversations apparaîtront ici. Rejoignez une activité ou contactez un ami pour commencer.',
+            cta: 'Explorer les activités',
+            onPress: () => router.push('/(tabs)/browse'),
+          };
+      }
+    };
+
+    const content = getEmptyContent();
+
+    return (
+      <View style={styles.emptyState}>
+        <View style={styles.emptyIconContainer}>
+          <IconSymbol name={content.icon} size={48} color={colors.textMuted} />
+        </View>
+        <Text style={styles.emptyTitle}>{content.title}</Text>
+        <Text style={styles.emptySubtitle}>{content.subtitle}</Text>
+        <TouchableOpacity
+          style={styles.emptyCta}
+          onPress={content.onPress}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.emptyCtaText}>{content.cta}</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      {/* Barre d'actions contextuelle (style WhatsApp) */}
+      {/* Barre d'actions contextuelle */}
       {selectedConversation && (
         <View style={styles.actionBarContainer}>
-          <LinearGradient
-            colors={['rgba(96, 165, 250, 0.95)', 'rgba(129, 140, 252, 0.95)', 'rgba(192, 132, 252, 0.95)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.actionBar}
-          >
-            <SafeAreaView edges={['top']} style={styles.actionBarSafeArea}>
-              <View style={styles.actionBarContent}>
-                {/* Bouton retour */}
-                <TouchableOpacity
-                  style={styles.actionBarButton}
-                  onPress={handleCloseActionBar}
-                >
-                  <IconSymbol name="arrow.left" size={22} color="#FFFFFF" />
-                </TouchableOpacity>
+          <SafeAreaView edges={['top']} style={styles.actionBarSafeArea}>
+            <View style={styles.actionBar}>
+              <TouchableOpacity
+                style={styles.actionBarButton}
+                onPress={handleCloseActionBar}
+              >
+                <IconSymbol name="xmark" size={20} color={colors.text} />
+              </TouchableOpacity>
 
-                {/* Compteur de sélection */}
-                <Text style={styles.actionBarCount}>1</Text>
+              <Text style={styles.actionBarTitle}>1 sélectionné</Text>
 
-                {/* Spacer */}
-                <View style={styles.actionBarSpacer} />
-
-                {/* Actions */}
+              <View style={styles.actionBarActions}>
                 <TouchableOpacity
                   style={styles.actionBarButton}
                   onPress={handleMuteConversation}
                 >
                   <IconSymbol
                     name={selectedConversation?.isMuted ? "bell.fill" : "bell.slash.fill"}
-                    size={22}
-                    color="#FFFFFF"
+                    size={20}
+                    color={colors.textSecondary}
                   />
                 </TouchableOpacity>
 
@@ -537,167 +545,165 @@ export default function ChatScreen() {
                   style={styles.actionBarButton}
                   onPress={handleArchiveConversation}
                 >
-                  <IconSymbol name="archivebox.fill" size={22} color="#FFFFFF" />
+                  <IconSymbol name="archivebox" size={20} color={colors.textSecondary} />
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={styles.actionBarButton}
                   onPress={() => handleDeleteConversation(selectedConversation.id)}
                 >
-                  <IconSymbol name="trash.fill" size={22} color="#FFFFFF" />
+                  <IconSymbol name="trash" size={20} color={colors.error} />
                 </TouchableOpacity>
-              </View>
-            </SafeAreaView>
-          </LinearGradient>
-        </View>
-      )}
-
-      {/* Header - barre avec dégradé bleu → violet → rose/violet */}
-      {!selectedConversation && (
-        <LinearGradient
-          colors={['#60A5FA', '#818CF8', '#C084FC']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.header}
-        >
-          <SafeAreaView edges={['top']} style={styles.headerSafeArea}>
-            <View style={styles.headerTop}>
-              <View style={styles.headerTitleRow}>
-                <View style={styles.headerLeftButtons}>
-                  <TouchableOpacity
-                    style={styles.headerButton}
-                    onPress={() => router.push('/add-friends')}
-                  >
-                    <IconSymbol name="person.badge.plus" size={20} color="#FFFFFF" />
-                  </TouchableOpacity>
-                </View>
-                <Text style={styles.headerUsername}>
-                  {profile?.full_name || profile?.username || 'Utilisateur'}
-                </Text>
-                <View style={styles.headerRightButtons}>
-                  <TouchableOpacity
-                    style={styles.headerButton}
-                    onPress={() => router.push('/friend-requests')}
-                  >
-                    <IconSymbol name="envelope.fill" size={20} color="#FFFFFF" />
-                    {pendingRequestsCount > 0 && (
-                      <View style={styles.headerBadge}>
-                        <Text style={styles.headerBadgeText}>
-                          {pendingRequestsCount > 9 ? '9+' : pendingRequestsCount}
-                        </Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.headerButton}
-                    onPress={() => setShowFriendsModal(true)}
-                  >
-                    <IconSymbol name="pencil" size={20} color="#FFFFFF" />
-                  </TouchableOpacity>
-                </View>
               </View>
             </View>
           </SafeAreaView>
-        </LinearGradient>
+        </View>
       )}
 
-      {/* Barre de recherche */}
+      {/* Header - fond clair */}
+      {!selectedConversation && (
+        <SafeAreaView edges={['top']} style={styles.headerSafeArea}>
+          <View style={styles.header}>
+            <View style={styles.headerTop}>
+              {/* Icône gauche */}
+              <TouchableOpacity
+                style={styles.headerIconButton}
+                onPress={() => router.push('/add-friends')}
+              >
+                <IconSymbol name="person.badge.plus" size={22} color={colors.textSecondary} />
+              </TouchableOpacity>
+
+              {/* Nom utilisateur central */}
+              <Text style={styles.headerUsername}>
+                {profile?.full_name || profile?.username || 'Messages'}
+              </Text>
+
+              {/* Icônes droites */}
+              <View style={styles.headerRightButtons}>
+                <TouchableOpacity
+                  style={styles.headerIconButton}
+                  onPress={() => router.push('/friend-requests')}
+                >
+                  <IconSymbol name="envelope" size={22} color={colors.textSecondary} />
+                  {pendingRequestsCount > 0 && (
+                    <View style={styles.headerBadge}>
+                      <Text style={styles.headerBadgeText}>
+                        {pendingRequestsCount > 9 ? '9+' : pendingRequestsCount}
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.headerIconButton}
+                  onPress={() => setShowFriendsModal(true)}
+                >
+                  <IconSymbol name="square.and.pencil" size={22} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </SafeAreaView>
+      )}
+
+      {/* Barre de recherche compacte */}
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
-          <IconSymbol name="magnifyingglass" size={18} color="#9CA3AF" />
+          <IconSymbol name="magnifyingglass" size={16} color={colors.textMuted} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Rechercher une conversation..."
-            placeholderTextColor="#9CA3AF"
+            placeholder="Rechercher..."
+            placeholderTextColor={colors.textMuted}
             value={headerSearchQuery}
             onChangeText={setHeaderSearchQuery}
           />
+          {headerSearchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setHeaderSearchQuery('')}>
+              <IconSymbol name="xmark.circle.fill" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
-      {/* Onglets de filtre */}
-      <View style={styles.filterTabs}>
-        <TouchableOpacity
-          onPress={() => setActiveFilter('all')}
-          activeOpacity={0.7}
-        >
-          {activeFilter === 'all' ? (
-            <LinearGradient
-              colors={['#60A5FA', '#818CF8', '#C084FC']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.filterTabActive}
-            >
-              <Text style={styles.filterTabTextActive}>Tous</Text>
-            </LinearGradient>
-          ) : (
-            <View style={styles.filterTab}>
-              <Text style={styles.filterTabText}>Tous</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+      {/* Segmented control sobre */}
+      <View style={styles.segmentedControl}>
+        <View style={styles.segmentedControlInner}>
+          <TouchableOpacity
+            onPress={() => setActiveFilter('all')}
+            activeOpacity={0.7}
+            style={[
+              styles.segmentedTab,
+              activeFilter === 'all' && styles.segmentedTabActive,
+            ]}
+          >
+            <Text style={[
+              styles.segmentedTabText,
+              activeFilter === 'all' && styles.segmentedTabTextActive,
+            ]}>
+              Tous
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={() => setActiveFilter('activities')}
-          activeOpacity={0.7}
-        >
-          {activeFilter === 'activities' ? (
-            <LinearGradient
-              colors={['#60A5FA', '#818CF8', '#C084FC']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.filterTabActive}
-            >
-              <Text style={styles.filterTabTextActive}>
-                Activités {activitiesCount > 0 && `(${activitiesCount})`}
-              </Text>
-            </LinearGradient>
-          ) : (
-            <View style={styles.filterTab}>
-              <Text style={styles.filterTabText}>
-                Activités {activitiesCount > 0 && `(${activitiesCount})`}
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setActiveFilter('activities')}
+            activeOpacity={0.7}
+            style={[
+              styles.segmentedTab,
+              activeFilter === 'activities' && styles.segmentedTabActive,
+            ]}
+          >
+            <Text style={[
+              styles.segmentedTabText,
+              activeFilter === 'activities' && styles.segmentedTabTextActive,
+            ]}>
+              Activités
+            </Text>
+            {activitiesCount > 0 && (
+              <View style={[
+                styles.segmentedBadge,
+                activeFilter === 'activities' && styles.segmentedBadgeActive,
+              ]}>
+                <Text style={[
+                  styles.segmentedBadgeText,
+                  activeFilter === 'activities' && styles.segmentedBadgeTextActive,
+                ]}>
+                  {activitiesCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={() => setActiveFilter('friends')}
-          activeOpacity={0.7}
-        >
-          {activeFilter === 'friends' ? (
-            <LinearGradient
-              colors={['#60A5FA', '#818CF8', '#C084FC']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.filterTabActive}
-            >
-              <Text style={styles.filterTabTextActive}>
-                Amis {privateCount > 0 && `(${privateCount})`}
-              </Text>
-            </LinearGradient>
-          ) : (
-            <View style={styles.filterTab}>
-              <Text style={styles.filterTabText}>
-                Amis {privateCount > 0 && `(${privateCount})`}
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setActiveFilter('friends')}
+            activeOpacity={0.7}
+            style={[
+              styles.segmentedTab,
+              activeFilter === 'friends' && styles.segmentedTabActive,
+            ]}
+          >
+            <Text style={[
+              styles.segmentedTabText,
+              activeFilter === 'friends' && styles.segmentedTabTextActive,
+            ]}>
+              Amis
+            </Text>
+            {privateCount > 0 && (
+              <View style={[
+                styles.segmentedBadge,
+                activeFilter === 'friends' && styles.segmentedBadgeActive,
+              ]}>
+                <Text style={[
+                  styles.segmentedBadgeText,
+                  activeFilter === 'friends' && styles.segmentedBadgeTextActive,
+                ]}>
+                  {privateCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Titre Messages avec barre dégradée */}
-      <View style={styles.messagesTitleContainer}>
-        <Text style={styles.messagesTitle}>Messages</Text>
-        <LinearGradient
-          colors={['#60A5FA', '#818CF8', '#C084FC']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.messagesTitleBar}
-        />
-      </View>
-
-      {/* Liste des conversations pleine largeur */}
+      {/* Liste des conversations */}
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
@@ -707,151 +713,97 @@ export default function ChatScreen() {
         showsVerticalScrollIndicator={false}
       >
         {convLoading ? (
-          <View style={styles.emptyState}>
-            <ActivityIndicator size="large" color="#3B82F6" />
+          <View style={styles.loadingState}>
+            <ActivityIndicator size="large" color={colors.primary} />
           </View>
         ) : getFilteredConversations().length > 0 ? (
           <View style={styles.conversationsList}>
             {getFilteredConversations().map(renderChatItem)}
           </View>
         ) : (
-          <View style={styles.emptyState}>
-            <IconSymbol
-              name={activeFilter === 'activities' ? 'calendar' : activeFilter === 'friends' ? 'heart.fill' : 'message.fill'}
-              size={64}
-              color="#D1D5DB"
-            />
-            <Text style={styles.emptyText}>
-              {activeFilter === 'activities'
-                ? 'Aucune activité en cours'
-                : activeFilter === 'friends'
-                ? 'Aucune conversation'
-                : 'Aucun message'}
-            </Text>
-            <Text style={styles.emptySubtext}>
-              {activeFilter === 'activities'
-                ? 'Rejoignez une activité pour voir vos groupes ici'
-                : activeFilter === 'friends'
-                ? 'Commencez une conversation avec vos amis'
-                : 'Vos conversations apparaîtront ici'}
-            </Text>
-            {activeFilter === 'friends' && (
-              <TouchableOpacity onPress={() => setShowFriendsModal(true)}>
-                <LinearGradient
-                  colors={['#60A5FA', '#818CF8', '#C084FC']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.startChatButton}
-                >
-                  <Text style={styles.startChatButtonText}>Nouvelle conversation</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            )}
-          </View>
+          <EmptyState />
         )}
       </ScrollView>
 
-      {/* Modal de sélection d'ami - Style Glassmorphism */}
+      {/* Modal de sélection d'ami */}
       <Modal
         visible={showFriendsModal}
         animationType="slide"
         presentationStyle="pageSheet"
         onRequestClose={() => setShowFriendsModal(false)}
       >
-        <LinearGradient
-          colors={['#60A5FA', '#818CF8', '#C084FC']}
-          style={styles.modalGradient}
-        >
-          <SafeAreaView style={styles.modalContainer} edges={['top', 'bottom']}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Nouvelle conversation</Text>
+        <SafeAreaView style={styles.modalContainer} edges={['top', 'bottom']}>
+          {/* Modal Header */}
+          <View style={styles.modalHeader}>
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => setShowFriendsModal(false)}
+            >
+              <IconSymbol name="xmark" size={20} color={colors.text} />
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Nouvelle conversation</Text>
+            <View style={styles.modalCloseButton} />
+          </View>
+
+          {/* Modal Search */}
+          <View style={styles.modalSearchContainer}>
+            <View style={styles.modalSearchBar}>
+              <IconSymbol name="magnifyingglass" size={16} color={colors.textMuted} />
+              <TextInput
+                style={styles.modalSearchInput}
+                placeholder="Rechercher un ami..."
+                placeholderTextColor={colors.textMuted}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+            </View>
+          </View>
+
+          {friendsLoading ? (
+            <View style={styles.modalLoadingState}>
+              <ActivityIndicator size="large" color={colors.primary} />
+            </View>
+          ) : friends.length === 0 ? (
+            <View style={styles.modalEmptyState}>
+              <View style={styles.modalEmptyIconContainer}>
+                <IconSymbol name="person.2" size={48} color={colors.textMuted} />
+              </View>
+              <Text style={styles.modalEmptyTitle}>Aucun ami</Text>
+              <Text style={styles.modalEmptySubtitle}>
+                Ajoutez des amis pour pouvoir leur envoyer des messages.
+              </Text>
               <TouchableOpacity
-                style={styles.closeButton}
-                onPress={() => setShowFriendsModal(false)}
+                style={styles.modalEmptyCta}
+                onPress={() => {
+                  setShowFriendsModal(false);
+                  router.push('/add-friends');
+                }}
               >
-                <IconSymbol name="xmark" size={22} color="#FFFFFF" />
+                <Text style={styles.modalEmptyCtaText}>Ajouter des amis</Text>
               </TouchableOpacity>
             </View>
-
-            {friendsLoading ? (
-              <View style={styles.modalEmptyState}>
-                <ActivityIndicator size="large" color="#FFFFFF" />
-                <Text style={styles.modalEmptyText}>Chargement...</Text>
-              </View>
-            ) : friends.length === 0 ? (
-              <View style={styles.modalEmptyState}>
-                <View style={styles.glassCard}>
-                  <IconSymbol name="person.2.fill" size={64} color="rgba(255,255,255,0.9)" />
-                  <Text style={styles.modalEmptyText}>Aucun ami</Text>
-                  <Text style={styles.modalEmptySubtext}>
-                    Ajoutez des amis pour démarrer une conversation
+          ) : (
+            <FlatList
+              data={friends.filter(c =>
+                c.name.toLowerCase().includes(searchQuery.toLowerCase())
+              )}
+              renderItem={renderFriendItem}
+              keyExtractor={item => item.id}
+              contentContainerStyle={styles.friendsList}
+              showsVerticalScrollIndicator={false}
+              ItemSeparatorComponent={() => <View style={styles.friendSeparator} />}
+              ListEmptyComponent={
+                <View style={styles.modalEmptyState}>
+                  <IconSymbol name="magnifyingglass" size={40} color={colors.textMuted} />
+                  <Text style={styles.modalEmptyTitle}>Aucun résultat</Text>
+                  <Text style={styles.modalEmptySubtitle}>
+                    Aucun ami ne correspond à votre recherche.
                   </Text>
                 </View>
-              </View>
-            ) : (
-              <>
-                <View style={styles.modalSearchContainer}>
-                  <IconSymbol name="magnifyingglass" size={20} color="rgba(255,255,255,0.7)" />
-                  <TextInput
-                    style={styles.modalSearchInput}
-                    placeholder="Rechercher un contact..."
-                    placeholderTextColor="rgba(255,255,255,0.6)"
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                  />
-                </View>
-
-                <View style={styles.modalInfoBar}>
-                  <IconSymbol name="info.circle.fill" size={14} color="#FFFFFF" />
-                  <Text style={styles.modalInfoBarText}>
-                    Vous pouvez contacter les personnes avec qui vous avez fait une activité
-                  </Text>
-                </View>
-
-                <FlatList
-                  data={friends.filter(c =>
-                    c.name.toLowerCase().includes(searchQuery.toLowerCase())
-                  )}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      style={styles.glassFriendItem}
-                      onPress={() => handleCreateConversation(item.id)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.glassFriendAvatarContainer}>
-                        <Image source={{ uri: item.avatar }} style={styles.glassFriendAvatar} />
-                        {item.is_online && (
-                          <View style={styles.glassFriendOnlineIndicator} />
-                        )}
-                      </View>
-                      <View style={styles.glassFriendInfo}>
-                        <Text style={styles.glassFriendName}>{item.name}</Text>
-                        <Text style={styles.glassFriendStatus}>
-                          {item.is_online ? 'En ligne' : 'Hors ligne'}
-                        </Text>
-                      </View>
-                      <IconSymbol name="chevron.right" size={20} color="rgba(255,255,255,0.7)" />
-                    </TouchableOpacity>
-                  )}
-                  keyExtractor={item => item.id}
-                  contentContainerStyle={styles.glassFriendsList}
-                  showsVerticalScrollIndicator={false}
-                  ListEmptyComponent={
-                    <View style={styles.modalEmptyState}>
-                      <View style={styles.glassCard}>
-                        <IconSymbol name="person.2" size={48} color="rgba(255,255,255,0.9)" />
-                        <Text style={styles.modalEmptyText}>Aucun ami trouvé</Text>
-                        <Text style={styles.modalEmptySubtext}>
-                          Ajoutez des amis pour démarrer une conversation
-                        </Text>
-                      </View>
-                    </View>
-                  }
-                />
-              </>
-            )}
-          </SafeAreaView>
-        </LinearGradient>
+              }
+            />
+          )}
+        </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );
@@ -860,240 +812,236 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.backgroundAlt,
   },
 
-  // Barre d'actions contextuelle (style WhatsApp)
+  // Action Bar (sélection)
   actionBarContainer: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     zIndex: 100,
-  },
-  actionBar: {
-    width: '100%',
+    backgroundColor: colors.backgroundAlt,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
   },
   actionBarSafeArea: {
     width: '100%',
   },
-  actionBarContent: {
+  actionBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 12,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
   },
   actionBarButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  actionBarCount: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginLeft: 8,
-  },
-  actionBarSpacer: {
+  actionBarTitle: {
     flex: 1,
+    fontSize: typography.base,
+    fontFamily: 'Manrope-SemiBold',
+    fontWeight: typography.semibold,
+    color: colors.text,
+    marginLeft: spacing.sm,
+  },
+  actionBarActions: {
+    flexDirection: 'row',
+    gap: spacing.xs,
   },
 
-  // Header - barre avec dégradé
-  header: {
-    // backgroundColor sera remplacé par le gradient
-  },
+  // Header
   headerSafeArea: {
-    width: '100%',
+    backgroundColor: colors.backgroundAlt,
+  },
+  header: {
+    backgroundColor: colors.backgroundAlt,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderSubtle,
   },
   headerTop: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  headerTitleRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  headerIconButton: {
+    position: 'relative',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  headerLeftButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  headerRightButtons: {
-    flexDirection: 'row',
-    gap: 8,
   },
   headerUsername: {
     flex: 1,
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontSize: typography.xl,
+    fontFamily: 'Manrope-Bold',
+    fontWeight: typography.bold,
+    color: colors.text,
     textAlign: 'center',
+    letterSpacing: -0.3,
   },
-  headerButton: {
-    position: 'relative',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
+  headerRightButtons: {
+    flexDirection: 'row',
+    gap: spacing.xs,
   },
   headerBadge: {
     position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: '#EF4444',
+    top: 2,
+    right: 2,
+    backgroundColor: colors.primary,
     borderRadius: 10,
     minWidth: 18,
     height: 18,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 4,
-    borderWidth: 2,
-    borderColor: '#60A5FA',
   },
   headerBadgeText: {
     fontSize: 10,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontFamily: 'Manrope-Bold',
+    fontWeight: typography.bold,
+    color: colors.textOnPrimary,
   },
 
-  // Barre de recherche
+  // Search Bar
   searchContainer: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    backgroundColor: colors.backgroundAlt,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 8,
+    backgroundColor: colors.inputBackground,
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
   },
   searchInput: {
     flex: 1,
-    fontSize: 15,
-    color: '#374151',
+    fontSize: typography.sm,
+    fontFamily: 'Manrope-Regular',
+    color: colors.text,
+    paddingVertical: 0,
   },
 
-  // Onglets de filtre
-  filterTabs: {
+  // Segmented Control
+  segmentedControl: {
+    backgroundColor: colors.backgroundAlt,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
+  },
+  segmentedControlInner: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    backgroundColor: colors.inputBackground,
+    borderRadius: borderRadius.sm,
+    padding: 3,
   },
-  filterTab: {
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
-    minWidth: '30%',
+  segmentedTab: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.sm - 2,
+    gap: spacing.xs,
   },
-  filterTabActive: {
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: 20,
-    minWidth: '30%',
+  segmentedTabActive: {
+    backgroundColor: colors.backgroundAlt,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  segmentedTabText: {
+    fontSize: typography.sm,
+    fontFamily: 'Manrope-Medium',
+    fontWeight: typography.medium,
+    color: colors.textTertiary,
+  },
+  segmentedTabTextActive: {
+    color: colors.text,
+    fontFamily: 'Manrope-SemiBold',
+    fontWeight: typography.semibold,
+  },
+  segmentedBadge: {
+    backgroundColor: colors.borderLight,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 6,
   },
-  filterTabText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#9CA3AF',
+  segmentedBadgeActive: {
+    backgroundColor: colors.primaryLight,
   },
-  filterTabTextActive: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
+  segmentedBadgeText: {
+    fontSize: 11,
+    fontFamily: 'Manrope-SemiBold',
+    fontWeight: typography.semibold,
+    color: colors.textTertiary,
+  },
+  segmentedBadgeTextActive: {
+    color: colors.primary,
   },
 
-  // Titre Messages
-  messagesTitleContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 8,
-    backgroundColor: '#FFFFFF',
-  },
-  messagesTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1F2937',
-    marginBottom: 8,
-  },
-  messagesTitleBar: {
-    width: 40,
-    height: 3,
-    borderRadius: 2,
-  },
-
-  // Liste des conversations
+  // Conversations List
   scrollView: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.backgroundAlt,
   },
   contentContainer: {
-    paddingBottom: 20,
+    paddingBottom: spacing.xl,
   },
   contentContainerWithTabBar: {
     paddingBottom: 100,
   },
   conversationsList: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.backgroundAlt,
   },
 
-  // Item de conversation style Instagram
+  // Chat Item
   chatItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F9FAFB',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.backgroundAlt,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderLight,
     position: 'relative',
-    overflow: 'hidden',
   },
   chatItemSelectedBg: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(129, 140, 252, 0.12)',
+    backgroundColor: colors.primaryLight,
   },
-  selectionIndicator: {
+  unreadDot: {
     position: 'absolute',
-    left: 8,
-    top: '50%',
-    marginTop: -14,
-    zIndex: 10,
-  },
-  selectionCheckBg: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#818CF8',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
+    left: spacing.sm,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
   },
   chatAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#E5E7EB',
-    marginRight: 12,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.borderLight,
+    marginRight: spacing.md,
   },
   chatInfo: {
     flex: 1,
@@ -1102,239 +1050,232 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   chatName: {
     flex: 1,
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginRight: 8,
+    fontSize: typography.base,
+    fontFamily: 'Manrope-Medium',
+    fontWeight: typography.medium,
+    color: colors.text,
+    marginRight: spacing.sm,
   },
-  chatNameSelected: {
-    color: '#818CF8',
+  chatNameUnread: {
+    fontFamily: 'Manrope-SemiBold',
+    fontWeight: typography.semibold,
   },
   chatTime: {
-    fontSize: 12,
-    color: '#9CA3AF',
+    fontSize: typography.xs,
+    fontFamily: 'Manrope-Regular',
+    color: colors.textTertiary,
+  },
+  chatTimeUnread: {
+    color: colors.primary,
+    fontFamily: 'Manrope-Medium',
+    fontWeight: typography.medium,
+  },
+  chatSubline: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   lastMessage: {
-    fontSize: 14,
-    color: '#6B7280',
+    flex: 1,
+    fontSize: typography.sm,
+    fontFamily: 'Manrope-Regular',
+    color: colors.textTertiary,
     lineHeight: 20,
   },
-  muteIconContainer: {
-    marginLeft: 8,
-    padding: 4,
+  lastMessageUnread: {
+    color: colors.textSecondary,
+    fontFamily: 'Manrope-Medium',
+    fontWeight: typography.medium,
   },
-  unreadBadge: {
-    borderRadius: 12,
-    minWidth: 22,
-    height: 22,
-    justifyContent: 'center',
+  muteIcon: {
+    marginLeft: spacing.xs,
+  },
+  contextRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 6,
-    marginLeft: 8,
+    marginTop: 4,
+    gap: 4,
   },
-  unreadText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
+  contextText: {
+    fontSize: 11,
+    fontFamily: 'Manrope-Regular',
+    color: colors.textTertiary,
   },
 
-  // Empty state
+  // Loading State
+  loadingState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 80,
+  },
+
+  // Empty State
   emptyState: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 60,
-    paddingHorizontal: 40,
+    paddingVertical: 80,
+    paddingHorizontal: spacing.xxxl,
   },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#374151',
-    marginTop: 16,
-    marginBottom: 8,
+  emptyIconContainer: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: colors.inputBackground,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.xl,
   },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#9CA3AF',
+  emptyTitle: {
+    fontSize: typography.lg,
+    fontFamily: 'Manrope-SemiBold',
+    fontWeight: typography.semibold,
+    color: colors.text,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontSize: typography.sm,
+    fontFamily: 'Manrope-Regular',
+    color: colors.textTertiary,
     textAlign: 'center',
     lineHeight: 22,
-    marginBottom: 24,
+    marginBottom: spacing.xl,
   },
-  startChatButton: {
-    borderRadius: 24,
-    paddingHorizontal: 28,
-    paddingVertical: 14,
+  emptyCta: {
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
   },
-  startChatButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
+  emptyCtaText: {
+    fontSize: typography.sm,
+    fontFamily: 'Manrope-SemiBold',
+    fontWeight: typography.semibold,
+    color: colors.textOnPrimary,
   },
 
-  // Modal styles - Glassmorphism
-  modalGradient: {
-    flex: 1,
-  },
+  // Modal
   modalContainer: {
     flex: 1,
+    backgroundColor: colors.backgroundAlt,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderSubtle,
   },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  closeButton: {
+  modalCloseButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
+  modalTitle: {
+    fontSize: typography.lg,
+    fontFamily: 'Manrope-SemiBold',
+    fontWeight: typography.semibold,
+    color: colors.text,
+  },
   modalSearchContainer: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  modalSearchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    marginHorizontal: 16,
-    marginVertical: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 16,
-    gap: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: colors.inputBackground,
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
   },
   modalSearchInput: {
     flex: 1,
-    fontSize: 16,
-    color: '#FFFFFF',
+    fontSize: typography.sm,
+    fontFamily: 'Manrope-Regular',
+    color: colors.text,
+    paddingVertical: 0,
   },
-  modalInfoBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    marginHorizontal: 16,
-    marginBottom: 12,
-    padding: 14,
-    borderRadius: 14,
-    gap: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
-  modalInfoBarText: {
+  modalLoadingState: {
     flex: 1,
-    fontSize: 13,
-    color: '#FFFFFF',
-    fontWeight: '500',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalEmptyState: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.xxxl,
   },
-  modalEmptyText: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginTop: 16,
+  modalEmptyIconContainer: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: colors.inputBackground,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.xl,
   },
-  modalEmptySubtext: {
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.9)',
+  modalEmptyTitle: {
+    fontSize: typography.lg,
+    fontFamily: 'Manrope-SemiBold',
+    fontWeight: typography.semibold,
+    color: colors.text,
+    marginBottom: spacing.sm,
     textAlign: 'center',
-    marginTop: 8,
+  },
+  modalEmptySubtitle: {
+    fontSize: typography.sm,
+    fontFamily: 'Manrope-Regular',
+    color: colors.textTertiary,
+    textAlign: 'center',
     lineHeight: 22,
+    marginBottom: spacing.xl,
   },
-  glassCard: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: 20,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-    alignItems: 'center',
+  modalEmptyCta: {
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
   },
-  glassFriendsList: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    gap: 10,
-  },
-  glassFriendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 18,
-    gap: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  glassFriendAvatarContainer: {
-    position: 'relative',
-  },
-  glassFriendAvatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.4)',
-  },
-  glassFriendOnlineIndicator: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#22C55E',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.5)',
-  },
-  glassFriendInfo: {
-    flex: 1,
-  },
-  glassFriendName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  glassFriendStatus: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 2,
+  modalEmptyCtaText: {
+    fontSize: typography.sm,
+    fontFamily: 'Manrope-SemiBold',
+    fontWeight: typography.semibold,
+    color: colors.textOnPrimary,
   },
   friendsList: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
   },
   friendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F9FAFB',
-    gap: 12,
+    paddingVertical: spacing.md,
+    gap: spacing.md,
+  },
+  friendSeparator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.borderLight,
   },
   friendAvatarContainer: {
     position: 'relative',
   },
   friendAvatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#E5E7EB',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.borderLight,
   },
   friendOnlineIndicator: {
     position: 'absolute',
@@ -1343,21 +1284,23 @@ const styles = StyleSheet.create({
     width: 14,
     height: 14,
     borderRadius: 7,
-    backgroundColor: '#22C55E',
+    backgroundColor: colors.success,
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: colors.backgroundAlt,
   },
   friendInfo: {
     flex: 1,
   },
   friendName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
+    fontSize: typography.base,
+    fontFamily: 'Manrope-Medium',
+    fontWeight: typography.medium,
+    color: colors.text,
   },
   friendStatus: {
-    fontSize: 13,
-    color: '#9CA3AF',
+    fontSize: typography.xs,
+    fontFamily: 'Manrope-Regular',
+    color: colors.textTertiary,
     marginTop: 2,
   },
 });

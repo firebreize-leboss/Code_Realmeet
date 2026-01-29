@@ -1,8 +1,9 @@
 // app/my-participated-activities.tsx
-// Page "Mes activités" avec onglets En cours / Passées
-// Design premium cohérent avec profile et browse (orange unique + Manrope + fond blanc/gris)
+// Page "Mes activités" - Uniquement les activités terminées
+// Design premium: fond blanc/gris clair, cartes épurées
+// Palette: Blanc, Gris, Noir/Charcoal, Orange désaturé (accent uniquement)
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -20,8 +21,6 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { colors, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
 import { useFonts, Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold } from '@expo-google-fonts/manrope';
-
-type TabType = 'ongoing' | 'past';
 
 interface Activity {
   id: string;
@@ -48,7 +47,6 @@ export default function MyParticipatedActivitiesScreen() {
   const [allActivities, setAllActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabType>('ongoing');
 
   const loadActivities = useCallback(async () => {
     try {
@@ -136,18 +134,11 @@ export default function MyParticipatedActivitiesScreen() {
     setRefreshing(false);
   };
 
-  // Séparer les activités en cours et passées
-  const ongoingActivities = useMemo(() =>
-    allActivities.filter(a => !a.isPast).sort((a, b) =>
-      new Date(a.slot_date || a.date).getTime() - new Date(b.slot_date || b.date).getTime()
-    ), [allActivities]);
-
+  // Filtrer uniquement les activités terminées (passées)
   const pastActivities = useMemo(() =>
     allActivities.filter(a => a.isPast).sort((a, b) =>
       new Date(b.slot_date || b.date).getTime() - new Date(a.slot_date || a.date).getTime()
     ), [allActivities]);
-
-  const currentActivities = activeTab === 'ongoing' ? ongoingActivities : pastActivities;
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -173,35 +164,32 @@ export default function MyParticipatedActivitiesScreen() {
     return timeString.substring(0, 5);
   };
 
-  const renderActivity = ({ item, index }: { item: Activity; index: number }) => {
-    const isPast = item.isPast;
-
+  const renderActivity = ({ item }: { item: Activity }) => {
     return (
       <TouchableOpacity
-        style={[styles.activityCard, isPast && styles.activityCardPast]}
+        style={styles.activityCard}
         onPress={() => {
-          router.push(`/activity-detail?id=${item.id}&from=${isPast ? 'past' : 'ongoing'}&slotId=${item.slot_id}`);
+          router.push(`/activity-detail?id=${item.id}&from=past&slotId=${item.slot_id}`);
         }}
-        activeOpacity={0.7}
+        activeOpacity={0.8}
       >
-        {/* Image avec ratio stable */}
+        {/* Image avec ratio stable 1:1 */}
         <View style={styles.imageContainer}>
           <Image
             source={{ uri: item.image_url || 'https://via.placeholder.com/80' }}
-            style={[styles.activityImage, isPast && styles.activityImagePast]}
+            style={styles.activityImage}
           />
-          {isPast && (
-            <View style={styles.pastOverlay}>
-              <IconSymbol name="clock.fill" size={12} color={colors.textTertiary} />
-            </View>
-          )}
+          {/* Indicateur visuel discret */}
+          <View style={styles.pastImageOverlay}>
+            <IconSymbol name="checkmark" size={14} color={colors.textMuted} />
+          </View>
         </View>
 
-        {/* Contenu */}
+        {/* Contenu principal */}
         <View style={styles.activityContent}>
-          {/* Titre */}
+          {/* Titre - Manrope SemiBold */}
           <Text
-            style={[styles.activityTitle, isPast && styles.activityTitlePast]}
+            style={styles.activityTitle}
             numberOfLines={2}
           >
             {item.nom}
@@ -211,12 +199,12 @@ export default function MyParticipatedActivitiesScreen() {
           <View style={styles.metaRow}>
             <IconSymbol
               name="calendar"
-              size={14}
-              color={isPast ? colors.textMuted : colors.textTertiary}
+              size={13}
+              color={colors.textMuted}
             />
-            <Text style={[styles.metaText, isPast && styles.metaTextPast]}>
+            <Text style={styles.metaText}>
               {formatDate(item.slot_date || item.date)}
-              {item.slot_time && ` - ${formatTime(item.slot_time)}`}
+              {item.slot_time && ` · ${formatTime(item.slot_time)}`}
             </Text>
           </View>
 
@@ -224,28 +212,27 @@ export default function MyParticipatedActivitiesScreen() {
           <View style={styles.metaRow}>
             <IconSymbol
               name="location.fill"
-              size={14}
-              color={isPast ? colors.textMuted : colors.textTertiary}
+              size={13}
+              color={colors.textMuted}
             />
-            <Text style={[styles.metaText, isPast && styles.metaTextPast]}>
+            <Text style={styles.metaText} numberOfLines={1}>
               {item.ville}
             </Text>
           </View>
 
-          {/* Badge Terminé pour les passées */}
-          {isPast && (
-            <View style={styles.terminatedBadge}>
-              <Text style={styles.terminatedBadgeText}>Terminé</Text>
-            </View>
-          )}
+          {/* Badge Terminé discret */}
+          <View style={styles.terminatedBadge}>
+            <IconSymbol name="checkmark.circle.fill" size={10} color={colors.primaryMuted} />
+            <Text style={styles.terminatedBadgeText}>Terminé</Text>
+          </View>
         </View>
 
-        {/* Chevron */}
+        {/* Chevron discret */}
         <View style={styles.chevronContainer}>
           <IconSymbol
             name="chevron.right"
-            size={16}
-            color={isPast ? colors.textMuted : colors.textTertiary}
+            size={14}
+            color={colors.borderLight}
           />
         </View>
       </TouchableOpacity>
@@ -253,36 +240,35 @@ export default function MyParticipatedActivitiesScreen() {
   };
 
   const renderEmptyState = () => {
-    const isOngoing = activeTab === 'ongoing';
-
     return (
       <View style={styles.emptyContainer}>
-        <View style={styles.emptyIconContainer}>
-          <IconSymbol
-            name={isOngoing ? "calendar.badge.clock" : "clock.arrow.circlepath"}
-            size={48}
-            color={colors.primaryMuted}
-          />
+        {/* Illustration élégante */}
+        <View style={styles.emptyIllustration}>
+          <View style={styles.emptyIconCircle}>
+            <IconSymbol
+              name="sparkles"
+              size={32}
+              color={colors.primary}
+            />
+          </View>
         </View>
+
         <Text style={styles.emptyTitle}>
-          {isOngoing ? 'Aucune activité à venir' : 'Aucune activité passée'}
+          Votre aventure commence ici
         </Text>
         <Text style={styles.emptyDescription}>
-          {isOngoing
-            ? 'Inscrivez-vous à des activités pour les voir apparaître ici'
-            : 'Vos activités terminées apparaîtront ici'
-          }
+          Vous n'avez pas encore participé à une activité.{'\n'}
+          Rejoignez une expérience et créez vos premiers souvenirs !
         </Text>
-        {isOngoing && (
-          <TouchableOpacity
-            style={styles.exploreButton}
-            onPress={() => router.replace('/(tabs)/browse')}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.exploreButtonText}>Explorer les activités</Text>
-            <IconSymbol name="arrow.right" size={16} color="#FFFFFF" />
-          </TouchableOpacity>
-        )}
+
+        <TouchableOpacity
+          style={styles.exploreButton}
+          onPress={() => router.replace('/(tabs)/browse')}
+          activeOpacity={0.85}
+        >
+          <IconSymbol name="magnifyingglass" size={16} color="#FFFFFF" />
+          <Text style={styles.exploreButtonText}>Découvrir les activités</Text>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -316,85 +302,14 @@ export default function MyParticipatedActivitiesScreen() {
         <View style={styles.headerRight} />
       </View>
 
-      {/* Segmented Control Premium */}
-      <View style={styles.segmentedControlContainer}>
-        <View style={styles.segmentedControl}>
-          {/* Tab En cours */}
-          <TouchableOpacity
-            style={[
-              styles.segmentedTab,
-              activeTab === 'ongoing' && styles.segmentedTabActive,
-            ]}
-            onPress={() => setActiveTab('ongoing')}
-            activeOpacity={0.7}
-          >
-            <Text
-              style={[
-                styles.segmentedTabText,
-                activeTab === 'ongoing' && styles.segmentedTabTextActive,
-              ]}
-            >
-              En cours
-            </Text>
-            {ongoingActivities.length > 0 && (
-              <View style={[
-                styles.tabBadge,
-                activeTab === 'ongoing' && styles.tabBadgeActive,
-              ]}>
-                <Text style={[
-                  styles.tabBadgeText,
-                  activeTab === 'ongoing' && styles.tabBadgeTextActive,
-                ]}>
-                  {ongoingActivities.length}
-                </Text>
-              </View>
-            )}
-            {activeTab === 'ongoing' && <View style={styles.activeIndicator} />}
-          </TouchableOpacity>
-
-          {/* Tab Passées */}
-          <TouchableOpacity
-            style={[
-              styles.segmentedTab,
-              activeTab === 'past' && styles.segmentedTabActive,
-            ]}
-            onPress={() => setActiveTab('past')}
-            activeOpacity={0.7}
-          >
-            <Text
-              style={[
-                styles.segmentedTabText,
-                activeTab === 'past' && styles.segmentedTabTextActive,
-              ]}
-            >
-              Passées
-            </Text>
-            {pastActivities.length > 0 && (
-              <View style={[
-                styles.tabBadge,
-                activeTab === 'past' && styles.tabBadgeActive,
-              ]}>
-                <Text style={[
-                  styles.tabBadgeText,
-                  activeTab === 'past' && styles.tabBadgeTextActive,
-                ]}>
-                  {pastActivities.length}
-                </Text>
-              </View>
-            )}
-            {activeTab === 'past' && <View style={styles.activeIndicator} />}
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Liste des activités */}
+      {/* Liste des activités terminées */}
       <FlatList
-        data={currentActivities}
+        data={pastActivities}
         renderItem={renderActivity}
         keyExtractor={(item) => `${item.id}-${item.slot_id || 'no-slot'}`}
         contentContainerStyle={[
           styles.listContent,
-          currentActivities.length === 0 && styles.listContentEmpty,
+          pastActivities.length === 0 && styles.listContentEmpty,
         ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -412,228 +327,170 @@ export default function MyParticipatedActivitiesScreen() {
 }
 
 const styles = StyleSheet.create({
-  // Container principal
+  // ==========================================
+  // Container principal - Fond blanc/gris premium
+  // ==========================================
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#FFFFFF',
   },
 
-  // Header
+  // ==========================================
+  // Header - Clean et minimal
+  // ==========================================
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: colors.backgroundAlt,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle,
+    paddingVertical: 14,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderLight,
   },
   backButton: {
     width: 40,
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 12,
+    borderRadius: 20,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
     fontFamily: 'Manrope_700Bold',
     color: colors.text,
-    letterSpacing: -0.3,
+    letterSpacing: -0.4,
   },
   headerRight: {
     width: 40,
   },
 
-  // Loading
+  // ==========================================
+  // Loading state
+  // ==========================================
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 12,
+    gap: 16,
+    backgroundColor: '#FFFFFF',
   },
   loadingText: {
-    fontSize: 15,
-    fontFamily: 'Manrope_500Medium',
-    color: colors.textTertiary,
-  },
-
-  // Segmented Control Premium
-  segmentedControlContainer: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 12,
-    backgroundColor: colors.backgroundAlt,
-  },
-  segmentedControl: {
-    flexDirection: 'row',
-    backgroundColor: colors.borderSubtle,
-    borderRadius: 12,
-    padding: 4,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-  },
-  segmentedTab: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    gap: 6,
-    position: 'relative',
-  },
-  segmentedTabActive: {
-    backgroundColor: '#FFFFFF',
-    ...shadows.sm,
-  },
-  segmentedTabText: {
     fontSize: 14,
-    fontWeight: '500',
     fontFamily: 'Manrope_500Medium',
-    color: colors.textTertiary,
-  },
-  segmentedTabTextActive: {
-    fontWeight: '600',
-    fontFamily: 'Manrope_600SemiBold',
-    color: colors.text,
+    color: colors.textMuted,
   },
 
-  // Badge discret dans les tabs
-  tabBadge: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.borderLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6,
-  },
-  tabBadgeActive: {
-    backgroundColor: colors.primaryLight,
-  },
-  tabBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    fontFamily: 'Manrope_600SemiBold',
-    color: colors.textTertiary,
-  },
-  tabBadgeTextActive: {
-    color: colors.primaryMuted,
-  },
-
-  // Indicateur actif (micro-accent orange)
-  activeIndicator: {
-    position: 'absolute',
-    bottom: 2,
-    left: '50%',
-    marginLeft: -8,
-    width: 16,
-    height: 2,
-    backgroundColor: colors.primary,
-    borderRadius: 1,
-    opacity: 0.8,
-  },
-
-  // Liste
+  // ==========================================
+  // Liste FlatList - Spacing régulier
+  // ==========================================
   listContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: Platform.OS === 'ios' ? 100 : 120,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 100 : 110,
   },
   listContentEmpty: {
     flexGrow: 1,
   },
   separator: {
-    height: 12,
+    height: 10,
   },
 
+  // ==========================================
   // Carte activité premium
+  // Image à gauche, titre SemiBold, meta gris
+  // ==========================================
   activityCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 14,
-    ...shadows.sm,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 12,
     borderWidth: 1,
-    borderColor: colors.borderSubtle,
-  },
-  activityCardPast: {
-    opacity: 0.75,
-    backgroundColor: colors.backgroundAccent,
+    borderColor: '#F0F0F2',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
   },
 
-  // Image
+  // ==========================================
+  // Image avec ratio stable
+  // ==========================================
   imageContainer: {
     position: 'relative',
   },
   activityImage: {
-    width: 72,
-    height: 72,
-    borderRadius: 12,
-    backgroundColor: colors.borderSubtle,
+    width: 68,
+    height: 68,
+    borderRadius: 10,
+    backgroundColor: '#F2F2F4',
   },
-  activityImagePast: {
-    opacity: 0.85,
-  },
-  pastOverlay: {
+  pastImageOverlay: {
     position: 'absolute',
-    top: 4,
+    bottom: 4,
     right: 4,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1,
   },
 
-  // Contenu
+  // ==========================================
+  // Contenu principal
+  // ==========================================
   activityContent: {
     flex: 1,
-    marginLeft: 14,
-    marginRight: 8,
-    gap: 4,
+    marginLeft: 12,
+    marginRight: 6,
+    gap: 3,
   },
   activityTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     fontFamily: 'Manrope_600SemiBold',
-    color: colors.text,
-    lineHeight: 20,
-    marginBottom: 2,
-  },
-  activityTitlePast: {
     color: colors.textSecondary,
+    lineHeight: 19,
+    marginBottom: 3,
   },
 
-  // Meta info
+  // ==========================================
+  // Meta info (date, lieu) - Icônes cohérentes
+  // ==========================================
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
   },
   metaText: {
     fontSize: 13,
     fontFamily: 'Manrope_400Regular',
-    color: colors.textTertiary,
-  },
-  metaTextPast: {
     color: colors.textMuted,
+    flex: 1,
   },
 
-  // Badge Terminé
+  // ==========================================
+  // Badge Terminé discret (gris/orange très light)
+  // ==========================================
   terminatedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     alignSelf: 'flex-start',
     marginTop: 4,
-    paddingHorizontal: 8,
+    paddingHorizontal: 7,
     paddingVertical: 3,
-    borderRadius: 6,
-    backgroundColor: colors.borderSubtle,
+    borderRadius: 5,
+    backgroundColor: '#F5F5F7',
+    gap: 4,
   },
   terminatedBadgeText: {
     fontSize: 10,
@@ -641,18 +498,23 @@ const styles = StyleSheet.create({
     fontFamily: 'Manrope_600SemiBold',
     color: colors.textTertiary,
     textTransform: 'uppercase',
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
 
-  // Chevron
+  // ==========================================
+  // Chevron discret
+  // ==========================================
   chevronContainer: {
-    width: 24,
-    height: 24,
+    width: 20,
+    height: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    opacity: 0.5,
   },
 
-  // Empty state
+  // ==========================================
+  // Empty state premium - Design élégant
+  // ==========================================
   emptyContainer: {
     flex: 1,
     alignItems: 'center',
@@ -660,43 +522,55 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
     paddingVertical: 60,
   },
-  emptyIconContainer: {
+  emptyIllustration: {
+    marginBottom: 28,
+  },
+  emptyIconCircle: {
     width: 88,
     height: 88,
     borderRadius: 44,
     backgroundColor: colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 6,
   },
   emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    fontFamily: 'Manrope_600SemiBold',
+    fontSize: 20,
+    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     color: colors.text,
-    marginBottom: 8,
+    marginBottom: 12,
     textAlign: 'center',
+    letterSpacing: -0.3,
   },
   emptyDescription: {
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: 'Manrope_400Regular',
     color: colors.textTertiary,
     textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 24,
+    lineHeight: 22,
+    marginBottom: 32,
   },
   exploreButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     backgroundColor: colors.primary,
-    paddingHorizontal: 24,
+    paddingHorizontal: 28,
     paddingVertical: 14,
     borderRadius: 12,
-    ...shadows.sm,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 6,
   },
   exploreButtonText: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '600',
     fontFamily: 'Manrope_600SemiBold',
     color: '#FFFFFF',

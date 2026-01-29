@@ -1,6 +1,6 @@
 // app/add-friends.tsx
 // Page de recherche et ajout d'amis avec contacts des activités passées
-// Design Glassmorphism comme profile.tsx
+// Design premium: fond neutre, orange accent, typographie Manrope
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -18,7 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase';
-import { LinearGradient } from 'expo-linear-gradient';
+import { colors, typography, spacing, borderRadius } from '@/styles/commonStyles';
 
 interface UserSearchResult {
   id: string;
@@ -177,56 +177,54 @@ export default function AddFriendsScreen() {
 
   const renderUserItem = ({ item }: { item: UserSearchResult }) => (
     <TouchableOpacity
-      style={styles.glassCard}
+      style={styles.userCard}
       onPress={() => handleViewProfile(item.id)}
       activeOpacity={0.7}
     >
-      <View style={styles.userItemContent}>
-        <Image
-          source={{ uri: item.avatar_url || 'https://via.placeholder.com/56' }}
-          style={styles.userAvatar}
-        />
-        <View style={styles.userInfo}>
-          <Text style={styles.userName}>{item.full_name}</Text>
-          {item.from_activity && item.activity_name && (
-            <View style={styles.activityBadge}>
-              <IconSymbol name="figure.run" size={12} color="#FFFFFF" />
-              <Text style={styles.activityBadgeText}>{item.activity_name}</Text>
-            </View>
-          )}
-          {item.city && !item.from_activity && (
-            <View style={styles.locationRow}>
-              <IconSymbol name="location.fill" size={14} color="rgba(255,255,255,0.8)" />
-              <Text style={styles.userCity}>{item.city}</Text>
-            </View>
-          )}
-        </View>
-        {item.is_friend ? (
-          <View style={styles.friendBadge}>
-            <IconSymbol name="checkmark" size={16} color="#FFFFFF" />
-            <Text style={styles.friendBadgeText}>Ami</Text>
+      <Image
+        source={{ uri: item.avatar_url || 'https://via.placeholder.com/52' }}
+        style={styles.userAvatar}
+      />
+      <View style={styles.userInfo}>
+        <Text style={styles.userName}>{item.full_name}</Text>
+        {item.from_activity && item.activity_name && (
+          <View style={styles.activityBadge}>
+            <IconSymbol name="figure.run" size={11} color={colors.primary} />
+            <Text style={styles.activityBadgeText}>{item.activity_name}</Text>
           </View>
-        ) : item.request_sent ? (
-          <View style={styles.pendingBadge}>
-            <Text style={styles.pendingBadgeText}>Envoyé</Text>
+        )}
+        {item.city && !item.from_activity && (
+          <View style={styles.locationRow}>
+            <IconSymbol name="location.fill" size={12} color={colors.textTertiary} />
+            <Text style={styles.userCity}>{item.city}</Text>
           </View>
-        ) : (
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => handleSendFriendRequest(item.id)}
-            disabled={sendingRequest === item.id}
-          >
-            {sendingRequest === item.id ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <>
-                <IconSymbol name="plus" size={16} color="#FFFFFF" />
-                <Text style={styles.addButtonText}>Ajouter</Text>
-              </>
-            )}
-          </TouchableOpacity>
         )}
       </View>
+      {item.is_friend ? (
+        <View style={styles.friendBadge}>
+          <IconSymbol name="checkmark" size={14} color={colors.success} />
+          <Text style={styles.friendBadgeText}>Ami</Text>
+        </View>
+      ) : item.request_sent ? (
+        <View style={styles.pendingBadge}>
+          <Text style={styles.pendingBadgeText}>Envoyé</Text>
+        </View>
+      ) : (
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => handleSendFriendRequest(item.id)}
+          disabled={sendingRequest === item.id}
+        >
+          {sendingRequest === item.id ? (
+            <ActivityIndicator size="small" color={colors.textOnPrimary} />
+          ) : (
+            <>
+              <IconSymbol name="plus" size={14} color={colors.textOnPrimary} />
+              <Text style={styles.addButtonText}>Ajouter</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      )}
     </TouchableOpacity>
   );
 
@@ -235,135 +233,139 @@ export default function AddFriendsScreen() {
   const isSearching = searchQuery.trim().length > 0;
 
   return (
-    <LinearGradient
-      colors={['#60A5FA', '#818CF8', '#C084FC']}
-      style={styles.container}
-    >
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.headerButton} onPress={() => router.back()}>
-            <IconSymbol name="chevron.left" size={22} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.headerButton} onPress={() => router.back()}>
+          <IconSymbol name="chevron.left" size={20} color={colors.text} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Ajouter des contacts</Text>
+        <View style={styles.headerButton} />
+      </View>
 
-        {/* Search Bar */}
-        <View style={styles.searchContainer}>
-          <View style={styles.searchBar}>
-            <IconSymbol name="magnifyingglass" size={20} color="rgba(255,255,255,0.7)" />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Rechercher par pseudo..."
-              placeholderTextColor="rgba(255,255,255,0.6)"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              autoFocus={false}
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')}>
-                <IconSymbol name="xmark" size={18} color="rgba(255,255,255,0.7)" />
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-
-        {loadingContacts ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#FFFFFF" />
-            <Text style={styles.loadingText}>Chargement...</Text>
-          </View>
-        ) : (
-          <FlatList
-            data={filteredActivityContacts}
-            renderItem={renderUserItem}
-            keyExtractor={item => item.id}
-            contentContainerStyle={styles.listContainer}
-            showsVerticalScrollIndicator={false}
-            ListHeaderComponent={
-              hasActivityResults ? (
-                <View style={styles.sectionHeader}>
-                  <View style={styles.sectionTitleRow}>
-                    <IconSymbol name="person.2.fill" size={18} color="#FFFFFF" />
-                    <Text style={styles.sectionTitle}>
-                      {isSearching ? 'Résultats dans vos activités' : 'Personnes rencontrées'}
-                    </Text>
-                  </View>
-                  <Text style={styles.sectionSubtitle}>
-                    Ajoutez les personnes avec qui vous avez partagé une activité
-                  </Text>
-                </View>
-              ) : null
-            }
-            ListEmptyComponent={
-              <View style={styles.emptyState}>
-                <View style={styles.glassCard}>
-                  <IconSymbol
-                    name={isSearching ? "magnifyingglass" : "person.2.fill"}
-                    size={64}
-                    color="rgba(255,255,255,0.9)"
-                  />
-                  <Text style={styles.emptyText}>
-                    {isSearching ? 'Aucun résultat' : 'Aucun contact pour l\'instant'}
-                  </Text>
-                  <Text style={styles.emptySubtext}>
-                    {isSearching
-                      ? 'Aucun contact ne correspond à cette recherche'
-                      : 'Participez à des activités pour rencontrer des personnes et les ajouter en amis'}
-                  </Text>
-                </View>
-              </View>
-            }
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchBar}>
+          <IconSymbol name="magnifyingglass" size={16} color={colors.textMuted} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Rechercher par pseudo"
+            placeholderTextColor={colors.textMuted}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoFocus={false}
           />
-        )}
-      </SafeAreaView>
-    </LinearGradient>
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <IconSymbol name="xmark.circle.fill" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
+      {loadingContacts ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      ) : (
+        <FlatList
+          data={filteredActivityContacts}
+          renderItem={renderUserItem}
+          keyExtractor={item => item.id}
+          contentContainerStyle={styles.listContainer}
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            hasActivityResults ? (
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>
+                  {isSearching ? 'Résultats' : 'Personnes rencontrées'}
+                </Text>
+                <Text style={styles.sectionSubtitle}>
+                  {filteredActivityContacts.length} contact{filteredActivityContacts.length > 1 ? 's' : ''}
+                </Text>
+              </View>
+            ) : null
+          }
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <View style={styles.emptyIconContainer}>
+                <IconSymbol
+                  name={isSearching ? "magnifyingglass" : "person.2"}
+                  size={40}
+                  color={colors.textMuted}
+                />
+              </View>
+              <Text style={styles.emptyTitle}>
+                {isSearching ? 'Aucun résultat' : 'Aucun contact pour l\'instant'}
+              </Text>
+              <Text style={styles.emptySubtitle}>
+                {isSearching
+                  ? 'Aucun contact ne correspond à cette recherche.'
+                  : 'Participez à des activités pour rencontrer des personnes et les ajouter en amis.'}
+              </Text>
+            </View>
+          }
+        />
+      )}
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  safeArea: {
-    flex: 1,
+    backgroundColor: colors.backgroundAlt,
   },
 
   // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.backgroundAlt,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderSubtle,
   },
   headerButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: typography.lg,
+    fontFamily: 'Manrope-SemiBold',
+    fontWeight: typography.semibold,
+    color: colors.text,
   },
 
   // Search
   searchContainer: {
-    paddingHorizontal: 16,
-    marginBottom: 16,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.backgroundAlt,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 12,
+    backgroundColor: colors.inputBackground,
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: colors.borderSubtle,
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
-    color: '#FFFFFF',
+    fontSize: typography.sm,
+    fontFamily: 'Manrope-Regular',
+    color: colors.text,
+    paddingVertical: 0,
   },
 
   // Loading
@@ -371,73 +373,57 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 12,
-  },
-  loadingText: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    fontWeight: '600',
   },
 
   // Liste
   listContainer: {
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
     paddingBottom: Platform.OS === 'ios' ? 40 : 60,
-    gap: 12,
   },
 
   // Section header
   sectionHeader: {
-    marginBottom: 16,
-  },
-  sectionTitleRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
+    marginBottom: spacing.md,
+    paddingBottom: spacing.sm,
   },
   sectionTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontSize: typography.base,
+    fontFamily: 'Manrope-SemiBold',
+    fontWeight: typography.semibold,
+    color: colors.text,
   },
   sectionSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
-    marginLeft: 26,
+    fontSize: typography.xs,
+    fontFamily: 'Manrope-Regular',
+    color: colors.textTertiary,
   },
 
-  // Glass Card
-  glassCard: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-
-  // User item
-  userItemContent: {
+  // User card
+  userCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    paddingVertical: spacing.md,
+    gap: spacing.md,
   },
   userAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.4)',
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.borderLight,
   },
   userInfo: {
     flex: 1,
     gap: 4,
   },
   userName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontSize: typography.base,
+    fontFamily: 'Manrope-Medium',
+    fontWeight: typography.medium,
+    color: colors.text,
   },
   locationRow: {
     flexDirection: 'row',
@@ -445,23 +431,31 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   userCity: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
+    fontSize: typography.xs,
+    fontFamily: 'Manrope-Regular',
+    color: colors.textTertiary,
   },
   activityBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: borderRadius.sm - 2,
     alignSelf: 'flex-start',
   },
   activityBadgeText: {
-    fontSize: 12,
-    color: '#FFFFFF',
-    fontWeight: '500',
+    fontSize: 11,
+    fontFamily: 'Manrope-Medium',
+    fontWeight: typography.medium,
+    color: colors.primary,
+  },
+
+  // Separator
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.borderLight,
   },
 
   // Badges
@@ -469,61 +463,76 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.sm,
+    backgroundColor: colors.successLight,
   },
   friendBadgeText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#FFFFFF',
+    fontSize: typography.xs,
+    fontFamily: 'Manrope-Medium',
+    fontWeight: typography.medium,
+    color: colors.success,
   },
   pendingBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.sm,
+    backgroundColor: colors.inputBackground,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: colors.borderLight,
   },
   pendingBadgeText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.8)',
+    fontSize: typography.xs,
+    fontFamily: 'Manrope-Medium',
+    fontWeight: typography.medium,
+    color: colors.textTertiary,
   },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.sm,
   },
   addButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontSize: typography.xs,
+    fontFamily: 'Manrope-SemiBold',
+    fontWeight: typography.semibold,
+    color: colors.textOnPrimary,
   },
 
   // Empty state
   emptyState: {
     flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 80,
+    paddingHorizontal: spacing.xxxl,
+  },
+  emptyIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.inputBackground,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 60,
+    marginBottom: spacing.xl,
   },
-  emptyText: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginTop: 16,
-    marginBottom: 8,
+  emptyTitle: {
+    fontSize: typography.lg,
+    fontFamily: 'Manrope-SemiBold',
+    fontWeight: typography.semibold,
+    color: colors.text,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
   },
-  emptySubtext: {
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.9)',
+  emptySubtitle: {
+    fontSize: typography.sm,
+    fontFamily: 'Manrope-Regular',
+    color: colors.textTertiary,
     textAlign: 'center',
     lineHeight: 22,
   },

@@ -1,6 +1,6 @@
 // app/friend-requests.tsx
 // Page des demandes d'amis avec protection entreprise
-// Design Glassmorphism comme profile.tsx
+// Design premium: fond neutre, orange accent, typographie Manrope
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -19,7 +19,7 @@ import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase';
 import { useBusinessRestrictions } from '@/hooks/useBusinessRestrictions';
-import { LinearGradient } from 'expo-linear-gradient';
+import { colors, typography, spacing, borderRadius } from '@/styles/commonStyles';
 
 interface FriendRequest {
   id: string;
@@ -136,29 +136,25 @@ export default function FriendRequestsScreen() {
   // Écran de blocage pour les entreprises
   if (isBusiness) {
     return (
-      <LinearGradient
-        colors={['#60A5FA', '#818CF8', '#C084FC']}
-        style={styles.container}
-      >
-        <SafeAreaView style={styles.safeArea} edges={['top']}>
-          <View style={styles.header}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
-              <IconSymbol name="chevron.left" size={22} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
+            <IconSymbol name="chevron.left" size={20} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Demandes d'amis</Text>
+          <View style={styles.headerButton} />
+        </View>
 
-          <View style={styles.restrictedContainer}>
-            <View style={styles.glassCard}>
-              <IconSymbol name="building.2.fill" size={64} color="rgba(255,255,255,0.9)" />
-              <Text style={styles.restrictedTitle}>Fonctionnalité non disponible</Text>
-              <Text style={styles.restrictedText}>
-                Les comptes entreprise ne peuvent pas recevoir de demandes d'amis.
-                Les utilisateurs peuvent découvrir votre entreprise via vos activités.
-              </Text>
-            </View>
+        <View style={styles.restrictedContainer}>
+          <View style={styles.emptyIconContainer}>
+            <IconSymbol name="building.2.fill" size={40} color={colors.textMuted} />
           </View>
-        </SafeAreaView>
-      </LinearGradient>
+          <Text style={styles.restrictedTitle}>Fonctionnalité non disponible</Text>
+          <Text style={styles.restrictedText}>
+            Les comptes entreprise ne peuvent pas recevoir de demandes d'amis.
+          </Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
@@ -166,20 +162,21 @@ export default function FriendRequestsScreen() {
     const isProcessing = processing === item.id;
 
     return (
-      <View style={styles.glassCard}>
+      <View style={styles.requestCard}>
         <TouchableOpacity
           onPress={() => router.push(`/user-profile?id=${item.sender_id}`)}
           style={styles.userInfo}
+          activeOpacity={0.7}
         >
           <Image
-            source={{ uri: item.sender_avatar || 'https://via.placeholder.com/56' }}
+            source={{ uri: item.sender_avatar || 'https://via.placeholder.com/52' }}
             style={styles.userAvatar}
           />
           <View style={styles.userDetails}>
             <Text style={styles.userName}>{item.sender_name}</Text>
             {item.sender_city && (
               <View style={styles.locationRow}>
-                <IconSymbol name="location.fill" size={14} color="rgba(255,255,255,0.8)" />
+                <IconSymbol name="location.fill" size={12} color={colors.textTertiary} />
                 <Text style={styles.userCity}>{item.sender_city}</Text>
               </View>
             )}
@@ -192,9 +189,10 @@ export default function FriendRequestsScreen() {
             style={[styles.rejectButton, isProcessing && styles.buttonDisabled]}
             onPress={() => handleRejectRequest(item.id)}
             disabled={isProcessing}
+            activeOpacity={0.7}
           >
             {isProcessing ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
+              <ActivityIndicator size="small" color={colors.textSecondary} />
             ) : (
               <Text style={styles.rejectButtonText}>Refuser</Text>
             )}
@@ -204,9 +202,10 @@ export default function FriendRequestsScreen() {
             style={[styles.acceptButton, isProcessing && styles.buttonDisabled]}
             onPress={() => handleAcceptRequest(item.id)}
             disabled={isProcessing}
+            activeOpacity={0.8}
           >
             {isProcessing ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
+              <ActivityIndicator size="small" color={colors.textOnPrimary} />
             ) : (
               <Text style={styles.acceptButtonText}>Accepter</Text>
             )}
@@ -217,76 +216,80 @@ export default function FriendRequestsScreen() {
   };
 
   return (
-    <LinearGradient
-      colors={['#60A5FA', '#818CF8', '#C084FC']}
-      style={styles.container}
-    >
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
-            <IconSymbol name="chevron.left" size={22} color="#FFFFFF" />
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
+          <IconSymbol name="chevron.left" size={20} color={colors.text} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Demandes d'amis</Text>
+        <View style={styles.headerButton} />
+      </View>
+
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      ) : requests.length === 0 ? (
+        <View style={styles.emptyState}>
+          <View style={styles.emptyIconContainer}>
+            <IconSymbol name="person.2" size={40} color={colors.textMuted} />
+          </View>
+          <Text style={styles.emptyTitle}>Aucune demande</Text>
+          <Text style={styles.emptySubtitle}>
+            Vous n'avez pas de demandes d'amis en attente.
+          </Text>
+          <TouchableOpacity
+            style={styles.addFriendsButton}
+            onPress={() => router.push('/add-friends')}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.addFriendsButtonText}>Ajouter des amis</Text>
           </TouchableOpacity>
         </View>
-
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#FFFFFF" />
-            <Text style={styles.loadingText}>Chargement...</Text>
-          </View>
-        ) : requests.length === 0 ? (
-          <View style={styles.emptyState}>
-            <View style={styles.glassCard}>
-              <IconSymbol name="person.crop.circle.badge.checkmark" size={64} color="rgba(255,255,255,0.9)" />
-              <Text style={styles.emptyText}>Aucune demande</Text>
-              <Text style={styles.emptySubtext}>
-                Vous n'avez pas de demandes d'amis en attente
-              </Text>
-              <TouchableOpacity
-                style={styles.addFriendsButton}
-                onPress={() => router.push('/add-friends')}
-              >
-                <IconSymbol name="person.badge.plus" size={20} color="#FFFFFF" />
-                <Text style={styles.addFriendsButtonText}>Ajouter des amis</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ) : (
-          <FlatList
-            data={requests}
-            renderItem={renderRequestItem}
-            keyExtractor={item => item.id}
-            contentContainerStyle={styles.listContainer}
-            showsVerticalScrollIndicator={false}
-          />
-        )}
-      </SafeAreaView>
-    </LinearGradient>
+      ) : (
+        <FlatList
+          data={requests}
+          renderItem={renderRequestItem}
+          keyExtractor={item => item.id}
+          contentContainerStyle={styles.listContainer}
+          showsVerticalScrollIndicator={false}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+        />
+      )}
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  safeArea: {
-    flex: 1,
+    backgroundColor: colors.backgroundAlt,
   },
 
   // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.backgroundAlt,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderSubtle,
   },
   headerButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: typography.lg,
+    fontFamily: 'Manrope-SemiBold',
+    fontWeight: typography.semibold,
+    color: colors.text,
   },
 
   // Loading
@@ -294,89 +297,92 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 12,
-  },
-  loadingText: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    fontWeight: '600',
   },
 
   // Empty state
   emptyState: {
     flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xxxl,
+  },
+  emptyIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.inputBackground,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    marginBottom: spacing.xl,
   },
-  emptyText: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginTop: 16,
-  },
-  emptySubtext: {
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.9)',
+  emptyTitle: {
+    fontSize: typography.lg,
+    fontFamily: 'Manrope-SemiBold',
+    fontWeight: typography.semibold,
+    color: colors.text,
+    marginBottom: spacing.sm,
     textAlign: 'center',
-    marginTop: 8,
+  },
+  emptySubtitle: {
+    fontSize: typography.sm,
+    fontFamily: 'Manrope-Regular',
+    color: colors.textTertiary,
+    textAlign: 'center',
     lineHeight: 22,
   },
   addFriendsButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 18,
-    marginTop: 24,
+    marginTop: spacing.xxl,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
   },
   addFriendsButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontSize: typography.sm,
+    fontFamily: 'Manrope-SemiBold',
+    fontWeight: typography.semibold,
+    color: colors.textOnPrimary,
   },
 
   // Liste
   listContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
     paddingBottom: Platform.OS === 'ios' ? 40 : 60,
-    gap: 16,
   },
 
-  // Glass Card
-  glassCard: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: 20,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+  // Separator
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.borderLight,
+  },
+
+  // Request card
+  requestCard: {
+    paddingVertical: spacing.md,
   },
 
   // User info
   userInfo: {
     flexDirection: 'row',
-    gap: 14,
+    gap: spacing.md,
   },
   userAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.4)',
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.borderLight,
   },
   userDetails: {
     flex: 1,
     justifyContent: 'center',
-    gap: 4,
+    gap: 2,
   },
   userName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontSize: typography.base,
+    fontFamily: 'Manrope-Medium',
+    fontWeight: typography.medium,
+    color: colors.text,
   },
   locationRow: {
     flexDirection: 'row',
@@ -384,48 +390,51 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   userCity: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.8)',
+    fontSize: typography.xs,
+    fontFamily: 'Manrope-Regular',
+    color: colors.textTertiary,
   },
   requestDate: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.7)',
-    marginTop: 2,
+    fontSize: typography.xs,
+    fontFamily: 'Manrope-Regular',
+    color: colors.textMuted,
   },
 
   // Action buttons
   actionButtons: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 16,
+    gap: spacing.sm,
+    marginTop: spacing.md,
   },
   rejectButton: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: colors.inputBackground,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-    paddingVertical: 12,
-    borderRadius: 14,
+    borderColor: colors.borderLight,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
   rejectButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontSize: typography.sm,
+    fontFamily: 'Manrope-Medium',
+    fontWeight: typography.medium,
+    color: colors.textSecondary,
   },
   acceptButton: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    paddingVertical: 12,
-    borderRadius: 14,
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
   acceptButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontSize: typography.sm,
+    fontFamily: 'Manrope-SemiBold',
+    fontWeight: typography.semibold,
+    color: colors.textOnPrimary,
   },
   buttonDisabled: {
     opacity: 0.5,
@@ -434,22 +443,24 @@ const styles = StyleSheet.create({
   // Restricted
   restrictedContainer: {
     flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xxxl,
   },
   restrictedTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginTop: 20,
+    fontSize: typography.lg,
+    fontFamily: 'Manrope-SemiBold',
+    fontWeight: typography.semibold,
+    color: colors.text,
+    marginTop: spacing.xl,
     textAlign: 'center',
   },
   restrictedText: {
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.9)',
+    fontSize: typography.sm,
+    fontFamily: 'Manrope-Regular',
+    color: colors.textTertiary,
     textAlign: 'center',
-    marginTop: 12,
+    marginTop: spacing.sm,
     lineHeight: 22,
   },
 });

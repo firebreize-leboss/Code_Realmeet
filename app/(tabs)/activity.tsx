@@ -4,22 +4,21 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   Image,
   Platform,
   ActivityIndicator,
   Alert,
   RefreshControl,
+  FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
-import { colors } from '@/styles/commonStyles';
+import { colors, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
 import { intelligentGroupsService } from '@/services/intelligent-groups.service';
 import { useAuth } from '@/contexts/AuthContext';
-import { LinearGradient } from 'expo-linear-gradient';
 
 type TabType = 'ongoing' | 'past';
 type BusinessTabType = 'created' | 'live';
@@ -128,11 +127,8 @@ export default function ActivityScreen() {
         })
       );
 
-      // Remettre en draft les activités publiées qui n'ont plus de créneaux futurs
-      // Cela empêche qu'elles repassent automatiquement en "live" quand on ajoute des créneaux
       for (const activity of activitiesWithSlotInfo) {
         if (activity.isPublished && !activity.hasLiveSlots) {
-          // L'activité était publiée mais n'a plus de créneaux futurs -> la remettre en draft
           await supabase
             .from('activities')
             .update({ status: 'draft' })
@@ -142,11 +138,9 @@ export default function ActivityScreen() {
         }
       }
 
-      // Une activité est "en cours" (live) uniquement si elle est publiée (status='active') ET a des créneaux futurs
       const live = activitiesWithSlotInfo.filter(a => a.isPublished && a.hasLiveSlots);
       setLiveActivities(live);
 
-      // Une activité est "créée" si elle n'est PAS publiée (status='draft')
       const created = activitiesWithSlotInfo.filter(a => !a.isPublished);
       setCreatedActivities(created);
 
@@ -373,24 +367,122 @@ export default function ActivityScreen() {
     });
   };
 
-  const renderBusinessActivityItem = (activity: Activity) => {
-    const isLive = activity.isPublished && activity.hasLiveSlots;
+  // Segmented control component
+  const SegmentedControl = ({
+    tabs,
+    activeTab,
+    onTabChange,
+    counts
+  }: {
+    tabs: { key: string; label: string }[];
+    activeTab: string;
+    onTabChange: (key: string) => void;
+    counts: Record<string, number>;
+  }) => (
+    <View style={styles.segmentedControl}>
+      {tabs.map((tab) => {
+        const isActive = activeTab === tab.key;
+        const count = counts[tab.key] || 0;
+        return (
+          <TouchableOpacity
+            key={tab.key}
+            style={[styles.segmentedTab, isActive && styles.segmentedTabActive]}
+            onPress={() => onTabChange(tab.key)}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.segmentedTabText, isActive && styles.segmentedTabTextActive]}>
+              {tab.label}
+            </Text>
+            {count > 0 && (
+              <View style={[styles.segmentedBadge, isActive && styles.segmentedBadgeActive]}>
+                <Text style={[styles.segmentedBadgeText, isActive && styles.segmentedBadgeTextActive]}>
+                  {count}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+
+  // Activity card for user view
+  const renderUserActivityItem = ({ item, index }: { item: Activity; index: number }) => {
+    const isPast = activeTab === 'past';
 
     return (
       <TouchableOpacity
-        key={activity.id}
-        style={styles.activityItem}
-        onPress={() => router.push(`/manage-activity?id=${activity.id}`)}
-        activeOpacity={0.8}
+        style={[styles.activityCard, isPast && styles.activityCardPast]}
+        onPress={() => router.push(
+          isPast
+            ? `/activity-detail?id=${item.id}&from=past&slotId=${item.user_slot_id ?? ''}`
+            : `/activity-detail?id=${item.id}&from=myActivities`
+        )}
+        activeOpacity={0.7}
       >
         <Image
-          source={{ uri: activity.image_url || 'https://via.placeholder.com/80' }}
+          source={{ uri: item.image_url || 'https://via.placeholder.com/80' }}
+          style={[styles.activityImage, isPast && styles.activityImagePast]}
+        />
+        <View style={styles.activityContent}>
+          <View style={styles.activityHeader}>
+            <Text style={[styles.activityTitle, isPast && styles.activityTitlePast]} numberOfLines={2}>
+              {item.nom}
+            </Text>
+            {isPast && (
+              <View style={styles.pastBadge}>
+                <IconSymbol name="checkmark.circle.fill" size={12} color={colors.textTertiary} />
+                <Text style={styles.pastBadgeText}>Terminé</Text>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.activityMeta}>
+            <View style={styles.metaRow}>
+              <IconSymbol name="calendar" size={14} color={isPast ? colors.textMuted : colors.textTertiary} />
+              <Text style={[styles.metaText, isPast && styles.metaTextPast]}>
+                {formatDate(item.date_heure)}
+              </Text>
+            </View>
+            <View style={styles.metaRow}>
+              <IconSymbol name="clock.fill" size={14} color={isPast ? colors.textMuted : colors.textTertiary} />
+              <Text style={[styles.metaText, isPast && styles.metaTextPast]}>
+                {formatTime(item.date_heure)}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.metaRow}>
+            <IconSymbol name="location.fill" size={14} color={isPast ? colors.textMuted : colors.primary} />
+            <Text style={[styles.metaTextLocation, isPast && styles.metaTextPast]} numberOfLines={1}>
+              {item.ville}
+            </Text>
+          </View>
+        </View>
+
+        <IconSymbol name="chevron.right" size={18} color={colors.textMuted} />
+      </TouchableOpacity>
+    );
+  };
+
+  // Activity card for business view
+  const renderBusinessActivityItem = ({ item }: { item: Activity }) => {
+    const isLive = item.isPublished && item.hasLiveSlots;
+
+    return (
+      <TouchableOpacity
+        style={styles.activityCard}
+        onPress={() => router.push(`/manage-activity?id=${item.id}`)}
+        activeOpacity={0.7}
+      >
+        <Image
+          source={{ uri: item.image_url || 'https://via.placeholder.com/80' }}
           style={styles.activityImage}
         />
-        <View style={styles.activityInfo}>
-          <View style={styles.activityTitleRow}>
+        <View style={styles.activityContent}>
+          <View style={styles.activityHeader}>
             <Text style={styles.activityTitle} numberOfLines={2}>
-              {activity.nom}
+              {item.nom}
             </Text>
             {isLive && (
               <View style={styles.liveBadge}>
@@ -398,47 +490,45 @@ export default function ActivityScreen() {
                 <Text style={styles.liveBadgeText}>En ligne</Text>
               </View>
             )}
-            {activity.status === 'draft' && (
+            {item.status === 'draft' && (
               <View style={styles.draftBadge}>
                 <Text style={styles.draftBadgeText}>Brouillon</Text>
               </View>
             )}
           </View>
 
-          <View style={styles.activityMeta}>
-            <View style={styles.metaItem}>
-              <IconSymbol name="location.fill" size={14} color="rgba(255,255,255,0.9)" />
-              <Text style={styles.metaText} numberOfLines={1}>
-                {activity.ville}
-              </Text>
-            </View>
+          <View style={styles.metaRow}>
+            <IconSymbol name="location.fill" size={14} color={colors.textTertiary} />
+            <Text style={styles.metaText} numberOfLines={1}>
+              {item.ville}
+            </Text>
           </View>
 
-          {activity.participants !== undefined && (
-            <View style={styles.metaItem}>
-              <IconSymbol name="person.2.fill" size={14} color="#FFFFFF" />
-              <Text style={[styles.metaText, { color: '#FFFFFF', fontWeight: '600' }]}>
-                {activity.participants}/{activity.max_participants} inscrits
+          {item.participants !== undefined && (
+            <View style={styles.metaRow}>
+              <IconSymbol name="person.2.fill" size={14} color={colors.textTertiary} />
+              <Text style={styles.metaText}>
+                {item.participants}/{item.max_participants} inscrits
               </Text>
             </View>
           )}
 
           {businessTab === 'created' && (
             <>
-              {activity.hasLiveSlots ? (
+              {item.hasLiveSlots ? (
                 <TouchableOpacity
                   style={styles.publishButton}
                   onPress={(e) => {
                     e.stopPropagation();
-                    handlePublishActivity(activity.id);
+                    handlePublishActivity(item.id);
                   }}
                 >
-                  <IconSymbol name="paperplane.fill" size={14} color="#818CF8" />
+                  <IconSymbol name="paperplane.fill" size={14} color={colors.primary} />
                   <Text style={styles.publishButtonText}>Publier</Text>
                 </TouchableOpacity>
               ) : (
                 <View style={styles.noSlotsMessage}>
-                  <IconSymbol name="exclamationmark.triangle.fill" size={12} color="#f59e0b" />
+                  <IconSymbol name="exclamationmark.triangle.fill" size={12} color={colors.primary} />
                   <Text style={styles.noSlotsMessageText}>
                     Ajoutez des créneaux pour publier
                   </Text>
@@ -447,376 +537,542 @@ export default function ActivityScreen() {
             </>
           )}
 
-          {activity.isPublished && businessTab === 'live' && (
+          {item.isPublished && businessTab === 'live' && (
             <TouchableOpacity
               style={styles.unpublishButton}
               onPress={(e) => {
                 e.stopPropagation();
-                handleUnpublishActivity(activity.id);
+                handleUnpublishActivity(item.id);
               }}
             >
-              <IconSymbol name="xmark.circle.fill" size={14} color="#ef4444" />
+              <IconSymbol name="xmark.circle.fill" size={14} color={colors.error} />
               <Text style={styles.unpublishButtonText}>Retirer</Text>
             </TouchableOpacity>
           )}
         </View>
-        <IconSymbol name="chevron.right" size={20} color="rgba(255,255,255,0.7)" />
+        <IconSymbol name="chevron.right" size={18} color={colors.textMuted} />
       </TouchableOpacity>
     );
   };
 
-  const renderActivityItem = (activity: Activity) => (
-    <TouchableOpacity
-      key={activity.id}
-      style={styles.activityItem}
-      onPress={() => router.push(
-        isBusiness
-          ? `/manage-activity?id=${activity.id}`
-          : activeTab === 'past'
-            ? `/activity-detail?id=${activity.id}&from=past&slotId=${activity.user_slot_id ?? ''}`
-            : `/activity-detail?id=${activity.id}&from=myActivities`
-      )}
-      activeOpacity={0.8}
-    >
-      <Image
-        source={{ uri: activity.image_url || 'https://via.placeholder.com/80' }}
-        style={styles.activityImage}
-      />
-      <View style={styles.activityInfo}>
-        <Text style={styles.activityTitle} numberOfLines={2}>
-          {activity.nom}
-        </Text>
-        <View style={styles.activityMeta}>
-          <View style={styles.metaItem}>
-            <IconSymbol name="calendar" size={14} color="rgba(255,255,255,0.9)" />
-            <Text style={styles.metaText}>{formatDate(activity.date_heure)}</Text>
-          </View>
-          <View style={styles.metaItem}>
-            <IconSymbol name="clock.fill" size={14} color="rgba(255,255,255,0.9)" />
-            <Text style={styles.metaText}>{formatTime(activity.date_heure)}</Text>
-          </View>
-        </View>
-        <View style={styles.metaItem}>
-          <IconSymbol name="location.fill" size={14} color="rgba(255,255,255,0.9)" />
-          <Text style={styles.metaText} numberOfLines={1}>
-            {activity.ville}
-          </Text>
-        </View>
-        {isBusiness && activity.participants !== undefined && (
-          <View style={styles.metaItem}>
-            <IconSymbol name="person.2.fill" size={14} color="#FFFFFF" />
-            <Text style={[styles.metaText, { color: '#FFFFFF', fontWeight: '600' }]}>
-              {activity.participants}/{activity.max_participants} inscrits
-            </Text>
-          </View>
-        )}
-      </View>
-      <IconSymbol name="chevron.right" size={20} color="rgba(255,255,255,0.7)" />
-    </TouchableOpacity>
-  );
-
-  const renderEmptyState = () => (
+  // Empty state component
+  const EmptyState = ({
+    title,
+    description,
+    showCTA = false,
+    ctaLabel = 'Explorer',
+    onCTAPress
+  }: {
+    title: string;
+    description: string;
+    showCTA?: boolean;
+    ctaLabel?: string;
+    onCTAPress?: () => void;
+  }) => (
     <View style={styles.emptyContainer}>
-      <IconSymbol
-        name={isBusiness ? "calendar.badge.plus" : "calendar"}
-        size={64}
-        color="rgba(255,255,255,0.7)"
-      />
-      <Text style={styles.emptyTitle}>
-        {activeTab === 'ongoing'
-          ? isBusiness
-            ? 'Aucune activité à venir'
-            : 'Aucune activité en cours'
-          : 'Aucune activité passée'}
-      </Text>
-      <Text style={styles.emptyText}>
-        {isBusiness
-          ? 'Créez votre première activité pour attirer des participants !'
-          : 'Inscrivez-vous à des activités pour les voir apparaître ici'}
-      </Text>
-      {isBusiness && activeTab === 'ongoing' && (
-        <TouchableOpacity
-          style={styles.createButton}
-          onPress={() => router.push('/create-activity')}
-        >
-          <IconSymbol name="plus" size={20} color="#818CF8" />
-          <Text style={styles.createButtonText}>Créer une activité</Text>
+      <View style={styles.emptyIconContainer}>
+        <IconSymbol name="calendar" size={48} color={colors.textMuted} />
+      </View>
+      <Text style={styles.emptyTitle}>{title}</Text>
+      <Text style={styles.emptyDescription}>{description}</Text>
+      {showCTA && onCTAPress && (
+        <TouchableOpacity style={styles.emptyCTA} onPress={onCTAPress}>
+          <Text style={styles.emptyCTAText}>{ctaLabel}</Text>
+          <IconSymbol name="arrow.right" size={16} color="#FFFFFF" />
         </TouchableOpacity>
       )}
     </View>
   );
 
+  // Create activity card for business
+  const CreateActivityCard = () => (
+    <TouchableOpacity
+      style={styles.createActivityCard}
+      onPress={() => router.push('/create-activity')}
+      activeOpacity={0.7}
+    >
+      <View style={styles.createActivityIcon}>
+        <IconSymbol name="plus" size={28} color={colors.primary} />
+      </View>
+      <View style={styles.createActivityContent}>
+        <Text style={styles.createActivityTitle}>Créer une nouvelle activité</Text>
+        <Text style={styles.createActivitySubtext}>
+          Ajoutez des créneaux puis publiez-la
+        </Text>
+      </View>
+      <IconSymbol name="chevron.right" size={18} color={colors.textMuted} />
+    </TouchableOpacity>
+  );
+
   // Loading state
   if (loading) {
     return (
-      <LinearGradient
-        colors={['#60A5FA', '#818CF8', '#C084FC']}
-        style={styles.container}
-      >
+      <View style={styles.container}>
         <SafeAreaView style={styles.safeArea} edges={['top']}>
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>{isBusiness ? 'Mes activités' : 'My Activities'}</Text>
+            <Text style={styles.headerTitle}>Mes activités</Text>
           </View>
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#FFFFFF" />
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={styles.loadingText}>Chargement...</Text>
           </View>
         </SafeAreaView>
-      </LinearGradient>
+      </View>
     );
   }
 
   // Business view
   if (isBusiness) {
+    const businessTabs = [
+      { key: 'live', label: 'En cours' },
+      { key: 'created', label: 'Créées' },
+    ];
+    const businessCounts = {
+      live: liveActivities.length,
+      created: createdActivities.length,
+    };
+
     return (
-      <LinearGradient
-        colors={['#60A5FA', '#818CF8', '#C084FC']}
-        style={styles.container}
-      >
+      <View style={styles.container}>
         <SafeAreaView style={styles.safeArea} edges={['top']}>
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>Mes activités</Text>
+            <View>
+              <Text style={styles.headerTitle}>Mes activités</Text>
+              <View style={styles.headerAccent} />
+            </View>
           </View>
 
-          <View style={styles.tabContainer}>
-            <TouchableOpacity
-              style={[styles.tab, businessTab === 'live' && styles.tabActive]}
-              onPress={() => setBusinessTab('live')}
-            >
-              <Text style={[styles.tabText, businessTab === 'live' && styles.tabTextActive]}>
-                En cours
-              </Text>
-              {liveActivities.length > 0 && (
-                <View style={[styles.badge, businessTab === 'live' && styles.badgeActive]}>
-                  <Text style={[styles.badgeText, businessTab === 'live' && styles.badgeTextActive]}>
-                    {liveActivities.length}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tab, businessTab === 'created' && styles.tabActive]}
-              onPress={() => setBusinessTab('created')}
-            >
-              <Text style={[styles.tabText, businessTab === 'created' && styles.tabTextActive]}>
-                Créées
-              </Text>
-              {createdActivities.length > 0 && (
-                <View style={[styles.badge, businessTab === 'created' && styles.badgeActive]}>
-                  <Text style={[styles.badgeText, businessTab === 'created' && styles.badgeTextActive]}>
-                    {createdActivities.length}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
+          <View style={styles.tabsContainer}>
+            <SegmentedControl
+              tabs={businessTabs}
+              activeTab={businessTab}
+              onTabChange={(key) => setBusinessTab(key as BusinessTabType)}
+              counts={businessCounts}
+            />
           </View>
 
-          <ScrollView
-            style={styles.scrollView}
+          <FlatList
+            data={businessTab === 'live' ? liveActivities : createdActivities}
+            renderItem={renderBusinessActivityItem}
+            keyExtractor={(item) => item.id}
             contentContainerStyle={[
-              styles.contentContainer,
-              Platform.OS !== 'ios' && styles.contentContainerWithTabBar,
+              styles.listContent,
+              Platform.OS !== 'ios' && styles.listContentWithTabBar,
             ]}
             showsVerticalScrollIndicator={false}
             refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#FFFFFF" />
+              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
             }
-          >
-            {businessTab === 'live' ? (
-              liveActivities.length > 0 ? (
-                liveActivities.map(renderBusinessActivityItem)
+            ListHeaderComponent={businessTab === 'created' ? <CreateActivityCard /> : null}
+            ListEmptyComponent={
+              businessTab === 'live' ? (
+                <EmptyState
+                  title="Aucune activité en cours"
+                  description="Publiez une activité avec des créneaux futurs pour la voir apparaître ici"
+                />
               ) : (
-                <View style={styles.emptyContainer}>
-                  <IconSymbol name="calendar" size={64} color="rgba(255,255,255,0.7)" />
-                  <Text style={styles.emptyTitle}>Aucune activité en cours</Text>
-                  <Text style={styles.emptyText}>
-                    Publiez une activité avec des créneaux futurs pour la voir ici
-                  </Text>
-                </View>
+                <EmptyState
+                  title="Aucune activité créée"
+                  description="Créez votre première activité pour commencer"
+                />
               )
-            ) : (
-              <>
-                <TouchableOpacity
-                  style={styles.createActivityCard}
-                  onPress={() => router.push('/create-activity')}
-                >
-                  <View style={styles.createActivityIcon}>
-                    <IconSymbol name="plus" size={32} color="#FFFFFF" />
-                  </View>
-                  <Text style={styles.createActivityText}>Créer une nouvelle activité</Text>
-                  <Text style={styles.createActivitySubtext}>
-                    Ajoutez des créneaux puis publiez-la
-                  </Text>
-                </TouchableOpacity>
-
-                {createdActivities.length > 0 ? (
-                  createdActivities.map(renderBusinessActivityItem)
-                ) : (
-                  <View style={styles.emptyContainer}>
-                    <IconSymbol name="folder" size={64} color="rgba(255,255,255,0.7)" />
-                    <Text style={styles.emptyTitle}>Aucune activité créée</Text>
-                    <Text style={styles.emptyText}>
-                      Créez votre première activité pour commencer
-                    </Text>
-                  </View>
-                )}
-              </>
-            )}
-          </ScrollView>
+            }
+          />
         </SafeAreaView>
-      </LinearGradient>
+      </View>
     );
   }
 
   // User view
+  const userTabs = [
+    { key: 'ongoing', label: 'En cours' },
+    { key: 'past', label: 'Passées' },
+  ];
+  const userCounts = {
+    ongoing: ongoingActivities.length,
+    past: pastActivities.length,
+  };
+
   return (
-    <LinearGradient
-      colors={['#60A5FA', '#818CF8', '#C084FC']}
-      style={styles.container}
-    >
+    <View style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Mes activités</Text>
+          <View>
+            <Text style={styles.headerTitle}>Mes activités</Text>
+            <View style={styles.headerAccent} />
+          </View>
         </View>
 
-        <View style={styles.tabContainer}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'ongoing' && styles.tabActive]}
-            onPress={() => setActiveTab('ongoing')}
-          >
-            <Text style={[styles.tabText, activeTab === 'ongoing' && styles.tabTextActive]}>
-              En cours
-            </Text>
-            {ongoingActivities.length > 0 && (
-              <View style={[styles.badge, activeTab === 'ongoing' && styles.badgeActive]}>
-                <Text style={[styles.badgeText, activeTab === 'ongoing' && styles.badgeTextActive]}>
-                  {ongoingActivities.length}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'past' && styles.tabActive]}
-            onPress={() => setActiveTab('past')}
-          >
-            <Text style={[styles.tabText, activeTab === 'past' && styles.tabTextActive]}>
-              Passées
-            </Text>
-            {pastActivities.length > 0 && (
-              <View style={[styles.badge, activeTab === 'past' && styles.badgeActive]}>
-                <Text style={[styles.badgeText, activeTab === 'past' && styles.badgeTextActive]}>
-                  {pastActivities.length}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
+        <View style={styles.tabsContainer}>
+          <SegmentedControl
+            tabs={userTabs}
+            activeTab={activeTab}
+            onTabChange={(key) => setActiveTab(key as TabType)}
+            counts={userCounts}
+          />
         </View>
 
-        <ScrollView
-          style={styles.scrollView}
+        <FlatList
+          data={activeTab === 'ongoing' ? ongoingActivities : pastActivities}
+          renderItem={renderUserActivityItem}
+          keyExtractor={(item) => item.id}
           contentContainerStyle={[
-            styles.contentContainer,
-            Platform.OS !== 'ios' && styles.contentContainerWithTabBar,
+            styles.listContent,
+            Platform.OS !== 'ios' && styles.listContentWithTabBar,
           ]}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#FFFFFF" />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
           }
-        >
-          {activeTab === 'ongoing' ? (
-            ongoingActivities.length > 0 ? (
-              ongoingActivities.map(renderActivityItem)
+          ListEmptyComponent={
+            activeTab === 'ongoing' ? (
+              <EmptyState
+                title="Aucune activité en cours"
+                description="Découvrez des activités près de chez vous et inscrivez-vous !"
+                showCTA
+                ctaLabel="Explorer"
+                onCTAPress={() => router.push('/(tabs)/browse')}
+              />
             ) : (
-              renderEmptyState()
+              <EmptyState
+                title="Aucune activité passée"
+                description="Vos activités terminées apparaîtront ici"
+              />
             )
-          ) : (
-            pastActivities.length > 0 ? (
-              pastActivities.map(renderActivityItem)
-            ) : (
-              renderEmptyState()
-            )
-          )}
-        </ScrollView>
+          }
+        />
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  // Container & Layout
   container: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   safeArea: {
     flex: 1,
   },
+
+  // Header - Premium avec accent orange discret
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
+    backgroundColor: colors.backgroundAlt,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderSubtle,
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '700',
-    color: '#FFFFFF',
+    fontFamily: 'Manrope_700Bold',
+    color: colors.text,
+    letterSpacing: -0.3,
   },
-  tabContainer: {
-    flexDirection: 'row',
+  headerAccent: {
+    width: 24,
+    height: 2,
+    backgroundColor: colors.primary,
+    borderRadius: 1,
+    marginTop: 4,
+    opacity: 0.7,
+  },
+
+  // Tabs container
+  tabsContainer: {
     paddingHorizontal: 20,
-    paddingVertical: 10,
-    gap: 10,
+    paddingVertical: 12,
+    backgroundColor: colors.backgroundAlt,
   },
-  tab: {
+
+  // Segmented Control - Premium sobre
+  segmentedControl: {
+    flexDirection: 'row',
+    backgroundColor: colors.borderSubtle,
+    borderRadius: 10,
+    padding: 3,
+  },
+  segmentedTab: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    paddingHorizontal: 12,
+    borderRadius: 7,
+    gap: 6,
   },
-  tabActive: {
-    backgroundColor: 'rgba(255,255,255,0.35)',
-    borderColor: 'rgba(255,255,255,0.5)',
+  segmentedTabActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
-  tabText: {
+  segmentedTabText: {
     fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
+    color: colors.textTertiary,
+  },
+  segmentedTabTextActive: {
+    color: colors.text,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.7)',
+    fontFamily: 'Manrope_600SemiBold',
   },
-  tabTextActive: {
-    color: '#FFFFFF',
-  },
-  badge: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
+  segmentedBadge: {
+    backgroundColor: colors.badge,
     borderRadius: 10,
-    paddingHorizontal: 8,
+    paddingHorizontal: 7,
     paddingVertical: 2,
+    minWidth: 20,
+    alignItems: 'center',
   },
-  badgeActive: {
-    backgroundColor: 'rgba(255,255,255,0.35)',
+  segmentedBadgeActive: {
+    backgroundColor: colors.primaryLight,
   },
-  badgeText: {
-    fontSize: 12,
+  segmentedBadgeText: {
+    fontSize: 11,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.7)',
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.textTertiary,
   },
-  badgeTextActive: {
-    color: '#FFFFFF',
+  segmentedBadgeTextActive: {
+    color: colors.primaryMuted,
   },
-  scrollView: {
-    flex: 1,
-  },
-  contentContainer: {
+
+  // List content
+  listContent: {
     paddingHorizontal: 20,
-    paddingBottom: 40,
+    paddingTop: 8,
+    paddingBottom: 24,
+    flexGrow: 1,
   },
-  contentContainerWithTabBar: {
+  listContentWithTabBar: {
     paddingBottom: 100,
   },
+
+  // Activity Card - Premium avec hiérarchie claire
+  activityCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: 14,
+    marginBottom: 12,
+    gap: 14,
+    ...shadows.sm,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  activityCardPast: {
+    opacity: 0.85,
+    backgroundColor: colors.backgroundAccent,
+  },
+  activityImage: {
+    width: 72,
+    height: 72,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.borderSubtle,
+  },
+  activityImagePast: {
+    opacity: 0.8,
+  },
+  activityContent: {
+    flex: 1,
+    gap: 4,
+  },
+  activityHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  activityTitle: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.text,
+    lineHeight: 20,
+  },
+  activityTitlePast: {
+    color: colors.textSecondary,
+  },
+  activityMeta: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 2,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  metaText: {
+    fontSize: 13,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textTertiary,
+  },
+  metaTextPast: {
+    color: colors.textMuted,
+  },
+  metaTextLocation: {
+    fontSize: 13,
+    fontFamily: 'Manrope_500Medium',
+    color: colors.textSecondary,
+    flex: 1,
+  },
+
+  // Past badge
+  pastBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.borderSubtle,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    gap: 4,
+  },
+  pastBadgeText: {
+    fontSize: 10,
+    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
+    color: colors.textTertiary,
+  },
+
+  // Live badge
+  liveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.successLight,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    gap: 4,
+  },
+  liveDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: colors.success,
+  },
+  liveBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.success,
+  },
+
+  // Draft badge
+  draftBadge: {
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  draftBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.primary,
+  },
+
+  // Action buttons
+  publishButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 5,
+    marginTop: 6,
+    alignSelf: 'flex-start',
+  },
+  publishButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.primary,
+  },
+  noSlotsMessage: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 5,
+    marginTop: 6,
+    alignSelf: 'flex-start',
+  },
+  noSlotsMessageText: {
+    fontSize: 11,
+    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
+    color: colors.primaryMuted,
+  },
+  unpublishButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.errorLight,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 5,
+    marginTop: 6,
+    alignSelf: 'flex-start',
+  },
+  unpublishButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.error,
+  },
+
+  // Create activity card
+  createActivityCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: 16,
+    marginBottom: 16,
+    gap: 14,
+    borderWidth: 2,
+    borderColor: colors.borderLight,
+    borderStyle: 'dashed',
+  },
+  createActivityIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 14,
+    backgroundColor: colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  createActivityContent: {
+    flex: 1,
+  },
+  createActivityTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.text,
+    marginBottom: 2,
+  },
+  createActivitySubtext: {
+    fontSize: 13,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textTertiary,
+  },
+
+  // Loading state
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -824,204 +1080,57 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   loadingText: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    fontWeight: '600',
+    fontSize: 15,
+    fontFamily: 'Manrope_500Medium',
+    color: colors.textTertiary,
   },
-  activityItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 12,
-    gap: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  activityImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-  },
-  activityInfo: {
-    flex: 1,
-    gap: 6,
-  },
-  activityTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 4,
-  },
-  liveBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(16, 185, 129, 0.3)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.5)',
-  },
-  liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#10b981',
-  },
-  liveBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#10b981',
-  },
-  draftBadge: {
-    backgroundColor: 'rgba(245, 158, 11, 0.3)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.5)',
-  },
-  draftBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#f59e0b',
-  },
-  publishButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 16,
-    gap: 6,
-    marginTop: 8,
-    alignSelf: 'flex-start',
-  },
-  publishButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#818CF8',
-  },
-  noSlotsMessage: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(245, 158, 11, 0.3)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
-    gap: 6,
-    marginTop: 8,
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.5)',
-  },
-  noSlotsMessageText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#f59e0b',
-  },
-  createActivityCard: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    marginBottom: 16,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)',
-    borderStyle: 'dashed',
-  },
-  createActivityIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  createActivityText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  createActivitySubtext: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.8)',
-  },
-  activityTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  activityMeta: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  metaText: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.9)',
-  },
+
+  // Empty state - Premium centered
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 60,
-    gap: 12,
+    paddingHorizontal: 32,
+  },
+  emptyIconContainer: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: colors.borderSubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
   },
   emptyTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#FFFFFF',
-    marginTop: 10,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.9)',
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.text,
     textAlign: 'center',
-    paddingHorizontal: 40,
+    marginBottom: 8,
   },
-  createButton: {
+  emptyDescription: {
+    fontSize: 14,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textTertiary,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  emptyCTA: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.9)',
+    backgroundColor: colors.primary,
     paddingVertical: 12,
     paddingHorizontal: 24,
-    borderRadius: 25,
-    marginTop: 16,
+    borderRadius: 12,
+    marginTop: 24,
     gap: 8,
   },
-  createButtonText: {
-    fontSize: 16,
+  emptyCTAText: {
+    fontSize: 15,
     fontWeight: '600',
-    color: '#818CF8',
-  },
-  unpublishButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(239, 68, 68, 0.3)',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 16,
-    gap: 6,
-    marginTop: 8,
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.5)',
-  },
-  unpublishButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#ef4444',
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#FFFFFF',
   },
 });
