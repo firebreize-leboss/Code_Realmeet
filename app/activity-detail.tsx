@@ -578,6 +578,17 @@ export default function ActivityDetailScreen() {
   const isHost = currentUserId === activity.host.id;
   const isCompetitorActivity = isBusiness && activity.host.id !== currentUserId;
 
+  // === DEBUG SCROLL ===
+  const showFooter = (!isHost && !isActivityPast) || (isHost && isBusiness);
+  const calculatedPaddingBottom = showFooter ? 70 + insets.bottom : 0;
+  console.log('[DEBUG SCROLL] isHost:', isHost);
+  console.log('[DEBUG SCROLL] isActivityPast:', isActivityPast);
+  console.log('[DEBUG SCROLL] isBusiness:', isBusiness);
+  console.log('[DEBUG SCROLL] showFooter:', showFooter);
+  console.log('[DEBUG SCROLL] insets.bottom:', insets.bottom);
+  console.log('[DEBUG SCROLL] calculatedPaddingBottom:', calculatedPaddingBottom);
+  // === FIN DEBUG SCROLL ===
+
   return (
     <View style={styles.container}>
       {/* Header avec image pleine largeur */}
@@ -621,12 +632,19 @@ export default function ActivityDetailScreen() {
         style={styles.scrollView}
         contentContainerStyle={[
           styles.contentContainer,
-          // Padding en bas pour le footer CTA fixe (hauteur footer ~70px sans extra)
-          { paddingBottom: (!isHost && !isActivityPast) || (isHost && isBusiness) ? 70 : 0 },
+          { flexGrow: 1 },
         ]}
         showsVerticalScrollIndicator={false}
         overScrollMode="never"
         bounces={false}
+        onScroll={(event) => {
+          const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+          console.log('[DEBUG SCROLL onScroll] contentOffset.y:', contentOffset.y);
+          console.log('[DEBUG SCROLL onScroll] contentSize.height:', contentSize.height);
+          console.log('[DEBUG SCROLL onScroll] layoutMeasurement.height:', layoutMeasurement.height);
+          console.log('[DEBUG SCROLL onScroll] maxScroll (contentSize - layout):', contentSize.height - layoutMeasurement.height);
+        }}
+        scrollEventThrottle={100}
       >
         {/* Badge activité terminée */}
         {isActivityPast && (
@@ -827,6 +845,9 @@ export default function ActivityDetailScreen() {
             ) : null}
           </View>
         )}
+
+        {/* Spacer pour le footer fixe */}
+        <View style={{ paddingBottom: (!isHost && !isActivityPast) || (isHost && isBusiness) ? 70 + insets.bottom : 0 }} />
       </ScrollView>
 
       {/* Footer */}
