@@ -74,8 +74,6 @@ export default function BusinessGroupViewScreen() {
           filter: `conversation_id=eq.${conversationId}`,
         },
         async (payload: any) => {
-          console.log('📩 Nouveau message reçu:', payload.new);
-          
           const { data: profile } = await supabase
             .from('profiles')
             .select('full_name, avatar_url')
@@ -111,7 +109,6 @@ export default function BusinessGroupViewScreen() {
   const loadGroupData = async () => {
     try {
       setLoading(true);
-      console.log('🔍 Chargement du groupe, conversationId:', conversationId);
 
       // Récupérer l'ID de l'entreprise connectée
       const { data: userData } = await supabase.auth.getUser();
@@ -160,9 +157,7 @@ export default function BusinessGroupViewScreen() {
         .eq('conversation_id', conversationId);
 
       if (partError) {
-        console.error('❌ Erreur chargement participants:', partError);
-      } else {
-        console.log('✅ Participants chargés:', participantsData?.length);
+        console.error('Erreur chargement participants:', partError);
       }
 
       if (participantsData) {
@@ -193,9 +188,7 @@ export default function BusinessGroupViewScreen() {
         .order('created_at', { ascending: true });
 
       if (msgError) {
-        console.error('❌ Erreur chargement messages:', msgError);
-      } else {
-        console.log('✅ Messages chargés:', messagesData?.length);
+        console.error('Erreur chargement messages:', msgError);
       }
 
       if (messagesData && messagesData.length > 0) {

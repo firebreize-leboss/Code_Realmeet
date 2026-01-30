@@ -227,38 +227,24 @@ export default function BrowseScreen() {
 
 
   useEffect(() => {
-    console.log('[SCROLL DEBUG] useEffect params triggered', {
-      hasHandledParams: hasHandledParams.current,
-      activitiesLength: activities.length,
-      viewMode: params.viewMode,
-      selectedActivityId: params.selectedActivityId,
-    });
-
     if (hasHandledParams.current) {
-      console.log('[SCROLL DEBUG] Already handled params, returning');
       return;
     }
     if (activities.length === 0) {
-      console.log('[SCROLL DEBUG] No activities, returning');
       return;
     }
 
     if (params.viewMode === 'maps') {
-      console.log('[SCROLL DEBUG] Setting viewMode to maps');
       setViewMode('maps');
     }
 
     if (params.selectedActivityId) {
-      console.log('[SCROLL DEBUG] Looking for activity with id:', params.selectedActivityId);
       const activity = activities.find(a => a.id === params.selectedActivityId);
-      console.log('[SCROLL DEBUG] Found activity:', activity ? { id: activity.id, nom: activity.nom, lat: activity.latitude, lng: activity.longitude } : 'NOT FOUND');
 
       if (activity && activity.latitude && activity.longitude) {
         hasHandledParams.current = true;
         hasCenteredOnActivity.current = true;
-        console.log('[SCROLL DEBUG] Setting timeout to center on activity');
         setTimeout(() => {
-          console.log('[SCROLL DEBUG] Inside timeout, webViewRef.current:', !!webViewRef.current);
           if (webViewRef.current) {
             const message = JSON.stringify({
               type: 'centerOnActivity',
@@ -266,10 +252,8 @@ export default function BrowseScreen() {
               latitude: activity.latitude,
               longitude: activity.longitude,
             });
-            console.log('[SCROLL DEBUG] Posting message to WebView:', message);
             webViewRef.current.postMessage(message);
           }
-          console.log('[SCROLL DEBUG] Setting selectedActivity');
           const slotData = cache.slotDataByActivity[activity.id];
           setSelectedActivity({
             id: activity.id,
@@ -286,10 +270,7 @@ export default function BrowseScreen() {
             totalParticipants: slotData ? (slotData.totalMaxPlaces - slotData.remainingPlaces) : activity.participants,
             totalMaxPlaces: slotData?.totalMaxPlaces || activity.max_participants,
           });
-          console.log('[SCROLL DEBUG] selectedActivity set successfully');
         }, 1500);
-      } else {
-        console.log('[SCROLL DEBUG] Activity not found or missing coordinates');
       }
     }
   }, [params.viewMode, params.selectedActivityId, activities]);
@@ -327,12 +308,6 @@ export default function BrowseScreen() {
   latestMap: Record<string, string | null> = latestSlotDateByActivity,
   shouldCenter: boolean = true
 ) => {
-    console.log('[SCROLL DEBUG] sendActivitiesToMap called', {
-      activitiesCount: activitiesData.length,
-      shouldCenter,
-      webViewRefExists: !!webViewRef.current,
-    });
-
     if (webViewRef.current) {
       const activitiesWithCoords = activitiesData.filter(a => a.latitude && a.longitude);
       webViewRef.current.postMessage(JSON.stringify({
@@ -430,7 +405,6 @@ export default function BrowseScreen() {
   }, [activities, searchQuery, tempFilters, userLocation, latestSlotDateByActivity, remainingPlacesByActivity]);
 
   const closeActivity = () => {
-    console.log('[SCROLL DEBUG] closeActivity called');
     setSelectedActivity(null);
     if (webViewRef.current) {
       webViewRef.current.postMessage(JSON.stringify({ type: 'deselectMarker' }));
@@ -439,14 +413,11 @@ export default function BrowseScreen() {
 
 
   const handleWebViewMessage = (event: any) => {
-    console.log('[SCROLL DEBUG] handleWebViewMessage received:', event.nativeEvent.data);
     try {
       const data = JSON.parse(event.nativeEvent.data);
-      console.log('[SCROLL DEBUG] Parsed message data:', data);
       if (data.type === 'markerClicked') {
         // Guard pour éviter les appels redondants sur iOS
         if (selectedActivity?.id === data.activity.id) return;
-        console.log('[SCROLL DEBUG] markerClicked - setting selectedActivity:', data.activity);
         const slotData = cache.slotDataByActivity[data.activity.id];
         setSelectedActivity({
           ...data.activity,
@@ -456,7 +427,7 @@ export default function BrowseScreen() {
         });
       }
     } catch (e) {
-      console.error('[SCROLL DEBUG] Error parsing message:', e);
+      console.error('Error parsing WebView message:', e);
     }
   };
 
@@ -516,13 +487,10 @@ export default function BrowseScreen() {
     }
 
     function handleMessage(event) {
-      console.log('[MAP DEBUG] handleMessage received:', event.data);
       try {
         const data = JSON.parse(event.data);
-        console.log('[MAP DEBUG] Parsed data type:', data.type);
 
         if (data.type === 'updateUserLocation') {
-          console.log('[MAP DEBUG] Updating user location');
           if (userMarker) userMarker.remove();
           const userEl = document.createElement('div');
           userEl.className = 'user-marker';
@@ -533,7 +501,6 @@ export default function BrowseScreen() {
 
         if (data.type === 'loadActivities') {
           const activities = data.activities || [];
-          console.log('[MAP DEBUG] loadActivities - count:', activities.length);
           Object.values(markers).forEach(m => m.remove());
           markers = {};
 
@@ -542,7 +509,6 @@ export default function BrowseScreen() {
             el.className = 'custom-marker';
             el.id = 'marker-' + a.id;
             el.onclick = () => {
-              console.log('[MAP DEBUG] Marker clicked:', a.id, a.nom);
               if (selectedMarkerId) {
                 const prev = document.getElementById('marker-' + selectedMarkerId);
                 if (prev) prev.classList.remove('selected');
@@ -555,7 +521,6 @@ export default function BrowseScreen() {
               .setLngLat([a.longitude, a.latitude])
               .addTo(map);
           });
-          console.log('[MAP DEBUG] Created', Object.keys(markers).length, 'markers');
 
           if (data.userLocation) {
             if (userMarker) userMarker.remove();
@@ -568,25 +533,19 @@ export default function BrowseScreen() {
 
           if (data.shouldCenter !== false) {
             if (data.userLocation) {
-              console.log('[MAP DEBUG] Centering on user location');
               map.setCenter([data.userLocation.longitude, data.userLocation.latitude]);
             } else if (activities.length > 0) {
-              console.log('[MAP DEBUG] Centering on first activity');
               map.setCenter([activities[0].longitude, activities[0].latitude]);
             }
           }
         } else if (data.type === 'deselectMarker' && selectedMarkerId) {
-          console.log('[MAP DEBUG] Deselecting marker:', selectedMarkerId);
           const m = document.getElementById('marker-' + selectedMarkerId);
           if (m) m.classList.remove('selected');
           selectedMarkerId = null;
         } else if (data.type === 'centerOnUser') {
-          console.log('[MAP DEBUG] centerOnUser:', data.longitude, data.latitude);
           map.flyTo({ center: [data.longitude, data.latitude], zoom: 15, duration: 1000 });
         } else if (data.type === 'centerOnActivity') {
-          console.log('[MAP DEBUG] centerOnActivity:', data.activityId, data.longitude, data.latitude);
           map.flyTo({ center: [data.longitude, data.latitude], zoom: 15, duration: 1000 });
-          // Sélectionner visuellement le marker
           if (data.activityId) {
             if (selectedMarkerId) {
               const prev = document.getElementById('marker-' + selectedMarkerId);
@@ -594,15 +553,12 @@ export default function BrowseScreen() {
             }
             const targetMarker = document.getElementById('marker-' + data.activityId);
             if (targetMarker) {
-              console.log('[MAP DEBUG] Selecting marker visually:', data.activityId);
               targetMarker.classList.add('selected');
               selectedMarkerId = data.activityId;
-            } else {
-              console.log('[MAP DEBUG] Target marker not found:', data.activityId);
             }
           }
         }
-      } catch(e) { console.error('[MAP DEBUG] Error:', e); }
+      } catch(e) { console.error('Map error:', e); }
     }
     document.addEventListener('message', handleMessage);
     window.addEventListener('message', handleMessage);
@@ -847,13 +803,8 @@ export default function BrowseScreen() {
               style={styles.map}
               onMessage={handleWebViewMessage}
               onLoadEnd={() => {
-                console.log('[SCROLL DEBUG] WebView onLoadEnd triggered', {
-                  filteredActivitiesCount: filteredActivities.length,
-                  hasCenteredOnActivity: hasCenteredOnActivity.current,
-                });
                 if (filteredActivities.length > 0) {
                   const shouldCenter = !hasCenteredOnActivity.current;
-                  console.log('[SCROLL DEBUG] Calling sendActivitiesToMap from onLoadEnd, shouldCenter:', shouldCenter);
                   sendActivitiesToMap(filteredActivities, latestSlotDateByActivity, shouldCenter);
                   if (shouldCenter) {
                     hasCenteredOnActivity.current = true;

@@ -187,8 +187,6 @@ export default function SettingsScreen() {
         },
       });
 
-      console.log('Delete account response:', response);
-
       if (response.error) {
         throw new Error(response.error.message || 'Erreur lors de la suppression');
       }

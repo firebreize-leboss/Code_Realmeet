@@ -132,13 +132,11 @@ export default function SignupIndividualScreen() {
       // 3. Upload de l'avatar si présent
       let avatarUrl = null;
       if (profileImage) {
-        console.log('🔵 Début upload avatar...');
         const uploadResult = await storageService.uploadAvatar(profileImage, userId);
         if (uploadResult.success) {
           avatarUrl = uploadResult.url;
-          console.log('✅ Avatar uploadé:', avatarUrl);
         } else {
-          console.error('❌ Erreur upload avatar:', uploadResult.error);
+          console.error('Erreur upload avatar:', uploadResult.error);
           Alert.alert('Avertissement', 'Votre compte a été créé mais la photo de profil n\'a pas pu être uploadée.');
         }
       }

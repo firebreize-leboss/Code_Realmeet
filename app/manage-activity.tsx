@@ -137,8 +137,6 @@ export default function ManageActivityScreen() {
         `)
         .in('slot_id', slotIds.length > 0 ? slotIds : ['00000000-0000-0000-0000-000000000000']);
 
-      console.log('slotGroupsWithMembers query result:', slotGroupsWithMembers, 'error:', slotGroupsError);
-
       // Fusionner les participants de slot_participants et slot_group_members
       // en évitant les doublons (basé sur user_id + slot_id)
       const participantsFromSlotParticipants = participantsData || [];
@@ -170,10 +168,6 @@ export default function ManageActivityScreen() {
 
       const allParticipantsData = [...participantsFromSlotParticipants, ...participantsFromGroups];
 
-      console.log('Participants chargés (slot_participants):', participantsData?.length, participantsError);
-      console.log('Participants chargés (slot_group_members):', participantsFromGroups.length);
-      console.log('Total participants:', allParticipantsData.length);
-      
       const { data: conversations } = await supabase
         .from('conversations')
         .select('id, slot_id')
@@ -190,7 +184,6 @@ export default function ManageActivityScreen() {
 
       // Compter les participants uniques par slot (comme dans ActivityCalendar.tsx)
       // en utilisant un Set<string> pour dédupliquer user_id + slot_id
-      console.log('participantsData:', participantsData, 'slotGroupsWithMembers:', slotGroupsWithMembers);
       const countBySlotId: Record<string, number> = {};
       const seenUserSlotCombosForCount = new Set<string>();
 
@@ -262,7 +255,6 @@ export default function ManageActivityScreen() {
         slotId: p.slot_id,
       }));
 
-      console.log('Participants formatés:', formattedParticipants.length, formattedParticipants);
       setParticipants(formattedParticipants);
     } catch (error) {
       console.error('Erreur chargement activité:', error);
@@ -296,26 +288,20 @@ export default function ManageActivityScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              console.log('Tentative de pause pour activité:', activity?.id);
-              
               const { data, error } = await supabase
                 .from('activities')
                 .update({ status: 'paused' })
                 .eq('id', activity?.id)
                 .select()
                 .single();
-              
-              console.log('Résultat:', { data, error });
-              
+
               if (error) {
-                console.error('Erreur Supabase:', error);
                 throw error;
               }
               
               setActivity(prev => prev ? { ...prev, status: 'paused' } : null);
               Alert.alert('Succès', 'Activité mise en pause');
             } catch (error: any) {
-              console.error('Erreur complète:', error);
               Alert.alert('Erreur', error.message || 'Impossible de mettre en pause');
             }
           }

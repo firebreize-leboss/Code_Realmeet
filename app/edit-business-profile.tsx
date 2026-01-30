@@ -182,7 +182,6 @@ export default function EditBusinessProfileScreen() {
             setBusinessCoverUrl(urlData.publicUrl);
           }
 
-          console.log('✅ Image uploadée:', urlData.publicUrl);
         } catch (uploadError: any) {
           console.error('Erreur upload:', uploadError);
           Alert.alert('Erreur', uploadError.message || "Impossible d'uploader l'image");

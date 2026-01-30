@@ -33,8 +33,6 @@ export async function formIntelligentGroups(
   activityId: string
 ): Promise<GroupFormationResult> {
   try {
-    console.log(`Formation des groupes pour le créneau ${slotId}`);
-    
     // Appeler la fonction SQL qui fait tout en une transaction
     const { data, error } = await supabase.rpc('form_slot_groups', {
       p_slot_id: slotId
@@ -44,8 +42,6 @@ export async function formIntelligentGroups(
       console.error('Erreur RPC form_slot_groups:', error);
       throw error;
     }
-
-    console.log('Résultat formation groupes:', data);
 
     if (!data.success) {
       throw new Error(data.error || 'Erreur formation groupes');
@@ -78,13 +74,11 @@ export async function shouldFormGroups(slotId: string): Promise<boolean> {
       .single();
 
     if (error || !slot) {
-      console.log('Erreur ou slot non trouvé:', error);
       return false;
     }
 
     // Si déjà formés, ne pas reformer
     if (slot.groups_formed) {
-      console.log(`Slot ${slotId}: groupes déjà formés`);
       return false;
     }
 
@@ -95,12 +89,9 @@ export async function shouldFormGroups(slotId: string): Promise<boolean> {
     const oneDayBefore = new Date(slotDateTime.getTime() - 24 * 60 * 60 * 1000);
     const now = new Date();
 
-    console.log(`Slot ${slotId}: date=${slotDateTime.toISOString()}, J-1=${oneDayBefore.toISOString()}, now=${now.toISOString()}`);
-
     // Vérifier si on est passé J-1
     const shouldForm = now >= oneDayBefore && now < slotDateTime;
-    console.log(`Slot ${slotId}: shouldForm=${shouldForm}`);
-    
+
     return shouldForm;
   } catch (error) {
     console.error('Erreur vérification formation groupes:', error);
@@ -119,7 +110,6 @@ export async function checkAndFormGroupsIfNeeded(
     const shouldForm = await shouldFormGroups(slotId);
     
     if (shouldForm) {
-      console.log(`Formation automatique des groupes pour le créneau ${slotId}`);
       await formIntelligentGroups(slotId, activityId);
       return true;
     }

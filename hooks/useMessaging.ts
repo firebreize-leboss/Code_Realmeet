@@ -500,8 +500,6 @@ export function useConversations() {
       channelRef.current = null;
     }
 
-    console.log('📡 Configuration subscription realtime conversations');
-
     const channel = supabase
       .channel(`conversations_realtime_${Date.now()}`)
       .on(
@@ -519,14 +517,9 @@ export function useConversations() {
           const userConvIds = userConversationIdsRef.current;
           const currentUserId = userIdRef.current;
           
-          console.log('🔔 Message reçu:', convId, 'Mes convs:', userConvIds.length);
-          
           if (!userConvIds.includes(convId)) {
-            console.log('⏭️ Message ignoré (pas ma conversation)');
             return;
           }
-
-          console.log('✅ Message dans une de mes conversations, mise à jour UI');
 
           // Formater le texte du message
           let lastMessageText = '';
@@ -553,7 +546,6 @@ export function useConversations() {
             
             if (existingIndex === -1) {
               // Nouvelle conversation qu'on ne connaît pas, recharger
-              console.log('🆕 Nouvelle conversation détectée, rechargement...');
               loadConversations();
               return prev;
             }
@@ -571,22 +563,17 @@ export function useConversations() {
 
             // Retirer la conversation de sa position actuelle et la remettre en premier
             const newList = prev.filter(c => c.id !== convId);
-            
-            console.log('📝 UI mise à jour:', updatedConv.name, 'unread:', updatedConv.unreadCount);
-            
+
             return [updatedConv, ...newList];
           });
         }
       )
-      .subscribe((status) => {
-        console.log('📡 Subscription status:', status);
-      });
+      .subscribe();
 
     channelRef.current = channel;
 
     return () => {
       if (channelRef.current) {
-        console.log('🔌 Cleanup subscription conversations');
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
       }

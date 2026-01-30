@@ -28,7 +28,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Écouter les changements d'auth
     const { data: { subscription } } = authService.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth event:', event);
         if (session?.user) {
           setUser(session.user);
           await loadProfile(session.user.id);

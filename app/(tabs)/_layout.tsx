@@ -3,7 +3,7 @@
 // Avec guard d'authentification pour rediriger vers /auth/account-type si non connecté
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Platform } from 'react-native';
 import { useRouter, usePathname, useLocalSearchParams } from 'expo-router';
 import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
 import SwipeableTabView from '@/components/SwipeableTabView';
@@ -89,6 +89,16 @@ const businessTabs: TabBarItem[] = [
 
 // Composant interne qui utilise le contexte MapView
 function TabLayoutContent() {
+  const renderCount = useRef(0);
+  renderCount.current += 1;
+
+  // Debug: identifier les instances multiples
+  useEffect(() => {
+    const instanceId = Math.random().toString(36).substr(2, 9);
+    console.log('[DEBUG _layout] MOUNT instance:', instanceId);
+    return () => console.log('[DEBUG _layout] UNMOUNT instance:', instanceId);
+  }, []);
+
   const { user, profile, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
@@ -107,8 +117,14 @@ function TabLayoutContent() {
   const prevTabIndexRef = useRef(currentTabIndex);
 
   const isBusiness = profile?.account_type === 'business';
-  const tabs = isBusiness ? businessTabs : userTabs;
+  const tabs = useMemo(() => isBusiness ? businessTabs : userTabs, [isBusiness]);
   const prevIsBusiness = useRef<boolean | null>(null);
+
+  // Mémoriser les paramètres pour éviter les nouvelles références et les boucles infinies
+  const stableParams = useMemo(() => ({
+    viewMode: params.viewMode,
+    selectedActivityId: params.selectedActivityId
+  }), [params.viewMode, params.selectedActivityId]);
 
   // Synchroniser l'index du tab avec la route actuelle
   useEffect(() => {
@@ -122,26 +138,17 @@ function TabLayoutContent() {
       return;
     }
 
-    console.log('[DEBUG _layout] === SYNC TAB EFFECT ===');
-    console.log('[DEBUG _layout] pathname:', pathname);
-    console.log('[DEBUG _layout] params:', JSON.stringify(params));
-    console.log('[DEBUG _layout] prevTabIndexRef.current:', prevTabIndexRef.current);
-    console.log('[DEBUG _layout] isSwipeNavigation.current:', isSwipeNavigation.current);
-
     // Ignorer la synchronisation si on vient d'un swipe ou d'un clic sur la tab bar
     if (isSwipeNavigation.current) {
-      console.log('[DEBUG _layout] SKIP: isSwipeNavigation est true');
       return;
     }
     if (isTabBarNavigation.current) {
-      console.log('[DEBUG _layout] SKIP: isTabBarNavigation est true');
       return;
     }
 
     // Vérifier si on navigue vers browse avec des paramètres (ex: viewMode=maps)
-    if (params.viewMode === 'maps' || params.selectedActivityId) {
+    if (stableParams.viewMode === 'maps' || stableParams.selectedActivityId) {
       const browseIndex = tabs.findIndex(tab => tab.name === 'browse');
-      console.log('[DEBUG _layout] Paramètres maps détectés, browseIndex:', browseIndex);
       if (browseIndex !== -1 && browseIndex !== prevTabIndexRef.current) {
         prevTabIndexRef.current = browseIndex;
         setCurrentTabIndex(browseIndex);
@@ -151,18 +158,11 @@ function TabLayoutContent() {
 
     // Sinon, synchroniser via le pathname
     const tabIndex = tabs.findIndex(tab => pathname.includes(tab.name));
-    console.log('[DEBUG _layout] Recherche tab par pathname:', pathname);
-    console.log('[DEBUG _layout] tabs.map(name):', tabs.map(t => t.name));
-    console.log('[DEBUG _layout] Match results:', tabs.map(t => ({ name: t.name, includes: pathname.includes(t.name) })));
-    console.log('[DEBUG _layout] tabIndex trouvé:', tabIndex, '(tab:', tabIndex >= 0 ? tabs[tabIndex].name : 'AUCUN', ')');
     if (tabIndex !== -1 && tabIndex !== prevTabIndexRef.current) {
-      console.log('[DEBUG _layout] CHANGEMENT de tab:', prevTabIndexRef.current, '->', tabIndex);
       prevTabIndexRef.current = tabIndex;
       setCurrentTabIndex(tabIndex);
-    } else {
-      console.log('[DEBUG _layout] PAS DE CHANGEMENT - tabIndex:', tabIndex, 'prevTabIndexRef:', prevTabIndexRef.current);
     }
-  }, [pathname, params, tabs]);
+  }, [pathname, stableParams, tabs]);
 
   // Désactiver le swipe quand on est sur le tab browse (index 1) et que la vue maps est active
   const isSwipeEnabled = !(currentTabIndex === 1 && isMapViewActive);
@@ -205,7 +205,6 @@ function TabLayoutContent() {
   }, [isBusiness]);
 
   const handleIndexChange = useCallback((index: number) => {
-    console.log('[DEBUG _layout] handleIndexChange (swipe):', index, '(tab:', tabs[index]?.name, ')');
     isSwipeNavigation.current = true;
     prevTabIndexRef.current = index;
     setCurrentTabIndex(index);
@@ -215,7 +214,6 @@ function TabLayoutContent() {
   }, [tabs]);
 
   const handleTabPress = useCallback((index: number) => {
-    console.log('[DEBUG _layout] handleTabPress:', index, '(tab:', tabs[index]?.name, ')');
     isTabBarNavigation.current = true;
     prevTabIndexRef.current = index;
     setCurrentTabIndex(index);

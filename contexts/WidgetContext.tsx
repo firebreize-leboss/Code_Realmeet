@@ -44,9 +44,8 @@ const safeReloadWidget = () => {
       if (ExtensionStorage && typeof ExtensionStorage.reloadWidget === 'function') {
         ExtensionStorage.reloadWidget();
       }
-    } catch (error) {
+    } catch {
       // Silencieux - le module n'est pas disponible
-      console.log('[Widget] ExtensionStorage not available:', error);
     }
   }, 100);
 };

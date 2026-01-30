@@ -324,7 +324,7 @@ export default function ActivityScreen() {
                 slotData.activity_id
               );
               if (formed) {
-                console.log(`Groupes formés pour le créneau ${activity.user_slot_id}`);
+                // Groupes formés avec succès
               }
             }
           } catch (err) {

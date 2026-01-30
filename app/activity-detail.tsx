@@ -515,9 +515,7 @@ export default function ActivityDetailScreen() {
             selectedSlot.id,
             activity.id
           );
-          if (formed) {
-            console.log('Groupes formés immédiatement après inscription');
-          }
+          // Groupes formés si conditions remplies
         } catch (err) {
           console.error('Erreur formation groupes:', err);
         }
@@ -578,16 +576,8 @@ export default function ActivityDetailScreen() {
   const isHost = currentUserId === activity.host.id;
   const isCompetitorActivity = isBusiness && activity.host.id !== currentUserId;
 
-  // === DEBUG SCROLL ===
   const showFooter = (!isHost && !isActivityPast) || (isHost && isBusiness);
   const calculatedPaddingBottom = showFooter ? 70 + insets.bottom : 0;
-  console.log('[DEBUG SCROLL] isHost:', isHost);
-  console.log('[DEBUG SCROLL] isActivityPast:', isActivityPast);
-  console.log('[DEBUG SCROLL] isBusiness:', isBusiness);
-  console.log('[DEBUG SCROLL] showFooter:', showFooter);
-  console.log('[DEBUG SCROLL] insets.bottom:', insets.bottom);
-  console.log('[DEBUG SCROLL] calculatedPaddingBottom:', calculatedPaddingBottom);
-  // === FIN DEBUG SCROLL ===
 
   return (
     <View style={styles.container}>
@@ -637,14 +627,6 @@ export default function ActivityDetailScreen() {
         showsVerticalScrollIndicator={false}
         overScrollMode="never"
         bounces={false}
-        onScroll={(event) => {
-          const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-          console.log('[DEBUG SCROLL onScroll] contentOffset.y:', contentOffset.y);
-          console.log('[DEBUG SCROLL onScroll] contentSize.height:', contentSize.height);
-          console.log('[DEBUG SCROLL onScroll] layoutMeasurement.height:', layoutMeasurement.height);
-          console.log('[DEBUG SCROLL onScroll] maxScroll (contentSize - layout):', contentSize.height - layoutMeasurement.height);
-        }}
-        scrollEventThrottle={100}
       >
         {/* Badge activité terminée */}
         {isActivityPast && (

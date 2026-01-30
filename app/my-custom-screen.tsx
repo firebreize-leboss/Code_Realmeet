@@ -149,10 +149,7 @@ export default function MyCustomScreen() {
         {/* Bouton d'action */}
         <TouchableOpacity
           style={styles.button}
-          onPress={() => {
-            console.log('Bouton cliqué !');
-            router.back();
-          }}
+          onPress={() => router.back()}
         >
           <Text style={styles.buttonText}>Retour à l'accueil</Text>
         </TouchableOpacity>
