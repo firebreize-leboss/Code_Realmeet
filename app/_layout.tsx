@@ -11,6 +11,7 @@ import { Stack, router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { SystemBars } from "react-native-edge-to-edge";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 import { useColorScheme, Alert } from "react-native";
 import { useNetworkState } from "expo-network";
 
@@ -117,35 +118,37 @@ export default function RootLayout() {
             >
               <SystemBars style="auto" />
               <GestureHandlerRootView style={{ flex: 1 }}>
-                <WidgetProvider>
-                  <Stack screenOptions={{ headerShown: false }}>
-                  {/* Main app with tabs */}
-                  <Stack.Screen name="(tabs)" />
+                <KeyboardProvider>
+                  <WidgetProvider>
+                    <Stack screenOptions={{ headerShown: false }}>
+                    {/* Main app with tabs */}
+                    <Stack.Screen name="(tabs)" />
 
-                  {/* Modal Demo Screens */}
-                  <Stack.Screen
-                    name="modal"
-                    options={{
-                      presentation: "modal",
-                    }}
-                  />
-                  <Stack.Screen
-                    name="formsheet"
-                    options={{
-                      presentation: "formSheet",
-                      sheetGrabberVisible: true,
-                      sheetAllowedDetents: [0.5, 0.8, 1.0],
-                      sheetCornerRadius: 20,
-                    }}
-                  />
-                  <Stack.Screen
-                    name="transparent-modal"
-                    options={{
-                      presentation: "transparentModal",
-                    }}
-                  />
-                  </Stack>
-                </WidgetProvider>
+                    {/* Modal Demo Screens */}
+                    <Stack.Screen
+                      name="modal"
+                      options={{
+                        presentation: "modal",
+                      }}
+                    />
+                    <Stack.Screen
+                      name="formsheet"
+                      options={{
+                        presentation: "formSheet",
+                        sheetGrabberVisible: true,
+                        sheetAllowedDetents: [0.5, 0.8, 1.0],
+                        sheetCornerRadius: 20,
+                      }}
+                    />
+                    <Stack.Screen
+                      name="transparent-modal"
+                      options={{
+                        presentation: "transparentModal",
+                      }}
+                    />
+                    </Stack>
+                  </WidgetProvider>
+                </KeyboardProvider>
               </GestureHandlerRootView>
             </ThemeProvider>
           </DataCacheProvider>

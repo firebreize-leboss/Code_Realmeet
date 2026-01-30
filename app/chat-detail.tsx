@@ -10,13 +10,13 @@ import {
   TextInput,
   TouchableOpacity,
   Image,
-  KeyboardAvoidingView,
   Platform,
   Alert,
   ActivityIndicator,
   Modal,
   Keyboard,
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -835,8 +835,8 @@ export default function ChatDetailScreen() {
       {/* Messages - KeyboardAvoidingView */}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 56 : 0}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={insets.top + 56}
       >
         {conversationStatus.isClosed && (
           <View style={styles.closedBanner}>
