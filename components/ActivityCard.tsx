@@ -421,13 +421,13 @@ const styles = StyleSheet.create({
   // =============================================
   compactCard: {
     width: '100%',
-    borderRadius: 14,
+    borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: colors.backgroundAlt,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
+    shadowOpacity: 0.07,
+    shadowRadius: 10,
     elevation: 3,
   },
   compactImageContainer: {
@@ -531,28 +531,32 @@ const styles = StyleSheet.create({
     textShadowRadius: 2,
   },
   compactContent: {
-    padding: 12,
+    padding: 13,
+    paddingTop: 12,
+    paddingBottom: 14,
   },
   // 1. Titre - noir/gris foncé (priorité 1) - LA STAR
   compactTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    fontFamily: 'Manrope_800ExtraBold',
+    color: TEXT_PRIMARY,
+    marginBottom: 4,
+    letterSpacing: -0.3,
+    lineHeight: 20,
+  },
+  // 2. Prix - orange affirmé (priorité 2) - Visible sans agressivité
+  compactPrice: {
     fontSize: 15,
     fontWeight: '700',
     fontFamily: 'Manrope_700Bold',
-    color: TEXT_PRIMARY,
-    marginBottom: 5,
-    letterSpacing: -0.2,
-  },
-  // 2. Prix - orange très désaturé (priorité 2) - Moins dominant
-  compactPrice: {
-    fontSize: 14,
-    fontWeight: '600',
-    fontFamily: 'Manrope_600SemiBold',
-    color: colors.primaryMuted,
-    marginBottom: 8,
+    color: colors.primary,
+    marginBottom: 10,
+    opacity: 0.88,
   },
   // 3. Dates - badges discrets (priorité 3)
   compactDatesContainer: {
-    marginBottom: 8,
+    marginBottom: 10,
   },
   compactDateBubbles: {
     flexDirection: 'row',
@@ -562,9 +566,9 @@ const styles = StyleSheet.create({
   },
   compactDateBubble: {
     backgroundColor: BG_SUBTLE,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 8,
   },
   compactDateBubbleText: {
     fontSize: 11,
@@ -582,7 +586,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    marginBottom: 8,
+    marginBottom: 10,
   },
   compactDateText: {
     fontSize: 12,
@@ -623,13 +627,13 @@ const styles = StyleSheet.create({
   // =============================================
   listCard: {
     height: 200,
-    borderRadius: 14,
+    borderRadius: 18,
     overflow: 'hidden',
     position: 'relative',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
+    shadowOpacity: 0.09,
+    shadowRadius: 12,
     elevation: 4,
   },
   listImage: {
@@ -672,16 +676,17 @@ const styles = StyleSheet.create({
     left: 12,
     right: 12,
     backgroundColor: 'rgba(255,255,255,0.95)',
-    padding: 12,
-    borderRadius: 10,
+    padding: 13,
+    borderRadius: 12,
   },
   listTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    fontFamily: 'Manrope_700Bold',
+    fontSize: 16,
+    fontWeight: '800',
+    fontFamily: 'Manrope_800ExtraBold',
     color: TEXT_PRIMARY,
     marginBottom: 8,
-    letterSpacing: -0.2,
+    letterSpacing: -0.3,
+    lineHeight: 20,
   },
   listInfoLayout: {
     flexDirection: 'row',
@@ -713,9 +718,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 3,
     backgroundColor: BG_SUBTLE,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
   listParticipantsText: {
     fontSize: 11,
@@ -724,10 +729,11 @@ const styles = StyleSheet.create({
     color: TEXT_TERTIARY,
   },
   listPrice: {
-    fontSize: 14,
-    fontWeight: '600',
-    fontFamily: 'Manrope_600SemiBold',
-    color: colors.primaryMuted,
+    fontSize: 15,
+    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
+    color: colors.primary,
+    opacity: 0.88,
   },
   listFullBadge: {
     position: 'absolute',
@@ -750,14 +756,14 @@ const styles = StyleSheet.create({
   // =============================================
   fullCard: {
     width: SCREEN_WIDTH - 32,
-    borderRadius: 14,
+    borderRadius: 18,
     overflow: 'hidden',
     backgroundColor: colors.backgroundAlt,
     marginBottom: spacing.lg,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
+    shadowOpacity: 0.09,
+    shadowRadius: 12,
     elevation: 4,
   },
   fullImageContainer: {
@@ -838,24 +844,28 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   fullContent: {
-    padding: 14,
+    padding: 15,
+    paddingTop: 14,
+    paddingBottom: 16,
   },
   // 1. Titre - priorité 1 - LA STAR
   fullTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    fontFamily: 'Manrope_800ExtraBold',
+    color: TEXT_PRIMARY,
+    marginBottom: 4,
+    letterSpacing: -0.3,
+    lineHeight: 21,
+  },
+  // 2. Prix - priorité 2 - Visible sans agressivité
+  fullPrice: {
     fontSize: 16,
     fontWeight: '700',
     fontFamily: 'Manrope_700Bold',
-    color: TEXT_PRIMARY,
-    marginBottom: 5,
-    letterSpacing: -0.2,
-  },
-  // 2. Prix - priorité 2 - Moins dominant
-  fullPrice: {
-    fontSize: 15,
-    fontWeight: '600',
-    fontFamily: 'Manrope_600SemiBold',
-    color: colors.primaryMuted,
-    marginBottom: 10,
+    color: colors.primary,
+    marginBottom: 12,
+    opacity: 0.88,
   },
   // 3. Métadonnées - priorité 3
   fullMeta: {
