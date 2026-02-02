@@ -1,3 +1,6 @@
+// app/auth/login-individual.tsx
+// Page de connexion particulier alternative - Design premium unifié
+
 import React, { useState } from 'react';
 import {
   View,
@@ -8,12 +11,13 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
+import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
-import { LinearGradient } from 'expo-linear-gradient';
 
 export default function LoginIndividualScreen() {
   const router = useRouter();
@@ -39,7 +43,6 @@ export default function LoginIndividualScreen() {
       if (authError) throw new Error('Identifiants incorrects');
       if (!authData.user) throw new Error('Erreur de connexion');
 
-      // Vérifier le type de compte
       const { data: profile } = await supabase
         .from('profiles')
         .select('account_type')
@@ -68,27 +71,27 @@ export default function LoginIndividualScreen() {
   };
 
   return (
-    <LinearGradient
-      colors={['#60A5FA', '#818CF8', '#C084FC']}
-      style={styles.container}
-    >
+    <View style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
+        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => router.back()}
           >
-            <IconSymbol name="chevron.left" size={24} color="#FFFFFF" />
+            <IconSymbol name="chevron.left" size={20} color={colors.text} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Connexion</Text>
-          <View style={styles.placeholder} />
+          <View style={styles.headerSpacer} />
         </View>
 
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
+          {/* Welcome Section */}
           <View style={styles.welcomeSection}>
             <Text style={styles.welcomeTitle}>Bon retour !</Text>
             <Text style={styles.welcomeSubtitle}>
@@ -96,15 +99,16 @@ export default function LoginIndividualScreen() {
             </Text>
           </View>
 
+          {/* Form */}
           <View style={styles.form}>
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Email</Text>
               <View style={styles.inputContainer}>
-                <IconSymbol name="envelope" size={20} color="rgba(255,255,255,0.7)" />
+                <IconSymbol name="envelope" size={18} color={colors.textTertiary} />
                 <TextInput
                   style={styles.input}
                   placeholder="votre.email@exemple.com"
-                  placeholderTextColor="rgba(255,255,255,0.5)"
+                  placeholderTextColor={colors.textMuted}
                   value={email}
                   onChangeText={setEmail}
                   keyboardType="email-address"
@@ -116,11 +120,11 @@ export default function LoginIndividualScreen() {
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Mot de passe</Text>
               <View style={styles.inputContainer}>
-                <IconSymbol name="lock.fill" size={20} color="rgba(255,255,255,0.7)" />
+                <IconSymbol name="lock.fill" size={18} color={colors.textTertiary} />
                 <TextInput
                   style={styles.input}
                   placeholder="••••••••"
-                  placeholderTextColor="rgba(255,255,255,0.5)"
+                  placeholderTextColor={colors.textMuted}
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry={!showPassword}
@@ -128,8 +132,8 @@ export default function LoginIndividualScreen() {
                 <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                   <IconSymbol
                     name={showPassword ? "eye.slash.fill" : "eye.fill"}
-                    size={20}
-                    color="rgba(255,255,255,0.7)"
+                    size={18}
+                    color={colors.textTertiary}
                   />
                 </TouchableOpacity>
               </View>
@@ -140,228 +144,253 @@ export default function LoginIndividualScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.loginButton}
+              style={[styles.loginButton, loading && styles.loginButtonDisabled]}
               onPress={handleLogin}
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator color="#818CF8" />
+                <ActivityIndicator color="#FFFFFF" />
               ) : (
                 <Text style={styles.loginButtonText}>Se connecter</Text>
               )}
             </TouchableOpacity>
           </View>
 
+          {/* Divider */}
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
             <Text style={styles.dividerText}>OU</Text>
             <View style={styles.dividerLine} />
           </View>
 
+          {/* Social Buttons */}
           <View style={styles.socialButtons}>
             <TouchableOpacity style={styles.socialButton}>
-              <IconSymbol name="logo.apple" size={24} color="#FFFFFF" />
+              <IconSymbol name="logo.apple" size={22} color={colors.text} />
               <Text style={styles.socialButtonText}>Continuer avec Apple</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.socialButton}>
-              <IconSymbol name="logo.google" size={24} color="#FFFFFF" />
+              <IconSymbol name="globe" size={22} color={colors.text} />
               <Text style={styles.socialButtonText}>Continuer avec Google</Text>
             </TouchableOpacity>
           </View>
 
+          {/* Sign Up Link */}
           <View style={styles.signupSection}>
             <Text style={styles.signupText}>Vous n'avez pas de compte RealMeet ?</Text>
+            <TouchableOpacity onPress={() => router.push('/auth/signup-individual')}>
+              <Text style={styles.signupLink}>Créez un compte</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity onPress={() => router.push('/auth/signup-individual')}>
-            <Text style={styles.signupLink}>Créez un compte</Text>
-          </TouchableOpacity>
 
+          {/* Switch to Business */}
           <View style={styles.switchSection}>
             <Text style={styles.switchText}>Vous êtes une entreprise ?</Text>
             <TouchableOpacity onPress={() => router.replace('/auth/login-business')}>
               <Text style={styles.switchLink}>Se connecter ici</Text>
             </TouchableOpacity>
           </View>
-
         </ScrollView>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   safeArea: {
     flex: 1,
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.backgroundAlt,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderSubtle,
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: colors.inputBackground,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontSize: typography.lg,
+    fontWeight: typography.bold,
+    fontFamily: 'Manrope_700Bold',
+    color: colors.text,
+    letterSpacing: -0.3,
   },
-  placeholder: {
-    width: 44,
+  headerSpacer: {
+    width: 36,
   },
   scrollView: {
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xxxl,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 60,
   },
   welcomeSection: {
-    paddingVertical: 32,
     alignItems: 'center',
+    marginBottom: spacing.xxxl,
   },
   welcomeTitle: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 8,
-    letterSpacing: -1,
+    fontSize: 28,
+    fontWeight: typography.bold,
+    fontFamily: 'Manrope_700Bold',
+    color: colors.text,
+    marginBottom: spacing.sm,
+    letterSpacing: -0.5,
   },
   welcomeSubtitle: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.8)',
+    fontSize: typography.base,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
   },
   form: {
-    gap: 20,
-    marginBottom: 24,
+    gap: spacing.lg,
+    marginBottom: spacing.lg,
   },
   inputGroup: {
-    gap: 8,
+    gap: spacing.sm,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginBottom: 4,
+    fontSize: typography.sm,
+    fontWeight: typography.semibold,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.text,
+    marginLeft: spacing.xs,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 4,
+    backgroundColor: colors.inputBackground,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-    gap: 12,
+    borderColor: colors.borderLight,
+    gap: spacing.md,
   },
   input: {
     flex: 1,
-    fontSize: 16,
-    color: '#FFFFFF',
-    paddingVertical: 14,
+    paddingVertical: spacing.md,
+    fontSize: typography.base,
+    fontFamily: 'Manrope_500Medium',
+    color: colors.text,
   },
   forgotPassword: {
     alignSelf: 'flex-end',
-    marginTop: -8,
   },
   forgotPasswordText: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    fontWeight: '600',
+    fontSize: typography.sm,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.primary,
   },
   loginButton: {
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    borderRadius: 12,
-    paddingVertical: 16,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.lg,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: spacing.sm,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  loginButtonDisabled: {
+    opacity: 0.7,
   },
   loginButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#818CF8',
-  },
-  switchSection: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 24,
-    gap: 8,
-  },
-  switchText: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
-  },
-  switchLink: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    fontWeight: '600',
+    fontSize: typography.base,
+    fontWeight: typography.bold,
+    fontFamily: 'Manrope_700Bold',
+    color: colors.textOnPrimary,
   },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 24,
-    gap: 16,
+    marginVertical: spacing.xl,
+    gap: spacing.lg,
   },
   dividerLine: {
     flex: 1,
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.borderLight,
   },
   dividerText: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
-    fontWeight: '500',
+    fontSize: typography.sm,
+    fontFamily: 'Manrope_500Medium',
+    color: colors.textTertiary,
   },
   socialButtons: {
-    gap: 12,
-    marginBottom: 32,
+    gap: spacing.md,
+    marginBottom: spacing.xxl,
   },
   socialButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: 12,
-    paddingVertical: 16,
-    gap: 12,
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    gap: spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: colors.borderLight,
   },
   socialButtonText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#FFFFFF',
+    fontSize: typography.base,
+    fontWeight: typography.medium,
+    fontFamily: 'Manrope_500Medium',
+    color: colors.text,
   },
   signupSection: {
     alignItems: 'center',
-    marginBottom: 8,
+    gap: spacing.xs,
+    marginBottom: spacing.lg,
   },
   signupText: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.8)',
+    fontSize: typography.base,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textSecondary,
     textAlign: 'center',
   },
   signupLink: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    fontWeight: '600',
+    fontSize: typography.base,
+    fontWeight: typography.semibold,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.primary,
     textAlign: 'center',
+  },
+  switchSection: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: spacing.md,
+    gap: spacing.xs,
+  },
+  switchText: {
+    fontSize: typography.sm,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textTertiary,
+  },
+  switchLink: {
+    fontSize: typography.sm,
+    fontWeight: typography.semibold,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.primary,
   },
 });

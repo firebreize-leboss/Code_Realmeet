@@ -15,9 +15,10 @@ import {
   ActivityIndicator,
   Modal,
   Keyboard,
+  AppState,
 } from 'react-native';
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { KeyboardAvoidingView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import * as ImagePicker from 'expo-image-picker';
@@ -90,8 +91,6 @@ export default function ChatDetailScreen() {
   const flatListRef = useRef<FlatList>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const insets = useSafeAreaInsets();
-
   // États de base
   const [convName, setConvName] = useState('Conversation');
   const [convImage, setConvImage] = useState('');
@@ -133,6 +132,16 @@ export default function ChatDetailScreen() {
   const { messages, loading: messagesLoading, sendMessage, currentUserId } = useMessages(conversationId as string);
 
   const { markAsRead } = useConversations();
+
+  // Fix bug retour d'app avec clavier ouvert
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        Keyboard.dismiss();
+      }
+    });
+    return () => subscription.remove();
+  }, []);
 
   // Marquer la conversation comme lue quand on l'ouvre
   useEffect(() => {
@@ -334,9 +343,6 @@ export default function ChatDetailScreen() {
     loadConversationInfo();
   }, [conversationId]);
 
-  useEffect(() => {
-    Keyboard.dismiss();
-  }, [conversationId]);
 
   useEffect(() => {
     return () => {
@@ -835,8 +841,8 @@ export default function ChatDetailScreen() {
       {/* Messages - KeyboardAvoidingView */}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={insets.top + 56}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         {conversationStatus.isClosed && (
           <View style={styles.closedBanner}>
@@ -870,7 +876,8 @@ export default function ChatDetailScreen() {
         )}
 
         {/* Zone de saisie Premium */}
-        <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+        <SafeAreaView edges={['bottom']} style={styles.inputSafeArea}>
+          <View style={styles.inputContainer}>
 
           {/* Bannière d'invitation en attente pour le destinataire */}
           {pendingInvitation?.isRecipient && (
@@ -975,7 +982,8 @@ export default function ChatDetailScreen() {
               )}
             </View>
           )}
-        </View>
+          </View>
+        </SafeAreaView>
       </KeyboardAvoidingView>
 
       {/* Modal Options */}
@@ -1292,12 +1300,16 @@ const styles = StyleSheet.create({
   },
 
   // === INPUT CONTAINER ===
+  inputSafeArea: {
+    backgroundColor: COLORS.white,
+  },
   inputContainer: {
     backgroundColor: COLORS.white,
     borderTopWidth: 1,
     borderTopColor: COLORS.grayMedium,
     paddingHorizontal: 12,
     paddingTop: 10,
+    paddingBottom: 8,
   },
   warningBanner: {
     flexDirection: 'row',

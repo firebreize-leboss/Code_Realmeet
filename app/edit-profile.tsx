@@ -1,6 +1,6 @@
 // app/edit-profile.tsx
 // Écran d'édition de profil avec intention et personality_tags
-// Design Glassmorphism comme profile.tsx
+// Design premium unifié avec le reste de l'app
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -25,7 +25,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { userService } from '@/services/user.service';
 import { storageService } from '@/services/storage.service';
 import { UserIntention } from '@/lib/database.types';
-import { LinearGradient } from 'expo-linear-gradient';
+import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 
 export default function EditProfileScreen() {
   const { user, profile, refreshProfile } = useAuth();
@@ -113,16 +113,15 @@ export default function EditProfileScreen() {
   };
 
   return (
-    <LinearGradient
-      colors={['#60A5FA', '#818CF8', '#C084FC']}
-      style={styles.container}
-    >
+    <View style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
-            <IconSymbol name="chevron.left" size={22} color="#FFFFFF" />
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <IconSymbol name="chevron.left" size={20} color={colors.text} />
           </TouchableOpacity>
+          <Text style={styles.headerTitle}>Modifier le profil</Text>
+          <View style={styles.headerSpacer} />
         </View>
 
         <ScrollView
@@ -131,15 +130,15 @@ export default function EditProfileScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Avatar */}
+          {/* Avatar Section */}
           <View style={styles.avatarSection}>
-            <TouchableOpacity onPress={handleImagePick}>
+            <TouchableOpacity onPress={handleImagePick} style={styles.avatarWrapper}>
               <Image
                 source={{ uri: profileImage || 'https://via.placeholder.com/120' }}
                 style={styles.avatar}
               />
-              <View style={styles.cameraOverlay}>
-                <IconSymbol name="camera.fill" size={24} color="#FFFFFF" />
+              <View style={styles.cameraBadge}>
+                <IconSymbol name="camera.fill" size={16} color="#FFFFFF" />
               </View>
             </TouchableOpacity>
             <TouchableOpacity onPress={handleImagePick} style={styles.changePhotoButton}>
@@ -148,14 +147,14 @@ export default function EditProfileScreen() {
           </View>
 
           {/* FULL NAME */}
-          <View style={styles.glassCard}>
+          <View style={styles.fieldSection}>
             <Text style={styles.label}>Nom complet</Text>
             <View style={styles.inputContainer}>
-              <IconSymbol name="person.fill" size={20} color="rgba(255,255,255,0.7)" />
+              <IconSymbol name="person.fill" size={18} color={colors.textTertiary} />
               <TextInput
                 style={styles.input}
                 placeholder="John Doe"
-                placeholderTextColor="rgba(255,255,255,0.5)"
+                placeholderTextColor={colors.textMuted}
                 value={fullName}
                 onChangeText={setFullName}
               />
@@ -163,12 +162,12 @@ export default function EditProfileScreen() {
           </View>
 
           {/* BIO */}
-          <View style={styles.glassCard}>
+          <View style={styles.fieldSection}>
             <Text style={styles.label}>Bio</Text>
             <TextInput
-              style={[styles.inputContainer, styles.textArea]}
+              style={styles.textArea}
               placeholder="Parlez-nous de vous..."
-              placeholderTextColor="rgba(255,255,255,0.5)"
+              placeholderTextColor={colors.textMuted}
               value={bio}
               onChangeText={setBio}
               multiline
@@ -178,14 +177,14 @@ export default function EditProfileScreen() {
           </View>
 
           {/* CITY */}
-          <View style={styles.glassCard}>
+          <View style={styles.fieldSection}>
             <Text style={styles.label}>Ville</Text>
             <View style={styles.inputContainer}>
-              <IconSymbol name="location.fill" size={20} color="rgba(255,255,255,0.7)" />
+              <IconSymbol name="location.fill" size={18} color={colors.textTertiary} />
               <TextInput
                 style={styles.input}
                 placeholder="Paris"
-                placeholderTextColor="rgba(255,255,255,0.5)"
+                placeholderTextColor={colors.textMuted}
                 value={city}
                 onChangeText={setCity}
               />
@@ -193,14 +192,14 @@ export default function EditProfileScreen() {
           </View>
 
           {/* PHONE */}
-          <View style={styles.glassCard}>
+          <View style={styles.fieldSection}>
             <Text style={styles.label}>Téléphone</Text>
             <View style={styles.inputContainer}>
-              <IconSymbol name="phone.fill" size={20} color="rgba(255,255,255,0.7)" />
+              <IconSymbol name="phone.fill" size={18} color={colors.textTertiary} />
               <TextInput
                 style={styles.input}
                 placeholder="+33 6 12 34 56 78"
-                placeholderTextColor="rgba(255,255,255,0.5)"
+                placeholderTextColor={colors.textMuted}
                 value={phone}
                 onChangeText={setPhone}
                 keyboardType="phone-pad"
@@ -209,7 +208,7 @@ export default function EditProfileScreen() {
           </View>
 
           {/* INTENTION */}
-          <View style={styles.glassCard}>
+          <View style={styles.fieldSection}>
             <Text style={styles.label}>Je recherche sur RealMeet</Text>
             <IntentionSelector
               selectedIntention={intention}
@@ -218,7 +217,7 @@ export default function EditProfileScreen() {
           </View>
 
           {/* PERSONALITY TAGS */}
-          <View style={styles.glassCard}>
+          <View style={styles.fieldSection}>
             <Text style={styles.label}>Personnalité</Text>
             <PersonalityTagsSelector
               selectedTags={personalityTags}
@@ -228,7 +227,7 @@ export default function EditProfileScreen() {
           </View>
 
           {/* INTERESTS */}
-          <View style={styles.glassCard}>
+          <View style={styles.fieldSection}>
             <Text style={styles.label}>Centres d'intérêt</Text>
             <InterestSelector
               selectedInterests={interests}
@@ -244,39 +243,54 @@ export default function EditProfileScreen() {
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color="#818CF8" />
+              <ActivityIndicator color="#FFFFFF" />
             ) : (
               <Text style={styles.saveButtonText}>Enregistrer</Text>
             )}
           </TouchableOpacity>
         </ScrollView>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   safeArea: {
     flex: 1,
   },
 
-  // Header
+  // Header - cohérent avec Settings
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.backgroundAlt,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderSubtle,
   },
-  headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+  backButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: colors.inputBackground,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: typography.lg,
+    fontWeight: typography.bold,
+    fontFamily: 'Manrope_700Bold',
+    color: colors.text,
+    letterSpacing: -0.3,
+  },
+  headerSpacer: {
+    width: 36,
   },
 
   // ScrollView
@@ -284,103 +298,128 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 60,
-    gap: 16,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: Platform.OS === 'ios' ? 100 : 120,
   },
 
-  // Avatar
+  // Avatar Section - plus chaleureux et visible
   avatarSection: {
     alignItems: 'center',
-    paddingVertical: 20,
+    paddingVertical: spacing.xl,
+    marginBottom: spacing.md,
+  },
+  avatarWrapper: {
+    position: 'relative',
   },
   avatar: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    borderWidth: 3,
-    borderColor: 'rgba(255,255,255,0.4)',
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: colors.borderLight,
+    borderWidth: 4,
+    borderColor: colors.backgroundAlt,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  cameraOverlay: {
+  cameraBadge: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    bottom: 4,
+    right: 4,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.5)',
+    borderWidth: 3,
+    borderColor: colors.backgroundAlt,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
   },
   changePhotoButton: {
-    marginTop: 12,
+    marginTop: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
   },
   changePhotoText: {
-    fontSize: 15,
-    color: '#FFFFFF',
-    fontWeight: '600',
+    fontSize: typography.sm,
+    fontFamily: 'Manrope_600SemiBold',
+    fontWeight: typography.semibold,
+    color: colors.primary,
   },
 
-  // Glass Card
-  glassCard: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: 20,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+  // Field Section - structure claire sans bulles imbriquées
+  fieldSection: {
+    marginBottom: spacing.lg,
   },
   label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginBottom: 12,
+    fontSize: typography.sm,
+    fontWeight: typography.semibold,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.text,
+    marginBottom: spacing.sm,
+    marginLeft: spacing.xs,
   },
 
-  // Input
+  // Input - fond gris clair avec bordure fine
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 4,
+    backgroundColor: colors.inputBackground,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    gap: 12,
+    borderColor: colors.borderLight,
+    gap: spacing.md,
   },
   input: {
     flex: 1,
-    fontSize: 16,
-    color: '#FFFFFF',
-    paddingVertical: 12,
+    fontSize: typography.base,
+    fontFamily: 'Manrope_500Medium',
+    color: colors.text,
+    paddingVertical: spacing.md,
   },
   textArea: {
-    height: 100,
-    alignItems: 'flex-start',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    fontSize: 16,
-    color: '#FFFFFF',
+    backgroundColor: colors.inputBackground,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    fontSize: typography.base,
+    fontFamily: 'Manrope_500Medium',
+    color: colors.text,
+    minHeight: 100,
     textAlignVertical: 'top',
   },
 
-  // Save button
+  // Save button - accent orange
   saveButton: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    paddingVertical: 16,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.lg,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: spacing.xl,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
   },
   saveButtonDisabled: {
     opacity: 0.7,
   },
   saveButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#818CF8',
+    fontSize: typography.base,
+    fontWeight: typography.bold,
+    fontFamily: 'Manrope_700Bold',
+    color: colors.textOnPrimary,
   },
 });

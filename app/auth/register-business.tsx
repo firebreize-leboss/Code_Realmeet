@@ -1,5 +1,5 @@
 // app/auth/register-business.tsx
-// Page d'inscription pour les comptes entreprise
+// Page d'inscription entreprise - Design premium unifié
 
 import React, { useState } from 'react';
 import {
@@ -17,9 +17,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
-import { colors } from '@/styles/commonStyles';
+import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
-import { LinearGradient } from 'expo-linear-gradient';
 
 const BUSINESS_CATEGORIES = [
   'Sport & Fitness',
@@ -117,10 +116,8 @@ export default function RegisterBusinessScreen() {
   const handleRegister = async () => {
     setLoading(true);
     try {
-      // Nettoyer l'email
       const cleanedEmail = email.trim().toLowerCase();
 
-      // 1. Create auth account
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: cleanedEmail,
         password: password,
@@ -132,7 +129,6 @@ export default function RegisterBusinessScreen() {
       }
       if (!authData.user) throw new Error('Erreur lors de la création du compte');
 
-      // 2. Create business profile
       const { error: profileError } = await supabase
         .from('profiles')
         .insert({
@@ -193,7 +189,7 @@ export default function RegisterBusinessScreen() {
             ]}
           >
             {step > s ? (
-              <IconSymbol name="checkmark" size={14} color="#818CF8" />
+              <IconSymbol name="checkmark" size={14} color={colors.primary} />
             ) : (
               <Text style={[styles.stepNumber, step >= s && styles.stepNumberActive]}>
                 {s}
@@ -216,15 +212,15 @@ export default function RegisterBusinessScreen() {
       </Text>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Email professionnel</Text>
-        <View style={styles.inputWrapper}>
-          <IconSymbol name="envelope.fill" size={20} color="rgba(255,255,255,0.7)" />
+        <Text style={styles.label}>Email professionnel</Text>
+        <View style={styles.inputContainer}>
+          <IconSymbol name="envelope.fill" size={18} color={colors.textTertiary} />
           <TextInput
             style={styles.input}
             value={email}
             onChangeText={setEmail}
             placeholder="contact@entreprise.com"
-            placeholderTextColor="rgba(255,255,255,0.5)"
+            placeholderTextColor={colors.textMuted}
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
@@ -233,37 +229,37 @@ export default function RegisterBusinessScreen() {
       </View>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Mot de passe</Text>
-        <View style={styles.inputWrapper}>
-          <IconSymbol name="lock.fill" size={20} color="rgba(255,255,255,0.7)" />
+        <Text style={styles.label}>Mot de passe</Text>
+        <View style={styles.inputContainer}>
+          <IconSymbol name="lock.fill" size={18} color={colors.textTertiary} />
           <TextInput
             style={styles.input}
             value={password}
             onChangeText={setPassword}
             placeholder="••••••••"
-            placeholderTextColor="rgba(255,255,255,0.5)"
+            placeholderTextColor={colors.textMuted}
             secureTextEntry={!showPassword}
           />
           <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
             <IconSymbol
               name={showPassword ? 'eye.slash.fill' : 'eye.fill'}
-              size={20}
-              color="rgba(255,255,255,0.7)"
+              size={18}
+              color={colors.textTertiary}
             />
           </TouchableOpacity>
         </View>
       </View>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Confirmer le mot de passe</Text>
-        <View style={styles.inputWrapper}>
-          <IconSymbol name="lock.fill" size={20} color="rgba(255,255,255,0.7)" />
+        <Text style={styles.label}>Confirmer le mot de passe</Text>
+        <View style={styles.inputContainer}>
+          <IconSymbol name="lock.fill" size={18} color={colors.textTertiary} />
           <TextInput
             style={styles.input}
             value={confirmPassword}
             onChangeText={setConfirmPassword}
             placeholder="••••••••"
-            placeholderTextColor="rgba(255,255,255,0.5)"
+            placeholderTextColor={colors.textMuted}
             secureTextEntry={!showPassword}
           />
         </View>
@@ -274,7 +270,7 @@ export default function RegisterBusinessScreen() {
           <IconSymbol
             name={password.length >= 6 ? 'checkmark.circle.fill' : 'circle'}
             size={16}
-            color={password.length >= 6 ? '#10B981' : 'rgba(255,255,255,0.5)'}
+            color={password.length >= 6 ? colors.success : colors.textMuted}
           />
           <Text style={styles.hintText}>Au moins 6 caractères</Text>
         </View>
@@ -282,7 +278,7 @@ export default function RegisterBusinessScreen() {
           <IconSymbol
             name={password === confirmPassword && password.length > 0 ? 'checkmark.circle.fill' : 'circle'}
             size={16}
-            color={password === confirmPassword && password.length > 0 ? '#10B981' : 'rgba(255,255,255,0.5)'}
+            color={password === confirmPassword && password.length > 0 ? colors.success : colors.textMuted}
           />
           <Text style={styles.hintText}>Les mots de passe correspondent</Text>
         </View>
@@ -298,48 +294,48 @@ export default function RegisterBusinessScreen() {
       </Text>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Nom de l'entreprise *</Text>
-        <View style={styles.inputWrapper}>
-          <IconSymbol name="building.2.fill" size={20} color="rgba(255,255,255,0.7)" />
+        <Text style={styles.label}>Nom de l'entreprise *</Text>
+        <View style={styles.inputContainer}>
+          <IconSymbol name="building.2.fill" size={18} color={colors.textTertiary} />
           <TextInput
             style={styles.input}
             value={businessName}
             onChangeText={setBusinessName}
             placeholder="Nom de votre entreprise"
-            placeholderTextColor="rgba(255,255,255,0.5)"
+            placeholderTextColor={colors.textMuted}
           />
         </View>
       </View>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Catégorie *</Text>
+        <Text style={styles.label}>Catégorie *</Text>
         <TouchableOpacity
-          style={styles.selectWrapper}
+          style={styles.selectContainer}
           onPress={() => setShowCategoryPicker(true)}
         >
-          <IconSymbol name="square.stack.3d.up.fill" size={20} color="rgba(255,255,255,0.7)" />
+          <IconSymbol name="square.stack.3d.up.fill" size={18} color={colors.textTertiary} />
           <Text style={businessCategory ? styles.selectText : styles.selectPlaceholder}>
             {businessCategory || 'Sélectionner une catégorie'}
           </Text>
-          <IconSymbol name="chevron.down" size={20} color="rgba(255,255,255,0.7)" />
+          <IconSymbol name="chevron.down" size={18} color={colors.textTertiary} />
         </TouchableOpacity>
       </View>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Numéro SIRET (optionnel)</Text>
-        <View style={styles.inputWrapper}>
-          <IconSymbol name="doc.text.fill" size={20} color="rgba(255,255,255,0.7)" />
+        <Text style={styles.label}>Numéro SIRET (optionnel)</Text>
+        <View style={styles.inputContainer}>
+          <IconSymbol name="doc.text.fill" size={18} color={colors.textTertiary} />
           <TextInput
             style={styles.input}
             value={siret}
             onChangeText={setSiret}
             placeholder="123 456 789 01234"
-            placeholderTextColor="rgba(255,255,255,0.5)"
+            placeholderTextColor={colors.textMuted}
             keyboardType="default"
             maxLength={20}
           />
         </View>
-        <Text style={styles.inputHint}>
+        <Text style={styles.helperText}>
           Optionnel - Vous pourrez l'ajouter plus tard pour faire vérifier votre compte
         </Text>
       </View>
@@ -354,63 +350,63 @@ export default function RegisterBusinessScreen() {
       </Text>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Nom du contact principal *</Text>
-        <View style={styles.inputWrapper}>
-          <IconSymbol name="person.fill" size={20} color="rgba(255,255,255,0.7)" />
+        <Text style={styles.label}>Nom du contact principal *</Text>
+        <View style={styles.inputContainer}>
+          <IconSymbol name="person.fill" size={18} color={colors.textTertiary} />
           <TextInput
             style={styles.input}
             value={contactName}
             onChangeText={setContactName}
             placeholder="Prénom Nom"
-            placeholderTextColor="rgba(255,255,255,0.5)"
+            placeholderTextColor={colors.textMuted}
           />
         </View>
       </View>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Téléphone</Text>
-        <View style={styles.inputWrapper}>
-          <IconSymbol name="phone.fill" size={20} color="rgba(255,255,255,0.7)" />
+        <Text style={styles.label}>Téléphone</Text>
+        <View style={styles.inputContainer}>
+          <IconSymbol name="phone.fill" size={18} color={colors.textTertiary} />
           <TextInput
             style={styles.input}
             value={phone}
             onChangeText={setPhone}
             placeholder="+33 X XX XX XX XX"
-            placeholderTextColor="rgba(255,255,255,0.5)"
+            placeholderTextColor={colors.textMuted}
             keyboardType="phone-pad"
           />
         </View>
       </View>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Adresse</Text>
-        <View style={styles.inputWrapper}>
-          <IconSymbol name="location.fill" size={20} color="rgba(255,255,255,0.7)" />
+        <Text style={styles.label}>Adresse</Text>
+        <View style={styles.inputContainer}>
+          <IconSymbol name="location.fill" size={18} color={colors.textTertiary} />
           <TextInput
             style={styles.input}
             value={address}
             onChangeText={setAddress}
             placeholder="Adresse de l'établissement"
-            placeholderTextColor="rgba(255,255,255,0.5)"
+            placeholderTextColor={colors.textMuted}
           />
         </View>
       </View>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>Ville</Text>
-        <View style={styles.inputWrapper}>
-          <IconSymbol name="map.fill" size={20} color="rgba(255,255,255,0.7)" />
+        <Text style={styles.label}>Ville</Text>
+        <View style={styles.inputContainer}>
+          <IconSymbol name="map.fill" size={18} color={colors.textTertiary} />
           <TextInput
             style={styles.input}
             value={city}
             onChangeText={setCity}
             placeholder="Ville"
-            placeholderTextColor="rgba(255,255,255,0.5)"
+            placeholderTextColor={colors.textMuted}
           />
         </View>
       </View>
 
-      <View style={styles.termsContainer}>
+      <View style={styles.termsSection}>
         <Text style={styles.termsText}>
           En créant un compte, vous acceptez nos{' '}
           <Text style={styles.termsLink}>Conditions d'utilisation</Text>
@@ -422,10 +418,7 @@ export default function RegisterBusinessScreen() {
   );
 
   return (
-    <LinearGradient
-      colors={['#60A5FA', '#818CF8', '#C084FC']}
-      style={styles.container}
-    >
+    <View style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -437,10 +430,10 @@ export default function RegisterBusinessScreen() {
               onPress={() => (step > 1 ? setStep(step - 1) : router.back())}
               style={styles.backButton}
             >
-              <IconSymbol name="chevron.left" size={24} color="#FFFFFF" />
+              <IconSymbol name="chevron.left" size={20} color={colors.text} />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>Inscription Entreprise</Text>
-            <View style={styles.placeholder} />
+            <View style={styles.headerSpacer} />
           </View>
 
           {renderStepIndicator()}
@@ -459,19 +452,19 @@ export default function RegisterBusinessScreen() {
           {/* Bottom Actions */}
           <View style={styles.bottomActions}>
             <TouchableOpacity
-              style={styles.nextButton}
+              style={[styles.nextButton, loading && styles.nextButtonDisabled]}
               onPress={handleNextStep}
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator color="#818CF8" />
+                <ActivityIndicator color="#FFFFFF" />
               ) : (
                 <>
                   <Text style={styles.nextButtonText}>
                     {step === 3 ? 'Créer mon compte' : 'Continuer'}
                   </Text>
                   {step < 3 && (
-                    <IconSymbol name="chevron.right" size={20} color="#818CF8" />
+                    <IconSymbol name="chevron.right" size={18} color="#FFFFFF" />
                   )}
                 </>
               )}
@@ -499,7 +492,7 @@ export default function RegisterBusinessScreen() {
                 <View style={styles.modalHeader}>
                   <Text style={styles.modalTitle}>Catégorie d'activité</Text>
                   <TouchableOpacity onPress={() => setShowCategoryPicker(false)}>
-                    <IconSymbol name="xmark" size={24} color={colors.text} />
+                    <IconSymbol name="xmark" size={22} color={colors.text} />
                   </TouchableOpacity>
                 </View>
                 <ScrollView style={styles.modalScroll}>
@@ -524,7 +517,7 @@ export default function RegisterBusinessScreen() {
                         {cat}
                       </Text>
                       {businessCategory === cat && (
-                        <IconSymbol name="checkmark" size={20} color="#818CF8" />
+                        <IconSymbol name="checkmark" size={18} color={colors.primary} />
                       )}
                     </TouchableOpacity>
                   ))}
@@ -534,224 +527,259 @@ export default function RegisterBusinessScreen() {
           )}
         </KeyboardAvoidingView>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   safeArea: {
     flex: 1,
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.backgroundAlt,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderSubtle,
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: colors.inputBackground,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontSize: typography.lg,
+    fontWeight: typography.bold,
+    fontFamily: 'Manrope_700Bold',
+    color: colors.text,
+    letterSpacing: -0.3,
   },
-  placeholder: {
-    width: 44,
+  headerSpacer: {
+    width: 36,
   },
   stepIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 20,
-    paddingHorizontal: 40,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.xxxxl,
+    backgroundColor: colors.backgroundAlt,
   },
   stepDot: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: colors.inputBackground,
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: colors.borderLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
   stepDotActive: {
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    borderColor: 'rgba(255,255,255,0.95)',
+    backgroundColor: colors.primaryLight,
+    borderColor: colors.primary,
   },
   stepDotCurrent: {
-    borderColor: '#FFFFFF',
-    borderWidth: 3,
+    borderWidth: 2,
+    borderColor: colors.primary,
   },
   stepNumber: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.7)',
+    fontSize: typography.sm,
+    fontWeight: typography.semibold,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.textMuted,
   },
   stepNumberActive: {
-    color: '#818CF8',
+    color: colors.primary,
   },
   stepLine: {
     flex: 1,
     height: 2,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    marginHorizontal: 8,
+    backgroundColor: colors.borderLight,
+    marginHorizontal: spacing.sm,
   },
   stepLineActive: {
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    backgroundColor: colors.primary,
   },
   scrollView: {
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.xl,
   },
   stepContent: {
     flex: 1,
   },
   stepTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 8,
+    fontSize: 24,
+    fontWeight: typography.bold,
+    fontFamily: 'Manrope_700Bold',
+    color: colors.text,
+    marginBottom: spacing.xs,
+    letterSpacing: -0.5,
   },
   stepSubtitle: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.8)',
-    marginBottom: 32,
+    fontSize: typography.base,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textSecondary,
+    marginBottom: spacing.xxl,
   },
   inputGroup: {
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginBottom: 8,
+  label: {
+    fontSize: typography.sm,
+    fontWeight: typography.semibold,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.text,
+    marginBottom: spacing.sm,
+    marginLeft: spacing.xs,
   },
-  inputWrapper: {
+  inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    gap: 12,
+    backgroundColor: colors.inputBackground,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: colors.borderLight,
+    gap: spacing.md,
   },
   input: {
     flex: 1,
-    paddingVertical: 16,
-    fontSize: 16,
-    color: '#FFFFFF',
+    paddingVertical: spacing.md,
+    fontSize: typography.base,
+    fontFamily: 'Manrope_500Medium',
+    color: colors.text,
   },
-  inputHint: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.7)',
-    marginTop: 6,
-    marginLeft: 4,
+  helperText: {
+    fontSize: typography.xs,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textTertiary,
+    marginTop: spacing.xs,
+    marginLeft: spacing.xs,
   },
-  selectWrapper: {
+  selectContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    gap: 12,
+    backgroundColor: colors.inputBackground,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: colors.borderLight,
+    gap: spacing.md,
   },
   selectText: {
     flex: 1,
-    fontSize: 16,
-    color: '#FFFFFF',
+    fontSize: typography.base,
+    fontFamily: 'Manrope_500Medium',
+    color: colors.text,
   },
   selectPlaceholder: {
     flex: 1,
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.5)',
+    fontSize: typography.base,
+    fontFamily: 'Manrope_500Medium',
+    color: colors.textMuted,
   },
   passwordHints: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 12,
-    padding: 16,
-    gap: 12,
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
+    gap: spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: colors.borderSubtle,
   },
   hintRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: spacing.sm,
   },
   hintText: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
+    fontSize: typography.sm,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textSecondary,
   },
-  termsContainer: {
-    marginTop: 8,
-    padding: 16,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 12,
+  termsSection: {
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: colors.borderSubtle,
+    marginTop: spacing.sm,
   },
   termsText: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
-    lineHeight: 20,
+    fontSize: typography.xs,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textSecondary,
+    lineHeight: 18,
+    textAlign: 'center',
   },
   termsLink: {
-    color: '#FFFFFF',
-    fontWeight: '600',
+    color: colors.primary,
+    fontWeight: typography.semibold,
+    fontFamily: 'Manrope_600SemiBold',
   },
   bottomActions: {
-    padding: 20,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    padding: spacing.lg,
+    paddingBottom: Platform.OS === 'ios' ? 34 : spacing.lg,
+    backgroundColor: colors.backgroundAlt,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderSubtle,
   },
   nextButton: {
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    borderRadius: 12,
-    paddingVertical: 16,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.lg,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
+    gap: spacing.sm,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  nextButtonDisabled: {
+    opacity: 0.7,
   },
   nextButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#818CF8',
+    fontSize: typography.base,
+    fontWeight: typography.bold,
+    fontFamily: 'Manrope_700Bold',
+    color: colors.textOnPrimary,
   },
   loginPrompt: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 16,
+    gap: spacing.xs,
+    marginTop: spacing.lg,
   },
   loginPromptText: {
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.8)',
+    fontSize: typography.sm,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textSecondary,
   },
   loginLink: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontSize: typography.sm,
+    fontWeight: typography.semibold,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.primary,
   },
   modalOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -759,49 +787,52 @@ const styles = StyleSheet.create({
   },
   modalBackdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.overlay,
   },
   modalContent: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    backgroundColor: colors.backgroundAlt,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
     maxHeight: '60%',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    padding: spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: colors.borderSubtle,
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: typography.lg,
+    fontWeight: typography.semibold,
+    fontFamily: 'Manrope_600SemiBold',
     color: colors.text,
   },
   modalScroll: {
-    padding: 20,
+    padding: spacing.lg,
   },
   categoryOption: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingVertical: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderLight,
   },
   categoryOptionSelected: {
-    backgroundColor: '#818CF8' + '10',
-    marginHorizontal: -20,
-    paddingHorizontal: 20,
+    backgroundColor: colors.primaryLight,
+    marginHorizontal: -spacing.lg,
+    paddingHorizontal: spacing.lg,
   },
   categoryOptionText: {
-    fontSize: 16,
+    fontSize: typography.base,
+    fontFamily: 'Manrope_500Medium',
     color: colors.text,
   },
   categoryOptionTextSelected: {
-    color: '#818CF8',
-    fontWeight: '600',
+    color: colors.primary,
+    fontWeight: typography.semibold,
+    fontFamily: 'Manrope_600SemiBold',
   },
 });

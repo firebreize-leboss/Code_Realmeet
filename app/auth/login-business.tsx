@@ -1,5 +1,5 @@
 // app/auth/login-business.tsx
-// Page de connexion entreprise - SIRET optionnel + lien inscription
+// Page de connexion entreprise - Design premium unifié
 
 import React, { useState } from 'react';
 import {
@@ -11,13 +11,13 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
-import { colors } from '@/styles/commonStyles';
+import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
-import { LinearGradient } from 'expo-linear-gradient';
 
 export default function LoginBusinessScreen() {
   const router = useRouter();
@@ -43,7 +43,6 @@ export default function LoginBusinessScreen() {
       if (authError) throw new Error('Identifiants incorrects');
       if (!authData.user) throw new Error('Erreur de connexion');
 
-      // Vérifier que c'est bien un compte entreprise
       const { data: profile } = await supabase
         .from('profiles')
         .select('account_type')
@@ -72,20 +71,18 @@ export default function LoginBusinessScreen() {
   };
 
   return (
-    <LinearGradient
-      colors={['#60A5FA', '#818CF8', '#C084FC']}
-      style={styles.container}
-    >
+    <View style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
+        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => router.back()}
           >
-            <IconSymbol name="chevron.left" size={24} color="#FFFFFF" />
+            <IconSymbol name="chevron.left" size={20} color={colors.text} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Connexion Entreprise</Text>
-          <View style={styles.placeholder} />
+          <View style={styles.headerSpacer} />
         </View>
 
         <ScrollView
@@ -94,9 +91,10 @@ export default function LoginBusinessScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {/* Welcome Section */}
           <View style={styles.welcomeSection}>
             <View style={styles.iconContainer}>
-              <IconSymbol name="building.2.fill" size={48} color="#FFFFFF" />
+              <IconSymbol name="building.2.fill" size={32} color={colors.textSecondary} />
             </View>
             <Text style={styles.welcomeTitle}>Espace Entreprise</Text>
             <Text style={styles.welcomeSubtitle}>
@@ -104,17 +102,18 @@ export default function LoginBusinessScreen() {
             </Text>
           </View>
 
+          {/* Form */}
           <View style={styles.form}>
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Email professionnel</Text>
               <View style={styles.inputContainer}>
-                <IconSymbol name="envelope.fill" size={20} color="rgba(255,255,255,0.7)" />
+                <IconSymbol name="envelope.fill" size={18} color={colors.textTertiary} />
                 <TextInput
                   style={styles.input}
                   value={email}
                   onChangeText={setEmail}
                   placeholder="contact@entreprise.com"
-                  placeholderTextColor="rgba(255,255,255,0.5)"
+                  placeholderTextColor={colors.textMuted}
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -125,20 +124,20 @@ export default function LoginBusinessScreen() {
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Mot de passe</Text>
               <View style={styles.inputContainer}>
-                <IconSymbol name="lock.fill" size={20} color="rgba(255,255,255,0.7)" />
+                <IconSymbol name="lock.fill" size={18} color={colors.textTertiary} />
                 <TextInput
                   style={styles.input}
                   value={password}
                   onChangeText={setPassword}
                   placeholder="••••••••"
-                  placeholderTextColor="rgba(255,255,255,0.5)"
+                  placeholderTextColor={colors.textMuted}
                   secureTextEntry={!showPassword}
                 />
                 <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                   <IconSymbol
                     name={showPassword ? "eye.slash.fill" : "eye.fill"}
-                    size={20}
-                    color="rgba(255,255,255,0.7)"
+                    size={18}
+                    color={colors.textTertiary}
                   />
                 </TouchableOpacity>
               </View>
@@ -149,239 +148,245 @@ export default function LoginBusinessScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.loginButton}
+              style={[styles.loginButton, loading && styles.loginButtonDisabled]}
               onPress={handleLogin}
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator color="#818CF8" />
+                <ActivityIndicator color="#FFFFFF" />
               ) : (
                 <Text style={styles.loginButtonText}>Se connecter</Text>
               )}
             </TouchableOpacity>
           </View>
 
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>INFORMATIONS</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
+          {/* Features Section */}
           <View style={styles.featuresSection}>
-            <Text style={styles.featuresTitle}>Avec un compte entreprise :</Text>
+            <Text style={styles.featuresTitle}>Avec un compte entreprise</Text>
 
-            <View style={styles.feature}>
-              <View style={styles.featureIcon}>
-                <IconSymbol name="calendar" size={24} color="#FFFFFF" />
+            <View style={styles.featuresList}>
+              <View style={styles.feature}>
+                <View style={styles.featureIcon}>
+                  <IconSymbol name="calendar" size={18} color={colors.textSecondary} />
+                </View>
+                <View style={styles.featureContent}>
+                  <Text style={styles.featureTitle}>Événements professionnels</Text>
+                  <Text style={styles.featureText}>
+                    Organisez des événements et développez votre activité
+                  </Text>
+                </View>
               </View>
-              <View style={styles.featureContent}>
-                <Text style={styles.featureTitle}>Événements professionnels</Text>
-                <Text style={styles.featureText}>
-                  Organisez des événements et développez votre activité
-                </Text>
-              </View>
-            </View>
 
-            <View style={styles.feature}>
-              <View style={styles.featureIcon}>
-                <IconSymbol name="chart.bar.fill" size={24} color="#FFFFFF" />
-              </View>
-              <View style={styles.featureContent}>
-                <Text style={styles.featureTitle}>Analytics avancés</Text>
-                <Text style={styles.featureText}>
-                  Suivez les performances de vos événements en temps réel
-                </Text>
-              </View>
-            </View>
+              <View style={styles.featureSeparator} />
 
-            <View style={styles.feature}>
-              <View style={styles.featureIcon}>
-                <IconSymbol name="person.2.fill" size={24} color="#FFFFFF" />
+              <View style={styles.feature}>
+                <View style={styles.featureIcon}>
+                  <IconSymbol name="chart.bar.fill" size={18} color={colors.textSecondary} />
+                </View>
+                <View style={styles.featureContent}>
+                  <Text style={styles.featureTitle}>Analytics avancés</Text>
+                  <Text style={styles.featureText}>
+                    Suivez les performances de vos événements en temps réel
+                  </Text>
+                </View>
               </View>
-              <View style={styles.featureContent}>
-                <Text style={styles.featureTitle}>Gestion des participants</Text>
-                <Text style={styles.featureText}>
-                  Gérez facilement les inscriptions à vos activités
-                </Text>
+
+              <View style={styles.featureSeparator} />
+
+              <View style={styles.feature}>
+                <View style={styles.featureIcon}>
+                  <IconSymbol name="person.2.fill" size={18} color={colors.textSecondary} />
+                </View>
+                <View style={styles.featureContent}>
+                  <Text style={styles.featureTitle}>Gestion des participants</Text>
+                  <Text style={styles.featureText}>
+                    Gérez facilement les inscriptions à vos activités
+                  </Text>
+                </View>
               </View>
             </View>
           </View>
 
-          {/* Lien vers inscription */}
+          {/* Sign Up Link */}
           <View style={styles.signupSection}>
             <Text style={styles.signupText}>Pas encore de compte entreprise ?</Text>
             <TouchableOpacity onPress={() => router.push('/auth/register-business')}>
-              <Text style={styles.signupLink}>
-                Créer un compte
-              </Text>
+              <Text style={styles.signupLink}>Créer un compte</Text>
             </TouchableOpacity>
           </View>
 
+          {/* Switch to Individual */}
           <View style={styles.switchSection}>
             <Text style={styles.switchText}>Vous êtes un particulier ?</Text>
             <TouchableOpacity onPress={() => router.replace('/auth/login-individual')}>
               <Text style={styles.switchLink}>Se connecter ici</Text>
             </TouchableOpacity>
           </View>
-
         </ScrollView>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   safeArea: {
     flex: 1,
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.backgroundAlt,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderSubtle,
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: colors.inputBackground,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontSize: typography.lg,
+    fontWeight: typography.bold,
+    fontFamily: 'Manrope_700Bold',
+    color: colors.text,
+    letterSpacing: -0.3,
   },
-  placeholder: {
-    width: 44,
+  headerSpacer: {
+    width: 36,
   },
   scrollView: {
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xl,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 60,
   },
   welcomeSection: {
-    paddingVertical: 32,
     alignItems: 'center',
+    marginBottom: spacing.xxl,
   },
   iconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    width: 72,
+    height: 72,
+    borderRadius: 20,
+    backgroundColor: colors.inputBackground,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: spacing.lg,
   },
   welcomeTitle: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 8,
+    fontSize: 24,
+    fontWeight: typography.bold,
+    fontFamily: 'Manrope_700Bold',
+    color: colors.text,
+    marginBottom: spacing.xs,
+    letterSpacing: -0.5,
   },
   welcomeSubtitle: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.8)',
+    fontSize: typography.base,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textSecondary,
     textAlign: 'center',
   },
   form: {
-    gap: 20,
-    marginBottom: 24,
+    gap: spacing.lg,
+    marginBottom: spacing.xxl,
   },
   inputGroup: {
-    gap: 8,
+    gap: spacing.sm,
   },
   label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontSize: typography.sm,
+    fontWeight: typography.semibold,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.text,
+    marginLeft: spacing.xs,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 4,
+    backgroundColor: colors.inputBackground,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-    gap: 12,
+    borderColor: colors.borderLight,
+    gap: spacing.md,
   },
   input: {
     flex: 1,
-    fontSize: 16,
-    color: '#FFFFFF',
-    paddingVertical: 12,
+    paddingVertical: spacing.md,
+    fontSize: typography.base,
+    fontFamily: 'Manrope_500Medium',
+    color: colors.text,
   },
   forgotPassword: {
     alignSelf: 'flex-end',
   },
   forgotPasswordText: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    fontWeight: '600',
+    fontSize: typography.sm,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.primary,
   },
   loginButton: {
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    borderRadius: 12,
-    paddingVertical: 16,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.lg,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: spacing.sm,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  loginButtonDisabled: {
+    opacity: 0.7,
   },
   loginButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#818CF8',
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 24,
-    gap: 16,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-  },
-  dividerText: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.8)',
-    fontWeight: '600',
-    letterSpacing: 1,
+    fontSize: typography.base,
+    fontWeight: typography.bold,
+    fontFamily: 'Manrope_700Bold',
+    color: colors.textOnPrimary,
   },
   featuresSection: {
-    gap: 16,
-    marginBottom: 32,
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.xxl,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
   },
   featuresTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginBottom: 8,
+    fontSize: typography.base,
+    fontWeight: typography.semibold,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.text,
+    marginBottom: spacing.lg,
+  },
+  featuresList: {
+    gap: 0,
   },
   feature: {
     flexDirection: 'row',
-    gap: 12,
+    gap: spacing.md,
+    paddingVertical: spacing.md,
   },
   featureIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: colors.inputBackground,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -389,47 +394,55 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   featureTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginBottom: 4,
+    fontSize: typography.sm,
+    fontWeight: typography.semibold,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.text,
+    marginBottom: 2,
   },
   featureText: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
-    lineHeight: 20,
+    fontSize: typography.xs,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textTertiary,
+    lineHeight: 18,
+  },
+  featureSeparator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.borderLight,
   },
   signupSection: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 6,
-    flexWrap: 'wrap',
-    paddingBottom: 20,
+    gap: spacing.xs,
+    marginBottom: spacing.lg,
   },
   signupText: {
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.8)',
+    fontSize: typography.sm,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textSecondary,
   },
   signupLink: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontSize: typography.sm,
+    fontWeight: typography.semibold,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.primary,
   },
   switchSection: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 8,
-    gap: 8,
+    gap: spacing.xs,
   },
   switchText: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
+    fontSize: typography.sm,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textTertiary,
   },
   switchLink: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    fontWeight: '600',
+    fontSize: typography.sm,
+    fontWeight: typography.semibold,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.primary,
   },
 });

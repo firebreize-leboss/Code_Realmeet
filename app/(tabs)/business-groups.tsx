@@ -1,5 +1,6 @@
 // app/(tabs)/business-groups.tsx
 // Vue des groupes liés aux activités de l'entreprise (lecture seule)
+// Premium Clean Design - White/Gray with Orange accent
 
 import React, { useState, useCallback } from 'react';
 import {
@@ -18,7 +19,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
-import { LinearGradient } from 'expo-linear-gradient';
+import { useFonts, Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold } from '@expo-google-fonts/manrope';
 
 interface ActivityGroup {
   id: string;
@@ -37,6 +38,12 @@ interface ActivityGroup {
 
 export default function BusinessGroupsScreen() {
   const router = useRouter();
+  const [fontsLoaded] = useFonts({
+    Manrope_400Regular,
+    Manrope_500Medium,
+    Manrope_600SemiBold,
+    Manrope_700Bold,
+  });
   const [groups, setGroups] = useState<ActivityGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -189,7 +196,7 @@ export default function BusinessGroupsScreen() {
     <TouchableOpacity
       style={styles.groupCard}
       onPress={() => handleGroupPress(item)}
-      activeOpacity={0.8}
+      activeOpacity={0.7}
     >
       <Image
         source={{ uri: item.activityImage || 'https://via.placeholder.com/60' }}
@@ -203,25 +210,25 @@ export default function BusinessGroupsScreen() {
         </View>
 
         <View style={styles.slotInfo}>
-          <IconSymbol name="calendar" size={12} color="rgba(255,255,255,0.8)" />
+          <IconSymbol name="calendar" size={12} color="#9CA3AF" />
           <Text style={styles.slotText}>{item.slotDate} à {item.slotTime}</Text>
         </View>
 
         <Text style={styles.lastMessage} numberOfLines={1}>{item.lastMessage}</Text>
 
         <View style={styles.participantsRow}>
-          <IconSymbol name="person.2.fill" size={14} color="#FFFFFF" />
+          <IconSymbol name="person.2.fill" size={12} color={colors.primary} />
           <Text style={styles.participantsText}>
-            {item.participantCount}/{item.maxParticipants} participants
+            {item.participantCount}/{item.maxParticipants}
           </Text>
         </View>
       </View>
 
-      <View style={[styles.viewIndicator, !item.isOngoing && styles.viewIndicatorClosed]}>
+      <View style={[styles.statusIndicator, !item.isOngoing && styles.statusIndicatorClosed]}>
         <IconSymbol
           name={item.isOngoing ? "message.fill" : "lock.fill"}
-          size={16}
-          color={item.isOngoing ? "#FFFFFF" : "rgba(255,255,255,0.5)"}
+          size={14}
+          color={item.isOngoing ? colors.primary : "#9CA3AF"}
         />
       </View>
     </TouchableOpacity>
@@ -229,30 +236,32 @@ export default function BusinessGroupsScreen() {
 
   if (loading) {
     return (
-      <LinearGradient
-        colors={['#60A5FA', '#818CF8', '#C084FC']}
-        style={styles.container}
-      >
+      <View style={styles.container}>
         <SafeAreaView style={styles.safeArea} edges={['top']}>
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>Groupes d'activités</Text>
+          </View>
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#FFFFFF" />
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={styles.loadingText}>Chargement des groupes...</Text>
           </View>
         </SafeAreaView>
-      </LinearGradient>
+      </View>
     );
   }
 
+  const ongoingGroups = groups.filter(g => g.isOngoing);
+  const finishedGroups = groups.filter(g => !g.isOngoing);
+
   return (
-    <LinearGradient
-      colors={['#60A5FA', '#818CF8', '#C084FC']}
-      style={styles.container}
-    >
+    <View style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
+        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Groupes d'activités</Text>
         </View>
 
+        {/* Tab Selector */}
         <View style={styles.tabContainer}>
           <TouchableOpacity
             style={[styles.tab, activeTab === 'ongoing' && styles.tabActive]}
@@ -263,7 +272,7 @@ export default function BusinessGroupsScreen() {
             </Text>
             <View style={[styles.tabBadge, activeTab === 'ongoing' && styles.tabBadgeActive]}>
               <Text style={[styles.tabBadgeText, activeTab === 'ongoing' && styles.tabBadgeTextActive]}>
-                {groups.filter(g => g.isOngoing).length}
+                {ongoingGroups.length}
               </Text>
             </View>
           </TouchableOpacity>
@@ -276,7 +285,7 @@ export default function BusinessGroupsScreen() {
             </Text>
             <View style={[styles.tabBadge, activeTab === 'finished' && styles.tabBadgeActive]}>
               <Text style={[styles.tabBadgeText, activeTab === 'finished' && styles.tabBadgeTextActive]}>
-                {groups.filter(g => !g.isOngoing).length}
+                {finishedGroups.length}
               </Text>
             </View>
           </TouchableOpacity>
@@ -284,7 +293,9 @@ export default function BusinessGroupsScreen() {
 
         {groups.length === 0 ? (
           <View style={styles.emptyState}>
-            <IconSymbol name="person.3.fill" size={64} color="rgba(255,255,255,0.7)" />
+            <View style={styles.emptyIconContainer}>
+              <IconSymbol name="person.3.fill" size={48} color="#D1D5DB" />
+            </View>
             <Text style={styles.emptyTitle}>Aucun groupe actif</Text>
             <Text style={styles.emptyText}>
               Les groupes apparaîtront lorsque des participants s'inscriront à vos activités
@@ -292,53 +303,69 @@ export default function BusinessGroupsScreen() {
             <TouchableOpacity
               style={styles.createButton}
               onPress={() => router.push('/create-activity')}
+              activeOpacity={0.8}
             >
-              <IconSymbol name="plus.circle.fill" size={20} color="#818CF8" />
+              <IconSymbol name="plus" size={18} color="#FFFFFF" />
               <Text style={styles.createButtonText}>Créer une activité</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <FlatList
-            data={groups.filter(g => activeTab === 'ongoing' ? g.isOngoing : !g.isOngoing)}
+            data={activeTab === 'ongoing' ? ongoingGroups : finishedGroups}
             renderItem={renderGroupItem}
             keyExtractor={item => item.id}
-            contentContainerStyle={[
-              styles.listContent,
-              Platform.OS !== 'ios' && styles.listContentWithTabBar,
-            ]}
+            contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
+            ItemSeparatorComponent={() => <View style={styles.itemSeparator} />}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={onRefresh}
-                tintColor="#FFFFFF"
+                tintColor={colors.primary}
               />
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyTabState}>
+                <IconSymbol
+                  name={activeTab === 'ongoing' ? "calendar.badge.clock" : "checkmark.circle"}
+                  size={40}
+                  color="#D1D5DB"
+                />
+                <Text style={styles.emptyTabText}>
+                  {activeTab === 'ongoing'
+                    ? "Aucun groupe en cours"
+                    : "Aucun groupe terminé"}
+                </Text>
+              </View>
             }
           />
         )}
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   safeArea: {
     flex: 1,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 16,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E5E7EB',
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#FFFFFF',
+    fontFamily: 'Manrope_700Bold',
+    color: '#1F2937',
+    letterSpacing: -0.5,
   },
   loadingContainer: {
     flex: 1,
@@ -347,37 +374,88 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   loadingText: {
-    fontSize: 16,
-    color: '#FFFFFF',
+    fontSize: 15,
+    fontFamily: 'Manrope_500Medium',
+    color: '#6B7280',
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 8,
+    backgroundColor: '#FFFFFF',
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#F2F2F7',
+    gap: 8,
+  },
+  tabActive: {
+    backgroundColor: colors.primaryLight,
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
+    color: '#9CA3AF',
+  },
+  tabTextActive: {
+    color: colors.primary,
     fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+  },
+  tabBadge: {
+    backgroundColor: '#E5E7EB',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    minWidth: 24,
+    alignItems: 'center',
+  },
+  tabBadgeActive: {
+    backgroundColor: colors.primary,
+  },
+  tabBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#6B7280',
+  },
+  tabBadgeTextActive: {
+    color: '#FFFFFF',
   },
   listContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 100 : 120,
   },
-  listContentWithTabBar: {
-    paddingBottom: 100,
+  itemSeparator: {
+    height: 8,
   },
   groupCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 12,
-    gap: 14,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 12,
+    gap: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: '#F2F2F7',
   },
   groupImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    width: 56,
+    height: 56,
+    borderRadius: 10,
+    backgroundColor: '#F3F4F6',
   },
   groupContent: {
     flex: 1,
-    gap: 4,
+    gap: 3,
   },
   groupHeader: {
     flexDirection: 'row',
@@ -386,14 +464,16 @@ const styles = StyleSheet.create({
   },
   activityName: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
-    color: '#FFFFFF',
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#1F2937',
     marginRight: 8,
   },
   lastTime: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.7)',
+    fontFamily: 'Manrope_400Regular',
+    color: '#9CA3AF',
   },
   slotInfo: {
     flexDirection: 'row',
@@ -402,28 +482,36 @@ const styles = StyleSheet.create({
   },
   slotText: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.8)',
+    fontFamily: 'Manrope_400Regular',
+    color: '#9CA3AF',
   },
   lastMessage: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 2,
+    fontFamily: 'Manrope_400Regular',
+    color: '#6B7280',
   },
   participantsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 4,
+    gap: 4,
+    marginTop: 2,
   },
   participantsText: {
-    fontSize: 13,
-    color: '#FFFFFF',
+    fontSize: 12,
     fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.primary,
   },
-  viewIndicator: {
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+  statusIndicator: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  statusIndicatorClosed: {
+    backgroundColor: '#F2F2F7',
   },
   emptyState: {
     flex: 1,
@@ -431,82 +519,53 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 40,
   },
+  emptyIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#F2F2F7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   emptyTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '600',
-    color: '#FFFFFF',
-    marginTop: 16,
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#1F2937',
+    marginBottom: 8,
   },
   emptyText: {
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.9)',
+    fontSize: 14,
+    fontFamily: 'Manrope_400Regular',
+    color: '#6B7280',
     textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 22,
+    lineHeight: 20,
+    marginBottom: 24,
   },
   createButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 25,
-    marginTop: 24,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
   },
   createButtonText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
-    color: '#818CF8',
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#FFFFFF',
   },
-  tabContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+  emptyTabState: {
+    alignItems: 'center',
+    paddingVertical: 60,
     gap: 12,
   },
-  tab: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  tabActive: {
-    backgroundColor: 'rgba(255,255,255,0.35)',
-    borderColor: 'rgba(255,255,255,0.5)',
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.7)',
-  },
-  tabTextActive: {
-    color: '#FFFFFF',
-  },
-  tabBadge: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
-  tabBadgeActive: {
-    backgroundColor: 'rgba(255,255,255,0.35)',
-  },
-  tabBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.7)',
-  },
-  tabBadgeTextActive: {
-    color: '#FFFFFF',
-  },
-  viewIndicatorClosed: {
-    opacity: 0.5,
+  emptyTabText: {
+    fontSize: 15,
+    fontFamily: 'Manrope_500Medium',
+    color: '#9CA3AF',
   },
 });

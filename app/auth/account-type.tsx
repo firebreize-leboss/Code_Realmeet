@@ -1,5 +1,5 @@
 // app/auth/account-type.tsx
-// Page de sélection du type de compte avec connexion séparée
+// Page de sélection du type de compte - Design premium unifié
 
 import React from 'react';
 import {
@@ -8,28 +8,26 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
-import { colors } from '@/styles/commonStyles';
-import { LinearGradient } from 'expo-linear-gradient';
+import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 export default function AccountTypeScreen() {
   const router = useRouter();
 
   return (
-    <LinearGradient
-      colors={['#60A5FA', '#818CF8', '#C084FC']}
-      style={styles.container}
-    >
+    <View style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={false}
         >
+          {/* Header */}
           <Animated.View
             entering={FadeInDown.delay(100).springify()}
             style={styles.header}
@@ -45,32 +43,40 @@ export default function AccountTypeScreen() {
             <TouchableOpacity
               style={styles.card}
               onPress={() => router.push('/auth/login')}
-              activeOpacity={0.8}
+              activeOpacity={0.7}
             >
-              <View style={styles.iconContainer}>
-                <IconSymbol name="person.fill" size={48} color="#FFFFFF" />
+              <View style={styles.cardHeader}>
+                <View style={styles.iconContainer}>
+                  <IconSymbol name="person.fill" size={28} color={colors.primary} />
+                </View>
+                <View style={styles.cardTitleSection}>
+                  <Text style={styles.cardTitle}>Particulier</Text>
+                  <Text style={styles.cardDescription}>
+                    Rejoignez des activités et rencontrez de nouvelles personnes
+                  </Text>
+                </View>
               </View>
-              <Text style={styles.cardTitle}>Particulier</Text>
-              <Text style={styles.cardDescription}>
-                Rejoignez des activités et rencontrez de nouvelles personnes
-              </Text>
+
+              <View style={styles.separator} />
+
               <View style={styles.cardFeatures}>
                 <View style={styles.feature}>
-                  <IconSymbol name="checkmark.circle.fill" size={20} color="rgba(255,255,255,0.9)" />
+                  <IconSymbol name="checkmark" size={16} color={colors.primary} />
                   <Text style={styles.featureText}>Rejoindre des activités</Text>
                 </View>
                 <View style={styles.feature}>
-                  <IconSymbol name="checkmark.circle.fill" size={20} color="rgba(255,255,255,0.9)" />
+                  <IconSymbol name="checkmark" size={16} color={colors.primary} />
                   <Text style={styles.featureText}>Créer vos événements</Text>
                 </View>
                 <View style={styles.feature}>
-                  <IconSymbol name="checkmark.circle.fill" size={20} color="rgba(255,255,255,0.9)" />
+                  <IconSymbol name="checkmark" size={16} color={colors.primary} />
                   <Text style={styles.featureText}>Messagerie intégrée</Text>
                 </View>
               </View>
-              <View style={styles.continueButton}>
-                <Text style={styles.continueButtonText}>Continuer</Text>
-                <IconSymbol name="chevron.right" size={20} color="#818CF8" />
+
+              <View style={styles.cardFooter}>
+                <Text style={styles.continueText}>Continuer</Text>
+                <IconSymbol name="chevron.right" size={18} color={colors.primary} />
               </View>
             </TouchableOpacity>
           </Animated.View>
@@ -80,44 +86,53 @@ export default function AccountTypeScreen() {
             <TouchableOpacity
               style={styles.card}
               onPress={() => router.push('/auth/login-business')}
-              activeOpacity={0.8}
+              activeOpacity={0.7}
             >
-              <View style={[styles.iconContainer, styles.iconContainerBusiness]}>
-                <IconSymbol name="building.2.fill" size={48} color="#FFFFFF" />
+              <View style={styles.cardHeader}>
+                <View style={[styles.iconContainer, styles.iconContainerBusiness]}>
+                  <IconSymbol name="building.2.fill" size={28} color={colors.textSecondary} />
+                </View>
+                <View style={styles.cardTitleSection}>
+                  <Text style={styles.cardTitle}>Entreprise</Text>
+                  <Text style={styles.cardDescription}>
+                    Développez votre activité avec des événements professionnels
+                  </Text>
+                </View>
               </View>
-              <Text style={styles.cardTitle}>Entreprise</Text>
-              <Text style={styles.cardDescription}>
-                Développez votre activité avec des événements professionnels
-              </Text>
+
+              <View style={styles.separator} />
+
               <View style={styles.cardFeatures}>
                 <View style={styles.feature}>
-                  <IconSymbol name="checkmark.circle.fill" size={20} color="rgba(255,255,255,0.9)" />
+                  <IconSymbol name="checkmark" size={16} color={colors.textTertiary} />
                   <Text style={styles.featureText}>Créer des événements pro</Text>
                 </View>
                 <View style={styles.feature}>
-                  <IconSymbol name="checkmark.circle.fill" size={20} color="rgba(255,255,255,0.9)" />
+                  <IconSymbol name="checkmark" size={16} color={colors.textTertiary} />
                   <Text style={styles.featureText}>Analytics avancés</Text>
                 </View>
                 <View style={styles.feature}>
-                  <IconSymbol name="checkmark.circle.fill" size={20} color="rgba(255,255,255,0.9)" />
+                  <IconSymbol name="checkmark" size={16} color={colors.textTertiary} />
                   <Text style={styles.featureText}>Gestion des participants</Text>
                 </View>
               </View>
-              <View style={[styles.continueButton, styles.continueButtonBusiness]}>
-                <Text style={styles.continueButtonText}>Continuer</Text>
-                <IconSymbol name="chevron.right" size={20} color="#C084FC" />
+
+              <View style={styles.cardFooter}>
+                <Text style={styles.continueTextSecondary}>Continuer</Text>
+                <IconSymbol name="chevron.right" size={18} color={colors.textSecondary} />
               </View>
             </TouchableOpacity>
           </Animated.View>
         </ScrollView>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   safeArea: {
     flex: 1,
@@ -126,90 +141,114 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    padding: 20,
-    paddingTop: 40,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xxxxl,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 60,
   },
   header: {
-    marginBottom: 40,
+    marginBottom: spacing.xxxl,
     alignItems: 'center',
   },
   title: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 12,
+    fontSize: 28,
+    fontWeight: typography.bold,
+    fontFamily: 'Manrope_700Bold',
+    color: colors.text,
+    marginBottom: spacing.sm,
     textAlign: 'center',
+    letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 17,
-    color: 'rgba(255,255,255,0.85)',
+    fontSize: typography.base,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
   },
   card: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: 24,
-    padding: 24,
-    marginBottom: 20,
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: colors.borderSubtle,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.lg,
   },
   iconContainer: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    width: 56,
+    height: 56,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
-    alignSelf: 'center',
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: colors.primaryLight,
   },
   iconContainerBusiness: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: colors.inputBackground,
+  },
+  cardTitleSection: {
+    flex: 1,
+    paddingTop: spacing.xs,
   },
   cardTitle: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    textAlign: 'center',
-    marginBottom: 10,
+    fontSize: typography.xl,
+    fontWeight: typography.bold,
+    fontFamily: 'Manrope_700Bold',
+    color: colors.text,
+    marginBottom: spacing.xs,
+    letterSpacing: -0.3,
   },
   cardDescription: {
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.8)',
-    textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 22,
+    fontSize: typography.sm,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textTertiary,
+    lineHeight: 20,
+  },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.borderLight,
+    marginVertical: spacing.lg,
   },
   cardFeatures: {
-    gap: 14,
-    marginBottom: 24,
+    gap: spacing.md,
+    marginBottom: spacing.lg,
   },
   feature: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: spacing.md,
   },
   featureText: {
-    fontSize: 15,
-    color: '#FFFFFF',
-    fontWeight: '500',
+    fontSize: typography.sm,
+    fontFamily: 'Manrope_500Medium',
+    color: colors.textSecondary,
   },
-  continueButton: {
+  cardFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingVertical: 16,
-    gap: 8,
+    justifyContent: 'flex-end',
+    gap: spacing.xs,
+    paddingTop: spacing.sm,
   },
-  continueButtonBusiness: {
-    backgroundColor: 'rgba(255,255,255,0.95)',
+  continueText: {
+    fontSize: typography.base,
+    fontWeight: typography.semibold,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.primary,
   },
-  continueButtonText: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#818CF8',
+  continueTextSecondary: {
+    fontSize: typography.base,
+    fontWeight: typography.semibold,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.textSecondary,
   },
 });

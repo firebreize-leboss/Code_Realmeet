@@ -523,282 +523,211 @@ function BusinessProfileView({
 }: BusinessProfileViewProps) {
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
-      {/* Header avec dégradé */}
-      <LinearGradient
-        colors={['#60A5FA', '#818CF8', '#C084FC']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={styles.header}
-      >
-        <SafeAreaView edges={['top']} style={styles.headerSafeArea}>
-          <View style={styles.headerContent}>
-            <View style={styles.headerLeft}>
-              {profile.business_verified && (
-                <View style={styles.verifiedBadge}>
-                  <IconSymbol name="checkmark.seal.fill" size={12} color="#FFFFFF" />
-                  <Text style={styles.verifiedText}>Vérifié</Text>
-                </View>
-              )}
-            </View>
-            <Text style={styles.headerTitle}>Dashboard</Text>
-            <TouchableOpacity
-              onPress={() => router.push('/settings')}
-              style={styles.headerButton}
-            >
-              <IconSymbol name="gear" size={20} color="#FFFFFF" />
-            </TouchableOpacity>
+    <View style={styles.bizContainer}>
+      <SafeAreaView style={styles.bizSafeArea} edges={['top']}>
+        {/* Header minimaliste blanc */}
+        <View style={styles.bizHeader}>
+          <View style={styles.bizHeaderLeft}>
+            {profile.business_verified && (
+              <View style={styles.bizVerifiedBadge}>
+                <IconSymbol name="checkmark.seal.fill" size={12} color={colors.primary} />
+                <Text style={styles.bizVerifiedText}>Vérifié</Text>
+              </View>
+            )}
           </View>
-        </SafeAreaView>
-      </LinearGradient>
+          <Text style={styles.bizHeaderTitle}>Dashboard</Text>
+          <TouchableOpacity
+            onPress={() => router.push('/settings')}
+            style={styles.bizHeaderButton}
+          >
+            <IconSymbol name="gear" size={20} color="#6B7280" />
+          </TouchableOpacity>
+        </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#818CF8" />
-        }
-      >
-        {/* Business Profile Card */}
-        <View style={styles.businessProfileCard}>
-          {profile.business_cover_url && (
-            <Image
-              source={{ uri: profile.business_cover_url }}
-              style={styles.coverImage}
-            />
-          )}
-          <View style={styles.businessProfileContent}>
+        <ScrollView
+          style={styles.bizScrollView}
+          contentContainerStyle={styles.bizContentContainer}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+          }
+        >
+          {/* Business Profile Section */}
+          <View style={styles.bizProfileSection}>
             <Image
               source={{ uri: profile.business_logo_url || profile.avatar_url || 'https://via.placeholder.com/80' }}
-              style={styles.businessLogo}
+              style={styles.bizLogo}
             />
-            <View style={styles.businessInfo}>
-              <Text style={styles.businessName}>
-                {profile.business_name || profile.full_name}
-              </Text>
-              {profile.business_category && (
-                <View style={styles.categoryBadge}>
-                  <Text style={styles.categoryText}>{profile.business_category}</Text>
-                </View>
-              )}
-              {profile.business_rating !== undefined && profile.business_rating > 0 && (
-                <TouchableOpacity
-                  style={styles.ratingRow}
-                  onPress={() => router.push(`/business-reviews?id=${profile.id}&name=${encodeURIComponent(profile.business_name || '')}`)}
-                >
-                  <IconSymbol name="star.fill" size={14} color="#F59E0B" />
-                  <Text style={styles.ratingText}>
-                    {profile.business_rating.toFixed(1)} ({profile.business_review_count} avis)
-                  </Text>
-                  <IconSymbol name="chevron.right" size={12} color="#9CA3AF" />
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-          <TouchableOpacity
-            style={styles.editBusinessButton}
-            onPress={() => router.push('/edit-business-profile')}
-          >
-            <LinearGradient
-              colors={['#60A5FA', '#818CF8', '#C084FC']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.editBusinessGradient}
-            >
-              <IconSymbol name="pencil" size={14} color="#FFFFFF" />
-              <Text style={styles.editBusinessText}>Modifier</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
-
-        {/* Quick Stats Grid */}
-        <View style={styles.quickStatsGrid}>
-          <View style={styles.quickStatCard}>
-            <LinearGradient
-              colors={['rgba(96, 165, 250, 0.15)', 'rgba(96, 165, 250, 0.05)']}
-              style={styles.quickStatGradient}
-            >
-              <IconSymbol name="calendar" size={24} color="#60A5FA" />
-              <Text style={styles.quickStatValue}>
-                {dashboardData?.total_activities || 0}
-              </Text>
-              <Text style={styles.quickStatLabel}>Activités</Text>
-            </LinearGradient>
-          </View>
-          <View style={styles.quickStatCard}>
-            <LinearGradient
-              colors={['rgba(129, 140, 252, 0.15)', 'rgba(129, 140, 252, 0.05)']}
-              style={styles.quickStatGradient}
-            >
-              <IconSymbol name="person.2.fill" size={24} color="#818CF8" />
-              <Text style={styles.quickStatValue}>
-                {dashboardData?.total_participants || 0}
-              </Text>
-              <Text style={styles.quickStatLabel}>Participants</Text>
-            </LinearGradient>
-          </View>
-          <TouchableOpacity
-            style={styles.quickStatCard}
-            onPress={() => router.push(`/business-reviews?id=${profile.id}&name=${encodeURIComponent(profile.business_name || '')}`)}
-          >
-            <LinearGradient
-              colors={['rgba(192, 132, 252, 0.15)', 'rgba(192, 132, 252, 0.05)']}
-              style={styles.quickStatGradient}
-            >
-              <IconSymbol name="message.fill" size={24} color="#C084FC" />
-              <Text style={styles.quickStatValue}>
-                {dashboardData?.review_count || 0}
-              </Text>
-              <Text style={styles.quickStatLabel}>Avis</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-          <View style={styles.quickStatCard}>
-            <LinearGradient
-              colors={['rgba(96, 165, 250, 0.15)', 'rgba(192, 132, 252, 0.15)']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.quickStatGradient}
-            >
-              <IconSymbol name="dollarsign.circle.fill" size={24} color="#818CF8" />
-              <Text style={styles.quickStatValue}>
-                {(dashboardData?.total_revenue || 0).toFixed(0)}€
-              </Text>
-              <Text style={styles.quickStatLabel}>Revenus</Text>
-            </LinearGradient>
-          </View>
-        </View>
-
-        {/* Period Selector */}
-        <View style={styles.periodSelector}>
-          {(['7d', '30d', '90d'] as const).map((period) => (
+            <Text style={styles.bizName}>
+              {profile.business_name || profile.full_name}
+            </Text>
+            {profile.business_category && (
+              <View style={styles.bizCategoryBadge}>
+                <Text style={styles.bizCategoryText}>{profile.business_category}</Text>
+              </View>
+            )}
+            {profile.business_rating !== undefined && profile.business_rating > 0 && (
+              <TouchableOpacity
+                style={styles.bizRatingRow}
+                onPress={() => router.push(`/business-reviews?id=${profile.id}&name=${encodeURIComponent(profile.business_name || '')}`)}
+              >
+                <IconSymbol name="star.fill" size={14} color={colors.primary} />
+                <Text style={styles.bizRatingText}>
+                  {profile.business_rating.toFixed(1)} ({profile.business_review_count} avis)
+                </Text>
+                <IconSymbol name="chevron.right" size={12} color="#9CA3AF" />
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
-              key={period}
-              onPress={() => setSelectedPeriod(period)}
-              activeOpacity={0.7}
+              style={styles.bizEditButton}
+              onPress={() => router.push('/edit-business-profile')}
+              activeOpacity={0.8}
             >
-              {selectedPeriod === period ? (
-                <LinearGradient
-                  colors={['#60A5FA', '#818CF8', '#C084FC']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.periodButtonActive}
-                >
-                  <Text style={styles.periodButtonTextActive}>
-                    {period === '7d' ? '7 jours' : period === '30d' ? '30 jours' : '90 jours'}
-                  </Text>
-                </LinearGradient>
-              ) : (
-                <View style={styles.periodButton}>
-                  <Text style={styles.periodButtonText}>
-                    {period === '7d' ? '7 jours' : period === '30d' ? '30 jours' : '90 jours'}
-                  </Text>
-                </View>
-              )}
+              <Text style={styles.bizEditButtonText}>Modifier le profil</Text>
             </TouchableOpacity>
-          ))}
-        </View>
+          </View>
 
-        {/* Performance Summary */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Résumé des performances</Text>
-          <LinearGradient
-            colors={['#60A5FA', '#818CF8', '#C084FC']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.sectionTitleBar}
-          />
-          {loadingStats ? (
-            <View style={styles.statsLoading}>
-              <ActivityIndicator size="small" color="#818CF8" />
+          {/* Quick Stats Row */}
+          <View style={styles.bizStatsRow}>
+            <View style={styles.bizStatItem}>
+              <Text style={styles.bizStatValue}>{dashboardData?.total_activities || 0}</Text>
+              <Text style={styles.bizStatLabel}>Activités</Text>
             </View>
-          ) : (
-            <View style={styles.performanceCard}>
-              <View style={styles.performanceRow}>
-                <Text style={styles.performanceLabel}>Total activités</Text>
-                <Text style={styles.performanceValue}>{dashboardData?.total_activities || 0}</Text>
+            <View style={styles.bizStatDivider} />
+            <View style={styles.bizStatItem}>
+              <Text style={styles.bizStatValue}>{dashboardData?.total_participants || 0}</Text>
+              <Text style={styles.bizStatLabel}>Participants</Text>
+            </View>
+            <View style={styles.bizStatDivider} />
+            <TouchableOpacity
+              style={styles.bizStatItem}
+              onPress={() => router.push(`/business-reviews?id=${profile.id}&name=${encodeURIComponent(profile.business_name || '')}`)}
+            >
+              <Text style={styles.bizStatValue}>{dashboardData?.review_count || 0}</Text>
+              <Text style={styles.bizStatLabel}>Avis</Text>
+            </TouchableOpacity>
+            <View style={styles.bizStatDivider} />
+            <View style={styles.bizStatItem}>
+              <Text style={styles.bizStatValueAccent}>{(dashboardData?.total_revenue || 0).toFixed(0)}€</Text>
+              <Text style={styles.bizStatLabel}>Revenus</Text>
+            </View>
+          </View>
+
+          {/* Period Selector */}
+          <View style={styles.bizPeriodSelector}>
+            {(['7d', '30d', '90d'] as const).map((period) => (
+              <TouchableOpacity
+                key={period}
+                onPress={() => setSelectedPeriod(period)}
+                style={[
+                  styles.bizPeriodButton,
+                  selectedPeriod === period && styles.bizPeriodButtonActive
+                ]}
+                activeOpacity={0.7}
+              >
+                <Text style={[
+                  styles.bizPeriodButtonText,
+                  selectedPeriod === period && styles.bizPeriodButtonTextActive
+                ]}>
+                  {period === '7d' ? '7 jours' : period === '30d' ? '30 jours' : '90 jours'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Performance Summary */}
+          <View style={styles.bizSection}>
+            <Text style={styles.bizSectionTitle}>PERFORMANCES</Text>
+            {loadingStats ? (
+              <View style={styles.bizStatsLoading}>
+                <ActivityIndicator size="small" color={colors.primary} />
               </View>
-              <View style={styles.performanceRow}>
-                <Text style={styles.performanceLabel}>Activités actives</Text>
-                <Text style={styles.performanceValue}>{dashboardData?.active_activities || 0}</Text>
+            ) : (
+              <View style={styles.bizPerformanceCard}>
+                <View style={styles.bizPerformanceRow}>
+                  <Text style={styles.bizPerformanceLabel}>Total activités</Text>
+                  <Text style={styles.bizPerformanceValue}>{dashboardData?.total_activities || 0}</Text>
+                </View>
+                <View style={styles.bizPerformanceSeparator} />
+                <View style={styles.bizPerformanceRow}>
+                  <Text style={styles.bizPerformanceLabel}>Activités actives</Text>
+                  <Text style={styles.bizPerformanceValue}>{dashboardData?.active_activities || 0}</Text>
+                </View>
+                <View style={styles.bizPerformanceSeparator} />
+                <View style={styles.bizPerformanceRow}>
+                  <Text style={styles.bizPerformanceLabel}>Total participants</Text>
+                  <Text style={styles.bizPerformanceValue}>{dashboardData?.total_participants || 0}</Text>
+                </View>
+                <View style={styles.bizPerformanceSeparator} />
+                <View style={styles.bizPerformanceRow}>
+                  <Text style={styles.bizPerformanceLabel}>Revenus totaux</Text>
+                  <Text style={styles.bizPerformanceValueAccent}>{(dashboardData?.total_revenue || 0).toFixed(0)}€</Text>
+                </View>
               </View>
-              <View style={styles.performanceRow}>
-                <Text style={styles.performanceLabel}>Total participants</Text>
-                <Text style={styles.performanceValue}>{dashboardData?.total_participants || 0}</Text>
-              </View>
-              <View style={[styles.performanceRow, { borderBottomWidth: 0 }]}>
-                <Text style={styles.performanceLabel}>Revenus totaux</Text>
-                <Text style={styles.performanceValue}>{(dashboardData?.total_revenue || 0).toFixed(0)}€</Text>
-              </View>
+            )}
+          </View>
+
+          {/* Bio Section */}
+          {profile.business_description && (
+            <View style={styles.bizSection}>
+              <Text style={styles.bizSectionTitle}>À PROPOS</Text>
+              <Text style={styles.bizBioText}>{profile.business_description}</Text>
             </View>
           )}
-        </View>
 
-        {/* Bio Section */}
-        {profile.business_description && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Ma Bio</Text>
-            <LinearGradient
-              colors={['#60A5FA', '#818CF8', '#C084FC']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.sectionTitleBar}
-            />
-            <View style={styles.bioCard}>
-              <Text style={styles.bioText}>{profile.business_description}</Text>
+          {/* Contact Section */}
+          <View style={styles.bizSection}>
+            <Text style={styles.bizSectionTitle}>CONTACT</Text>
+            <View style={styles.bizContactCard}>
+              {profile.business_address && (
+                <View style={styles.bizContactRow}>
+                  <View style={styles.bizContactIcon}>
+                    <IconSymbol name="location.fill" size={16} color={colors.primary} />
+                  </View>
+                  <Text style={styles.bizContactText}>{profile.business_address}</Text>
+                </View>
+              )}
+              {profile.business_phone && (
+                <>
+                  {profile.business_address && <View style={styles.bizContactSeparator} />}
+                  <View style={styles.bizContactRow}>
+                    <View style={styles.bizContactIcon}>
+                      <IconSymbol name="phone.fill" size={16} color={colors.primary} />
+                    </View>
+                    <Text style={styles.bizContactText}>{profile.business_phone}</Text>
+                  </View>
+                </>
+              )}
+              {profile.business_email && (
+                <>
+                  {(profile.business_address || profile.business_phone) && <View style={styles.bizContactSeparator} />}
+                  <View style={styles.bizContactRow}>
+                    <View style={styles.bizContactIcon}>
+                      <IconSymbol name="envelope.fill" size={16} color={colors.primary} />
+                    </View>
+                    <Text style={styles.bizContactText}>{profile.business_email}</Text>
+                  </View>
+                </>
+              )}
+              {profile.business_website && (
+                <>
+                  {(profile.business_address || profile.business_phone || profile.business_email) && <View style={styles.bizContactSeparator} />}
+                  <View style={styles.bizContactRow}>
+                    <View style={styles.bizContactIcon}>
+                      <IconSymbol name="globe" size={16} color={colors.primary} />
+                    </View>
+                    <Text style={styles.bizContactTextLink}>{profile.business_website}</Text>
+                  </View>
+                </>
+              )}
+              {!profile.business_address && !profile.business_phone && !profile.business_email && !profile.business_website && (
+                <Text style={styles.bizEmptyText}>Aucune information de contact</Text>
+              )}
             </View>
           </View>
-        )}
-
-        {/* Contact Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Contact</Text>
-          <LinearGradient
-            colors={['#60A5FA', '#818CF8', '#C084FC']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.sectionTitleBar}
-          />
-          <View style={styles.contactCard}>
-            {profile.business_address && (
-              <View style={styles.contactRow}>
-                <View style={styles.contactIconContainer}>
-                  <IconSymbol name="location.fill" size={16} color="#818CF8" />
-                </View>
-                <Text style={styles.contactText}>{profile.business_address}</Text>
-              </View>
-            )}
-            {profile.business_phone && (
-              <View style={styles.contactRow}>
-                <View style={styles.contactIconContainer}>
-                  <IconSymbol name="phone.fill" size={16} color="#818CF8" />
-                </View>
-                <Text style={styles.contactText}>{profile.business_phone}</Text>
-              </View>
-            )}
-            {profile.business_email && (
-              <View style={styles.contactRow}>
-                <View style={styles.contactIconContainer}>
-                  <IconSymbol name="envelope.fill" size={16} color="#818CF8" />
-                </View>
-                <Text style={styles.contactText}>{profile.business_email}</Text>
-              </View>
-            )}
-            {profile.business_website && (
-              <View style={styles.contactRow}>
-                <View style={styles.contactIconContainer}>
-                  <IconSymbol name="globe" size={16} color="#818CF8" />
-                </View>
-                <Text style={[styles.contactText, styles.linkText]}>{profile.business_website}</Text>
-              </View>
-            )}
-            {!profile.business_address && !profile.business_phone && !profile.business_email && !profile.business_website && (
-              <Text style={styles.emptyText}>Aucune information de contact</Text>
-            )}
-          </View>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+        </ScrollView>
+      </SafeAreaView>
+    </View>
   );
 }
 
@@ -1089,202 +1018,316 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
-  // Business Profile Styles
-  businessProfileCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    overflow: 'hidden',
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
+  // ============================================
+  // BUSINESS PROFILE STYLES - Premium Clean Design
+  // ============================================
+  bizContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
   },
+  bizSafeArea: {
+    flex: 1,
+  },
+  bizHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E5E7EB',
+  },
+  bizHeaderLeft: {
+    width: 80,
+    alignItems: 'flex-start',
+  },
+  bizHeaderTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#1F2937',
+  },
+  bizHeaderButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#F2F2F7',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bizVerifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  bizVerifiedText: {
+    fontSize: 11,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.primary,
+  },
+  bizScrollView: {
+    flex: 1,
+  },
+  bizContentContainer: {
+    paddingBottom: Platform.OS === 'ios' ? 100 : 120,
+  },
+  bizProfileSection: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+    backgroundColor: '#FFFFFF',
+  },
+  bizLogo: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 3,
+    borderColor: colors.primary,
+    marginBottom: 12,
+  },
+  bizName: {
+    fontSize: 22,
+    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
+    color: '#1F2937',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  bizCategoryBadge: {
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 16,
+    marginBottom: 8,
+  },
+  bizCategoryText: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.primary,
+  },
+  bizRatingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 16,
+  },
+  bizRatingText: {
+    fontSize: 13,
+    fontFamily: 'Manrope_500Medium',
+    color: '#6B7280',
+  },
+  bizEditButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderRadius: 20,
+  },
+  bizEditButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#FFFFFF',
+  },
+  bizStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginTop: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#F2F2F7',
+  },
+  bizStatItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  bizStatValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
+    color: '#1F2937',
+  },
+  bizStatValueAccent: {
+    fontSize: 20,
+    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
+    color: colors.primary,
+  },
+  bizStatLabel: {
+    fontSize: 11,
+    fontFamily: 'Manrope_500Medium',
+    color: '#9CA3AF',
+    marginTop: 2,
+  },
+  bizStatDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: '#E5E7EB',
+  },
+  bizPeriodSelector: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginTop: 16,
+    backgroundColor: '#F2F2F7',
+    borderRadius: 10,
+    padding: 4,
+  },
+  bizPeriodButton: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  bizPeriodButtonActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  bizPeriodButtonText: {
+    fontSize: 13,
+    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
+    color: '#9CA3AF',
+  },
+  bizPeriodButtonTextActive: {
+    color: '#1F2937',
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+  },
+  bizSection: {
+    marginTop: 24,
+    paddingHorizontal: 16,
+  },
+  bizSectionTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#9CA3AF',
+    letterSpacing: 0.8,
+    marginBottom: 12,
+    marginLeft: 4,
+  },
+  bizStatsLoading: {
+    paddingVertical: 24,
+    alignItems: 'center',
+  },
+  bizPerformanceCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#F2F2F7',
+    overflow: 'hidden',
+  },
+  bizPerformanceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  bizPerformanceSeparator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#E5E7EB',
+    marginLeft: 16,
+  },
+  bizPerformanceLabel: {
+    fontSize: 15,
+    fontFamily: 'Manrope_400Regular',
+    color: '#6B7280',
+  },
+  bizPerformanceValue: {
+    fontSize: 15,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#1F2937',
+  },
+  bizPerformanceValueAccent: {
+    fontSize: 15,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.primary,
+  },
+  bizBioText: {
+    fontSize: 15,
+    fontFamily: 'Manrope_400Regular',
+    color: '#4B5563',
+    lineHeight: 22,
+  },
+  bizContactCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#F2F2F7',
+    overflow: 'hidden',
+  },
+  bizContactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  bizContactSeparator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#E5E7EB',
+    marginLeft: 52,
+  },
+  bizContactIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: colors.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bizContactText: {
+    flex: 1,
+    fontSize: 15,
+    fontFamily: 'Manrope_400Regular',
+    color: '#374151',
+  },
+  bizContactTextLink: {
+    flex: 1,
+    fontSize: 15,
+    fontFamily: 'Manrope_500Medium',
+    color: colors.primary,
+  },
+  bizEmptyText: {
+    fontSize: 14,
+    fontFamily: 'Manrope_400Regular',
+    color: '#9CA3AF',
+    textAlign: 'center',
+    paddingVertical: 16,
+  },
+
+  // Legacy styles kept for compatibility
   coverImage: {
     width: '100%',
     height: 100,
   },
-  businessProfileContent: {
-    flexDirection: 'row',
-    padding: 16,
-    gap: 16,
-  },
-  businessLogo: {
-    width: 80,
-    height: 80,
-    borderRadius: 16,
-    backgroundColor: '#F3F4F6',
-  },
-  businessInfo: {
-    flex: 1,
-    paddingTop: 8,
-  },
-  businessName: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1F2937',
-    marginBottom: 6,
-  },
-  categoryBadge: {
-    backgroundColor: 'rgba(129, 140, 252, 0.15)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-    marginBottom: 8,
-  },
-  categoryText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#818CF8',
-  },
-  ratingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  ratingText: {
-    fontSize: 13,
-    color: '#6B7280',
-  },
-  editBusinessButton: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-  },
-  editBusinessGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
+  bioCard: {
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
-  },
-  editBusinessText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-
-  // Quick Stats Grid
-  quickStatsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 20,
-  },
-  quickStatCard: {
-    width: (SCREEN_WIDTH - 44) / 2,
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  quickStatGradient: {
-    padding: 16,
-    alignItems: 'center',
-    gap: 8,
-  },
-  quickStatValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1F2937',
-  },
-  quickStatLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-
-  // Period Selector
-  periodSelector: {
-    flexDirection: 'row',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 12,
-    padding: 4,
-    marginBottom: 20,
-    gap: 4,
-  },
-  periodButton: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    borderRadius: 10,
-  },
-  periodButtonActive: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    borderRadius: 10,
-  },
-  periodButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#9CA3AF',
-  },
-  periodButtonTextActive: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-
-  // Performance Card
-  performanceCard: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 16,
     padding: 16,
   },
-  performanceRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  statsLoading: {
+    paddingVertical: 24,
     alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  performanceLabel: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  performanceValue: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1F2937',
-  },
-
-  // Contact Card
-  contactCard: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 16,
-    padding: 16,
-  },
-  contactRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 10,
-  },
-  contactIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: 'rgba(129, 140, 252, 0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  contactText: {
-    flex: 1,
-    fontSize: 15,
-    color: '#374151',
-  },
-  linkText: {
-    color: '#818CF8',
-  },
-  emptyText: {
-    fontSize: 14,
-    color: '#9CA3AF',
-    fontStyle: 'italic',
-    textAlign: 'center',
-    paddingVertical: 8,
   },
 
   // ============================================

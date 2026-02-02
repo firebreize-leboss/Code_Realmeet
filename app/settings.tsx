@@ -14,11 +14,10 @@ import { supabase } from '@/lib/supabase';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
-import { colors } from '@/styles/commonStyles';
+import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { authService } from '@/services/auth.service';
 import { notificationService } from '@/lib/notifications';
 import { useAuth } from '@/contexts/AuthContext';
-import { LinearGradient } from 'expo-linear-gradient';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -93,15 +92,15 @@ export default function SettingsScreen() {
       disabled={!onPress}
       activeOpacity={0.7}
     >
-      <View style={styles.settingIcon}>
-        <IconSymbol name={icon} size={22} color="#FFFFFF" />
+      <View style={styles.settingIconContainer}>
+        <IconSymbol name={icon} size={20} color={colors.textSecondary} />
       </View>
       <View style={styles.settingContent}>
         <Text style={styles.settingTitle}>{title}</Text>
         {subtitle && <Text style={styles.settingSubtitle}>{subtitle}</Text>}
       </View>
       {showChevron && (
-        <IconSymbol name="chevron.right" size={18} color="rgba(255,255,255,0.7)" />
+        <IconSymbol name="chevron.right" size={16} color={colors.textMuted} />
       )}
     </TouchableOpacity>
   );
@@ -122,22 +121,22 @@ export default function SettingsScreen() {
     loading?: boolean;
   }) => (
     <View style={styles.settingItem}>
-      <View style={styles.settingIcon}>
-        <IconSymbol name={icon} size={22} color="#FFFFFF" />
+      <View style={styles.settingIconContainer}>
+        <IconSymbol name={icon} size={20} color={colors.textSecondary} />
       </View>
       <View style={styles.settingContent}>
         <Text style={styles.settingTitle}>{title}</Text>
         {subtitle && <Text style={styles.settingSubtitle}>{subtitle}</Text>}
       </View>
       {loading ? (
-        <ActivityIndicator size="small" color="#FFFFFF" />
+        <ActivityIndicator size="small" color={colors.primary} />
       ) : (
         <Switch
           value={value}
           onValueChange={onValueChange}
-          trackColor={{ false: 'rgba(255,255,255,0.3)', true: 'rgba(255,255,255,0.5)' }}
-          thumbColor={value ? '#FFFFFF' : 'rgba(255,255,255,0.8)'}
-          ios_backgroundColor="rgba(255,255,255,0.3)"
+          trackColor={{ false: colors.borderLight, true: colors.primaryMuted }}
+          thumbColor={value ? colors.primary : colors.textMuted}
+          ios_backgroundColor={colors.borderLight}
         />
       )}
     </View>
@@ -226,10 +225,7 @@ export default function SettingsScreen() {
   };
 
   return (
-    <LinearGradient
-      colors={['#60A5FA', '#818CF8', '#C084FC']}
-      style={styles.container}
-    >
+    <View style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         {/* Header */}
         <View style={styles.header}>
@@ -237,8 +233,10 @@ export default function SettingsScreen() {
             style={styles.backButton}
             onPress={() => router.back()}
           >
-            <IconSymbol name="chevron.left" size={22} color="#FFFFFF" />
+            <IconSymbol name="chevron.left" size={20} color={colors.text} />
           </TouchableOpacity>
+          <Text style={styles.headerTitle}>Paramètres</Text>
+          <View style={styles.headerSpacer} />
         </View>
 
         <ScrollView
@@ -248,22 +246,22 @@ export default function SettingsScreen() {
         >
           {/* Section Compte */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Compte</Text>
-            <View style={styles.glassCard}>
+            <Text style={styles.sectionTitle}>COMPTE</Text>
+            <View style={styles.sectionCard}>
               <SettingItem
                 icon="person.fill"
                 title="Modifier le profil"
                 subtitle="Mettre à jour vos informations"
                 onPress={() => router.push('/edit-profile')}
               />
-              <View style={styles.divider} />
+              <View style={styles.separator} />
               <SettingItem
                 icon="lock.fill"
                 title="Confidentialité"
                 subtitle="Gérer vos paramètres de confidentialité"
                 onPress={() => console.log('Privacy')}
               />
-              <View style={styles.divider} />
+              <View style={styles.separator} />
               <SettingItem
                 icon="nosign"
                 title="Utilisateurs bloqués"
@@ -275,15 +273,15 @@ export default function SettingsScreen() {
 
           {/* Section Préférences */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Préférences</Text>
-            <View style={styles.glassCard}>
+            <Text style={styles.sectionTitle}>PRÉFÉRENCES</Text>
+            <View style={styles.sectionCard}>
               <SettingItem
                 icon="location.fill"
                 title="Distance"
                 subtitle="Définir votre rayon de recherche"
                 onPress={() => console.log('Distance')}
               />
-              <View style={styles.divider} />
+              <View style={styles.separator} />
               <SettingItem
                 icon="square.stack.3d.up.fill"
                 title="Catégories"
@@ -295,8 +293,8 @@ export default function SettingsScreen() {
 
           {/* Section Notifications */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Notifications</Text>
-            <View style={styles.glassCard}>
+            <Text style={styles.sectionTitle}>NOTIFICATIONS</Text>
+            <View style={styles.sectionCard}>
               <SettingToggle
                 icon="bell.fill"
                 title="Notifications push"
@@ -305,7 +303,7 @@ export default function SettingsScreen() {
                 onValueChange={handleNotificationToggle}
                 loading={notificationsLoading}
               />
-              <View style={styles.divider} />
+              <View style={styles.separator} />
               <SettingToggle
                 icon="location.fill"
                 title="Services de localisation"
@@ -318,20 +316,20 @@ export default function SettingsScreen() {
 
           {/* Section À propos */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>À propos</Text>
-            <View style={styles.glassCard}>
+            <Text style={styles.sectionTitle}>À PROPOS</Text>
+            <View style={styles.sectionCard}>
               <SettingItem
                 icon="info.circle.fill"
                 title="Aide & Support"
                 onPress={() => console.log('Help')}
               />
-              <View style={styles.divider} />
+              <View style={styles.separator} />
               <SettingItem
                 icon="doc.text.fill"
                 title="Conditions d'utilisation"
                 onPress={() => console.log('Terms')}
               />
-              <View style={styles.divider} />
+              <View style={styles.separator} />
               <SettingItem
                 icon="shield.fill"
                 title="Politique de confidentialité"
@@ -348,10 +346,10 @@ export default function SettingsScreen() {
             activeOpacity={0.8}
           >
             {logoutLoading ? (
-              <ActivityIndicator color="#FFFFFF" />
+              <ActivityIndicator color={colors.primary} />
             ) : (
               <>
-                <IconSymbol name="rectangle.portrait.and.arrow.right" size={20} color="#FFFFFF" />
+                <IconSymbol name="rectangle.portrait.and.arrow.right" size={18} color={colors.primary} />
                 <Text style={styles.logoutText}>Se déconnecter</Text>
               </>
             )}
@@ -365,10 +363,10 @@ export default function SettingsScreen() {
             activeOpacity={0.8}
           >
             {deleteLoading ? (
-              <ActivityIndicator color="#FFFFFF" />
+              <ActivityIndicator color={colors.error} />
             ) : (
               <>
-                <IconSymbol name="trash.fill" size={20} color="#FFFFFF" />
+                <IconSymbol name="trash.fill" size={18} color={colors.error} />
                 <Text style={styles.deleteAccountText}>Supprimer mon compte</Text>
               </>
             )}
@@ -378,13 +376,14 @@ export default function SettingsScreen() {
           <Text style={styles.versionText}>Version 1.0.0</Text>
         </ScrollView>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   safeArea: {
     flex: 1,
@@ -392,54 +391,70 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.backgroundAlt,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderSubtle,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: colors.inputBackground,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: typography.lg,
+    fontWeight: typography.bold,
+    fontFamily: 'Manrope_700Bold',
+    color: colors.text,
+    letterSpacing: -0.3,
+  },
+  headerSpacer: {
+    width: 36,
   },
   scrollView: {
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xl,
     paddingBottom: Platform.OS === 'ios' ? 100 : 120,
   },
   section: {
-    marginBottom: 24,
+    marginBottom: spacing.xl,
   },
   sectionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.9)',
-    marginBottom: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginLeft: 4,
+    fontSize: typography.xs,
+    fontWeight: typography.semibold,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.textTertiary,
+    marginBottom: spacing.sm,
+    marginLeft: spacing.xs,
+    letterSpacing: 0.8,
   },
-  glassCard: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: 20,
+  sectionCard: {
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: colors.borderSubtle,
     overflow: 'hidden',
   },
   settingItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    gap: 14,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
   },
-  settingIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+  settingIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: colors.inputBackground,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -447,59 +462,64 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   settingTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginBottom: 2,
+    fontSize: typography.base,
+    fontWeight: typography.medium,
+    fontFamily: 'Manrope_500Medium',
+    color: colors.text,
+    marginBottom: 1,
   },
   settingSubtitle: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.8)',
+    fontSize: typography.xs,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textTertiary,
   },
-  divider: {
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    marginLeft: 72,
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.borderLight,
+    marginLeft: 68,
   },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    borderRadius: 16,
-    paddingVertical: 16,
-    marginTop: 8,
+    gap: spacing.sm,
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    marginTop: spacing.sm,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: colors.primaryMuted,
   },
   logoutText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontSize: typography.base,
+    fontWeight: typography.semibold,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.primary,
   },
   deleteAccountButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    backgroundColor: 'rgba(220, 38, 38, 0.8)',
-    borderRadius: 16,
-    paddingVertical: 16,
-    marginTop: 12,
+    gap: spacing.sm,
+    backgroundColor: colors.errorLight,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    marginTop: spacing.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: 'rgba(255, 59, 48, 0.2)',
   },
   deleteAccountText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontSize: typography.base,
+    fontWeight: typography.semibold,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.error,
   },
   versionText: {
     textAlign: 'center',
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.6)',
-    marginTop: 24,
-    marginBottom: 20,
+    fontSize: typography.xs,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textMuted,
+    marginTop: spacing.xxl,
+    marginBottom: spacing.lg,
   },
 });

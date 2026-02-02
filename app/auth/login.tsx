@@ -1,5 +1,5 @@
 // app/auth/login.tsx
-// Page de connexion particulier - Vérifie que le compte n'est pas entreprise
+// Page de connexion particulier - Design premium unifié
 
 import React, { useState } from 'react';
 import {
@@ -11,13 +11,13 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
-import { colors } from '@/styles/commonStyles';
+import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
-import { LinearGradient } from 'expo-linear-gradient';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -35,7 +35,6 @@ export default function LoginScreen() {
     setLoading(true);
 
     try {
-      // 1. Connexion avec Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: email.trim().toLowerCase(),
         password,
@@ -49,7 +48,6 @@ export default function LoginScreen() {
         throw new Error('Erreur de connexion');
       }
 
-      // 2. Vérifier le type de compte
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('account_type')
@@ -62,7 +60,6 @@ export default function LoginScreen() {
       }
 
       if (profile.account_type === 'business') {
-        // C'est un compte entreprise, déconnecter
         await supabase.auth.signOut();
         Alert.alert(
           'Type de compte incorrect',
@@ -78,7 +75,6 @@ export default function LoginScreen() {
         return;
       }
 
-      // 3. Tout est OK, rediriger vers le profil
       router.replace('/(tabs)/profile');
 
     } catch (error: any) {
@@ -89,20 +85,18 @@ export default function LoginScreen() {
   };
 
   return (
-    <LinearGradient
-      colors={['#60A5FA', '#818CF8', '#C084FC']}
-      style={styles.container}
-    >
+    <View style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
+        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => router.back()}
           >
-            <IconSymbol name="chevron.left" size={24} color="#FFFFFF" />
+            <IconSymbol name="chevron.left" size={20} color={colors.text} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Connexion</Text>
-          <View style={styles.placeholder} />
+          <View style={styles.headerSpacer} />
         </View>
 
         <ScrollView
@@ -111,9 +105,10 @@ export default function LoginScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {/* Welcome Section */}
           <View style={styles.welcomeSection}>
             <View style={styles.iconContainer}>
-              <IconSymbol name="person.fill" size={48} color="#FFFFFF" />
+              <IconSymbol name="person.fill" size={32} color={colors.primary} />
             </View>
             <Text style={styles.welcomeTitle}>Bon retour !</Text>
             <Text style={styles.welcomeSubtitle}>
@@ -121,17 +116,18 @@ export default function LoginScreen() {
             </Text>
           </View>
 
+          {/* Form */}
           <View style={styles.form}>
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Email</Text>
+              <Text style={styles.label}>Email</Text>
               <View style={styles.inputContainer}>
-                <IconSymbol name="envelope.fill" size={20} color="rgba(255,255,255,0.7)" />
+                <IconSymbol name="envelope.fill" size={18} color={colors.textTertiary} />
                 <TextInput
                   style={styles.input}
                   value={email}
                   onChangeText={setEmail}
                   placeholder="votre@email.com"
-                  placeholderTextColor="rgba(255,255,255,0.5)"
+                  placeholderTextColor={colors.textMuted}
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -140,22 +136,22 @@ export default function LoginScreen() {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Mot de passe</Text>
+              <Text style={styles.label}>Mot de passe</Text>
               <View style={styles.inputContainer}>
-                <IconSymbol name="lock.fill" size={20} color="rgba(255,255,255,0.7)" />
+                <IconSymbol name="lock.fill" size={18} color={colors.textTertiary} />
                 <TextInput
                   style={styles.input}
                   value={password}
                   onChangeText={setPassword}
                   placeholder="••••••••"
-                  placeholderTextColor="rgba(255,255,255,0.5)"
+                  placeholderTextColor={colors.textMuted}
                   secureTextEntry={!showPassword}
                 />
                 <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                   <IconSymbol
                     name={showPassword ? "eye.slash.fill" : "eye.fill"}
-                    size={20}
-                    color="rgba(255,255,255,0.7)"
+                    size={18}
+                    color={colors.textTertiary}
                   />
                 </TouchableOpacity>
               </View>
@@ -166,24 +162,26 @@ export default function LoginScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.loginButton}
+              style={[styles.loginButton, loading && styles.loginButtonDisabled]}
               onPress={handleLogin}
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator color="#818CF8" />
+                <ActivityIndicator color="#FFFFFF" />
               ) : (
                 <Text style={styles.loginButtonText}>Se connecter</Text>
               )}
             </TouchableOpacity>
           </View>
 
+          {/* Divider */}
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
             <Text style={styles.dividerText}>Pas encore de compte ?</Text>
             <View style={styles.dividerLine} />
           </View>
 
+          {/* Register Button */}
           <TouchableOpacity
             style={styles.registerButton}
             onPress={() => router.push('/auth/signup-individual')}
@@ -191,6 +189,7 @@ export default function LoginScreen() {
             <Text style={styles.registerButtonText}>Créer un compte</Text>
           </TouchableOpacity>
 
+          {/* Switch to Business */}
           <View style={styles.switchSection}>
             <Text style={styles.switchText}>Vous êtes une entreprise ?</Text>
             <TouchableOpacity onPress={() => router.replace('/auth/login-business')}>
@@ -199,13 +198,14 @@ export default function LoginScreen() {
           </View>
         </ScrollView>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   safeArea: {
     flex: 1,
@@ -214,149 +214,170 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.backgroundAlt,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderSubtle,
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: colors.inputBackground,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontSize: typography.lg,
+    fontWeight: typography.bold,
+    fontFamily: 'Manrope_700Bold',
+    color: colors.text,
+    letterSpacing: -0.3,
   },
-  placeholder: {
-    width: 44,
+  headerSpacer: {
+    width: 36,
   },
   scrollView: {
     flex: 1,
   },
   contentContainer: {
-    padding: 20,
-    paddingBottom: 40,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xl,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 60,
   },
   welcomeSection: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: spacing.xxxl,
   },
   iconContainer: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    width: 72,
+    height: 72,
+    borderRadius: 20,
+    backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: spacing.lg,
   },
   welcomeTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 8,
+    fontSize: 24,
+    fontWeight: typography.bold,
+    fontFamily: 'Manrope_700Bold',
+    color: colors.text,
+    marginBottom: spacing.xs,
+    letterSpacing: -0.5,
   },
   welcomeSubtitle: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.8)',
+    fontSize: typography.base,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textSecondary,
     textAlign: 'center',
   },
   form: {
-    gap: 16,
+    gap: spacing.lg,
   },
   inputGroup: {
-    gap: 8,
+    gap: spacing.sm,
   },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
+  label: {
+    fontSize: typography.sm,
+    fontWeight: typography.semibold,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.text,
+    marginLeft: spacing.xs,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    gap: 12,
+    backgroundColor: colors.inputBackground,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: colors.borderLight,
+    gap: spacing.md,
   },
   input: {
     flex: 1,
-    paddingVertical: 16,
-    fontSize: 16,
-    color: '#FFFFFF',
+    paddingVertical: spacing.md,
+    fontSize: typography.base,
+    fontFamily: 'Manrope_500Medium',
+    color: colors.text,
   },
   forgotPassword: {
     alignSelf: 'flex-end',
   },
   forgotPasswordText: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    fontWeight: '500',
+    fontSize: typography.sm,
+    fontFamily: 'Manrope_500Medium',
+    color: colors.primary,
   },
   loginButton: {
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    borderRadius: 12,
-    paddingVertical: 16,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.lg,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: spacing.sm,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  loginButtonDisabled: {
+    opacity: 0.7,
   },
   loginButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#818CF8',
+    fontSize: typography.base,
+    fontWeight: typography.bold,
+    fontFamily: 'Manrope_700Bold',
+    color: colors.textOnPrimary,
   },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 24,
-    gap: 12,
+    marginVertical: spacing.xxl,
+    gap: spacing.md,
   },
   dividerLine: {
     flex: 1,
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.borderLight,
   },
   dividerText: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
+    fontSize: typography.sm,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textTertiary,
   },
   registerButton: {
-    borderRadius: 12,
-    paddingVertical: 16,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.lg,
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.5)',
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 1.5,
+    borderColor: colors.borderLight,
+    backgroundColor: colors.backgroundAlt,
   },
   registerButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontSize: typography.base,
+    fontWeight: typography.semibold,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.text,
   },
   switchSection: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 24,
-    gap: 8,
+    marginTop: spacing.xl,
+    gap: spacing.xs,
   },
   switchText: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
+    fontSize: typography.sm,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textTertiary,
   },
   switchLink: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    fontWeight: '600',
+    fontSize: typography.sm,
+    fontWeight: typography.semibold,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.primary,
   },
 });

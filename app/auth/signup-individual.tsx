@@ -1,5 +1,5 @@
 // app/auth/signup-individual.tsx
-// Écran d'inscription individuel avec sélection d'intention
+// Écran d'inscription individuel - Design premium unifié
 
 import React, { useState } from 'react';
 import {
@@ -12,18 +12,18 @@ import {
   Image,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { InterestSelector } from '@/components/InterestSelector';
 import { IntentionSelector } from '@/components/IntentionSelector';
-import { colors } from '@/styles/commonStyles';
+import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { authService } from '@/services/auth.service';
 import { userService } from '@/services/user.service';
 import { storageService } from '@/services/storage.service';
 import { UserIntention } from '@/lib/database.types';
-import { LinearGradient } from 'expo-linear-gradient';
 
 export default function SignupIndividualScreen() {
   const [firstName, setFirstName] = useState('');
@@ -43,7 +43,6 @@ export default function SignupIndividualScreen() {
   const [loading, setLoading] = useState(false);
 
   const handleDateChange = (text: string) => {
-    // Auto-format: DD/MM/YYYY
     const cleaned = text.replace(/\D/g, '');
     let formatted = '';
     if (cleaned.length > 0) {
@@ -59,13 +58,11 @@ export default function SignupIndividualScreen() {
   };
 
   const handleSignup = async () => {
-    // Validation des champs obligatoires
     if (!firstName || !lastName || !email || !password || !confirmPassword || !birthDate || !city) {
       Alert.alert('Erreur', 'Veuillez remplir tous les champs obligatoires');
       return;
     }
 
-    // Validation de l'intention
     if (!intention) {
       Alert.alert('Erreur', 'Veuillez indiquer ce que vous recherchez sur RealMeet');
       return;
@@ -81,13 +78,11 @@ export default function SignupIndividualScreen() {
       return;
     }
 
-    // Validation de la date
     if (birthDate.length !== 10) {
       Alert.alert('Erreur', 'La date doit être au format JJ/MM/AAAA');
       return;
     }
 
-    // Validation de l'âge (au moins 18 ans)
     const [day, month, year] = birthDate.split('/').map(Number);
     const birthYear = year;
     const currentYear = new Date().getFullYear();
@@ -99,7 +94,6 @@ export default function SignupIndividualScreen() {
     setLoading(true);
 
     try {
-      // 1. Vérifier si le username est disponible
       const username = `${firstName.toLowerCase()}.${lastName.toLowerCase()}`;
       const isAvailable = await userService.isUsernameAvailable(username);
 
@@ -109,7 +103,6 @@ export default function SignupIndividualScreen() {
         return;
       }
 
-      // 2. Créer d'abord le compte (pour avoir l'ID utilisateur)
       const accountResult = await authService.registerUser({
         email,
         password,
@@ -129,7 +122,6 @@ export default function SignupIndividualScreen() {
 
       const userId = accountResult.user!.id;
 
-      // 3. Upload de l'avatar si présent
       let avatarUrl = null;
       if (profileImage) {
         const uploadResult = await storageService.uploadAvatar(profileImage, userId);
@@ -141,7 +133,6 @@ export default function SignupIndividualScreen() {
         }
       }
 
-      // 4. Mettre à jour le profil avec l'avatar, bio, interests ET intention
       const updateResult = await userService.updateProfile(userId, {
         avatar_url: avatarUrl,
         bio: bio || null,
@@ -150,10 +141,9 @@ export default function SignupIndividualScreen() {
       });
 
       if (!updateResult.success) {
-        console.error('❌ Erreur mise à jour profil:', updateResult.error);
+        console.error('Erreur mise à jour profil:', updateResult.error);
       }
 
-      // 5. La connexion est automatique grâce à Supabase !
       Alert.alert(
         'Bienvenue !',
         'Votre compte a été créé avec succès !',
@@ -165,7 +155,7 @@ export default function SignupIndividualScreen() {
         ]
       );
     } catch (error: any) {
-      console.error('❌ Erreur inscription:', error);
+      console.error('Erreur inscription:', error);
       Alert.alert('Erreur', error.message || 'Une erreur est survenue');
     } finally {
       setLoading(false);
@@ -182,27 +172,27 @@ export default function SignupIndividualScreen() {
   };
 
   return (
-    <LinearGradient
-      colors={['#60A5FA', '#818CF8', '#C084FC']}
-      style={styles.container}
-    >
+    <View style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
+        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => router.back()}
           >
-            <IconSymbol name="chevron.left" size={24} color="#FFFFFF" />
+            <IconSymbol name="chevron.left" size={20} color={colors.text} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Créer un compte</Text>
-          <View style={styles.placeholder} />
+          <View style={styles.headerSpacer} />
         </View>
 
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
+          {/* Welcome Section */}
           <View style={styles.welcomeSection}>
             <Text style={styles.welcomeTitle}>Rejoignez RealMeet</Text>
             <Text style={styles.welcomeSubtitle}>
@@ -220,15 +210,19 @@ export default function SignupIndividualScreen() {
                 <Image source={{ uri: profileImage }} style={styles.profileImage} />
               ) : (
                 <View style={styles.photoPlaceholder}>
-                  <IconSymbol name="camera.fill" size={32} color="rgba(255,255,255,0.7)" />
+                  <IconSymbol name="camera.fill" size={28} color={colors.textTertiary} />
                 </View>
               )}
+              <View style={styles.cameraBadge}>
+                <IconSymbol name="plus" size={14} color="#FFFFFF" />
+              </View>
             </TouchableOpacity>
             <TouchableOpacity onPress={handleImagePick}>
-              <Text style={styles.photoText}>Ajouter une photo de profil</Text>
+              <Text style={styles.photoText}>Ajouter une photo</Text>
             </TouchableOpacity>
           </View>
 
+          {/* Form */}
           <View style={styles.form}>
             {/* Nom et Prénom */}
             <View style={styles.row}>
@@ -238,7 +232,7 @@ export default function SignupIndividualScreen() {
                   <TextInput
                     style={styles.input}
                     placeholder="Jean"
-                    placeholderTextColor="rgba(255,255,255,0.5)"
+                    placeholderTextColor={colors.textMuted}
                     value={firstName}
                     onChangeText={setFirstName}
                   />
@@ -251,7 +245,7 @@ export default function SignupIndividualScreen() {
                   <TextInput
                     style={styles.input}
                     placeholder="Dupont"
-                    placeholderTextColor="rgba(255,255,255,0.5)"
+                    placeholderTextColor={colors.textMuted}
                     value={lastName}
                     onChangeText={setLastName}
                   />
@@ -263,11 +257,11 @@ export default function SignupIndividualScreen() {
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Date de naissance *</Text>
               <View style={styles.inputContainer}>
-                <IconSymbol name="calendar" size={20} color="rgba(255,255,255,0.7)" />
+                <IconSymbol name="calendar" size={18} color={colors.textTertiary} />
                 <TextInput
                   style={styles.input}
                   placeholder="JJ/MM/AAAA"
-                  placeholderTextColor="rgba(255,255,255,0.5)"
+                  placeholderTextColor={colors.textMuted}
                   value={birthDate}
                   onChangeText={handleDateChange}
                   keyboardType="numeric"
@@ -281,11 +275,11 @@ export default function SignupIndividualScreen() {
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Email *</Text>
               <View style={styles.inputContainer}>
-                <IconSymbol name="envelope" size={20} color="rgba(255,255,255,0.7)" />
+                <IconSymbol name="envelope" size={18} color={colors.textTertiary} />
                 <TextInput
                   style={styles.input}
                   placeholder="votre.email@exemple.com"
-                  placeholderTextColor="rgba(255,255,255,0.5)"
+                  placeholderTextColor={colors.textMuted}
                   value={email}
                   onChangeText={setEmail}
                   keyboardType="email-address"
@@ -298,11 +292,11 @@ export default function SignupIndividualScreen() {
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Téléphone</Text>
               <View style={styles.inputContainer}>
-                <IconSymbol name="phone.fill" size={20} color="rgba(255,255,255,0.7)" />
+                <IconSymbol name="phone.fill" size={18} color={colors.textTertiary} />
                 <TextInput
                   style={styles.input}
                   placeholder="+33 6 12 34 56 78"
-                  placeholderTextColor="rgba(255,255,255,0.5)"
+                  placeholderTextColor={colors.textMuted}
                   value={phone}
                   onChangeText={setPhone}
                   keyboardType="phone-pad"
@@ -314,18 +308,18 @@ export default function SignupIndividualScreen() {
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Ville *</Text>
               <View style={styles.inputContainer}>
-                <IconSymbol name="location.fill" size={20} color="rgba(255,255,255,0.7)" />
+                <IconSymbol name="location.fill" size={18} color={colors.textTertiary} />
                 <TextInput
                   style={styles.input}
                   placeholder="Paris"
-                  placeholderTextColor="rgba(255,255,255,0.5)"
+                  placeholderTextColor={colors.textMuted}
                   value={city}
                   onChangeText={setCity}
                 />
               </View>
             </View>
 
-            {/* Intention - OBLIGATOIRE */}
+            {/* Intention */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Je recherche sur RealMeet *</Text>
               <IntentionSelector
@@ -338,18 +332,16 @@ export default function SignupIndividualScreen() {
             {/* Bio */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Bio</Text>
-              <View style={[styles.inputContainer, styles.textArea]}>
-                <TextInput
-                  style={[styles.input, styles.textAreaInput]}
-                  placeholder="Parlez-nous de vous..."
-                  placeholderTextColor="rgba(255,255,255,0.5)"
-                  value={bio}
-                  onChangeText={setBio}
-                  multiline
-                  numberOfLines={4}
-                  textAlignVertical="top"
-                />
-              </View>
+              <TextInput
+                style={styles.textArea}
+                placeholder="Parlez-nous de vous..."
+                placeholderTextColor={colors.textMuted}
+                value={bio}
+                onChangeText={setBio}
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+              />
               <Text style={styles.helperText}>Optionnel - Décrivez-vous en quelques mots</Text>
             </View>
 
@@ -367,11 +359,11 @@ export default function SignupIndividualScreen() {
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Mot de passe *</Text>
               <View style={styles.inputContainer}>
-                <IconSymbol name="lock.fill" size={20} color="rgba(255,255,255,0.7)" />
+                <IconSymbol name="lock.fill" size={18} color={colors.textTertiary} />
                 <TextInput
                   style={styles.input}
                   placeholder="••••••••"
-                  placeholderTextColor="rgba(255,255,255,0.5)"
+                  placeholderTextColor={colors.textMuted}
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry={!showPassword}
@@ -379,8 +371,8 @@ export default function SignupIndividualScreen() {
                 <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                   <IconSymbol
                     name={showPassword ? "eye.slash.fill" : "eye.fill"}
-                    size={20}
-                    color="rgba(255,255,255,0.7)"
+                    size={18}
+                    color={colors.textTertiary}
                   />
                 </TouchableOpacity>
               </View>
@@ -391,11 +383,11 @@ export default function SignupIndividualScreen() {
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Confirmer le mot de passe *</Text>
               <View style={styles.inputContainer}>
-                <IconSymbol name="lock.fill" size={20} color="rgba(255,255,255,0.7)" />
+                <IconSymbol name="lock.fill" size={18} color={colors.textTertiary} />
                 <TextInput
                   style={styles.input}
                   placeholder="••••••••"
-                  placeholderTextColor="rgba(255,255,255,0.5)"
+                  placeholderTextColor={colors.textMuted}
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
                   secureTextEntry={!showConfirmPassword}
@@ -403,8 +395,8 @@ export default function SignupIndividualScreen() {
                 <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
                   <IconSymbol
                     name={showConfirmPassword ? "eye.slash.fill" : "eye.fill"}
-                    size={20}
-                    color="rgba(255,255,255,0.7)"
+                    size={18}
+                    color={colors.textTertiary}
                   />
                 </TouchableOpacity>
               </View>
@@ -420,207 +412,252 @@ export default function SignupIndividualScreen() {
               </Text>
             </View>
 
+            {/* Signup Button */}
             <TouchableOpacity
-              style={styles.signupButton}
+              style={[styles.signupButton, loading && styles.signupButtonDisabled]}
               onPress={handleSignup}
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator color="#818CF8" />
+                <ActivityIndicator color="#FFFFFF" />
               ) : (
                 <Text style={styles.signupButtonText}>Créer mon compte</Text>
               )}
             </TouchableOpacity>
           </View>
 
+          {/* Login Link */}
           <View style={styles.loginSection}>
             <Text style={styles.loginText}>Vous avez déjà un compte ?</Text>
+            <TouchableOpacity onPress={() => router.back()}>
+              <Text style={styles.loginLink}>Se connecter</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text style={styles.loginLink}>Se connecter</Text>
-          </TouchableOpacity>
         </ScrollView>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   safeArea: {
     flex: 1,
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.backgroundAlt,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderSubtle,
   },
   backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: colors.inputBackground,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontSize: typography.lg,
+    fontWeight: typography.bold,
+    fontFamily: 'Manrope_700Bold',
+    color: colors.text,
+    letterSpacing: -0.3,
   },
-  placeholder: {
-    width: 44,
+  headerSpacer: {
+    width: 36,
   },
   scrollView: {
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xl,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 60,
   },
   welcomeSection: {
-    paddingVertical: 24,
     alignItems: 'center',
+    marginBottom: spacing.xl,
   },
   welcomeTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 8,
+    fontSize: 24,
+    fontWeight: typography.bold,
+    fontFamily: 'Manrope_700Bold',
+    color: colors.text,
+    marginBottom: spacing.xs,
+    letterSpacing: -0.5,
   },
   welcomeSubtitle: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.8)',
+    fontSize: typography.base,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textSecondary,
     textAlign: 'center',
   },
   photoSection: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: spacing.xxl,
   },
   photoContainer: {
-    marginBottom: 12,
+    position: 'relative',
+    marginBottom: spacing.md,
   },
   photoPlaceholder: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: colors.inputBackground,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: colors.borderLight,
     borderStyle: 'dashed',
   },
   profileImage: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: colors.borderLight,
+  },
+  cameraBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: colors.backgroundAlt,
   },
   photoText: {
-    fontSize: 15,
-    color: '#FFFFFF',
-    fontWeight: '600',
+    fontSize: typography.sm,
+    fontFamily: 'Manrope_600SemiBold',
+    fontWeight: typography.semibold,
+    color: colors.primary,
   },
   form: {
-    gap: 20,
+    gap: spacing.lg,
   },
   inputGroup: {
-    gap: 8,
+    gap: spacing.sm,
   },
   label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontSize: typography.sm,
+    fontWeight: typography.semibold,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.text,
+    marginLeft: spacing.xs,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 4,
+    backgroundColor: colors.inputBackground,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.lg,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-    gap: 12,
+    borderColor: colors.borderLight,
+    gap: spacing.md,
   },
   input: {
     flex: 1,
-    fontSize: 16,
-    color: '#FFFFFF',
-    paddingVertical: 12,
+    paddingVertical: spacing.md,
+    fontSize: typography.base,
+    fontFamily: 'Manrope_500Medium',
+    color: colors.text,
   },
   textArea: {
-    height: 100,
-    alignItems: 'flex-start',
-    paddingVertical: 12,
-  },
-  textAreaInput: {
-    height: 80,
+    backgroundColor: colors.inputBackground,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    fontSize: typography.base,
+    fontFamily: 'Manrope_500Medium',
+    color: colors.text,
+    minHeight: 100,
     textAlignVertical: 'top',
   },
   helperText: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.7)',
-    marginTop: 4,
+    fontSize: typography.xs,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textTertiary,
+    marginLeft: spacing.xs,
   },
   row: {
     flexDirection: 'row',
-    gap: 12,
+    gap: spacing.md,
   },
   halfWidth: {
     flex: 1,
   },
   termsSection: {
-    marginTop: 8,
-    padding: 16,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 12,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: colors.borderSubtle,
   },
   termsText: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.8)',
-    lineHeight: 20,
+    fontSize: typography.xs,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textSecondary,
+    lineHeight: 18,
     textAlign: 'center',
   },
   termsLink: {
-    color: '#FFFFFF',
-    fontWeight: '600',
+    color: colors.primary,
+    fontWeight: typography.semibold,
+    fontFamily: 'Manrope_600SemiBold',
   },
   signupButton: {
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    borderRadius: 12,
-    paddingVertical: 16,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.lg,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: spacing.sm,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  signupButtonDisabled: {
+    opacity: 0.7,
   },
   signupButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#818CF8',
+    fontSize: typography.base,
+    fontWeight: typography.bold,
+    fontFamily: 'Manrope_700Bold',
+    color: colors.textOnPrimary,
   },
   loginSection: {
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
-    marginTop: 32,
+    gap: spacing.xs,
+    marginTop: spacing.xxl,
   },
   loginText: {
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.8)',
-    textAlign: 'center',
+    fontSize: typography.sm,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textSecondary,
   },
   loginLink: {
-    fontSize: 15,
-    color: '#FFFFFF',
-    fontWeight: '600',
-    textAlign: 'center',
+    fontSize: typography.sm,
+    fontWeight: typography.semibold,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.primary,
   },
 });

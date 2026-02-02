@@ -1,4 +1,7 @@
 // app/category-activities.tsx
+// Category activities page - Premium Clean Design
+// White/Gray with Orange accent only
+
 import React, { useState, useMemo } from 'react';
 import {
   View,
@@ -17,9 +20,9 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
 import { PREDEFINED_CATEGORIES } from '@/constants/categories';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useDataCache } from '@/contexts/DataCacheContext';
 import ActivityCard from '@/components/ActivityCard';
+import { useFonts, Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold } from '@expo-google-fonts/manrope';
 
 interface Activity {
   id: string;
@@ -44,6 +47,12 @@ export default function CategoryActivitiesScreen() {
   const { cache, loading: cacheLoading, refreshActivities } = useDataCache();
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [fontsLoaded] = useFonts({
+    Manrope_400Regular,
+    Manrope_500Medium,
+    Manrope_600SemiBold,
+    Manrope_700Bold,
+  });
 
   const categoryName = decodeURIComponent(category as string);
   const categoryInfo = PREDEFINED_CATEGORIES.find(cat => cat.name === categoryName);
@@ -97,76 +106,73 @@ export default function CategoryActivitiesScreen() {
 
   if (cacheLoading) {
     return (
-      <LinearGradient
-        colors={['#60A5FA', '#818CF8', '#C084FC']}
-        style={styles.container}
-      >
+      <View style={styles.container}>
         <SafeAreaView style={styles.safeArea} edges={['top']}>
+          {/* Header */}
           <View style={styles.header}>
             <TouchableOpacity
               style={styles.backButton}
               onPress={() => router.back()}
             >
-              <IconSymbol name="chevron.left" size={24} color="#FFFFFF" />
+              <IconSymbol name="chevron.left" size={20} color="#1F2937" />
             </TouchableOpacity>
             <View style={styles.headerCenter}>
               {categoryInfo && (
-                <View style={styles.headerIcon}>
-                  <IconSymbol name={categoryInfo.icon} size={20} color="#FFFFFF" />
+                <View style={styles.headerIconContainer}>
+                  <IconSymbol name={categoryInfo.icon} size={16} color={colors.primary} />
                 </View>
               )}
               <Text style={styles.headerTitle}>{categoryName}</Text>
             </View>
-            <View style={styles.placeholder} />
+            <View style={styles.headerSpacer} />
           </View>
+
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#FFFFFF" />
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={styles.loadingText}>Chargement des activités...</Text>
           </View>
         </SafeAreaView>
-      </LinearGradient>
+      </View>
     );
   }
 
   return (
-    <LinearGradient
-      colors={['#60A5FA', '#818CF8', '#C084FC']}
-      style={styles.container}
-    >
+    <View style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
+        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => router.back()}
           >
-            <IconSymbol name="chevron.left" size={24} color="#FFFFFF" />
+            <IconSymbol name="chevron.left" size={20} color="#1F2937" />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
             {categoryInfo && (
-              <View style={styles.headerIcon}>
-                <IconSymbol name={categoryInfo.icon} size={20} color="#FFFFFF" />
+              <View style={styles.headerIconContainer}>
+                <IconSymbol name={categoryInfo.icon} size={16} color={colors.primary} />
               </View>
             )}
             <Text style={styles.headerTitle}>{categoryName}</Text>
           </View>
-          <View style={styles.placeholder} />
+          <View style={styles.headerSpacer} />
         </View>
 
-        {/* Barre de recherche */}
+        {/* Search Bar */}
         <View style={styles.searchContainer}>
           <View style={styles.searchInputWrapper}>
-            <IconSymbol name="magnifyingglass" size={20} color="rgba(255,255,255,0.9)" />
+            <IconSymbol name="magnifyingglass" size={18} color="#9CA3AF" />
             <TextInput
               style={styles.searchInput}
               placeholder="Rechercher une activité..."
-              placeholderTextColor="rgba(255,255,255,0.6)"
+              placeholderTextColor="#9CA3AF"
               value={searchQuery}
               onChangeText={setSearchQuery}
               returnKeyType="search"
             />
             {searchQuery !== '' && (
               <TouchableOpacity onPress={() => setSearchQuery('')}>
-                <IconSymbol name="xmark.circle.fill" size={20} color="rgba(255,255,255,0.7)" />
+                <IconSymbol name="xmark.circle.fill" size={18} color="#9CA3AF" />
               </TouchableOpacity>
             )}
           </View>
@@ -174,22 +180,21 @@ export default function CategoryActivitiesScreen() {
 
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={[
-            styles.contentContainer,
-            Platform.OS !== 'ios' && styles.contentContainerWithTabBar,
-          ]}
+          contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#FFFFFF" />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
           }
         >
           {filteredActivities.length === 0 ? (
             <View style={styles.emptyContainer}>
-              <IconSymbol
-                name={searchQuery ? "magnifyingglass" : "tray"}
-                size={64}
-                color="rgba(255,255,255,0.7)"
-              />
+              <View style={styles.emptyIconContainer}>
+                <IconSymbol
+                  name={searchQuery ? "magnifyingglass" : "tray"}
+                  size={40}
+                  color="#D1D5DB"
+                />
+              </View>
               <Text style={styles.emptyTitle}>
                 {searchQuery ? 'Aucun résultat' : 'Aucune activité'}
               </Text>
@@ -206,11 +211,11 @@ export default function CategoryActivitiesScreen() {
                 {filteredActivities.length} activité{filteredActivities.length > 1 ? 's' : ''}
                 {searchQuery && ` trouvée${filteredActivities.length > 1 ? 's' : ''}`}
               </Text>
-              <View style={styles.gridContainer}>
+              <View style={styles.activitiesList}>
                 {filteredActivities.map((activity, index) => (
                   <Animated.View
                     key={activity.id}
-                    entering={FadeInDown.delay(index * 80).springify()}
+                    entering={FadeInDown.delay(index * 60).springify()}
                     style={styles.cardWrapper}
                   >
                     <ActivityCard
@@ -224,13 +229,14 @@ export default function CategoryActivitiesScreen() {
           )}
         </ScrollView>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   safeArea: {
     flex: 1,
@@ -241,12 +247,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E5E7EB',
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#F2F2F7',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -255,43 +264,44 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
+    gap: 8,
   },
-  headerIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.25)',
+  headerIconContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#1F2937',
   },
-  placeholder: {
-    width: 40,
+  headerSpacer: {
+    width: 36,
   },
   searchContainer: {
     paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
   },
   searchInputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    gap: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: '#F2F2F7',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
-    color: '#FFFFFF',
+    fontSize: 15,
+    fontFamily: 'Manrope_400Regular',
+    color: '#1F2937',
     paddingVertical: 0,
   },
   scrollView: {
@@ -299,10 +309,8 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     paddingHorizontal: 16,
-    paddingBottom: 40,
-  },
-  contentContainerWithTabBar: {
-    paddingBottom: 100,
+    paddingTop: 16,
+    paddingBottom: Platform.OS === 'ios' ? 100 : 120,
   },
   loadingContainer: {
     flex: 1,
@@ -311,40 +319,49 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   loadingText: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    fontWeight: '600',
+    fontSize: 15,
+    fontFamily: 'Manrope_500Medium',
+    color: '#6B7280',
   },
   countText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.9)',
-    marginBottom: 15,
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
+    color: '#6B7280',
+    marginBottom: 12,
   },
-  gridContainer: {
-    flexDirection: 'column',
-    gap: 12,
+  activitiesList: {
+    gap: 10,
   },
   cardWrapper: {
     width: '100%',
   },
   emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 60,
-    gap: 16,
+  },
+  emptyIconContainer: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#F2F2F7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
   },
   emptyTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#1F2937',
+    marginBottom: 8,
   },
   emptyText: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.9)',
+    fontSize: 14,
+    fontFamily: 'Manrope_400Regular',
+    color: '#6B7280',
     textAlign: 'center',
+    lineHeight: 20,
     paddingHorizontal: 32,
-    lineHeight: 22,
   },
 });

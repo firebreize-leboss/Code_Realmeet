@@ -11,7 +11,6 @@ import { Stack, router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { SystemBars } from "react-native-edge-to-edge";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { KeyboardProvider } from "react-native-keyboard-controller";
 import { useColorScheme, Alert } from "react-native";
 import { useNetworkState } from "expo-network";
 
@@ -118,7 +117,6 @@ export default function RootLayout() {
             >
               <SystemBars style="auto" />
               <GestureHandlerRootView style={{ flex: 1 }}>
-                <KeyboardProvider>
                   <WidgetProvider>
                     <Stack screenOptions={{ headerShown: false }}>
                     {/* Main app with tabs */}
@@ -148,7 +146,6 @@ export default function RootLayout() {
                     />
                     </Stack>
                   </WidgetProvider>
-                </KeyboardProvider>
               </GestureHandlerRootView>
             </ThemeProvider>
           </DataCacheProvider>
