@@ -114,14 +114,24 @@ class AuthService {
    */
   async getCurrentUser() {
     try {
+      // Vérifier d'abord s'il y a une session active
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        // Pas de session = pas d'utilisateur connecté, c'est normal
+        return null;
+      }
+
       const { data: { user }, error } = await supabase.auth.getUser();
-      
+
       if (error) throw error;
       if (!user) return null;
 
       return user;
     } catch (error: any) {
-      console.error('Erreur récupération utilisateur:', error);
+      // Ne pas logger les erreurs de session manquante car c'est un cas normal
+      if (error?.name !== 'AuthSessionMissingError') {
+        console.error('Erreur récupération utilisateur:', error);
+      }
       return null;
     }
   }
