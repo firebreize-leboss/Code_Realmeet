@@ -52,6 +52,9 @@ interface PendingSlot {
   time: string;
   duration: number;
   max_participants?: number;
+  max_groups?: number;
+  participants_per_group?: number;
+  min_participants_per_group?: number;
 }
 
 interface ActivityCalendarProps {
@@ -108,6 +111,7 @@ export default function ActivityCalendar({
   const [newDuration, setNewDuration] = useState('60');
   const [newMaxGroups, setNewMaxGroups] = useState('2');
   const [newParticipantsPerGroup, setNewParticipantsPerGroup] = useState('5');
+  const [newMinParticipantsPerGroup, setNewMinParticipantsPerGroup] = useState('4');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [addingSlot, setAddingSlot] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<SelectedSlot | null>(null);
@@ -517,6 +521,7 @@ export default function ActivityCalendar({
     setNewDuration('60');
     setNewMaxGroups('2');
     setNewParticipantsPerGroup('5');
+    setNewMinParticipantsPerGroup('4');
     setShowTimeModal(true);
   };
 
@@ -540,6 +545,7 @@ export default function ActivityCalendar({
     // Validation des groupes et participants par groupe
     const maxGroups = parseInt(newMaxGroups, 10);
     const participantsPerGroup = parseInt(newParticipantsPerGroup, 10);
+    const minParticipantsPerGroup = parseInt(newMinParticipantsPerGroup, 10);
 
     if (!maxGroups || maxGroups < 1) {
       Alert.alert('Champ requis', 'Veuillez indiquer le nombre de groupes.');
@@ -548,6 +554,16 @@ export default function ActivityCalendar({
 
     if (!participantsPerGroup || participantsPerGroup < 1) {
       Alert.alert('Champ requis', 'Veuillez indiquer le nombre de personnes par groupe.');
+      return;
+    }
+
+    if (!minParticipantsPerGroup || minParticipantsPerGroup < 2) {
+      Alert.alert('Champ requis', 'Le minimum de personnes par groupe doit être au moins 2.');
+      return;
+    }
+
+    if (minParticipantsPerGroup > participantsPerGroup) {
+      Alert.alert('Erreur', 'Le minimum ne peut pas dépasser le maximum de personnes par groupe.');
       return;
     }
 
@@ -565,7 +581,15 @@ export default function ActivityCalendar({
         Alert.alert('Créneau existant', 'Ce créneau existe déjà.');
         return;
       }
-      onSlotsChange?.([...pendingSlots, { date: dateStr, time: formattedTime, duration, max_participants: maxParticipants }]);
+      onSlotsChange?.([...pendingSlots, {
+        date: dateStr,
+        time: formattedTime,
+        duration,
+        max_participants: maxParticipants,
+        max_groups: maxGroups,
+        participants_per_group: participantsPerGroup,
+        min_participants_per_group: minParticipantsPerGroup,
+      }]);
       setShowTimeModal(false);
       return;
     }
@@ -584,6 +608,7 @@ export default function ActivityCalendar({
           max_participants: maxParticipants,
           max_groups: maxGroups,
           participants_per_group: participantsPerGroup,
+          min_participants_per_group: minParticipantsPerGroup,
           created_by: currentUserId,
         })
         .select('id')
@@ -934,6 +959,30 @@ export default function ActivityCalendar({
                   placeholderTextColor={colors.textSecondary}
                   value={newParticipantsPerGroup}
                   onChangeText={setNewParticipantsPerGroup}
+                  keyboardType="number-pad"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Minimum de personnes par groupe</Text>
+                <TextInput
+                  style={styles.timeInput}
+                  placeholder="Ex: 4"
+                  placeholderTextColor={colors.textSecondary}
+                  value={newMinParticipantsPerGroup}
+                  onChangeText={(text) => {
+                    const val = parseInt(text, 10);
+                    const maxVal = parseInt(newParticipantsPerGroup, 10);
+                    if (!text) {
+                      setNewMinParticipantsPerGroup('');
+                    } else if (val >= 2 && (!maxVal || val <= maxVal)) {
+                      setNewMinParticipantsPerGroup(text);
+                    } else if (val < 2) {
+                      setNewMinParticipantsPerGroup('2');
+                    } else if (maxVal && val > maxVal) {
+                      setNewMinParticipantsPerGroup(maxVal.toString());
+                    }
+                  }}
                   keyboardType="number-pad"
                 />
               </View>

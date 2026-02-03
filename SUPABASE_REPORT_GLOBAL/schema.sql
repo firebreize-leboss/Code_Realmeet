@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict O1GmZ7o6AMSj52igU8HoKvG9rjcl2wX04TOFRo2AMNSV4LB8JBeBYoxIBMc1a4F
+\restrict eKs4TAn4plgl2kjMcHa8sy1ZdMXcVOcb46eplebdF7AjNYYgo7QHNoDscTjfkeq
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.7 (Ubuntu 17.7-0ubuntu0.25.04.1)
@@ -1664,7 +1664,10 @@ CREATE TABLE public.activity_slots (
     groups_formed boolean DEFAULT false,
     groups_formed_at timestamp with time zone,
     is_locked boolean DEFAULT false,
-    locked_at timestamp with time zone
+    locked_at timestamp with time zone,
+    min_participants_per_group integer DEFAULT 4,
+    CONSTRAINT activity_slots_min_participants_per_group_check CHECK ((min_participants_per_group >= 2)),
+    CONSTRAINT check_min_less_than_max CHECK ((min_participants_per_group <= participants_per_group))
 );
 
 
@@ -4119,5 +4122,5 @@ ALTER TABLE public.slot_participants ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict O1GmZ7o6AMSj52igU8HoKvG9rjcl2wX04TOFRo2AMNSV4LB8JBeBYoxIBMc1a4F
+\unrestrict eKs4TAn4plgl2kjMcHa8sy1ZdMXcVOcb46eplebdF7AjNYYgo7QHNoDscTjfkeq
 

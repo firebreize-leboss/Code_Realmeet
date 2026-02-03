@@ -196,6 +196,9 @@ export default function CreateActivityScreen() {
       time: slot.time,
       duration: slot.duration,
       max_participants: slot.max_participants || 10,
+      max_groups: slot.max_groups || 2,
+      participants_per_group: slot.participants_per_group || 5,
+      min_participants_per_group: slot.min_participants_per_group || 4,
       created_by: result.data.host_id,
     }));
 

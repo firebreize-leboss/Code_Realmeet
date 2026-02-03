@@ -53,6 +53,7 @@ activity_slots	groups_formed	boolean	YES
 activity_slots	groups_formed_at	timestamp with time zone	YES
 activity_slots	is_locked	boolean	YES
 activity_slots	locked_at	timestamp with time zone	YES
+activity_slots	min_participants_per_group	integer	YES
 blocked_users	id	uuid	NO
 blocked_users	blocker_id	uuid	NO
 blocked_users	blocked_id	uuid	NO
@@ -229,4 +230,4 @@ v_slow_queries	total_exec_time	double precision	YES
 v_slow_queries	mean_exec_time	double precision	YES
 v_slow_queries	max_exec_time	double precision	YES
 v_slow_queries	rows	bigint	YES
-(230 rows)
+(231 rows)
