@@ -19,6 +19,7 @@ import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase';
 import { useBusinessRestrictions } from '@/hooks/useBusinessRestrictions';
+import { useDataCache } from '@/contexts/DataCacheContext';
 import { colors, typography, spacing, borderRadius } from '@/styles/commonStyles';
 
 interface FriendRequest {
@@ -33,6 +34,7 @@ interface FriendRequest {
 export default function FriendRequestsScreen() {
   const router = useRouter();
   const { isBusiness } = useBusinessRestrictions();
+  const { refreshFriends } = useDataCache();
 
   const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,6 +95,7 @@ export default function FriendRequestsScreen() {
         .eq('friend_request_id', requestId);
 
       setRequests(prev => prev.filter(req => req.id !== requestId));
+      await refreshFriends();
       Alert.alert('Succès', 'Demande acceptée ! Vous êtes maintenant amis.');
     } catch (error) {
       console.error('Error accepting friend request:', error);

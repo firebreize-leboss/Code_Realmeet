@@ -28,6 +28,7 @@ import { messageStorageService } from '@/services/message-storage.service';
 import { voiceMessageService } from '@/services/voice-message.service';
 import { blockService } from '@/services/block.service';
 import ReportModal from '@/components/ReportModal';
+import { useDataCache } from '@/contexts/DataCacheContext';
 
 // === DESIGN SYSTEM PREMIUM ===
 const COLORS = {
@@ -132,6 +133,7 @@ export default function ChatDetailScreen() {
   const { messages, loading: messagesLoading, sendMessage, currentUserId } = useMessages(conversationId as string);
 
   const { markAsRead } = useConversations();
+  const { refreshFriends } = useDataCache();
 
   // Fix bug retour d'app avec clavier ouvert
   useEffect(() => {
@@ -395,6 +397,7 @@ export default function ChatDetailScreen() {
         .eq('id', conversationId);
 
       setPendingInvitation(null);
+      await refreshFriends();
       Alert.alert('Succès', 'Invitation acceptée ! Vous pouvez maintenant discuter.');
     } catch (error: any) {
       console.error('Error accepting invitation:', error);
