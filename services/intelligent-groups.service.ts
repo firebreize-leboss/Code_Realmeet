@@ -34,12 +34,12 @@ export async function formIntelligentGroups(
 ): Promise<GroupFormationResult> {
   try {
     // Appeler la fonction SQL qui fait tout en une transaction
-    const { data, error } = await supabase.rpc('form_slot_groups', {
+    const { data, error } = await supabase.rpc('form_groups_v3', {
       p_slot_id: slotId
     });
 
     if (error) {
-      console.error('Erreur RPC form_slot_groups:', error);
+      console.error('Erreur RPC form_groups_v3:', error);
       throw error;
     }
 
