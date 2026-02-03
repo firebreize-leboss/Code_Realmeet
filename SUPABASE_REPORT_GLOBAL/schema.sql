@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 4N4ASckQh9qDzRgVL8ovVn9PuVMfw7ztTKwBF5qgD8mVBJPJE2bPkS7tWO3IeuZ
+\restrict VlYasid5Tljfae43H5qckkxadEdVzS8vuGAfpvNEO3LjMPK2KemsBmp0DjmCohf
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.7 (Ubuntu 17.7-0ubuntu0.25.04.1)
@@ -4065,5 +4065,5 @@ ALTER TABLE public.slot_participants ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 4N4ASckQh9qDzRgVL8ovVn9PuVMfw7ztTKwBF5qgD8mVBJPJE2bPkS7tWO3IeuZ
+\unrestrict VlYasid5Tljfae43H5qckkxadEdVzS8vuGAfpvNEO3LjMPK2KemsBmp0DjmCohf
 
