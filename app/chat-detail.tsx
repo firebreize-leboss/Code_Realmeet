@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
   Modal,
   Keyboard,
+  AppState,
 } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -341,6 +342,21 @@ export default function ChatDetailScreen() {
         clearInterval(recordingIntervalRef.current);
       }
       voiceMessageService.cleanup();
+    };
+  }, []);
+
+  // Force re-render quand l'app revient au premier plan (fix Android keyboard)
+  const [, forceUpdate] = useState(0);
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        Keyboard.dismiss();
+        forceUpdate(n => n + 1);
+      }
+    });
+
+    return () => {
+      subscription.remove();
     };
   }, []);
 
@@ -836,7 +852,7 @@ export default function ChatDetailScreen() {
       {/* KeyboardAvoidingView contenant FlatList + input */}
       <KeyboardAvoidingView
         style={styles.keyboardAvoidingContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         {conversationStatus.isClosed && (
