@@ -93,6 +93,7 @@ const DEFAULT_TAB_INDEX = 1; // browse
 // Derive tab index from a pathname by matching the last segment exactly
 // Returns null if no valid tab segment is found (e.g. pathname is just "(tabs)")
 function getTabIndexFromPathname(pathname: string, tabs: TabBarItem[]): number | null {
+  if (!pathname.includes('(tabs)')) return null;
   const lastSegment = pathname.split('/').filter(Boolean).pop() ?? '';
   const index = tabs.findIndex(tab => tab.name === lastSegment);
   return index !== -1 ? index : null;
@@ -159,8 +160,18 @@ function TabLayoutContent() {
 
   // Synchroniser l'index du tab avec la route actuelle
   useEffect(() => {
+    console.log('[TAB SYNC]', {
+      pathname,
+      isDetail: isDetailRoute(pathname),
+      tabIndex: getTabIndexFromPathname(pathname, tabs),
+      currentTabIndex,
+      prevTabIndex: prevTabIndexRef.current
+    });
+
     // Ignorer les pages modales/détail qui ne doivent pas affecter la navigation par tabs
+    // mais sauvegarder l'index actuel pour pouvoir le restaurer au retour
     if (isDetailRoute(pathname)) {
+      prevTabIndexRef.current = currentTabIndex;
       return;
     }
 
@@ -182,10 +193,16 @@ function TabLayoutContent() {
     }
 
     // Synchroniser via le pathname (exact segment match)
-    // Si tabIndex est null, le pathname ne contient pas de segment de tab valide
-    // (ex: "(tabs)" seul après un router.back) — on garde l'index actuel
     const tabIndex = getTabIndexFromPathname(pathname, tabs);
-    if (tabIndex !== null && tabIndex !== prevTabIndexRef.current) {
+
+    // Si tabIndex est null, le pathname ne contient pas de segment de tab valide
+    // (ex: "(tabs)" seul après un router.back) — restaurer l'index précédent
+    if (tabIndex === null) {
+      setCurrentTabIndex(prevTabIndexRef.current);
+      return;
+    }
+
+    if (tabIndex !== prevTabIndexRef.current) {
       prevTabIndexRef.current = tabIndex;
       setCurrentTabIndex(tabIndex);
     }
