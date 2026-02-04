@@ -91,19 +91,45 @@ const businessTabs: TabBarItem[] = [
 const DEFAULT_TAB_INDEX = 1; // browse
 
 // Derive tab index from a pathname by matching the last segment exactly
-function getTabIndexFromPathname(pathname: string, tabs: TabBarItem[]): number {
+// Returns null if no valid tab segment is found (e.g. pathname is just "(tabs)")
+function getTabIndexFromPathname(pathname: string, tabs: TabBarItem[]): number | null {
   const lastSegment = pathname.split('/').filter(Boolean).pop() ?? '';
   const index = tabs.findIndex(tab => tab.name === lastSegment);
-  return index !== -1 ? index : DEFAULT_TAB_INDEX;
+  return index !== -1 ? index : null;
 }
 
-// Returns true for modal/detail routes that should not affect tab state
+// Returns true for routes outside of the tabs layout that should not affect tab state
 function isDetailRoute(pathname: string): boolean {
-  return (
-    pathname.startsWith('/activity-detail') ||
-    pathname.startsWith('/chat-detail') ||
-    pathname.startsWith('/user-profile')
-  );
+  const detailPrefixes = [
+    '/activity-detail',
+    '/chat-detail',
+    '/user-profile',
+    '/add-friends',
+    '/friend-requests',
+    '/category-activities',
+    '/blocked-users',
+    '/business-group-view',
+    '/business-profile',
+    '/business-reviews',
+    '/create-activity',
+    '/edit-activity',
+    '/edit-business-profile',
+    '/edit-profile',
+    '/formsheet',
+    '/group-info',
+    '/laser-quest-detail',
+    '/manage-activity',
+    '/met-people',
+    '/modal',
+    '/my-activities',
+    '/my-custom-screen',
+    '/my-participated-activities',
+    '/settings',
+    '/transparent-modal',
+    '/user-activities',
+    '/auth',
+  ];
+  return detailPrefixes.some(prefix => pathname.startsWith(prefix));
 }
 
 // Composant interne qui utilise le contexte MapView
@@ -156,8 +182,10 @@ function TabLayoutContent() {
     }
 
     // Synchroniser via le pathname (exact segment match)
+    // Si tabIndex est null, le pathname ne contient pas de segment de tab valide
+    // (ex: "(tabs)" seul après un router.back) — on garde l'index actuel
     const tabIndex = getTabIndexFromPathname(pathname, tabs);
-    if (tabIndex !== prevTabIndexRef.current) {
+    if (tabIndex !== null && tabIndex !== prevTabIndexRef.current) {
       prevTabIndexRef.current = tabIndex;
       setCurrentTabIndex(tabIndex);
     }
