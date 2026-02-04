@@ -15,10 +15,9 @@ import {
   ActivityIndicator,
   Modal,
   Keyboard,
-  AppState,
 } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import * as ImagePicker from 'expo-image-picker';
@@ -134,16 +133,6 @@ export default function ChatDetailScreen() {
 
   const { markAsRead } = useConversations();
   const { refreshFriends } = useDataCache();
-
-  // Fix bug retour d'app avec clavier ouvert
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextAppState) => {
-      if (nextAppState === 'active') {
-        Keyboard.dismiss();
-      }
-    });
-    return () => subscription.remove();
-  }, []);
 
   // Marquer la conversation comme lue quand on l'ouvre
   useEffect(() => {
@@ -761,91 +750,94 @@ export default function ChatDetailScreen() {
 
   const inputWarning = getInputWarning();
   const hasText = message.trim().length > 0;
+  const insets = useSafeAreaInsets();
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header Premium Clair */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <IconSymbol name="chevron.left" size={22} color={COLORS.charcoal} />
-        </TouchableOpacity>
+    <View style={styles.container}>
+      {/* Header avec SafeArea top uniquement */}
+      <SafeAreaView edges={['top']} style={styles.headerSafeArea}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <IconSymbol name="chevron.left" size={22} color={COLORS.charcoal} />
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.headerCenter}
-          onPress={() => {
-            if (isGroup) {
-              router.push(`/group-info?id=${conversationId}`);
-            } else if (otherUserId) {
-              router.push(`/user-profile?id=${otherUserId}`);
-            }
-          }}
-        >
-          {convImage ? (
-            <Image source={{ uri: convImage }} style={styles.headerAvatar} />
-          ) : (
-            <View style={styles.headerAvatarPlaceholder}>
-              <IconSymbol
-                name={isGroup ? "person.2.fill" : "person.fill"}
-                size={18}
-                color={COLORS.grayTextDark}
-              />
-            </View>
-          )}
-
-          <View style={styles.headerTitleContainer}>
-            <Text style={styles.headerTitle} numberOfLines={1}>{convName}</Text>
-            {isGroup && (
-              <Text style={styles.headerSubtitle}>Groupe</Text>
-            )}
-          </View>
-        </TouchableOpacity>
-
-        {/* Bouton Voir l'activité pour les groupes d'activité */}
-        {isGroup && activityId && (
           <TouchableOpacity
-            style={styles.headerIconButton}
-            onPress={async () => {
-              try {
-                const { data: activityExists, error } = await supabase
-                  .from('activities')
-                  .select('id')
-                  .eq('id', activityId)
-                  .maybeSingle();
-
-                if (error || !activityExists) {
-                  Alert.alert(
-                    'Activité non disponible',
-                    'Cette activité n\'existe plus ou a été supprimée.'
-                  );
-                  return;
-                }
-
-                router.push(`/activity-detail?id=${activityId}`);
-              } catch (e) {
-                Alert.alert(
-                  'Erreur',
-                  'Impossible d\'accéder à cette activité.'
-                );
+            style={styles.headerCenter}
+            onPress={() => {
+              if (isGroup) {
+                router.push(`/group-info?id=${conversationId}`);
+              } else if (otherUserId) {
+                router.push(`/user-profile?id=${otherUserId}`);
               }
             }}
           >
-            <IconSymbol name="calendar" size={20} color={COLORS.orangeMuted} />
+            {convImage ? (
+              <Image source={{ uri: convImage }} style={styles.headerAvatar} />
+            ) : (
+              <View style={styles.headerAvatarPlaceholder}>
+                <IconSymbol
+                  name={isGroup ? "person.2.fill" : "person.fill"}
+                  size={18}
+                  color={COLORS.grayTextDark}
+                />
+              </View>
+            )}
+
+            <View style={styles.headerTitleContainer}>
+              <Text style={styles.headerTitle} numberOfLines={1}>{convName}</Text>
+              {isGroup && (
+                <Text style={styles.headerSubtitle}>Groupe</Text>
+              )}
+            </View>
           </TouchableOpacity>
-        )}
 
-        <TouchableOpacity style={styles.headerIconButton} onPress={() => setShowOptionsModal(true)}>
-          <IconSymbol name="ellipsis" size={20} color={COLORS.grayTextDark} />
-        </TouchableOpacity>
-      </View>
+          {/* Bouton Voir l'activité pour les groupes d'activité */}
+          {isGroup && activityId && (
+            <TouchableOpacity
+              style={styles.headerIconButton}
+              onPress={async () => {
+                try {
+                  const { data: activityExists, error } = await supabase
+                    .from('activities')
+                    .select('id')
+                    .eq('id', activityId)
+                    .maybeSingle();
 
-      {/* Séparateur fin sous le header */}
-      <View style={styles.headerSeparator} />
+                  if (error || !activityExists) {
+                    Alert.alert(
+                      'Activité non disponible',
+                      'Cette activité n\'existe plus ou a été supprimée.'
+                    );
+                    return;
+                  }
 
-      {/* Messages - KeyboardAvoidingView */}
+                  router.push(`/activity-detail?id=${activityId}`);
+                } catch (e) {
+                  Alert.alert(
+                    'Erreur',
+                    'Impossible d\'accéder à cette activité.'
+                  );
+                }
+              }}
+            >
+              <IconSymbol name="calendar" size={20} color={COLORS.orangeMuted} />
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity style={styles.headerIconButton} onPress={() => setShowOptionsModal(true)}>
+            <IconSymbol name="ellipsis" size={20} color={COLORS.grayTextDark} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Séparateur fin sous le header */}
+        <View style={styles.headerSeparator} />
+      </SafeAreaView>
+
+      {/* KeyboardAvoidingView contenant FlatList + input */}
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
+        style={styles.keyboardAvoidingContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         {conversationStatus.isClosed && (
           <View style={styles.closedBanner}>
@@ -878,8 +870,8 @@ export default function ChatDetailScreen() {
           />
         )}
 
-        {/* Zone de saisie Premium */}
-        <SafeAreaView edges={['bottom']} style={styles.inputSafeArea}>
+        {/* Zone de saisie avec SafeArea bottom via paddingBottom */}
+        <View style={[styles.inputBottomWrapper, { paddingBottom: insets.bottom }]}>
           <View style={styles.inputContainer}>
 
           {/* Bannière d'invitation en attente pour le destinataire */}
@@ -986,7 +978,7 @@ export default function ChatDetailScreen() {
             </View>
           )}
           </View>
-        </SafeAreaView>
+        </View>
       </KeyboardAvoidingView>
 
       {/* Modal Options */}
@@ -1046,7 +1038,7 @@ export default function ChatDetailScreen() {
         targetType="message"
         targetId={reportTargetMessageId || ''}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -1054,6 +1046,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.white,
+  },
+  headerSafeArea: {
+    backgroundColor: COLORS.white,
+  },
+  keyboardAvoidingContainer: {
+    flex: 1,
   },
 
   // === HEADER PREMIUM ===
@@ -1303,7 +1301,7 @@ const styles = StyleSheet.create({
   },
 
   // === INPUT CONTAINER ===
-  inputSafeArea: {
+  inputBottomWrapper: {
     backgroundColor: COLORS.white,
   },
   inputContainer: {
