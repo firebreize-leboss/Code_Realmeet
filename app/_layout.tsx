@@ -126,6 +126,25 @@ export default function RootLayout() {
                     {/* Main app with tabs */}
                     <Stack.Screen name="(tabs)" />
 
+                    {/* Auth account type - no back navigation */}
+                    <Stack.Screen
+                      name="auth/account-type"
+                      options={{
+                        gestureEnabled: false,
+                        headerBackVisible: false,
+                      }}
+                    />
+
+                    {/* Signup wizard - custom gesture handling */}
+                    <Stack.Screen
+                      name="auth/signup-wizard"
+                      options={{
+                        gestureEnabled: false,
+                        headerBackVisible: false,
+                        animation: 'slide_from_right',
+                      }}
+                    />
+
                     {/* Modal Demo Screens */}
                     <Stack.Screen
                       name="modal"

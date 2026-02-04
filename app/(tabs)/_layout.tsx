@@ -3,8 +3,9 @@
 // Avec guard d'authentification pour rediriger vers /auth/account-type si non connecté
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, BackHandler } from 'react-native';
 import { useRouter, usePathname, useLocalSearchParams } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
 import SwipeableTabView from '@/components/SwipeableTabView';
 import { useAuth } from '@/contexts/AuthContext';
@@ -247,6 +248,19 @@ function TabLayoutContent() {
     }
     prevIsBusiness.current = isBusiness;
   }, [isBusiness]);
+
+  // Empêcher le bouton retour de revenir vers la page d'accueil — quitter l'app à la place
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        BackHandler.exitApp();
+        return true;
+      };
+
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => subscription.remove();
+    }, [])
+  );
 
   const handleIndexChange = useCallback((index: number) => {
     navigationSourceRef.current = 'swipe';

@@ -496,7 +496,6 @@ export default function ChatDetailScreen() {
     if (!selectedMessage) return;
     setShowMessageActions(false);
     setReplyToMessage(selectedMessage);
-    setMessage(`@${selectedMessage.senderName} `);
     setTimeout(() => inputRef.current?.focus(), 100);
     setSelectedMessage(null);
   };
@@ -548,11 +547,12 @@ export default function ChatDetailScreen() {
     if (!message.trim() || !canSendMessages()) return;
 
     const userMessage = message.trim();
+    const replyId = replyToMessage?.id;
     setMessage('');
     setReplyToMessage(null);
 
     try {
-      await sendMessage(userMessage, 'text');
+      await sendMessage(userMessage, 'text', undefined, undefined, replyId);
     } catch (error) {
       console.error('Error sending message:', error);
     }
@@ -717,6 +717,18 @@ export default function ChatDetailScreen() {
         >
           {!isOwnMessage && isGroup && (
             <Text style={styles.senderName}>{msg.senderName}</Text>
+          )}
+
+          {/* Quoted / replied-to message */}
+          {msg.replyTo && (
+            <View style={[styles.replyQuote, isOwnMessage && styles.replyQuoteOwn]}>
+              <Text style={[styles.replyQuoteName, isOwnMessage && styles.replyQuoteNameOwn]}>
+                {msg.replyTo.senderName}
+              </Text>
+              <Text style={[styles.replyQuoteText, isOwnMessage && styles.replyQuoteTextOwn]} numberOfLines={2}>
+                {msg.replyTo.text || (msg.replyTo.type === 'image' ? 'Photo' : msg.replyTo.type === 'voice' ? 'Message vocal' : 'Message')}
+              </Text>
+            </View>
           )}
 
           {msg.text && (
@@ -890,7 +902,7 @@ export default function ChatDetailScreen() {
             </View>
             <TouchableOpacity
               style={styles.replyPreviewClose}
-              onPress={() => { setReplyToMessage(null); setMessage(''); }}
+              onPress={() => setReplyToMessage(null)}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <IconSymbol name="xmark" size={14} color={COLORS.grayTextDark} />
@@ -1318,6 +1330,39 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.orangePrimary,
     marginBottom: 4,
+  },
+
+  // === REPLY QUOTE (inside message bubble) ===
+  replyQuote: {
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.orangePrimary,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: 6,
+  },
+  replyQuoteOwn: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderLeftColor: COLORS.white,
+  },
+  replyQuoteName: {
+    fontSize: 12,
+    fontFamily: 'Manrope_600SemiBold',
+    fontWeight: '600',
+    color: COLORS.orangePrimary,
+    marginBottom: 2,
+  },
+  replyQuoteNameOwn: {
+    color: COLORS.white,
+  },
+  replyQuoteText: {
+    fontSize: 13,
+    fontFamily: 'Manrope_400Regular',
+    color: COLORS.grayTextDark,
+  },
+  replyQuoteTextOwn: {
+    color: 'rgba(255,255,255,0.8)',
   },
   messageText: {
     fontSize: 15,

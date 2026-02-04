@@ -10,7 +10,7 @@ export type Json =
   | Json[]
 
 // Type pour l'intention utilisateur
-export type UserIntention = 'amicaux' | 'rencontres' | 'reseau' | 'decouverte' | null;
+export type UserIntention = 'amicaux' | 'rencontres' | null;
 
 export interface Database {
   public: {
@@ -672,8 +672,6 @@ export interface ComposedGroup {
 export const INTENTION_OPTIONS = [
   { value: 'amicaux', label: 'Rencontres amicales', icon: 'person.2.fill', color: '#10B981' },
   { value: 'rencontres', label: 'Rencontres amoureuses', icon: 'heart.fill', color: '#EC4899' },
-  { value: 'reseau', label: 'Réseautage pro', icon: 'briefcase.fill', color: '#3B82F6' },
-  { value: 'decouverte', label: 'Découverte & activités', icon: 'star.fill', color: '#F59E0B' },
 ] as const;
 
 export function getIntentionLabel(intention: UserIntention): string {

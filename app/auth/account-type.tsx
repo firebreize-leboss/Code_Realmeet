@@ -1,7 +1,7 @@
 // app/auth/account-type.tsx
 // Page de sélection du type de compte - Design premium unifié
 
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,15 +9,30 @@ import {
   TouchableOpacity,
   ScrollView,
   Platform,
+  BackHandler,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 export default function AccountTypeScreen() {
   const router = useRouter();
+
+  // Prevent hardware back button from navigating back (exits app instead)
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        BackHandler.exitApp();
+        return true;
+      };
+
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => subscription.remove();
+    }, [])
+  );
 
   return (
     <View style={styles.container}>

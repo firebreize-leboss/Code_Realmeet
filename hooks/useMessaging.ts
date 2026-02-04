@@ -10,6 +10,13 @@ import { supabase } from '@/lib/supabase';
 
 export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'failed';
 
+export interface ReplyInfo {
+  id: string;
+  senderName: string;
+  text?: string;
+  type: 'text' | 'image' | 'voice' | 'system';
+}
+
 export interface TransformedMessage {
   id: string;
   senderId: string;
@@ -22,6 +29,7 @@ export interface TransformedMessage {
   type: 'text' | 'image' | 'voice' | 'system';
   timestamp: string;
   status?: MessageStatus;
+  replyTo?: ReplyInfo;
 }
 
 interface ConversationParticipant {
@@ -739,22 +747,42 @@ export function useMessages(conversationId: string) {
         // Mettre à jour les messages
         if (!messagesResult.error && messagesResult.data) {
           const messagesData = messagesResult.data as any[];
-          const transformedMessages: TransformedMessage[] = messagesData.map(msg => ({
-            id: msg.id,
-            senderId: msg.sender_id,
-            senderName: msg.profiles?.full_name || 'Inconnu',
-            senderAvatar: msg.profiles?.avatar_url,
-            text: msg.content || undefined,
-            imageUrl: msg.message_type === 'image' ? msg.media_url || undefined : undefined,
-            voiceUrl: msg.message_type === 'voice' ? msg.media_url || undefined : undefined,
-            voiceDuration: msg.media_duration || undefined,
-            type: msg.message_type,
-            timestamp: new Date(msg.created_at).toLocaleTimeString('fr-FR', {
-              hour: '2-digit',
-              minute: '2-digit',
-            }),
-            status: 'delivered' as const,
-          }));
+
+          // Build a lookup map for reply references
+          const msgMap = new Map<string, any>();
+          messagesData.forEach(msg => msgMap.set(msg.id, msg));
+
+          const transformedMessages: TransformedMessage[] = messagesData.map(msg => {
+            let replyTo: ReplyInfo | undefined;
+            if (msg.reply_to_message_id) {
+              const repliedMsg = msgMap.get(msg.reply_to_message_id);
+              if (repliedMsg) {
+                replyTo = {
+                  id: repliedMsg.id,
+                  senderName: repliedMsg.profiles?.full_name || 'Inconnu',
+                  text: repliedMsg.content || undefined,
+                  type: repliedMsg.message_type,
+                };
+              }
+            }
+            return {
+              id: msg.id,
+              senderId: msg.sender_id,
+              senderName: msg.profiles?.full_name || 'Inconnu',
+              senderAvatar: msg.profiles?.avatar_url,
+              text: msg.content || undefined,
+              imageUrl: msg.message_type === 'image' ? msg.media_url || undefined : undefined,
+              voiceUrl: msg.message_type === 'voice' ? msg.media_url || undefined : undefined,
+              voiceDuration: msg.media_duration || undefined,
+              type: msg.message_type,
+              timestamp: new Date(msg.created_at).toLocaleTimeString('fr-FR', {
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
+              status: 'delivered' as const,
+              replyTo,
+            };
+          });
 
           loadedMessageIdsRef.current = new Set(transformedMessages.map(m => m.id));
           setMessages(transformedMessages);
@@ -794,22 +822,41 @@ export function useMessages(conversationId: string) {
 
       if (error) throw error;
 
-      const transformedMessages: TransformedMessage[] = data?.map(msg => ({
-        id: msg.id,
-        senderId: msg.sender_id,
-        senderName: msg.profiles?.full_name || 'Inconnu',
-        senderAvatar: msg.profiles?.avatar_url,
-        text: msg.content || undefined,
-        imageUrl: msg.message_type === 'image' ? msg.media_url || undefined : undefined,
-        voiceUrl: msg.message_type === 'voice' ? msg.media_url || undefined : undefined,
-        voiceDuration: msg.media_duration || undefined,
-        type: msg.message_type,
-        timestamp: new Date(msg.created_at).toLocaleTimeString('fr-FR', {
-          hour: '2-digit',
-          minute: '2-digit',
-        }),
-        status: 'delivered',
-      })) || [];
+      // Build a lookup map for reply references
+      const msgMap = new Map<string, any>();
+      data?.forEach(msg => msgMap.set(msg.id, msg));
+
+      const transformedMessages: TransformedMessage[] = data?.map(msg => {
+        let replyTo: ReplyInfo | undefined;
+        if (msg.reply_to_message_id) {
+          const repliedMsg = msgMap.get(msg.reply_to_message_id);
+          if (repliedMsg) {
+            replyTo = {
+              id: repliedMsg.id,
+              senderName: repliedMsg.profiles?.full_name || 'Inconnu',
+              text: repliedMsg.content || undefined,
+              type: repliedMsg.message_type,
+            };
+          }
+        }
+        return {
+          id: msg.id,
+          senderId: msg.sender_id,
+          senderName: msg.profiles?.full_name || 'Inconnu',
+          senderAvatar: msg.profiles?.avatar_url,
+          text: msg.content || undefined,
+          imageUrl: msg.message_type === 'image' ? msg.media_url || undefined : undefined,
+          voiceUrl: msg.message_type === 'voice' ? msg.media_url || undefined : undefined,
+          voiceDuration: msg.media_duration || undefined,
+          type: msg.message_type,
+          timestamp: new Date(msg.created_at).toLocaleTimeString('fr-FR', {
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+          status: 'delivered',
+          replyTo,
+        };
+      }) || [];
 
       loadedMessageIdsRef.current = new Set(transformedMessages.map(m => m.id));
       setMessages(transformedMessages);
@@ -857,6 +904,37 @@ export function useMessages(conversationId: string) {
 
           const profile = profileData as { full_name: string; avatar_url: string } | null;
 
+          // Build replyTo from existing messages in state
+          let replyTo: ReplyInfo | undefined;
+          if (newMsg.reply_to_message_id) {
+            // Look up the replied message from current state
+            const currentMessages = messages;
+            const repliedMsg = currentMessages.find(m => m.id === newMsg.reply_to_message_id);
+            if (repliedMsg) {
+              replyTo = {
+                id: repliedMsg.id,
+                senderName: repliedMsg.senderName,
+                text: repliedMsg.text,
+                type: repliedMsg.type,
+              };
+            } else {
+              // Fallback: fetch from DB
+              const { data: repliedData } = await supabase
+                .from('messages')
+                .select('id, content, message_type, sender_id, profiles:sender_id(full_name)')
+                .eq('id', newMsg.reply_to_message_id)
+                .single();
+              if (repliedData) {
+                replyTo = {
+                  id: (repliedData as any).id,
+                  senderName: (repliedData as any).profiles?.full_name || 'Inconnu',
+                  text: (repliedData as any).content || undefined,
+                  type: (repliedData as any).message_type,
+                };
+              }
+            }
+          }
+
           const newMessage: TransformedMessage = {
             id: newMsg.id,
             senderId: newMsg.sender_id,
@@ -872,6 +950,7 @@ export function useMessages(conversationId: string) {
               minute: '2-digit',
             }),
             status: 'delivered',
+            replyTo,
           };
 
           setMessages(prev => {
@@ -896,7 +975,8 @@ export function useMessages(conversationId: string) {
     content: string,
     type: 'text' | 'image' | 'voice' = 'text',
     mediaUrl?: string,
-    mediaDuration?: number
+    mediaDuration?: number,
+    replyToMessageId?: string
   ) => {
     try {
       // Utiliser le cache si disponible, sinon charger
@@ -922,6 +1002,20 @@ export function useMessages(conversationId: string) {
 
       const tempId = `temp_${Date.now()}_${Math.random()}`;
 
+      // Build replyTo info for optimistic display
+      let replyToInfo: ReplyInfo | undefined;
+      if (replyToMessageId) {
+        const repliedMsg = messages.find(m => m.id === replyToMessageId);
+        if (repliedMsg) {
+          replyToInfo = {
+            id: repliedMsg.id,
+            senderName: repliedMsg.senderName,
+            text: repliedMsg.text,
+            type: repliedMsg.type,
+          };
+        }
+      }
+
       const optimisticMessage: TransformedMessage = {
         id: tempId,
         senderId: userId,
@@ -937,6 +1031,7 @@ export function useMessages(conversationId: string) {
           minute: '2-digit',
         }),
         status: 'sending',
+        replyTo: replyToInfo,
       };
 
       setMessages(prev => [...prev, optimisticMessage]);
@@ -950,6 +1045,7 @@ export function useMessages(conversationId: string) {
           message_type: type,
           media_url: mediaUrl || null,
           media_duration: mediaDuration || null,
+          reply_to_message_id: replyToMessageId || null,
         } as any)
         .select()
         .single();

@@ -1,5 +1,5 @@
 // app/edit-profile.tsx
-// Écran d'édition de profil avec intention et personality_tags
+// Écran d'édition de profil avec intention
 // Design premium unifié avec le reste de l'app
 
 import React, { useState, useEffect } from 'react';
@@ -20,7 +20,7 @@ import { router } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { InterestSelector } from '@/components/InterestSelector';
 import { IntentionSelector } from '@/components/IntentionSelector';
-import { PersonalityTagsSelector } from '@/components/PersonalityTagsSelector';
+
 import { useAuth } from '@/contexts/AuthContext';
 import { userService } from '@/services/user.service';
 import { storageService } from '@/services/storage.service';
@@ -38,7 +38,7 @@ export default function EditProfileScreen() {
   const [phone, setPhone] = useState('');
   const [interests, setInterests] = useState<string[]>([]);
   const [intention, setIntention] = useState<UserIntention>(null);
-  const [personalityTags, setPersonalityTags] = useState<string[]>([]);
+
   const [profileImage, setProfileImage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -49,7 +49,7 @@ export default function EditProfileScreen() {
       setPhone(profile.phone || '');
       setInterests(profile.interests || []);
       setIntention(profile.intention || null);
-      setPersonalityTags(profile.personality_tags || []);
+
       setProfileImage(profile.avatar_url);
     }
   }, [profile]);
@@ -84,7 +84,7 @@ export default function EditProfileScreen() {
         phone: phone.trim() || null,
         interests: interests.length > 0 ? interests : null,
         intention: intention,
-        personality_tags: personalityTags.length > 0 ? personalityTags : null,
+
         avatar_url: avatarUrl,
       });
 
@@ -213,16 +213,6 @@ export default function EditProfileScreen() {
             <IntentionSelector
               selectedIntention={intention}
               onIntentionChange={setIntention}
-            />
-          </View>
-
-          {/* PERSONALITY TAGS */}
-          <View style={styles.fieldSection}>
-            <Text style={styles.label}>Personnalité</Text>
-            <PersonalityTagsSelector
-              selectedTags={personalityTags}
-              onTagsChange={setPersonalityTags}
-              maxSelection={5}
             />
           </View>
 
