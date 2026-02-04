@@ -13,6 +13,7 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
+  Platform,
 } from 'react-native';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
@@ -131,9 +132,14 @@ export default function ChatDetailScreen() {
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportTargetMessageId, setReportTargetMessageId] = useState<string | null>(null);
 
+  // État pour la réponse à un message
+  const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
 
+  // État pour le menu d'actions long press
+  const [showMessageActions, setShowMessageActions] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
 
-  const { messages, loading: messagesLoading, sendMessage, currentUserId } = useMessages(conversationId as string);
+  const { messages, loading: messagesLoading, sendMessage, deleteMessage, currentUserId } = useMessages(conversationId as string);
 
   const { markAsRead } = useConversations();
   const { refreshFriends } = useDataCache();
@@ -481,24 +487,52 @@ export default function ChatDetailScreen() {
     }
   };
 
-  const handleMessageLongPress = (messageId: string, senderId: string) => {
-    if (senderId === currentUserId) return;
+  const handleMessageLongPress = (msg: Message) => {
+    setSelectedMessage(msg);
+    setShowMessageActions(true);
+  };
+
+  const handleActionReply = () => {
+    if (!selectedMessage) return;
+    setShowMessageActions(false);
+    setReplyToMessage(selectedMessage);
+    setMessage(`@${selectedMessage.senderName} `);
+    setTimeout(() => inputRef.current?.focus(), 100);
+    setSelectedMessage(null);
+  };
+
+  const handleActionDelete = () => {
+    if (!selectedMessage) return;
+    setShowMessageActions(false);
+    const msgId = selectedMessage.id;
+    setSelectedMessage(null);
 
     Alert.alert(
-      'Options du message',
-      'Que souhaitez-vous faire ?',
+      'Supprimer le message',
+      'Voulez-vous vraiment supprimer ce message ?',
       [
         { text: 'Annuler', style: 'cancel' },
         {
-          text: 'Signaler ce message',
+          text: 'Supprimer',
           style: 'destructive',
-          onPress: () => {
-            setReportTargetMessageId(messageId);
-            setShowReportModal(true);
+          onPress: async () => {
+            try {
+              await deleteMessage(msgId);
+            } catch {
+              Alert.alert('Erreur', 'Impossible de supprimer le message.');
+            }
           },
         },
       ]
     );
+  };
+
+  const handleActionReport = () => {
+    if (!selectedMessage) return;
+    setShowMessageActions(false);
+    setReportTargetMessageId(selectedMessage.id);
+    setSelectedMessage(null);
+    setTimeout(() => setShowReportModal(true), 300);
   };
 
   const handleReportUser = () => {
@@ -515,6 +549,7 @@ export default function ChatDetailScreen() {
 
     const userMessage = message.trim();
     setMessage('');
+    setReplyToMessage(null);
 
     try {
       await sendMessage(userMessage, 'text');
@@ -677,9 +712,8 @@ export default function ChatDetailScreen() {
         <TouchableOpacity
           style={[styles.messageBubble, isOwnMessage && styles.ownMessageBubble]}
           activeOpacity={0.8}
-          onLongPress={() => handleMessageLongPress(msg.id, msg.senderId)}
+          onLongPress={() => handleMessageLongPress(msg)}
           delayLongPress={500}
-          disabled={isOwnMessage}
         >
           {!isOwnMessage && isGroup && (
             <Text style={styles.senderName}>{msg.senderName}</Text>
@@ -844,6 +878,26 @@ export default function ChatDetailScreen() {
           </View>
         )}
 
+        {/* Chip de prévisualisation de réponse */}
+        {replyToMessage && (
+          <View style={styles.replyPreview}>
+            <View style={styles.replyPreviewBar} />
+            <View style={styles.replyPreviewContent}>
+              <Text style={styles.replyPreviewName}>{replyToMessage.senderName}</Text>
+              <Text style={styles.replyPreviewText} numberOfLines={1}>
+                {replyToMessage.text || (replyToMessage.imageUrl ? 'Photo' : 'Message vocal')}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.replyPreviewClose}
+              onPress={() => { setReplyToMessage(null); setMessage(''); }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <IconSymbol name="xmark" size={14} color={COLORS.grayTextDark} />
+            </TouchableOpacity>
+          </View>
+        )}
+
         {isRecording ? (
           <View style={styles.recordingContainer}>
             <View style={styles.recordingIndicator}>
@@ -888,7 +942,7 @@ export default function ChatDetailScreen() {
                 onPress={handleSend}
                 disabled={!canSendMessages()}
               >
-                <IconSymbol name="arrow.up" size={18} color={COLORS.white} />
+                <IconSymbol name="paperplane.fill" size={17} color={COLORS.white} />
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
@@ -1052,6 +1106,39 @@ export default function ChatDetailScreen() {
         targetType="message"
         targetId={reportTargetMessageId || ''}
       />
+
+      {/* Modal Actions sur message (long press) */}
+      <Modal
+        visible={showMessageActions}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { setShowMessageActions(false); setSelectedMessage(null); }}
+      >
+        <TouchableOpacity
+          style={styles.actionSheetOverlay}
+          activeOpacity={1}
+          onPress={() => { setShowMessageActions(false); setSelectedMessage(null); }}
+        >
+          <View style={styles.actionSheetContainer}>
+            <View style={styles.actionSheetHandle} />
+
+            <TouchableOpacity style={styles.actionSheetOption} onPress={handleActionReply}>
+              <IconSymbol name="arrowshape.turn.up.left.fill" size={20} color={COLORS.orangePrimary} />
+              <Text style={styles.actionSheetOptionText}>Répondre</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.actionSheetOption} onPress={handleActionDelete}>
+              <IconSymbol name="trash.fill" size={20} color={COLORS.error} />
+              <Text style={[styles.actionSheetOptionText, { color: COLORS.error }]}>Supprimer</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.actionSheetOption, styles.actionSheetOptionLast]} onPress={handleActionReport}>
+              <IconSymbol name="flag.fill" size={20} color={COLORS.warning} />
+              <Text style={[styles.actionSheetOptionText, { color: COLORS.warning }]}>Signaler</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -1322,9 +1409,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderTopWidth: 1,
     borderTopColor: COLORS.grayMedium,
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: 8,
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 10,
   },
   warningBanner: {
     flexDirection: 'row',
@@ -1344,23 +1431,23 @@ const styles = StyleSheet.create({
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: 6,
+    gap: 8,
   },
   inputIconButton: {
-    width: 40,
-    height: 40,
+    width: 42,
+    height: 42,
     justifyContent: 'center',
     alignItems: 'center',
   },
   inputWrapper: {
     flex: 1,
     backgroundColor: COLORS.grayBg,
-    borderRadius: 22,
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: COLORS.grayMedium,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    minHeight: 40,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    minHeight: 44,
     justifyContent: 'center',
   },
   input: {
@@ -1371,12 +1458,23 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
   },
   sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: COLORS.orangePrimary,
     justifyContent: 'center',
     alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: COLORS.orangePrimary,
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
 
   // === RECORDING ===
@@ -1513,5 +1611,86 @@ const styles = StyleSheet.create({
     fontFamily: 'Manrope_600SemiBold',
     fontWeight: '600',
     color: COLORS.white,
+  },
+
+  // === REPLY PREVIEW CHIP ===
+  replyPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.grayLight,
+    borderRadius: 10,
+    marginBottom: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.orangePrimary,
+  },
+  replyPreviewBar: {
+    // The left border on the container serves as the bar
+    width: 0,
+  },
+  replyPreviewContent: {
+    flex: 1,
+    marginLeft: 4,
+  },
+  replyPreviewName: {
+    fontSize: 13,
+    fontFamily: 'Manrope_600SemiBold',
+    fontWeight: '600',
+    color: COLORS.orangePrimary,
+    marginBottom: 2,
+  },
+  replyPreviewText: {
+    fontSize: 13,
+    fontFamily: 'Manrope_400Regular',
+    color: COLORS.grayTextDark,
+  },
+  replyPreviewClose: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: COLORS.grayMedium,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+
+  // === ACTION SHEET (long press messages) ===
+  actionSheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  actionSheetContainer: {
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 40,
+  },
+  actionSheetHandle: {
+    width: 36,
+    height: 4,
+    backgroundColor: COLORS.grayMedium,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  actionSheetOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.grayLight,
+  },
+  actionSheetOptionLast: {
+    borderBottomWidth: 0,
+  },
+  actionSheetOptionText: {
+    fontSize: 16,
+    fontFamily: 'Manrope_500Medium',
+    color: COLORS.charcoal,
   },
 });

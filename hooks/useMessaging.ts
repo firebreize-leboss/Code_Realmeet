@@ -990,11 +990,35 @@ export function useMessages(conversationId: string) {
     }
   };
 
+  // SOFT-DELETE : met à jour deleted_at côté serveur et retire localement
+  const deleteMessage = async (messageId: string) => {
+    // Retirer localement de manière optimiste
+    setMessages(prev => prev.filter(m => m.id !== messageId));
+    loadedMessageIdsRef.current.delete(messageId);
+
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', messageId);
+
+      if (error) {
+        // En cas d'erreur, recharger les messages pour rétablir l'état réel
+        await loadMessages();
+        throw error;
+      }
+    } catch (err) {
+      console.error('Error deleting message:', err);
+      throw err;
+    }
+  };
+
   return {
     messages,
     loading,
     error,
     sendMessage,
+    deleteMessage,
     refresh: loadMessages,
     currentUserId,
   };
