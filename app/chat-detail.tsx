@@ -350,13 +350,13 @@ export default function ChatDetailScreen() {
 
 
 
-  // Force re-render quand l'app revient au premier plan (fix Android keyboard)
-  const [, forceUpdate] = useState(0);
+  // Force remount du KeyboardAvoidingView quand l'app revient au premier plan (fix clavier Android/iOS)
+  const [keyboardResetKey, setKeyboardResetKey] = useState(0);
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextAppState) => {
       if (nextAppState === 'active') {
         Keyboard.dismiss();
-        forceUpdate(n => n + 1);
+        setKeyboardResetKey(prev => prev + 1);
       }
     });
 
@@ -854,9 +854,10 @@ export default function ChatDetailScreen() {
         <View style={styles.headerSeparator} />
       </SafeAreaView>
 
-      {/* Wrapper clavier: KeyboardAvoidingView sur iOS, View simple sur Android (adjustResize suffit) */}
+      {/* Wrapper clavier: KeyboardAvoidingView avec behavior adapté par plateforme */}
       {Platform.OS === 'ios' ? (
         <KeyboardAvoidingView
+          key={`kav-ios-${keyboardResetKey}`}
           style={styles.keyboardAvoidingContainer}
           behavior="padding"
           keyboardVerticalOffset={90}
@@ -1003,7 +1004,11 @@ export default function ChatDetailScreen() {
           </View>
         </KeyboardAvoidingView>
       ) : (
-        <View style={styles.keyboardAvoidingContainer}>
+        <KeyboardAvoidingView
+          key={`kav-android-${keyboardResetKey}`}
+          style={styles.keyboardAvoidingContainer}
+          behavior="height"
+        >
           {conversationStatus.isClosed && (
             <View style={styles.closedBanner}>
               <IconSymbol name="info.circle.fill" size={18} color={COLORS.grayTextDark} />
@@ -1144,7 +1149,7 @@ export default function ChatDetailScreen() {
             )}
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       )}
 
       {/* Modal Options */}
