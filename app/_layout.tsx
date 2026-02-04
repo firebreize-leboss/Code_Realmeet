@@ -26,6 +26,7 @@ import { Button } from "@/components/button";
 import { WidgetProvider } from "@/contexts/WidgetContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { DataCacheProvider } from "@/contexts/DataCacheContext";
+import { TabIndexProvider } from "@/contexts/TabIndexContext";
 import { notificationService } from "@/lib/notifications";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -111,6 +112,7 @@ export default function RootLayout() {
       <StatusBar style="dark" animated />
       <SafeAreaProvider>
         <AuthProvider>
+          <TabIndexProvider>
           <DataCacheProvider>
             <ThemeProvider
               value={CustomDefaultTheme}
@@ -149,6 +151,7 @@ export default function RootLayout() {
               </GestureHandlerRootView>
             </ThemeProvider>
           </DataCacheProvider>
+          </TabIndexProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </>

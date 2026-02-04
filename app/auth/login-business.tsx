@@ -62,8 +62,10 @@ export default function LoginBusinessScreen() {
         return;
       }
 
-      router.replace('/(tabs)/profile');
+      console.log('[NAV_DEBUG] login-business.tsx -> router.replace to /(tabs)/browse');
+      router.replace('/(tabs)/browse');
     } catch (error: any) {
+      console.log('[NAV_DEBUG] login-business.tsx -> login error:', error.message);
       Alert.alert('Erreur', error.message);
     } finally {
       setLoading(false);

@@ -15,7 +15,7 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/lib/supabase';
 import { useBusinessRestrictions } from '@/hooks/useBusinessRestrictions';
@@ -33,6 +33,7 @@ interface FriendRequest {
 
 export default function FriendRequestsScreen() {
   const router = useRouter();
+  const { returnTab } = useLocalSearchParams<{ returnTab?: string }>();
   const { isBusiness } = useBusinessRestrictions();
   const { refreshFriends } = useDataCache();
 
@@ -141,7 +142,13 @@ export default function FriendRequestsScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
+          <TouchableOpacity onPress={() => {
+            if (returnTab) {
+              router.navigate(`/(tabs)/${returnTab}` as any);
+            } else {
+              router.back();
+            }
+          }} style={styles.headerButton}>
             <IconSymbol name="chevron.left" size={20} color={colors.text} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Demandes d'amis</Text>
@@ -222,7 +229,13 @@ export default function FriendRequestsScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
+        <TouchableOpacity onPress={() => {
+          if (returnTab) {
+            router.navigate(`/(tabs)/${returnTab}` as any);
+          } else {
+            router.back();
+          }
+        }} style={styles.headerButton}>
           <IconSymbol name="chevron.left" size={20} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Demandes d'amis</Text>

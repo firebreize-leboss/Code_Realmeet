@@ -28,10 +28,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Écouter les changements d'auth
     const { data: { subscription } } = authService.onAuthStateChange(
       async (event, session) => {
+        console.log('[AUTH_DEBUG] onAuthStateChange event:', event, 'hasSession:', !!session, 'userId:', session?.user?.id);
         if (session?.user) {
           setUser(session.user);
           await loadProfile(session.user.id);
         } else {
+          console.log('[AUTH_DEBUG] No session -> clearing user & profile');
           setUser(null);
           setProfile(null);
         }
@@ -46,13 +48,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function checkUser() {
     try {
+      console.log('[AUTH_DEBUG] checkUser() called');
       const currentUser = await authService.getCurrentUser();
+      console.log('[AUTH_DEBUG] checkUser result:', currentUser ? `userId=${currentUser.id}` : 'null');
       if (currentUser) {
         setUser(currentUser);
         await loadProfile(currentUser.id);
       }
     } catch (error) {
-      console.error('Erreur vérification utilisateur:', error);
+      console.error('[AUTH_DEBUG] checkUser error:', error);
     } finally {
       setLoading(false);
     }
@@ -60,15 +64,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function loadProfile(userId: string) {
     try {
+      console.log('[AUTH_DEBUG] loadProfile() for userId:', userId);
       const profileData = await userService.getProfile(userId);
+      console.log('[AUTH_DEBUG] loadProfile result: account_type=', profileData?.account_type, 'username=', profileData?.username);
       setProfile(profileData);
     } catch (error) {
-      console.error('Erreur chargement profil:', error);
+      console.error('[AUTH_DEBUG] loadProfile error:', error);
     }
   }
 
   async function signOut() {
+    console.log('[AUTH_DEBUG] signOut() called');
     await authService.logoutUser();
+    console.log('[AUTH_DEBUG] signOut() done, clearing user & profile');
     setUser(null);
     setProfile(null);
   }

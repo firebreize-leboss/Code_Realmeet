@@ -80,8 +80,8 @@ export default function ChatScreen() {
   const [activeFilter, setActiveFilter] = useState<ChatFilter>('all');
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
 
-  const { cache, markConversationAsRead, refreshConversations, removeConversationFromCache, toggleMuteConversation } = useDataCache();
-  const { pendingCount: pendingRequestsCount } = useFriendRequests();
+  const { cache, markConversationAsRead, refreshConversations, refreshFriends, removeConversationFromCache, toggleMuteConversation } = useDataCache();
+  const { pendingCount: pendingRequestsCount, refresh: refreshFriendRequests } = useFriendRequests();
   const { profile } = useAuth();
   const [activityContacts, setActivityContacts] = useState<Friend[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -90,7 +90,9 @@ export default function ChatScreen() {
   useFocusEffect(
     useCallback(() => {
       refreshConversations();
-    }, [refreshConversations])
+      refreshFriends();
+      refreshFriendRequests();
+    }, [refreshConversations, refreshFriends, refreshFriendRequests])
   );
 
   const conversations = cache.conversations;
@@ -568,7 +570,7 @@ export default function ChatScreen() {
               {/* Icône gauche */}
               <TouchableOpacity
                 style={styles.headerIconButton}
-                onPress={() => router.push('/add-friends')}
+                onPress={() => router.push('/add-friends?returnTab=chat')}
               >
                 <IconSymbol name="person.badge.plus" size={22} color={colors.textSecondary} />
               </TouchableOpacity>
@@ -582,7 +584,7 @@ export default function ChatScreen() {
               <View style={styles.headerRightButtons}>
                 <TouchableOpacity
                   style={styles.headerIconButton}
-                  onPress={() => router.push('/friend-requests')}
+                  onPress={() => router.push('/friend-requests?returnTab=chat')}
                 >
                   <IconSymbol name="envelope" size={22} color={colors.textSecondary} />
                   {pendingRequestsCount > 0 && (

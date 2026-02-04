@@ -75,6 +75,7 @@ export default function LoginScreen() {
         return;
       }
 
+      console.log('[NAV_DEBUG] login.tsx -> router.replace to /(tabs)/profile — THIS IS THE PROBLEM: should redirect to /(tabs)/browse');
       router.replace('/(tabs)/profile');
 
     } catch (error: any) {

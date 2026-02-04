@@ -3,11 +3,12 @@
 // Avec guard d'authentification pour rediriger vers /auth/account-type si non connecté
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { View, ActivityIndicator, Platform } from 'react-native';
+import { View, ActivityIndicator } from 'react-native';
 import { useRouter, usePathname, useLocalSearchParams } from 'expo-router';
 import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
 import SwipeableTabView from '@/components/SwipeableTabView';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTabIndex } from '@/contexts/TabIndexContext';
 import { colors } from '@/styles/commonStyles';
 import { MapViewProvider, useMapView } from '@/contexts/MapViewContext';
 
@@ -87,37 +88,41 @@ const businessTabs: TabBarItem[] = [
   },
 ];
 
+const DEFAULT_TAB_INDEX = 1; // browse
+
+// Derive tab index from a pathname by matching the last segment exactly
+function getTabIndexFromPathname(pathname: string, tabs: TabBarItem[]): number {
+  const lastSegment = pathname.split('/').filter(Boolean).pop() ?? '';
+  const index = tabs.findIndex(tab => tab.name === lastSegment);
+  return index !== -1 ? index : DEFAULT_TAB_INDEX;
+}
+
+// Returns true for modal/detail routes that should not affect tab state
+function isDetailRoute(pathname: string): boolean {
+  return (
+    pathname.startsWith('/activity-detail') ||
+    pathname.startsWith('/chat-detail') ||
+    pathname.startsWith('/user-profile')
+  );
+}
+
 // Composant interne qui utilise le contexte MapView
 function TabLayoutContent() {
-  const renderCount = useRef(0);
-  renderCount.current += 1;
-
-  // Debug: identifier les instances multiples
-  useEffect(() => {
-    const instanceId = Math.random().toString(36).substr(2, 9);
-    console.log('[DEBUG _layout] MOUNT instance:', instanceId);
-    return () => console.log('[DEBUG _layout] UNMOUNT instance:', instanceId);
-  }, []);
-
   const { user, profile, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const params = useLocalSearchParams();
   const { isMapViewActive } = useMapView();
-  const [currentTabIndex, setCurrentTabIndex] = useState(() => {
-    // browse est toujours à l'index 1 dans userTabs et businessTabs
-    if (pathname.includes('browse')) {
-      return 1;
-    }
-    return 0;
-  });
-  const [isRedirecting, setIsRedirecting] = useState(false);
-  const isSwipeNavigation = useRef(false);
-  const isTabBarNavigation = useRef(false);
-  const prevTabIndexRef = useRef(currentTabIndex);
 
   const isBusiness = profile?.account_type === 'business';
   const tabs = useMemo(() => isBusiness ? businessTabs : userTabs, [isBusiness]);
+
+  const { currentTabIndex, setCurrentTabIndex } = useTabIndex();
+  const [isRedirecting, setIsRedirecting] = useState(false);
+
+  // Navigation source tracking — reset synchronously in the pathname effect
+  const navigationSourceRef = useRef<'swipe' | 'tabbar' | null>(null);
+  const prevTabIndexRef = useRef(currentTabIndex);
   const prevIsBusiness = useRef<boolean | null>(null);
 
   // Mémoriser les paramètres pour éviter les nouvelles références et les boucles infinies
@@ -129,20 +134,14 @@ function TabLayoutContent() {
   // Synchroniser l'index du tab avec la route actuelle
   useEffect(() => {
     // Ignorer les pages modales/détail qui ne doivent pas affecter la navigation par tabs
-    if (
-      pathname.includes('detail') ||
-      pathname.startsWith('/activity-detail') ||
-      pathname.startsWith('/chat-detail') ||
-      pathname.startsWith('/user-profile')
-    ) {
+    if (isDetailRoute(pathname)) {
       return;
     }
 
-    // Ignorer la synchronisation si on vient d'un swipe ou d'un clic sur la tab bar
-    if (isSwipeNavigation.current) {
-      return;
-    }
-    if (isTabBarNavigation.current) {
+    // Ignorer la synchronisation si on vient d'un swipe ou d'un clic sur la tab bar,
+    // then clear the flag so the next pathname change is handled normally
+    if (navigationSourceRef.current !== null) {
+      navigationSourceRef.current = null;
       return;
     }
 
@@ -156,9 +155,9 @@ function TabLayoutContent() {
       }
     }
 
-    // Sinon, synchroniser via le pathname
-    const tabIndex = tabs.findIndex(tab => pathname.includes(tab.name));
-    if (tabIndex !== -1 && tabIndex !== prevTabIndexRef.current) {
+    // Synchroniser via le pathname (exact segment match)
+    const tabIndex = getTabIndexFromPathname(pathname, tabs);
+    if (tabIndex !== prevTabIndexRef.current) {
       prevTabIndexRef.current = tabIndex;
       setCurrentTabIndex(tabIndex);
     }
@@ -198,29 +197,23 @@ function TabLayoutContent() {
   // Réinitialiser l'index du tab quand le type de compte change (pas au montage initial)
   useEffect(() => {
     if (prevIsBusiness.current !== null && prevIsBusiness.current !== isBusiness) {
-      prevTabIndexRef.current = 0;
-      setCurrentTabIndex(0);
+      prevTabIndexRef.current = DEFAULT_TAB_INDEX;
+      setCurrentTabIndex(DEFAULT_TAB_INDEX);
     }
     prevIsBusiness.current = isBusiness;
   }, [isBusiness]);
 
   const handleIndexChange = useCallback((index: number) => {
-    isSwipeNavigation.current = true;
+    navigationSourceRef.current = 'swipe';
     prevTabIndexRef.current = index;
     setCurrentTabIndex(index);
-    setTimeout(() => {
-      isSwipeNavigation.current = false;
-    }, 100);
-  }, [tabs]);
+  }, []);
 
   const handleTabPress = useCallback((index: number) => {
-    isTabBarNavigation.current = true;
+    navigationSourceRef.current = 'tabbar';
     prevTabIndexRef.current = index;
     setCurrentTabIndex(index);
-    setTimeout(() => {
-      isTabBarNavigation.current = false;
-    }, 100);
-  }, [tabs]);
+  }, []);
 
   // Écran de chargement pendant la vérification du type de compte ou redirection
   if (loading || isRedirecting || !user) {

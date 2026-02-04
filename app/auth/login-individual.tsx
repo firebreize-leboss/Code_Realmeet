@@ -62,8 +62,10 @@ export default function LoginIndividualScreen() {
         return;
       }
 
+      console.log('[NAV_DEBUG] login-individual.tsx -> router.replace to /(tabs)/browse');
       router.replace('/(tabs)/browse');
     } catch (error: any) {
+      console.log('[NAV_DEBUG] login-individual.tsx -> login error:', error.message);
       Alert.alert('Erreur', error.message);
     } finally {
       setLoading(false);

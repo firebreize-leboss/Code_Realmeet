@@ -211,13 +211,15 @@ export default function SettingsScreen() {
   const handleLogout = async () => {
     setLogoutLoading(true);
     try {
+      console.log('[NAV_DEBUG] settings.tsx handleLogout -> calling signOut()');
       // Utiliser signOut du contexte pour réinitialiser l'état global
       await signOut();
+      console.log('[NAV_DEBUG] settings.tsx handleLogout -> signOut done, replacing to /auth/account-type');
       // Le guard dans (tabs)/_layout.tsx redirigera automatiquement vers /auth/account-type
       // Mais on utilise aussi replace pour s'assurer que l'historique est nettoyé
       router.replace('/auth/account-type');
     } catch (error: any) {
-      console.error('Erreur déconnexion:', error);
+      console.error('[NAV_DEBUG] settings.tsx handleLogout error:', error);
       Alert.alert('Erreur', 'Impossible de se déconnecter. Veuillez réessayer.');
     } finally {
       setLogoutLoading(false);
