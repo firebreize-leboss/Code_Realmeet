@@ -773,21 +773,12 @@ export default function ChatDetailScreen() {
   const hasText = message.trim().length > 0;
   const insets = useSafeAreaInsets();
 
-  // Track keyboard visibility to avoid stacking KAV padding + safe area inset on iOS
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
-  useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const showSub = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
-    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
-    return () => { showSub.remove(); hideSub.remove(); };
-  }, []);
-
-  // iOS: safe area bottom only when keyboard is hidden (KAV padding handles it when open)
-  // Android: safe area bottom always (OS resize handles keyboard; no KAV behavior)
-  const bottomPadding = Platform.OS === 'ios'
-    ? (keyboardVisible ? 0 : insets.bottom)
-    : insets.bottom;
+  // Single bottom padding from safe-area insets — no duplication with KAV.
+  // On iOS, KAV behavior=padding shifts the whole block up; insets.bottom keeps
+  // the input above the home indicator when the keyboard is closed.
+  // On Android, softwareKeyboardLayoutMode=resize handles the keyboard; KAV is
+  // disabled, so insets.bottom is the only bottom spacing needed.
+  const bottomPadding = insets.bottom;
 
   // Shared content renderer to avoid duplicating the entire chat body
   const renderChatContent = () => (
@@ -1016,14 +1007,16 @@ export default function ChatDetailScreen() {
         <View style={styles.headerSeparator} />
       </SafeAreaView>
 
-      {/* Android: behavior=undefined — softwareKeyboardLayoutMode=resize handles keyboard.
-         iOS: behavior=padding — KAV adds padding to push input above keyboard.
-         Both keep keyboardResetKey for AppState remount fix. */}
+      {/* iOS: behavior=padding — KAV pushes input above keyboard; keyboardResetKey
+             forces remount after app-resume to fix stale keyboard offset.
+         Android: KAV fully disabled (enabled=false) — softwareKeyboardLayoutMode=resize
+             already adjusts the window; no keyboardResetKey needed. */}
       <KeyboardAvoidingView
-        key={`kav-${keyboardResetKey}`}
+        key={Platform.OS === 'ios' ? `kav-${keyboardResetKey}` : 'kav-android'}
         style={styles.keyboardAvoidingContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 56 : 0}
+        enabled={Platform.OS === 'ios'}
       >
         {renderChatContent()}
       </KeyboardAvoidingView>
