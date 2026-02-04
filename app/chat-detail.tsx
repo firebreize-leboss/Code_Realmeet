@@ -16,6 +16,7 @@ import {
   Modal,
   Keyboard,
   AppState,
+  type AppStateStatus,
 } from 'react-native';
 import { KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -89,8 +90,11 @@ const getDateKey = (timestamp: string): string => {
 export default function ChatDetailScreen() {
   const router = useRouter();
   const { id: conversationId } = useLocalSearchParams();
+  const insets = useSafeAreaInsets();
   const flatListRef = useRef<FlatList>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const inputRef = useRef<TextInput>(null);
+  const inputWasFocusedRef = useRef(false);
 
   // États de base
   const [convName, setConvName] = useState('Conversation');
@@ -350,13 +354,40 @@ export default function ChatDetailScreen() {
 
 
 
-  // Force remount du KeyboardAvoidingView quand l'app revient au premier plan (fix clavier Android/iOS)
+  // Keyboard recovery on app resume:
+  // 1. Memorise whether the input was focused before background
+  // 2. Dismiss keyboard when returning to active
+  // 3. Remount KAV on iOS only (via keyboardResetKey) to fix stale offset
+  // 4. Restore focus after a short delay if input was previously focused
   const [keyboardResetKey, setKeyboardResetKey] = useState(0);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextAppState) => {
-      if (nextAppState === 'active') {
+      const prev = appStateRef.current;
+      appStateRef.current = nextAppState;
+
+      // Going to background/inactive: remember focus state
+      if (nextAppState === 'background' || nextAppState === 'inactive') {
+        inputWasFocusedRef.current = inputRef.current?.isFocused?.() ?? false;
+        return;
+      }
+
+      // Returning to active
+      if (nextAppState === 'active' && (prev === 'background' || prev === 'inactive')) {
+        const wasFocused = inputWasFocusedRef.current;
         Keyboard.dismiss();
-        setKeyboardResetKey(prev => prev + 1);
+
+        // Remount KAV only on iOS to reset stale keyboard offset
+        if (Platform.OS === 'ios') {
+          setKeyboardResetKey(k => k + 1);
+        }
+
+        // Restore focus after keyboard dismiss + KAV remount settle
+        if (wasFocused) {
+          setTimeout(() => {
+            inputRef.current?.focus();
+          }, 350);
+        }
       }
     });
 
@@ -364,6 +395,28 @@ export default function ChatDetailScreen() {
       subscription.remove();
     };
   }, []);
+
+  // === DEBUG KEYBOARD: log AppState changes & keyboard events ===
+  useEffect(() => {
+    const appStateSubscription = AppState.addEventListener('change', (nextAppState) => {
+      console.log('[DEBUG KEYBOARD] AppState changed to:', nextAppState);
+      console.log('[DEBUG KEYBOARD] insets.bottom:', insets.bottom);
+    });
+
+    const keyboardDidShowSub = Keyboard.addListener('keyboardDidShow', (e) => {
+      console.log('[DEBUG KEYBOARD] keyboardDidShow, height:', e.endCoordinates.height);
+    });
+
+    const keyboardDidHideSub = Keyboard.addListener('keyboardDidHide', () => {
+      console.log('[DEBUG KEYBOARD] keyboardDidHide');
+    });
+
+    return () => {
+      appStateSubscription.remove();
+      keyboardDidShowSub.remove();
+      keyboardDidHideSub.remove();
+    };
+  }, [insets.bottom]);
 
   const canSendMessages = (): boolean => {
     if (conversationStatus.isClosed) return false;
@@ -771,8 +824,6 @@ export default function ChatDetailScreen() {
 
   const inputWarning = getInputWarning();
   const hasText = message.trim().length > 0;
-  const insets = useSafeAreaInsets();
-
   // Single bottom padding from safe-area insets — no duplication with KAV.
   // On iOS, KAV behavior=padding shifts the whole block up; insets.bottom keeps
   // the input above the home indicator when the keyboard is closed.
@@ -887,6 +938,7 @@ export default function ChatDetailScreen() {
 
             <View style={styles.inputWrapper}>
               <TextInput
+                ref={inputRef}
                 style={styles.input}
                 placeholder="Écrire un message..."
                 placeholderTextColor={COLORS.grayText}
