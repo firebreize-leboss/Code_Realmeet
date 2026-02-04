@@ -11,7 +11,8 @@ import { Stack, router } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { SystemBars } from "react-native-edge-to-edge";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { useColorScheme, Alert, AppState, Keyboard } from "react-native";
+import { useColorScheme, Alert } from "react-native";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 import { useNetworkState } from "expo-network";
 
 import {
@@ -52,16 +53,6 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
     }
   }, [loaded]);
-
-  // Fermer le clavier quand l'app passe en background/inactive
-  useEffect(() => {
-    const subscription = AppState.addEventListener("change", (nextAppState) => {
-      if (nextAppState === "background" || nextAppState === "inactive") {
-        Keyboard.dismiss();
-      }
-    });
-    return () => subscription.remove();
-  }, []);
 
   // Initialisation des notifications push (seulement en production)
   useEffect(() => {
@@ -129,6 +120,7 @@ export default function RootLayout() {
             >
               <SystemBars style="auto" />
               <GestureHandlerRootView style={{ flex: 1 }}>
+                <KeyboardProvider statusBarTranslucent navigationBarTranslucent>
                   <WidgetProvider>
                     <Stack screenOptions={{ headerShown: false }}>
                     {/* Main app with tabs */}
@@ -158,6 +150,7 @@ export default function RootLayout() {
                     />
                     </Stack>
                   </WidgetProvider>
+                </KeyboardProvider>
               </GestureHandlerRootView>
             </ThemeProvider>
           </DataCacheProvider>

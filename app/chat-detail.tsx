@@ -10,15 +10,12 @@ import {
   TextInput,
   TouchableOpacity,
   Image,
-  Platform,
   Alert,
   ActivityIndicator,
   Modal,
-  Keyboard,
-  AppState,
-  type AppStateStatus,
 } from 'react-native';
-import { KeyboardAvoidingView } from 'react-native';
+import Animated, { useAnimatedStyle } from 'react-native-reanimated';
+import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -91,10 +88,10 @@ export default function ChatDetailScreen() {
   const router = useRouter();
   const { id: conversationId } = useLocalSearchParams();
   const insets = useSafeAreaInsets();
+  const { height: kbHeight } = useReanimatedKeyboardAnimation();
   const flatListRef = useRef<FlatList>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const inputRef = useRef<TextInput>(null);
-  const inputWasFocusedRef = useRef(false);
 
   // États de base
   const [convName, setConvName] = useState('Conversation');
@@ -354,70 +351,6 @@ export default function ChatDetailScreen() {
 
 
 
-  // Keyboard recovery on app resume:
-  // 1. Memorise whether the input was focused before background
-  // 2. Dismiss keyboard when returning to active
-  // 3. Remount KAV on iOS only (via keyboardResetKey) to fix stale offset
-  // 4. Restore focus after a short delay if input was previously focused
-  const [keyboardResetKey, setKeyboardResetKey] = useState(0);
-  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextAppState) => {
-      const prev = appStateRef.current;
-      appStateRef.current = nextAppState;
-
-      // Going to background/inactive: remember focus state
-      if (nextAppState === 'background' || nextAppState === 'inactive') {
-        inputWasFocusedRef.current = inputRef.current?.isFocused?.() ?? false;
-        return;
-      }
-
-      // Returning to active
-      if (nextAppState === 'active' && (prev === 'background' || prev === 'inactive')) {
-        const wasFocused = inputWasFocusedRef.current;
-        Keyboard.dismiss();
-
-        // Remount KAV only on iOS to reset stale keyboard offset
-        if (Platform.OS === 'ios') {
-          setKeyboardResetKey(k => k + 1);
-        }
-
-        // Restore focus after keyboard dismiss + KAV remount settle
-        if (wasFocused) {
-          setTimeout(() => {
-            inputRef.current?.focus();
-          }, 350);
-        }
-      }
-    });
-
-    return () => {
-      subscription.remove();
-    };
-  }, []);
-
-  // === DEBUG KEYBOARD: log AppState changes & keyboard events ===
-  useEffect(() => {
-    const appStateSubscription = AppState.addEventListener('change', (nextAppState) => {
-      console.log('[DEBUG KEYBOARD] AppState changed to:', nextAppState);
-      console.log('[DEBUG KEYBOARD] insets.bottom:', insets.bottom);
-    });
-
-    const keyboardDidShowSub = Keyboard.addListener('keyboardDidShow', (e) => {
-      console.log('[DEBUG KEYBOARD] keyboardDidShow, height:', e.endCoordinates.height);
-    });
-
-    const keyboardDidHideSub = Keyboard.addListener('keyboardDidHide', () => {
-      console.log('[DEBUG KEYBOARD] keyboardDidHide');
-    });
-
-    return () => {
-      appStateSubscription.remove();
-      keyboardDidShowSub.remove();
-      keyboardDidHideSub.remove();
-    };
-  }, [insets.bottom]);
-
   const canSendMessages = (): boolean => {
     if (conversationStatus.isClosed) return false;
     if (isBlocked || hasBlockedMe) return false;
@@ -582,7 +515,6 @@ export default function ChatDetailScreen() {
 
     const userMessage = message.trim();
     setMessage('');
-    Keyboard.dismiss();
 
     try {
       await sendMessage(userMessage, 'text');
@@ -824,12 +756,12 @@ export default function ChatDetailScreen() {
 
   const inputWarning = getInputWarning();
   const hasText = message.trim().length > 0;
-  // Single bottom padding from safe-area insets — no duplication with KAV.
-  // On iOS, KAV behavior=padding shifts the whole block up; insets.bottom keeps
-  // the input above the home indicator when the keyboard is closed.
-  // On Android, softwareKeyboardLayoutMode=resize handles the keyboard; KAV is
-  // disabled, so insets.bottom is the only bottom spacing needed.
-  const bottomPadding = insets.bottom;
+
+  // RNKC kbHeight is negative when keyboard is open (0 → -keyboardHeight).
+  // paddingBottom = insets.bottom when closed, keyboard height when open.
+  const animatedBottomStyle = useAnimatedStyle(() => ({
+    paddingBottom: Math.max(insets.bottom, -kbHeight.value),
+  }));
 
   // Shared content renderer to avoid duplicating the entire chat body
   const renderChatContent = () => (
@@ -865,8 +797,8 @@ export default function ChatDetailScreen() {
         />
       )}
 
-      {/* Zone de saisie avec SafeArea bottom via paddingBottom */}
-      <View style={[styles.inputBottomWrapper, { paddingBottom: bottomPadding }]}>
+      {/* Zone de saisie avec animated paddingBottom from RNKC */}
+      <Animated.View style={[styles.inputBottomWrapper, animatedBottomStyle]}>
         <View style={styles.inputContainer}>
 
         {/* Bannière d'invitation en attente pour le destinataire */}
@@ -974,7 +906,7 @@ export default function ChatDetailScreen() {
           </View>
         )}
         </View>
-      </View>
+      </Animated.View>
     </>
   );
 
@@ -1059,19 +991,9 @@ export default function ChatDetailScreen() {
         <View style={styles.headerSeparator} />
       </SafeAreaView>
 
-      {/* iOS: behavior=padding — KAV pushes input above keyboard; keyboardResetKey
-             forces remount after app-resume to fix stale keyboard offset.
-         Android: KAV fully disabled (enabled=false) — softwareKeyboardLayoutMode=resize
-             already adjusts the window; no keyboardResetKey needed. */}
-      <KeyboardAvoidingView
-        key={Platform.OS === 'ios' ? `kav-${keyboardResetKey}` : 'kav-android'}
-        style={styles.keyboardAvoidingContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 56 : 0}
-        enabled={Platform.OS === 'ios'}
-      >
+      <View style={styles.keyboardAvoidingContainer}>
         {renderChatContent()}
-      </KeyboardAvoidingView>
+      </View>
 
       {/* Modal Options */}
       <Modal
