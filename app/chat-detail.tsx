@@ -130,6 +130,8 @@ export default function ChatDetailScreen() {
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportTargetMessageId, setReportTargetMessageId] = useState<string | null>(null);
 
+
+
   const { messages, loading: messagesLoading, sendMessage, currentUserId } = useMessages(conversationId as string);
 
   const { markAsRead } = useConversations();
@@ -344,6 +346,9 @@ export default function ChatDetailScreen() {
       voiceMessageService.cleanup();
     };
   }, []);
+
+
+
 
   // Force re-render quand l'app revient au premier plan (fix Android keyboard)
   const [, forceUpdate] = useState(0);
@@ -849,153 +854,298 @@ export default function ChatDetailScreen() {
         <View style={styles.headerSeparator} />
       </SafeAreaView>
 
-      {/* KeyboardAvoidingView contenant FlatList + input */}
-      <KeyboardAvoidingView
-        style={styles.keyboardAvoidingContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-      >
-        {conversationStatus.isClosed && (
-          <View style={styles.closedBanner}>
-            <IconSymbol name="info.circle.fill" size={18} color={COLORS.grayTextDark} />
-            <Text style={styles.closedBannerText}>
-              {conversationStatus.closedReason === 'activity_ended'
-                ? "L'activité est terminée. Cette conversation est maintenant en lecture seule."
-                : 'Cette conversation est fermée.'}
-            </Text>
-          </View>
-        )}
-
-        {(messagesLoading || !currentUserId) ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={COLORS.orangePrimary} />
-          </View>
-        ) : (
-          <FlatList
-            ref={flatListRef}
-            data={messagesWithDateSeparators}
-            renderItem={renderMessage}
-            keyExtractor={(item) => item.id}
-            inverted
-            contentContainerStyle={styles.messagesContent}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            initialNumToRender={20}
-            maxToRenderPerBatch={10}
-            windowSize={10}
-          />
-        )}
-
-        {/* Zone de saisie avec SafeArea bottom via paddingBottom */}
-        <View style={[styles.inputBottomWrapper, { paddingBottom: insets.bottom }]}>
-          <View style={styles.inputContainer}>
-
-          {/* Bannière d'invitation en attente pour le destinataire */}
-          {pendingInvitation?.isRecipient && (
-            <View style={styles.invitationBanner}>
-              <View style={styles.invitationBannerContent}>
-                <IconSymbol name="person.badge.plus" size={18} color={COLORS.orangePrimary} />
-                <Text style={styles.invitationBannerText}>
-                  {pendingInvitation.senderName} souhaite vous ajouter en ami
-                </Text>
-              </View>
-              <View style={styles.invitationActions}>
-                <TouchableOpacity
-                  style={styles.invitationRejectButton}
-                  onPress={handleRejectInvitation}
-                  disabled={processingInvitation}
-                >
-                  {processingInvitation ? (
-                    <ActivityIndicator size="small" color={COLORS.grayTextDark} />
-                  ) : (
-                    <Text style={styles.invitationRejectText}>Refuser</Text>
-                  )}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.invitationAcceptButton}
-                  onPress={handleAcceptInvitation}
-                  disabled={processingInvitation}
-                >
-                  {processingInvitation ? (
-                    <ActivityIndicator size="small" color={COLORS.white} />
-                  ) : (
-                    <Text style={styles.invitationAcceptText}>Accepter</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
+      {/* Wrapper clavier: KeyboardAvoidingView sur iOS, View simple sur Android (adjustResize suffit) */}
+      {Platform.OS === 'ios' ? (
+        <KeyboardAvoidingView
+          style={styles.keyboardAvoidingContainer}
+          behavior="padding"
+          keyboardVerticalOffset={90}
+        >
+          {conversationStatus.isClosed && (
+            <View style={styles.closedBanner}>
+              <IconSymbol name="info.circle.fill" size={18} color={COLORS.grayTextDark} />
+              <Text style={styles.closedBannerText}>
+                {conversationStatus.closedReason === 'activity_ended'
+                  ? "L'activité est terminée. Cette conversation est maintenant en lecture seule."
+                  : 'Cette conversation est fermée.'}
+              </Text>
             </View>
           )}
 
-          {inputWarning && (
-            <View style={styles.warningBanner}>
-              <IconSymbol name="exclamationmark.triangle.fill" size={16} color={COLORS.warning} />
-              <Text style={styles.warningText}>{inputWarning}</Text>
-            </View>
-          )}
-
-          {isRecording ? (
-            <View style={styles.recordingContainer}>
-              <View style={styles.recordingIndicator}>
-                <View style={styles.recordingDot} />
-                <Text style={styles.recordingTime}>{formatRecordingTime(recordingTime)}</Text>
-              </View>
-              <TouchableOpacity style={styles.stopRecordingButton} onPress={handleStopRecording}>
-                <IconSymbol name="stop.fill" size={22} color={COLORS.error} />
-              </TouchableOpacity>
+          {(messagesLoading || !currentUserId) ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={COLORS.orangePrimary} />
             </View>
           ) : (
-            <View style={styles.inputRow}>
-              <TouchableOpacity
-                style={styles.inputIconButton}
-                onPress={handleImagePick}
-                disabled={!canSendMessages()}
-              >
-                <IconSymbol
-                  name="photo"
-                  size={22}
-                  color={canSendMessages() ? COLORS.grayTextDark : COLORS.grayMedium}
-                />
-              </TouchableOpacity>
+            <FlatList
+              ref={flatListRef}
+              data={messagesWithDateSeparators}
+              renderItem={renderMessage}
+              keyExtractor={(item) => item.id}
+              inverted
+              contentContainerStyle={styles.messagesContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              initialNumToRender={20}
+              maxToRenderPerBatch={10}
+              windowSize={10}
+            />
+          )}
 
-              <View style={styles.inputWrapper}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Écrire un message..."
-                  placeholderTextColor={COLORS.grayText}
-                  value={message}
-                  onChangeText={setMessage}
-                  multiline
-                  maxLength={500}
-                  editable={canSendMessages()}
-                />
+          {/* Zone de saisie avec SafeArea bottom via paddingBottom */}
+          <View style={[styles.inputBottomWrapper, { paddingBottom: insets.bottom }]}>
+            <View style={styles.inputContainer}>
+
+            {/* Bannière d'invitation en attente pour le destinataire */}
+            {pendingInvitation?.isRecipient && (
+              <View style={styles.invitationBanner}>
+                <View style={styles.invitationBannerContent}>
+                  <IconSymbol name="person.badge.plus" size={18} color={COLORS.orangePrimary} />
+                  <Text style={styles.invitationBannerText}>
+                    {pendingInvitation.senderName} souhaite vous ajouter en ami
+                  </Text>
+                </View>
+                <View style={styles.invitationActions}>
+                  <TouchableOpacity
+                    style={styles.invitationRejectButton}
+                    onPress={handleRejectInvitation}
+                    disabled={processingInvitation}
+                  >
+                    {processingInvitation ? (
+                      <ActivityIndicator size="small" color={COLORS.grayTextDark} />
+                    ) : (
+                      <Text style={styles.invitationRejectText}>Refuser</Text>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.invitationAcceptButton}
+                    onPress={handleAcceptInvitation}
+                    disabled={processingInvitation}
+                  >
+                    {processingInvitation ? (
+                      <ActivityIndicator size="small" color={COLORS.white} />
+                    ) : (
+                      <Text style={styles.invitationAcceptText}>Accepter</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
+            )}
 
-              {hasText ? (
-                <TouchableOpacity
-                  style={styles.sendButton}
-                  onPress={handleSend}
-                  disabled={!canSendMessages()}
-                >
-                  <IconSymbol name="arrow.up" size={18} color={COLORS.white} />
+            {inputWarning && (
+              <View style={styles.warningBanner}>
+                <IconSymbol name="exclamationmark.triangle.fill" size={16} color={COLORS.warning} />
+                <Text style={styles.warningText}>{inputWarning}</Text>
+              </View>
+            )}
+
+            {isRecording ? (
+              <View style={styles.recordingContainer}>
+                <View style={styles.recordingIndicator}>
+                  <View style={styles.recordingDot} />
+                  <Text style={styles.recordingTime}>{formatRecordingTime(recordingTime)}</Text>
+                </View>
+                <TouchableOpacity style={styles.stopRecordingButton} onPress={handleStopRecording}>
+                  <IconSymbol name="stop.fill" size={22} color={COLORS.error} />
                 </TouchableOpacity>
-              ) : (
+              </View>
+            ) : (
+              <View style={styles.inputRow}>
                 <TouchableOpacity
                   style={styles.inputIconButton}
-                  onPress={handleStartRecording}
+                  onPress={handleImagePick}
                   disabled={!canSendMessages()}
                 >
                   <IconSymbol
-                    name="mic.fill"
+                    name="photo"
                     size={22}
                     color={canSendMessages() ? COLORS.grayTextDark : COLORS.grayMedium}
                   />
                 </TouchableOpacity>
-              )}
+
+                <View style={styles.inputWrapper}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Écrire un message..."
+                    placeholderTextColor={COLORS.grayText}
+                    value={message}
+                    onChangeText={setMessage}
+                    multiline
+                    maxLength={500}
+                    editable={canSendMessages()}
+                  />
+                </View>
+
+                {hasText ? (
+                  <TouchableOpacity
+                    style={styles.sendButton}
+                    onPress={handleSend}
+                    disabled={!canSendMessages()}
+                  >
+                    <IconSymbol name="arrow.up" size={18} color={COLORS.white} />
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.inputIconButton}
+                    onPress={handleStartRecording}
+                    disabled={!canSendMessages()}
+                  >
+                    <IconSymbol
+                      name="mic.fill"
+                      size={22}
+                      color={canSendMessages() ? COLORS.grayTextDark : COLORS.grayMedium}
+                    />
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      ) : (
+        <View style={styles.keyboardAvoidingContainer}>
+          {conversationStatus.isClosed && (
+            <View style={styles.closedBanner}>
+              <IconSymbol name="info.circle.fill" size={18} color={COLORS.grayTextDark} />
+              <Text style={styles.closedBannerText}>
+                {conversationStatus.closedReason === 'activity_ended'
+                  ? "L'activité est terminée. Cette conversation est maintenant en lecture seule."
+                  : 'Cette conversation est fermée.'}
+              </Text>
             </View>
           )}
+
+          {(messagesLoading || !currentUserId) ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={COLORS.orangePrimary} />
+            </View>
+          ) : (
+            <FlatList
+              ref={flatListRef}
+              data={messagesWithDateSeparators}
+              renderItem={renderMessage}
+              keyExtractor={(item) => item.id}
+              inverted
+              contentContainerStyle={styles.messagesContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              initialNumToRender={20}
+              maxToRenderPerBatch={10}
+              windowSize={10}
+            />
+          )}
+
+          {/* Zone de saisie avec SafeArea bottom via paddingBottom */}
+          <View style={[styles.inputBottomWrapper, { paddingBottom: insets.bottom }]}>
+            <View style={styles.inputContainer}>
+
+            {/* Bannière d'invitation en attente pour le destinataire */}
+            {pendingInvitation?.isRecipient && (
+              <View style={styles.invitationBanner}>
+                <View style={styles.invitationBannerContent}>
+                  <IconSymbol name="person.badge.plus" size={18} color={COLORS.orangePrimary} />
+                  <Text style={styles.invitationBannerText}>
+                    {pendingInvitation.senderName} souhaite vous ajouter en ami
+                  </Text>
+                </View>
+                <View style={styles.invitationActions}>
+                  <TouchableOpacity
+                    style={styles.invitationRejectButton}
+                    onPress={handleRejectInvitation}
+                    disabled={processingInvitation}
+                  >
+                    {processingInvitation ? (
+                      <ActivityIndicator size="small" color={COLORS.grayTextDark} />
+                    ) : (
+                      <Text style={styles.invitationRejectText}>Refuser</Text>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.invitationAcceptButton}
+                    onPress={handleAcceptInvitation}
+                    disabled={processingInvitation}
+                  >
+                    {processingInvitation ? (
+                      <ActivityIndicator size="small" color={COLORS.white} />
+                    ) : (
+                      <Text style={styles.invitationAcceptText}>Accepter</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {inputWarning && (
+              <View style={styles.warningBanner}>
+                <IconSymbol name="exclamationmark.triangle.fill" size={16} color={COLORS.warning} />
+                <Text style={styles.warningText}>{inputWarning}</Text>
+              </View>
+            )}
+
+            {isRecording ? (
+              <View style={styles.recordingContainer}>
+                <View style={styles.recordingIndicator}>
+                  <View style={styles.recordingDot} />
+                  <Text style={styles.recordingTime}>{formatRecordingTime(recordingTime)}</Text>
+                </View>
+                <TouchableOpacity style={styles.stopRecordingButton} onPress={handleStopRecording}>
+                  <IconSymbol name="stop.fill" size={22} color={COLORS.error} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.inputRow}>
+                <TouchableOpacity
+                  style={styles.inputIconButton}
+                  onPress={handleImagePick}
+                  disabled={!canSendMessages()}
+                >
+                  <IconSymbol
+                    name="photo"
+                    size={22}
+                    color={canSendMessages() ? COLORS.grayTextDark : COLORS.grayMedium}
+                  />
+                </TouchableOpacity>
+
+                <View style={styles.inputWrapper}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Écrire un message..."
+                    placeholderTextColor={COLORS.grayText}
+                    value={message}
+                    onChangeText={setMessage}
+                    multiline
+                    maxLength={500}
+                    editable={canSendMessages()}
+                  />
+                </View>
+
+                {hasText ? (
+                  <TouchableOpacity
+                    style={styles.sendButton}
+                    onPress={handleSend}
+                    disabled={!canSendMessages()}
+                  >
+                    <IconSymbol name="arrow.up" size={18} color={COLORS.white} />
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.inputIconButton}
+                    onPress={handleStartRecording}
+                    disabled={!canSendMessages()}
+                  >
+                    <IconSymbol
+                      name="mic.fill"
+                      size={22}
+                      color={canSendMessages() ? COLORS.grayTextDark : COLORS.grayMedium}
+                    />
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+            </View>
           </View>
         </View>
-      </KeyboardAvoidingView>
+      )}
 
       {/* Modal Options */}
       <Modal
