@@ -138,6 +138,7 @@ messages	created_at	timestamp with time zone	NO
 messages	updated_at	timestamp with time zone	NO
 messages	deleted_at	timestamp with time zone	YES
 messages	is_admin_message	boolean	YES
+messages	reply_to_message_id	uuid	YES
 met_people_hidden	user_id	uuid	NO
 met_people_hidden	hidden_user_id	uuid	NO
 met_people_hidden	created_at	timestamp with time zone	NO
@@ -230,4 +231,4 @@ v_slow_queries	total_exec_time	double precision	YES
 v_slow_queries	mean_exec_time	double precision	YES
 v_slow_queries	max_exec_time	double precision	YES
 v_slow_queries	rows	bigint	YES
-(231 rows)
+(232 rows)

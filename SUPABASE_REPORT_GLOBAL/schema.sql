@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict YcpGwd0cEI0WQ1z8s264AdxeTG1HQmehhGaee2Da1agHQ0cm5oxhkH7Nqg4a2j6
+\restrict 9AlyeGsn3iwICXLfYJfq0zWnBPrzcRRQQoTm1rl0ZtZMbWZqQiD2pqsgqOb8lhL
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.7 (Ubuntu 17.7-0ubuntu0.25.04.1)
@@ -1709,6 +1709,7 @@ CREATE TABLE public.messages (
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     deleted_at timestamp with time zone,
     is_admin_message boolean DEFAULT false,
+    reply_to_message_id uuid,
     CONSTRAINT messages_message_type_check CHECK ((message_type = ANY (ARRAY['text'::text, 'image'::text, 'voice'::text, 'system'::text])))
 );
 
@@ -2814,6 +2815,13 @@ CREATE INDEX idx_messages_not_deleted ON public.messages USING btree (conversati
 
 
 --
+-- Name: idx_messages_reply_to; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_messages_reply_to ON public.messages USING btree (reply_to_message_id) WHERE (reply_to_message_id IS NOT NULL);
+
+
+--
 -- Name: idx_messages_sender; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -3388,6 +3396,14 @@ ALTER TABLE ONLY public.group_formation_logs
 
 ALTER TABLE ONLY public.messages
     ADD CONSTRAINT messages_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES public.conversations(id) ON DELETE CASCADE;
+
+
+--
+-- Name: messages messages_reply_to_message_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.messages
+    ADD CONSTRAINT messages_reply_to_message_id_fkey FOREIGN KEY (reply_to_message_id) REFERENCES public.messages(id) ON DELETE SET NULL;
 
 
 --
@@ -4065,5 +4081,5 @@ ALTER TABLE public.slot_participants ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict YcpGwd0cEI0WQ1z8s264AdxeTG1HQmehhGaee2Da1agHQ0cm5oxhkH7Nqg4a2j6
+\unrestrict 9AlyeGsn3iwICXLfYJfq0zWnBPrzcRRQQoTm1rl0ZtZMbWZqQiD2pqsgqOb8lhL
 

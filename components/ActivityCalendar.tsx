@@ -358,15 +358,22 @@ export default function ActivityCalendar({
 
           if (error) throw error;
 
+          // En mode select, masquer les créneaux débutant à moins de 24h
+          const in24h = new Date(Date.now() + 24 * 60 * 60 * 1000);
+          const filtered = (data || []).filter(s => {
+            const startDt = new Date(`${s.date}T${s.time || '23:59:59'}`);
+            return startDt >= in24h;
+          });
+
           const grouped = new Map<string, any[]>();
-          (data || []).forEach(s => {
+          filtered.forEach(s => {
             const list = grouped.get(s.date) || [];
             list.push(s);
             grouped.set(s.date, list);
           });
 
           // Récupérer tous les slotIds pour compter les participants
-          const allSlotIds = (data || []).map(s => s.id);
+          const allSlotIds = filtered.map(s => s.id);
 
           // Compter les participants (slot_participants + slot_group_members) pour chaque slot
           let countBySlotIdSelect: Record<string, number> = {};

@@ -182,30 +182,16 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
         .gte('date', todayStr)
         .order('date', { ascending: true });
 
-      // Filtrer les créneaux dont la fin (date + heure_fin ou date + heure_start + duration) est passée
+      // Filtrer : garder uniquement les créneaux dont le début est strictement dans le futur
       const now = new Date();
       const filteredSlots = (slots || []).filter(s => {
-        // Calculer l'heure de fin du créneau
-        let endDateTime: Date;
         const slotDate = s.date; // Format YYYY-MM-DD
+        const timeStr = s.time_start || s.time_end; // time_start en priorité, time_end en fallback
+        const startDateTime = timeStr
+          ? new Date(`${slotDate}T${timeStr}`)
+          : new Date(`${slotDate}T23:59:59`); // fallback fin de journée
 
-        if (s.time_end) {
-          // Si time_end est défini, l'utiliser
-          endDateTime = new Date(`${slotDate}T${s.time_end}`);
-        } else if (s.time_start && s.duration) {
-          // Sinon, calculer à partir de time_start + duration (en minutes)
-          const startDateTime = new Date(`${slotDate}T${s.time_start}`);
-          endDateTime = new Date(startDateTime.getTime() + s.duration * 60 * 1000);
-        } else if (s.time_start) {
-          // Fallback: utiliser time_start comme heure de fin (créneau considéré passé dès qu'il commence)
-          endDateTime = new Date(`${slotDate}T${s.time_start}`);
-        } else {
-          // Si pas d'heure, utiliser la fin de la journée
-          endDateTime = new Date(`${slotDate}T23:59:59`);
-        }
-
-        // Garder le créneau si son heure de fin est dans le futur
-        return endDateTime > now;
+        return startDateTime > now;
       });
 
       const slotIds = filteredSlots.map(s => s.id);
@@ -309,23 +295,15 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
         .gte('date', todayStr)
         .order('date', { ascending: true });
 
-      // Filtrer les créneaux dont la fin (date + heure_fin ou date + heure_start + duration) est passée
+      // Filtrer : garder uniquement les créneaux dont le début est strictement dans le futur
       const filteredSlotsData = (slotsData || []).filter(s => {
-        let endDateTime: Date;
         const slotDate = s.date;
+        const timeStr = s.time_start || s.time_end;
+        const startDateTime = timeStr
+          ? new Date(`${slotDate}T${timeStr}`)
+          : new Date(`${slotDate}T23:59:59`);
 
-        if (s.time_end) {
-          endDateTime = new Date(`${slotDate}T${s.time_end}`);
-        } else if (s.time_start && s.duration) {
-          const startDateTime = new Date(`${slotDate}T${s.time_start}`);
-          endDateTime = new Date(startDateTime.getTime() + s.duration * 60 * 1000);
-        } else if (s.time_start) {
-          endDateTime = new Date(`${slotDate}T${s.time_start}`);
-        } else {
-          endDateTime = new Date(`${slotDate}T23:59:59`);
-        }
-
-        return endDateTime > now;
+        return startDateTime > now;
       });
 
       // Grouper les dates uniques et calculer totalMaxPlaces par activité

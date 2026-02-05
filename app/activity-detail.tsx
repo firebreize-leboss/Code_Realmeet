@@ -464,6 +464,17 @@ export default function ActivityDetailScreen() {
       } else {
         if (!selectedSlot) return;
 
+        // Règle J-1 : bloquer l'inscription si le créneau débute dans moins de 24h
+        const slotStart = new Date(`${selectedSlot.date}T${selectedSlot.time || '23:59:59'}`);
+        const in24h = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        if (slotStart < in24h) {
+          Alert.alert(
+            'Inscription impossible',
+            "L'activité se déroule dans moins de 24h. Vous ne pouvez plus vous inscrire."
+          );
+          return;
+        }
+
         if (selectedSlot.registrationClosed) {
           Alert.alert(
             'Inscriptions fermées',
