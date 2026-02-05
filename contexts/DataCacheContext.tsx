@@ -174,15 +174,41 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       const ids = activities.map(a => a.id);
       const todayStr = new Date().toISOString().split('T')[0];
 
-      // Récupérer les slots futurs
+      // Récupérer les slots (on récupère ceux d'aujourd'hui et futurs, puis on filtre par heure côté client)
       const { data: slots } = await supabase
         .from('activity_slots')
-        .select('id, activity_id, date, max_participants')
+        .select('id, activity_id, date, time_start, time_end, duration, max_participants')
         .in('activity_id', ids.length > 0 ? ids : ['__none__'])
         .gte('date', todayStr)
         .order('date', { ascending: true });
 
-      const slotIds = (slots || []).map(s => s.id);
+      // Filtrer les créneaux dont la fin (date + heure_fin ou date + heure_start + duration) est passée
+      const now = new Date();
+      const filteredSlots = (slots || []).filter(s => {
+        // Calculer l'heure de fin du créneau
+        let endDateTime: Date;
+        const slotDate = s.date; // Format YYYY-MM-DD
+
+        if (s.time_end) {
+          // Si time_end est défini, l'utiliser
+          endDateTime = new Date(`${slotDate}T${s.time_end}`);
+        } else if (s.time_start && s.duration) {
+          // Sinon, calculer à partir de time_start + duration (en minutes)
+          const startDateTime = new Date(`${slotDate}T${s.time_start}`);
+          endDateTime = new Date(startDateTime.getTime() + s.duration * 60 * 1000);
+        } else if (s.time_start) {
+          // Fallback: utiliser time_start comme heure de fin (créneau considéré passé dès qu'il commence)
+          endDateTime = new Date(`${slotDate}T${s.time_start}`);
+        } else {
+          // Si pas d'heure, utiliser la fin de la journée
+          endDateTime = new Date(`${slotDate}T23:59:59`);
+        }
+
+        // Garder le créneau si son heure de fin est dans le futur
+        return endDateTime > now;
+      });
+
+      const slotIds = filteredSlots.map(s => s.id);
 
       // Récupérer les participants
       const { data: slotParticipants } = await supabase
@@ -202,7 +228,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
         slotDataByActivity[id] = { latestDate: null, slotCount: 0, remainingPlaces: 0, totalMaxPlaces: 0, allDates: [] };
       });
 
-      (slots || []).forEach(s => {
+      filteredSlots.forEach(s => {
         if (!slotDataByActivity[s.activity_id].latestDate) {
           slotDataByActivity[s.activity_id].latestDate = s.date;
         }
@@ -273,14 +299,34 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
 
       const activityIds = activities.map(a => a.id);
       const todayStr = new Date().toISOString().split('T')[0];
+      const now = new Date();
 
       // Récupérer toutes les dates uniques et max_participants des slots futurs pour chaque activité
       const { data: slotsData } = await supabase
         .from('activity_slots')
-        .select('activity_id, date, max_participants')
+        .select('activity_id, date, time_start, time_end, duration, max_participants')
         .in('activity_id', activityIds.length > 0 ? activityIds : ['__none__'])
         .gte('date', todayStr)
         .order('date', { ascending: true });
+
+      // Filtrer les créneaux dont la fin (date + heure_fin ou date + heure_start + duration) est passée
+      const filteredSlotsData = (slotsData || []).filter(s => {
+        let endDateTime: Date;
+        const slotDate = s.date;
+
+        if (s.time_end) {
+          endDateTime = new Date(`${slotDate}T${s.time_end}`);
+        } else if (s.time_start && s.duration) {
+          const startDateTime = new Date(`${slotDate}T${s.time_start}`);
+          endDateTime = new Date(startDateTime.getTime() + s.duration * 60 * 1000);
+        } else if (s.time_start) {
+          endDateTime = new Date(`${slotDate}T${s.time_start}`);
+        } else {
+          endDateTime = new Date(`${slotDate}T23:59:59`);
+        }
+
+        return endDateTime > now;
+      });
 
       // Grouper les dates uniques et calculer totalMaxPlaces par activité
       const datesByActivity: Record<string, string[]> = {};
@@ -289,28 +335,42 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
         datesByActivity[id] = [];
         totalMaxPlacesByActivity[id] = 0;
       });
-      (slotsData || []).forEach(slot => {
+      filteredSlotsData.forEach(slot => {
         if (!datesByActivity[slot.activity_id].includes(slot.date)) {
           datesByActivity[slot.activity_id].push(slot.date);
         }
         totalMaxPlacesByActivity[slot.activity_id] += slot.max_participants || 10;
       });
 
-      // Construire slotDataByActivity depuis les données agrégées
+      // Construire slotDataByActivity depuis les données filtrées côté client
       const slotDataByActivity: Record<string, SlotData> = {};
+      const slotCountByActivity: Record<string, number> = {};
+
+      // Compter les créneaux filtrés par activité
+      filteredSlotsData.forEach(slot => {
+        slotCountByActivity[slot.activity_id] = (slotCountByActivity[slot.activity_id] || 0) + 1;
+      });
+
       activities.forEach(a => {
+        const allDates = datesByActivity[a.id] || [];
+        // Utiliser la première date des créneaux filtrés (triés par date croissante)
+        const latestDate = allDates.length > 0 ? allDates[0] : null;
+
         slotDataByActivity[a.id] = {
-          latestDate: a.next_slot_date || null,
-          slotCount: a.slot_count || 0,
+          latestDate,
+          slotCount: slotCountByActivity[a.id] || 0,
           remainingPlaces: a.total_remaining_places || 0,
           totalMaxPlaces: totalMaxPlacesByActivity[a.id] || 0,
-          allDates: datesByActivity[a.id] || [],
+          allDates,
         };
       });
 
+      // Filtrer les activités qui ont au moins un créneau futur
+      const activitiesWithSlots = activities.filter(a => slotDataByActivity[a.id]?.latestDate !== null);
+
       setCache(prev => ({
         ...prev,
-        activities,
+        activities: activitiesWithSlots,
         slotDataByActivity
       }));
     } catch (error) {
