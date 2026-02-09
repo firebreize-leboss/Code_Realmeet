@@ -14,11 +14,13 @@ import {
   ActivityIndicator,
   Modal,
   Platform,
-  LayoutChangeEvent,
 } from 'react-native';
-import Animated, { useAnimatedStyle } from 'react-native-reanimated';
+import Animated, {
+  useAnimatedStyle,
+  Easing,
+  withTiming,
+} from 'react-native-reanimated';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
-import MessageSendAnimation, { AnimationStartPosition, AnimationEndPosition } from '@/components/MessageSendAnimation';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -87,17 +89,40 @@ const getDateKey = (timestamp: string): string => {
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 };
 
+// Custom entering animation for messages (Instagram DM style)
+// Note: For inverted FlatList, positive translateY moves DOWN (towards the input area)
+// so we animate FROM positive (below) TO 0 (final position)
+const createMessageEnteringAnimation = (isOwnMessage: boolean) => {
+  'worklet';
+  const initialValues = {
+    opacity: 0,
+    transform: [
+      { translateY: 20 }, // Start 20px below (in inverted list, this is towards input)
+      { scale: 0.95 },
+    ],
+  };
+  const animations = {
+    opacity: withTiming(1, { duration: 250, easing: Easing.out(Easing.cubic) }),
+    transform: [
+      { translateY: withTiming(0, { duration: 250, easing: Easing.out(Easing.cubic) }) },
+      { scale: withTiming(1, { duration: 250, easing: Easing.out(Easing.cubic) }) },
+    ],
+  };
+  return { initialValues, animations };
+};
+
 export default function ChatDetailScreen() {
   const router = useRouter();
   const { id: conversationId } = useLocalSearchParams();
   const insets = useSafeAreaInsets();
   const { height: kbHeight } = useReanimatedKeyboardAnimation();
   const flatListRef = useRef<FlatList>(null);
-  const messagesListWrapperRef = useRef<View>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const inputRef = useRef<TextInput>(null);
-  const sendButtonRef = useRef<View>(null);
-  const containerRef = useRef<View>(null);
+
+  // Refs for entering animations - track which messages have been rendered
+  const renderedMessageIds = useRef<Set<string>>(new Set());
+  const isInitialLoad = useRef(true);
 
   // États de base
   const [convName, setConvName] = useState('Conversation');
@@ -143,17 +168,6 @@ export default function ChatDetailScreen() {
   // État pour le menu d'actions long press
   const [showMessageActions, setShowMessageActions] = useState(false);
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
-
-  // État pour l'animation d'envoi "Instagram DM"
-  const [sendAnimationVisible, setSendAnimationVisible] = useState(false);
-  const [animatingMessage, setAnimatingMessage] = useState('');
-  const [animatingImageUrl, setAnimatingImageUrl] = useState<string | undefined>(undefined);
-  const [animationStartPos, setAnimationStartPos] = useState<AnimationStartPosition>({ x: 0, y: 0, width: 200, height: 40 });
-  const [animationEndPos, setAnimationEndPos] = useState<AnimationEndPosition>({ x: 0, y: 0, width: 200, height: 40 });
-  const [hideLatestMessage, setHideLatestMessage] = useState(false);
-  const containerLayoutRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
-  const inputLayoutRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
-  const messagesListLayoutRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
 
   const { messages, loading: messagesLoading, sendMessage, deleteMessage, currentUserId } = useMessages(conversationId as string);
 
@@ -204,6 +218,21 @@ export default function ChatDetailScreen() {
     // Inverser pour FlatList inverted
     return result.reverse();
   }, [messages]);
+
+  // After initial messages load, mark all existing messages as "already rendered"
+  // so they don't animate on first load - only new messages animate
+  useEffect(() => {
+    if (!messagesLoading && messages && messages.length > 0 && isInitialLoad.current) {
+      // Mark all initial messages as already rendered
+      messages.forEach((msg) => {
+        renderedMessageIds.current.add(msg.id);
+      });
+      // After a short delay, mark initial load as complete
+      setTimeout(() => {
+        isInitialLoad.current = false;
+      }, 100);
+    }
+  }, [messagesLoading, messages]);
 
   // Charger les infos de conversation
   useEffect(() => {
@@ -559,126 +588,21 @@ export default function ChatDetailScreen() {
     }
   };
 
-  // Refs for measured window positions
-  const sendButtonMeasuredRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
-  const messagesListMeasuredRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
-
-  // Measure send button position in window coordinates
-  const measureSendButton = useCallback((): Promise<{ x: number; y: number; width: number; height: number }> => {
-    return new Promise((resolve) => {
-      if (sendButtonRef.current) {
-        sendButtonRef.current.measureInWindow((x, y, width, height) => {
-          const measured = { x, y, width, height };
-          sendButtonMeasuredRef.current = measured;
-          resolve(measured);
-        });
-      } else {
-        // Fallback if ref not available
-        resolve({ x: 300, y: 600, width: 42, height: 42 });
-      }
-    });
-  }, []);
-
-  // Measure messages list position in window coordinates
-  const measureMessagesList = useCallback((): Promise<{ x: number; y: number; width: number; height: number }> => {
-    return new Promise((resolve) => {
-      if (messagesListWrapperRef.current) {
-        messagesListWrapperRef.current.measureInWindow((x, y, width, height) => {
-          const measured = { x, y, width, height };
-          messagesListMeasuredRef.current = measured;
-          resolve(measured);
-        });
-      } else if (messagesListMeasuredRef.current) {
-        resolve(messagesListMeasuredRef.current);
-      } else {
-        // Fallback with reasonable defaults
-        resolve({ x: 0, y: 100, width: 375, height: 500 });
-      }
-    });
-  }, []);
-
-  // Calcul de la position de départ (zone d'input/bouton send) - using window coordinates
-  const calculateStartPosition = (messageText: string, sendButtonPos: { x: number; y: number; width: number; height: number }): AnimationStartPosition => {
-    const containerWidth = containerLayoutRef.current?.width || 375;
-
-    // Estimer la largeur de la bulle basée sur le texte
-    // Environ 8px par caractère + padding (28px horizontal total)
-    const estimatedBubbleWidth = Math.min(
-      containerWidth * 0.75,
-      Math.max(100, messageText.length * 8 + 32)
-    );
-
-    // Start position: centered on send button, bubble aligned to right edge
-    // The bubble should appear to emerge from the send button area
-    const startX = sendButtonPos.x + sendButtonPos.width - estimatedBubbleWidth;
-    const startY = sendButtonPos.y - 10; // Slightly above the button
-
-    return {
-      x: Math.max(16, startX), // Don't go off-screen left
-      y: startY,
-      width: estimatedBubbleWidth,
-      height: 44,
-    };
-  };
-
-  // Calcul de la position finale (en bas de la liste, aligné à droite) - using window coordinates
-  const calculateEndPosition = (messageText: string, messagesListPos: { x: number; y: number; width: number; height: number }): AnimationEndPosition => {
-    const containerWidth = containerLayoutRef.current?.width || 375;
-
-    // Estimer la largeur de la bulle basée sur le texte
-    const estimatedBubbleWidth = Math.min(
-      containerWidth * 0.75,
-      Math.max(100, messageText.length * 8 + 32)
-    );
-
-    // Position finale: aligné à droite avec padding de 16px
-    const xPos = containerWidth - estimatedBubbleWidth - 16;
-
-    // Y position: bottom of the messages list area (where the new message will appear)
-    // In an inverted FlatList, newest messages are at the bottom visually
-    const yPos = messagesListPos.y + messagesListPos.height - 60;
-
-    return {
-      x: xPos,
-      y: yPos,
-      width: estimatedBubbleWidth,
-      height: 44,
-    };
-  };
-
+  // Simplified handleSend - no more position measuring or animation orchestration
   const handleSend = async () => {
     if (!message.trim() || !canSendMessages()) return;
 
     const userMessage = message.trim();
     const replyId = replyToMessage?.id;
 
-    // Measure positions before animation starts (using window coordinates)
-    const [sendButtonPos, messagesListPos] = await Promise.all([
-      measureSendButton(),
-      measureMessagesList(),
-    ]);
-
-    // Calculer les positions de l'animation using measured window coordinates
-    const startPos = calculateStartPosition(userMessage, sendButtonPos);
-    const endPos = calculateEndPosition(userMessage, messagesListPos);
-
-    setAnimatingMessage(userMessage);
-    setAnimatingImageUrl(undefined);
-    setAnimationStartPos(startPos);
-    setAnimationEndPos(endPos);
-
-    // Vider le champ et réinitialiser le reply
+    // Clear input immediately
     setMessage('');
     setReplyToMessage(null);
-
-    // Masquer le dernier message (celui en cours d'envoi) et lancer l'animation
-    setHideLatestMessage(true);
-    setSendAnimationVisible(true);
 
     try {
       await sendMessage(userMessage, 'text', undefined, undefined, replyId);
 
-      // Scroll vers le bas après envoi (FlatList inversée = scroll to index 0)
+      // Scroll to latest message (FlatList inverted = scroll to offset 0)
       setTimeout(() => {
         flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
       }, 50);
@@ -686,37 +610,6 @@ export default function ChatDetailScreen() {
       console.error('Error sending message:', error);
     }
   };
-
-  // Callback quand l'animation est terminée
-  const handleAnimationComplete = useCallback(() => {
-    setSendAnimationVisible(false);
-    setHideLatestMessage(false); // Révéler le vrai message dans la liste
-    setAnimatingMessage('');
-    setAnimatingImageUrl(undefined);
-  }, []);
-
-  // Callback quand l'animation démarre
-  const handleAnimationStart = useCallback(() => {
-    // Le message est déjà masqué, l'animation overlay est visible
-  }, []);
-
-  // Mesurer le container pour calculer les positions
-  const handleContainerLayout = useCallback((event: LayoutChangeEvent) => {
-    const { x, y, width, height } = event.nativeEvent.layout;
-    containerLayoutRef.current = { x, y, width, height };
-  }, []);
-
-  // Mesurer la zone d'input pour calculer la position de départ de l'animation
-  const handleInputLayout = useCallback((event: LayoutChangeEvent) => {
-    const { x, y, width, height } = event.nativeEvent.layout;
-    inputLayoutRef.current = { x, y, width, height };
-  }, []);
-
-  // Mesurer la liste des messages pour positionner l'animation
-  const handleMessagesListLayout = useCallback((event: LayoutChangeEvent) => {
-    const { x, y, width, height } = event.nativeEvent.layout;
-    messagesListLayoutRef.current = { x, y, width, height };
-  }, []);
 
   const handleImagePick = async () => {
     if (!canSendMessages()) {
@@ -852,11 +745,13 @@ export default function ChatDetailScreen() {
     const isOwnMessage = msg.senderId === currentUserId;
     const isSystemMessage = msg.type === 'system';
 
-    // Vérifier si ce message doit être masqué pendant l'animation
-    // Dans une FlatList inversée, index 0 = dernier message (le plus récent)
-    const isAnimatingThisMessage = hideLatestMessage &&
-      isOwnMessage &&
-      index === 0;
+    // Determine if this message should animate (new message, not initial load)
+    const isNewMessage = !renderedMessageIds.current.has(msg.id) && !isInitialLoad.current;
+
+    // Mark this message as rendered
+    if (!renderedMessageIds.current.has(msg.id)) {
+      renderedMessageIds.current.add(msg.id);
+    }
 
     if (isSystemMessage) {
       return (
@@ -866,12 +761,9 @@ export default function ChatDetailScreen() {
       );
     }
 
-    return (
-      <View style={[
-        styles.messageRow,
-        isOwnMessage && styles.ownMessageRow,
-        isAnimatingThisMessage && styles.hiddenMessage,
-      ]}>
+    // Message content (shared between animated and non-animated)
+    const messageContent = (
+      <>
         {!isOwnMessage && (
           <TouchableOpacity
             onPress={() => {
@@ -975,9 +867,28 @@ export default function ChatDetailScreen() {
             )}
           </View>
         </TouchableOpacity>
+      </>
+    );
+
+    // For new messages, wrap in Animated.View with entering animation
+    if (isNewMessage) {
+      return (
+        <Animated.View
+          style={[styles.messageRow, isOwnMessage && styles.ownMessageRow]}
+          entering={createMessageEnteringAnimation(isOwnMessage)}
+        >
+          {messageContent}
+        </Animated.View>
+      );
+    }
+
+    // For existing messages, render without animation
+    return (
+      <View style={[styles.messageRow, isOwnMessage && styles.ownMessageRow]}>
+        {messageContent}
       </View>
     );
-  }, [currentUserId, isGroup, playingVoiceId, hideLatestMessage]);
+  }, [currentUserId, isGroup, playingVoiceId]);
 
   const inputWarning = getInputWarning();
   const hasText = message.trim().length > 0;
@@ -1007,12 +918,7 @@ export default function ChatDetailScreen() {
           <ActivityIndicator size="large" color={COLORS.orangePrimary} />
         </View>
       ) : (
-        <View
-          ref={messagesListWrapperRef}
-          style={styles.messagesListWrapper}
-          collapsable={false}
-          onLayout={handleMessagesListLayout}
-        >
+        <View style={styles.messagesListWrapper}>
           <FlatList
             ref={flatListRef}
             data={messagesWithDateSeparators}
@@ -1031,7 +937,7 @@ export default function ChatDetailScreen() {
 
       {/* Zone de saisie avec animated paddingBottom from RNKC */}
       <Animated.View style={[styles.inputBottomWrapper, animatedBottomStyle]}>
-        <View style={styles.inputContainer} onLayout={handleInputLayout}>
+        <View style={styles.inputContainer}>
 
         {/* Bannière d'invitation en attente pour le destinataire */}
         {pendingInvitation?.isRecipient && (
@@ -1135,15 +1041,13 @@ export default function ChatDetailScreen() {
             </View>
 
             {hasText ? (
-              <View ref={sendButtonRef} collapsable={false}>
-                <TouchableOpacity
-                  style={styles.sendButton}
-                  onPress={handleSend}
-                  disabled={!canSendMessages()}
-                >
-                  <IconSymbol name="paperplane.fill" size={17} color={COLORS.white} />
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity
+                style={styles.sendButton}
+                onPress={handleSend}
+                disabled={!canSendMessages()}
+              >
+                <IconSymbol name="paperplane.fill" size={17} color={COLORS.white} />
+              </TouchableOpacity>
             ) : (
               <TouchableOpacity
                 style={styles.inputIconButton}
@@ -1165,18 +1069,7 @@ export default function ChatDetailScreen() {
   );
 
   return (
-    <View style={styles.container} ref={containerRef} onLayout={handleContainerLayout} collapsable={false}>
-      {/* Animation overlay pour l'envoi de messages (Instagram DM style) */}
-      <MessageSendAnimation
-        visible={sendAnimationVisible}
-        message={animatingMessage}
-        imageUrl={animatingImageUrl}
-        startPosition={animationStartPos}
-        endPosition={animationEndPos}
-        onAnimationComplete={handleAnimationComplete}
-        onAnimationStart={handleAnimationStart}
-      />
-
+    <View style={styles.container}>
       {/* Header avec SafeArea top uniquement */}
       <SafeAreaView edges={['top']} style={styles.headerSafeArea}>
         <View style={styles.header}>
@@ -1502,9 +1395,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginBottom: 10,
     alignItems: 'flex-end',
-  },
-  hiddenMessage: {
-    opacity: 0,
   },
   ownMessageRow: {
     justifyContent: 'flex-end',
