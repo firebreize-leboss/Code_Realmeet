@@ -1,17 +1,16 @@
 // components/MessageSendAnimation.tsx
 // Animation "Instagram DM" pour l'envoi de messages
-// Smooth spring animation avec Reanimated 2/3 pour 60fps
+// Smooth translation animation avec Reanimated pour 60fps
 
 import React, { useEffect, useCallback, memo } from 'react';
 import { View, Text, StyleSheet, Dimensions, Image } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   withTiming,
-  withDelay,
   runOnJS,
   Easing,
+  interpolate,
 } from 'react-native-reanimated';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -22,19 +21,8 @@ const COLORS = {
   white: '#FFFFFF',
 };
 
-// Spring configurations optimisées pour une animation très subtile type Instagram
-// Instagram utilise une animation quasi-imperceptible: micro scale + fade rapide
-const SPRING_CONFIG = {
-  // Config pour le scale très subtil (pas d'overshoot visible)
-  scale: {
-    damping: 28,
-    stiffness: 400,
-    mass: 0.4,
-    overshootClamping: true,
-    restDisplacementThreshold: 0.001,
-    restSpeedThreshold: 0.001,
-  },
-};
+// Animation timing - Instagram DM style: fast and smooth
+const ANIMATION_DURATION = 200; // 200ms total, ease-out for snappy feel
 
 export interface AnimationStartPosition {
   x: number;
@@ -69,10 +57,8 @@ const MessageSendAnimation: React.FC<MessageSendAnimationProps> = memo(({
   onAnimationComplete,
   onAnimationStart,
 }) => {
-  // Shared values for animation - Instagram style: très subtil
-  // On anime directement à la position finale, pas de translation
-  const scale = useSharedValue(0.96);
-  const opacity = useSharedValue(0);
+  // Animation progress 0 -> 1
+  const progress = useSharedValue(0);
 
   const handleComplete = useCallback(() => {
     onAnimationComplete();
@@ -84,51 +70,66 @@ const MessageSendAnimation: React.FC<MessageSendAnimationProps> = memo(({
 
   useEffect(() => {
     if (visible) {
-      // Reset - Instagram style: commence presque à la taille finale
-      scale.value = 0.96;
-      opacity.value = 0;
+      // Reset progress
+      progress.value = 0;
 
       // Notify that animation is starting
       runOnJS(handleStart)();
 
-      // === Animation Instagram: très subtile et rapide ===
-      // Fade in instantané (50ms)
-      opacity.value = withTiming(1, {
-        duration: 50,
-        easing: Easing.out(Easing.ease)
-      });
-
-      // Micro scale: 0.96 -> 1.0 (à peine perceptible)
-      scale.value = withSpring(1.0, SPRING_CONFIG.scale, (finished) => {
+      // Animate progress from 0 to 1 with ease-out timing
+      progress.value = withTiming(1, {
+        duration: ANIMATION_DURATION,
+        easing: Easing.out(Easing.cubic),
+      }, (finished) => {
         if (finished) {
-          // Fade out rapide après un court délai
-          opacity.value = withDelay(
-            40,
-            withTiming(0, {
-              duration: 80,
-              easing: Easing.in(Easing.ease)
-            }, (fadeFinished) => {
-              if (fadeFinished) {
-                runOnJS(handleComplete)();
-              }
-            })
-          );
+          runOnJS(handleComplete)();
         }
       });
     }
-  }, [visible, endPosition, handleComplete, handleStart]);
+  }, [visible, handleComplete, handleStart]);
 
   const animatedContainerStyle = useAnimatedStyle(() => {
+    // Interpolate position from start to end
+    const translateX = interpolate(
+      progress.value,
+      [0, 1],
+      [startPosition.x, endPosition.x]
+    );
+    const translateY = interpolate(
+      progress.value,
+      [0, 1],
+      [startPosition.y, endPosition.y]
+    );
+
+    // Scale: start slightly smaller (1.0), animate to 0.98 at end
+    const scale = interpolate(
+      progress.value,
+      [0, 0.7, 1],
+      [1.0, 0.99, 0.98]
+    );
+
+    // Opacity: full opacity during movement, fade at the very end
+    const opacity = interpolate(
+      progress.value,
+      [0, 0.8, 1],
+      [1, 1, 0]
+    );
+
+    // Width interpolation for smooth size transition
+    const width = interpolate(
+      progress.value,
+      [0, 1],
+      [startPosition.width, endPosition.width]
+    );
+
     return {
       position: 'absolute',
-      // Position directement à la destination finale (pas de mouvement)
-      right: 16,
-      bottom: 0,
-      transform: [
-        { scale: scale.value },
-      ],
-      opacity: opacity.value,
+      left: translateX,
+      top: translateY,
+      width: width,
       maxWidth: SCREEN_WIDTH * 0.75,
+      transform: [{ scale }],
+      opacity,
     };
   });
 

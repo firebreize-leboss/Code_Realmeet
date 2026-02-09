@@ -93,6 +93,7 @@ export default function ChatDetailScreen() {
   const insets = useSafeAreaInsets();
   const { height: kbHeight } = useReanimatedKeyboardAnimation();
   const flatListRef = useRef<FlatList>(null);
+  const messagesListWrapperRef = useRef<View>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const inputRef = useRef<TextInput>(null);
   const sendButtonRef = useRef<View>(null);
@@ -558,8 +559,46 @@ export default function ChatDetailScreen() {
     }
   };
 
-  // Calcul de la position de départ (zone d'input/bouton send)
-  const calculateStartPosition = (messageText: string): AnimationStartPosition => {
+  // Refs for measured window positions
+  const sendButtonMeasuredRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
+  const messagesListMeasuredRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
+
+  // Measure send button position in window coordinates
+  const measureSendButton = useCallback((): Promise<{ x: number; y: number; width: number; height: number }> => {
+    return new Promise((resolve) => {
+      if (sendButtonRef.current) {
+        sendButtonRef.current.measureInWindow((x, y, width, height) => {
+          const measured = { x, y, width, height };
+          sendButtonMeasuredRef.current = measured;
+          resolve(measured);
+        });
+      } else {
+        // Fallback if ref not available
+        resolve({ x: 300, y: 600, width: 42, height: 42 });
+      }
+    });
+  }, []);
+
+  // Measure messages list position in window coordinates
+  const measureMessagesList = useCallback((): Promise<{ x: number; y: number; width: number; height: number }> => {
+    return new Promise((resolve) => {
+      if (messagesListWrapperRef.current) {
+        messagesListWrapperRef.current.measureInWindow((x, y, width, height) => {
+          const measured = { x, y, width, height };
+          messagesListMeasuredRef.current = measured;
+          resolve(measured);
+        });
+      } else if (messagesListMeasuredRef.current) {
+        resolve(messagesListMeasuredRef.current);
+      } else {
+        // Fallback with reasonable defaults
+        resolve({ x: 0, y: 100, width: 375, height: 500 });
+      }
+    });
+  }, []);
+
+  // Calcul de la position de départ (zone d'input/bouton send) - using window coordinates
+  const calculateStartPosition = (messageText: string, sendButtonPos: { x: number; y: number; width: number; height: number }): AnimationStartPosition => {
     const containerWidth = containerLayoutRef.current?.width || 375;
 
     // Estimer la largeur de la bulle basée sur le texte
@@ -569,27 +608,21 @@ export default function ChatDetailScreen() {
       Math.max(100, messageText.length * 8 + 32)
     );
 
-    // Position de départ: près du bouton send (en bas à droite de l'écran)
-    // L'input est en position absolue en bas du container
-    const inputY = inputLayoutRef.current?.y || 0;
-    const messagesBottom = messagesListLayoutRef.current
-      ? (messagesListLayoutRef.current.y + messagesListLayoutRef.current.height)
-      : inputY;
-
-    // Commencer légèrement en dessous de la position finale pour effet de "sortie"
-    const startX = containerWidth - estimatedBubbleWidth - 20;
-    const startY = messagesBottom - 20; // Près du bas de la liste
+    // Start position: centered on send button, bubble aligned to right edge
+    // The bubble should appear to emerge from the send button area
+    const startX = sendButtonPos.x + sendButtonPos.width - estimatedBubbleWidth;
+    const startY = sendButtonPos.y - 10; // Slightly above the button
 
     return {
-      x: startX,
+      x: Math.max(16, startX), // Don't go off-screen left
       y: startY,
-      width: estimatedBubbleWidth * 0.92, // Légèrement plus petit au départ
+      width: estimatedBubbleWidth,
       height: 44,
     };
   };
 
-  // Calcul de la position finale (en bas de la liste, aligné à droite)
-  const calculateEndPosition = (messageText: string): AnimationEndPosition => {
+  // Calcul de la position finale (en bas de la liste, aligné à droite) - using window coordinates
+  const calculateEndPosition = (messageText: string, messagesListPos: { x: number; y: number; width: number; height: number }): AnimationEndPosition => {
     const containerWidth = containerLayoutRef.current?.width || 375;
 
     // Estimer la largeur de la bulle basée sur le texte
@@ -601,14 +634,9 @@ export default function ChatDetailScreen() {
     // Position finale: aligné à droite avec padding de 16px
     const xPos = containerWidth - estimatedBubbleWidth - 16;
 
-    // Y position: dans la zone visible de la liste, juste au-dessus de l'input
-    // La FlatList est inversée donc le dernier message est visuellement en bas
-    const messagesBottom = messagesListLayoutRef.current
-      ? (messagesListLayoutRef.current.y + messagesListLayoutRef.current.height)
-      : (inputLayoutRef.current?.y || 500);
-
-    // Position finale: un peu plus haut dans la liste pour l'effet de "montée"
-    const yPos = messagesBottom - 70;
+    // Y position: bottom of the messages list area (where the new message will appear)
+    // In an inverted FlatList, newest messages are at the bottom visually
+    const yPos = messagesListPos.y + messagesListPos.height - 60;
 
     return {
       x: xPos,
@@ -624,9 +652,15 @@ export default function ChatDetailScreen() {
     const userMessage = message.trim();
     const replyId = replyToMessage?.id;
 
-    // Calculer les positions de l'animation
-    const startPos = calculateStartPosition(userMessage);
-    const endPos = calculateEndPosition(userMessage);
+    // Measure positions before animation starts (using window coordinates)
+    const [sendButtonPos, messagesListPos] = await Promise.all([
+      measureSendButton(),
+      measureMessagesList(),
+    ]);
+
+    // Calculer les positions de l'animation using measured window coordinates
+    const startPos = calculateStartPosition(userMessage, sendButtonPos);
+    const endPos = calculateEndPosition(userMessage, messagesListPos);
 
     setAnimatingMessage(userMessage);
     setAnimatingImageUrl(undefined);
@@ -973,20 +1007,26 @@ export default function ChatDetailScreen() {
           <ActivityIndicator size="large" color={COLORS.orangePrimary} />
         </View>
       ) : (
-        <FlatList
-          ref={flatListRef}
-          data={messagesWithDateSeparators}
-          renderItem={renderMessage}
-          keyExtractor={(item) => item.id}
-          inverted
-          contentContainerStyle={styles.messagesContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          initialNumToRender={20}
-          maxToRenderPerBatch={10}
-          windowSize={10}
+        <View
+          ref={messagesListWrapperRef}
+          style={styles.messagesListWrapper}
+          collapsable={false}
           onLayout={handleMessagesListLayout}
-        />
+        >
+          <FlatList
+            ref={flatListRef}
+            data={messagesWithDateSeparators}
+            renderItem={renderMessage}
+            keyExtractor={(item) => item.id}
+            inverted
+            contentContainerStyle={styles.messagesContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            initialNumToRender={20}
+            maxToRenderPerBatch={10}
+            windowSize={10}
+          />
+        </View>
       )}
 
       {/* Zone de saisie avec animated paddingBottom from RNKC */}
@@ -1393,6 +1433,9 @@ const styles = StyleSheet.create({
   },
 
   // === MESSAGES ===
+  messagesListWrapper: {
+    flex: 1,
+  },
   messagesContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
