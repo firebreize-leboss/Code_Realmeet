@@ -703,10 +703,19 @@ export default function ChatDetailScreen() {
     return (
       <View style={[styles.messageRow, isOwnMessage && styles.ownMessageRow]}>
         {!isOwnMessage && (
-          <Image
-            source={{ uri: msg.senderAvatar || 'https://via.placeholder.com/40' }}
-            style={styles.messageAvatar}
-          />
+          <TouchableOpacity
+            onPress={() => {
+              if (msg.senderId) {
+                router.push(`/user-profile?id=${msg.senderId}`);
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <Image
+              source={{ uri: msg.senderAvatar || 'https://via.placeholder.com/40' }}
+              style={styles.messageAvatar}
+            />
+          </TouchableOpacity>
         )}
 
         <TouchableOpacity

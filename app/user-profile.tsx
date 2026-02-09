@@ -19,7 +19,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
-import { PersonalityTagsBadges } from '@/components/PersonalityTagsBadges';
 import ReportModal from '@/components/ReportModal';
 import { colors } from '@/styles/commonStyles';
 import { supabase, removeFriend } from '@/lib/supabase';
@@ -547,14 +546,6 @@ export default function UserProfileScreen() {
             <View style={styles.card}>
               <Text style={styles.bio}>{profile.bio}</Text>
             </View>
-          </View>
-        )}
-
-        {/* Personality Tags */}
-        {profile.personality_tags.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Personnalité</Text>
-            <PersonalityTagsBadges tags={profile.personality_tags} />
           </View>
         )}
 
