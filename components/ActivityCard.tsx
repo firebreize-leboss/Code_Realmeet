@@ -14,7 +14,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Calendar, MapPin, Users, Heart } from 'lucide-react-native';
 import { colors, borderRadius, spacing, shadows, typography } from '@/styles/commonStyles';
-import { LinearGradient } from 'expo-linear-gradient';
+
 import { useBusinessRestrictions } from '@/hooks/useBusinessRestrictions';
 import { PREDEFINED_CATEGORIES } from '@/constants/categories';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -52,7 +52,7 @@ interface Activity {
 
 interface ActivityCardProps {
   activity: Activity;
-  variant?: 'full' | 'compact' | 'list';
+  variant?: 'full' | 'compact' | 'list' | 'browse';
   showHost?: boolean;
   showCompetitorBadge?: boolean;
   onLikePress?: () => void;
@@ -106,6 +106,133 @@ export default function ActivityCard({
   const spotsLeft = activity.max_participants - activity.participants;
   const isFull = spotsLeft <= 0;
   const isAlmostFull = spotsLeft <= 3 && spotsLeft > 0;
+
+  // Générer avatar host si non fourni
+  const getHostAvatar = () => {
+    if (activity.host_avatar) return activity.host_avatar;
+    const name = activity.host_name || activity.nom || 'Host';
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=F2994A&color=fff&size=56`;
+  };
+
+  // Extraire l'heure de time_start ou date
+  const getTimeDisplay = () => {
+    if (activity.time_start) {
+      // time_start format "HH:MM" ou "HH:MM:SS"
+      return activity.time_start.substring(0, 5);
+    }
+    if (activity.date) {
+      const date = new Date(activity.date);
+      const hours = date.getHours();
+      const minutes = date.getMinutes();
+      if (hours === 0 && minutes === 0) return null; // Pas d'heure spécifiée
+      return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+    }
+    return null;
+  };
+
+  // =============================================
+  // VARIANT: BROWSE - Clean vertical feed
+  // Full-width rounded image → text block (transparent) → thin separator
+  // No cards, no shadows. Airy rhythm between activities.
+  // =============================================
+  if (variant === 'browse') {
+    const timeDisplay = getTimeDisplay();
+
+    const participantsText = isFull
+      ? 'Complet'
+      : isAlmostFull
+        ? `${spotsLeft} place${spotsLeft > 1 ? 's' : ''}`
+        : `${activity.participants}/${activity.max_participants}`;
+
+    return (
+      <TouchableOpacity
+        style={styles.browseItem}
+        onPress={handlePress}
+        activeOpacity={0.92}
+      >
+        {/* ── Image pleine largeur avec coins arrondis ── */}
+        <View style={styles.browseImageWrap}>
+          <Image
+            source={{ uri: activity.image_url || 'https://via.placeholder.com/400' }}
+            style={styles.browseImage}
+          />
+
+          {/* Badge COMPLET */}
+          {isFull && (
+            <View style={styles.browseFullBadge}>
+              <Text style={styles.browseFullText}>COMPLET</Text>
+            </View>
+          )}
+
+          {/* Bouton favori */}
+          {onLikePress && (
+            <TouchableOpacity
+              style={styles.browseLikeButton}
+              onPress={onLikePress}
+              activeOpacity={0.8}
+            >
+              <Heart
+                size={18}
+                color={isLiked ? ACCENT_ORANGE : '#FFFFFF'}
+                fill={isLiked ? ACCENT_ORANGE : 'transparent'}
+              />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* ── Bloc texte sous l'image (fond transparent, dégradé global) ── */}
+        <View style={styles.browseContent}>
+          {/* 1. "Organisé par [Nom]" – mini avatar + petit texte gris/orange désaturé */}
+          {showHost && (
+            <TouchableOpacity
+              style={styles.browseHostRow}
+              onPress={handleHostPress}
+              activeOpacity={0.8}
+            >
+              <Image
+                source={{ uri: getHostAvatar() }}
+                style={styles.browseHostAvatar}
+              />
+              <Text style={styles.browseHostLabel}>Organisé par </Text>
+              <Text style={styles.browseHostName} numberOfLines={1}>
+                {activity.host_name || 'Organisateur'}
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {/* 2. Titre – noir/gris très foncé, gras */}
+          <Text style={styles.browseTitle} numberOfLines={2}>
+            {activity.nom}
+          </Text>
+
+          {/* 3. Ligne info compacte + prix orange à droite */}
+          <View style={styles.browseInfoRow}>
+            <View style={styles.browseMetaLine}>
+              {activity.date && (
+                <Text style={styles.browseMetaDate}>
+                  {`\u{1F4C5} ${formatDateShort(activity.date)}`}
+                  {timeDisplay ? ` \u00B7 ${timeDisplay}` : ''}
+                </Text>
+              )}
+              {activity.ville && (
+                <Text style={styles.browseMetaCity}>
+                  {`\u{1F4CD} ${activity.ville}`}
+                </Text>
+              )}
+              <Text style={[
+                styles.browseMetaParticipants,
+                isFull && styles.browseMetaFull,
+                isAlmostFull && styles.browseMetaUrgent,
+              ]}>
+                {`\u{1F465} ${participantsText}`}
+              </Text>
+            </View>
+            <Text style={styles.browsePrice}>{formatPrice(activity.prix)}</Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  }
 
   // =============================================
   // VARIANT: COMPACT - Design Premium Calme
@@ -891,5 +1018,165 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     fontFamily: 'Manrope_500Medium',
     color: TEXT_MUTED,
+  },
+
+  // =============================================
+  // BROWSE VARIANT - Clean vertical feed
+  // Rounded image → transparent text block → thin separator
+  // No card, no shadow. Airy spacing between activities.
+  // =============================================
+  browseItem: {
+    width: '100%',
+    backgroundColor: 'transparent',
+  },
+
+  // Image pleine largeur avec coins arrondis
+  browseImageWrap: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    position: 'relative',
+    overflow: 'hidden',
+    borderRadius: 14,
+    marginHorizontal: 0,
+  },
+  browseImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  browseFullBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    backgroundColor: ACCENT_ORANGE,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  browseFullText: {
+    fontSize: 11,
+    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
+    color: '#FFFFFF',
+    letterSpacing: 0.6,
+  },
+  browseLikeButton: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 36,
+    height: 36,
+    backgroundColor: 'rgba(0, 0, 0, 0.22)',
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // Bloc texte – fond transparent (le dégradé global remplace le fond par carte)
+  browseContent: {
+    backgroundColor: 'transparent',
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    paddingBottom: 16,
+    gap: 3,
+  },
+
+  // 1. "Organisé par X" – mini avatar circulaire + petit texte gris/orange désaturé
+  browseHostRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+    gap: 6,
+  },
+  browseHostAvatar: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: BG_SUBTLE,
+  },
+  browseHostLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
+    color: '#C4A882',
+    letterSpacing: 0.1,
+  },
+  browseHostName: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#B8956A',
+    letterSpacing: 0.1,
+    flexShrink: 1,
+  },
+
+  // 2. Titre – noir/gris très foncé, gras
+  browseTitle: {
+    fontSize: 19,
+    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
+    color: '#1A1A1A',
+    lineHeight: 24,
+    letterSpacing: -0.4,
+    marginTop: 1,
+  },
+
+  // 3. Ligne infos compacte + prix orange à droite
+  browseInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginTop: 6,
+    gap: 12,
+  },
+  browseMetaLine: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    flex: 1,
+    gap: 2,
+    rowGap: 2,
+  },
+  browseMetaDate: {
+    fontSize: 13,
+    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
+    color: TEXT_TERTIARY, // gris sobre
+    marginRight: 6,
+    lineHeight: 18,
+  },
+  browseMetaCity: {
+    fontSize: 13,
+    fontWeight: '400',
+    fontFamily: 'Manrope_400Regular',
+    color: TEXT_TERTIARY, // gris sobre
+    marginRight: 6,
+    lineHeight: 18,
+  },
+  browseMetaParticipants: {
+    fontSize: 13,
+    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
+    color: TEXT_TERTIARY, // gris sobre
+    lineHeight: 18,
+  },
+  browseMetaFull: {
+    color: colors.error,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+  },
+  browseMetaUrgent: {
+    color: ACCENT_ORANGE,
+    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
+  },
+
+  // Prix – orange, sans encadrement, à droite
+  browsePrice: {
+    fontSize: 16,
+    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
+    color: ACCENT_ORANGE,
+    lineHeight: 20,
   },
 });

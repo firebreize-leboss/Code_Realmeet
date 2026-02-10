@@ -18,6 +18,7 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
 import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import { WebView } from 'react-native-webview';
 import { supabase } from '@/lib/supabase';
 import { PREDEFINED_CATEGORIES } from '@/constants/categories';
@@ -753,36 +754,47 @@ export default function BrowseScreen() {
                 )}
               </TouchableOpacity>
             </View>
-            <ScrollView
-              style={styles.scrollView}
-              contentContainerStyle={[styles.contentContainer, Platform.OS !== 'ios' && styles.contentContainerWithTabBar]}
-              showsVerticalScrollIndicator={false}
-              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
-            >
-              {filteredActivities.length > 0 ? (
-                <View style={styles.gridContainer}>
-                  {filteredActivities.map((activity, index) => (
-                    <Animated.View
-                      key={activity.id}
-                      entering={hasAnimated.current ? undefined : FadeInDown.delay(index * 80).springify()}
-                      style={styles.cardWrapper}
-                    >
-                      <ActivityCard
-                        activity={mapActivityForCard(activity)}
-                        variant="compact"
-                      />
-                    </Animated.View>
-                  ))}
-                  {!hasAnimated.current && (() => { hasAnimated.current = true; return null; })()}
-                </View>
-              ) : (
-                <View style={styles.emptyState}>
-                  <IconSymbol name="calendar" size={64} color={colors.primary} />
-                  <Text style={styles.emptyText}>Aucune activité trouvée</Text>
-                  <Text style={styles.emptySubtext}>{searchQuery ? 'Essayez une autre recherche' : 'Créez la première activité !'}</Text>
-                </View>
-              )}
-            </ScrollView>
+            <View style={styles.scrollViewWhite}>
+              {/* Dégradé orangé très subtil en arrière-plan global */}
+              <LinearGradient
+                colors={['#FFFFFF', '#FFF4EC', '#FFFFFF']}
+                locations={[0, 0.35, 1]}
+                style={StyleSheet.absoluteFill}
+              />
+              <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={[styles.contentContainer, Platform.OS !== 'ios' && styles.contentContainerWithTabBar]}
+                showsVerticalScrollIndicator={false}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
+              >
+                {filteredActivities.length > 0 ? (
+                  <View style={styles.gridContainer}>
+                    {filteredActivities.map((activity, index) => (
+                      <Animated.View
+                        key={activity.id}
+                        entering={hasAnimated.current ? undefined : FadeInDown.delay(index * 80).springify()}
+                        style={styles.cardWrapper}
+                      >
+                        <ActivityCard
+                          activity={mapActivityForCard(activity)}
+                          variant="browse"
+                        />
+                        {index < filteredActivities.length - 1 && (
+                          <View style={styles.browseSeparator} />
+                        )}
+                      </Animated.View>
+                    ))}
+                    {!hasAnimated.current && (() => { hasAnimated.current = true; return null; })()}
+                  </View>
+                ) : (
+                  <View style={styles.emptyState}>
+                    <IconSymbol name="calendar" size={64} color={colors.primary} />
+                    <Text style={styles.emptyText}>Aucune activité trouvée</Text>
+                    <Text style={styles.emptySubtext}>{searchQuery ? 'Essayez une autre recherche' : 'Créez la première activité !'}</Text>
+                  </View>
+                )}
+              </ScrollView>
+            </View>
           </>
         ) : (
           <View style={styles.mapContainer}>
@@ -1235,13 +1247,13 @@ const styles = StyleSheet.create({
     fontFamily: 'Manrope_700Bold',
   },
 
-  // SCROLL & CONTENT
-  scrollView: {
+  // SCROLL & CONTENT – le dégradé LinearGradient est en absoluteFill dessous
+  scrollViewWhite: {
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 18,
-    paddingTop: 14,
+    paddingHorizontal: 0,
+    paddingTop: 0,
     paddingBottom: 26,
   },
   contentContainerWithTabBar: {
@@ -1282,14 +1294,19 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
-  // GRID - Rythme plus vivant avec espacement variable
+  // FLAT FEED - Airy spacing, thin separator between activities
   gridContainer: {
     flexDirection: 'column',
-    gap: 16,
+    paddingHorizontal: 16,
+    paddingTop: 16,
   },
   cardWrapper: {
     width: '100%',
-    marginBottom: 2,
+  },
+  browseSeparator: {
+    height: 1,
+    backgroundColor: '#E5E5E5',
+    marginVertical: 18,
   },
 
   // MAP VIEW
