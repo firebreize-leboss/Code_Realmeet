@@ -890,6 +890,8 @@ export function useMessages(conversationId: string) {
         async (payload: any) => {
           const newMsg = payload.new;
 
+          console.log('REALTIME Received message ID:', newMsg.id);
+
           // Vérifier si le message existe déjà (évite les doublons avec les messages optimistes)
           if (loadedMessageIdsRef.current.has(newMsg.id)) {
             return;
@@ -1000,7 +1002,7 @@ export function useMessages(conversationId: string) {
         profile = profileData as { full_name: string; avatar_url: string } | null;
       }
 
-      const tempId = `temp_${Date.now()}_${Math.random()}`;
+      const messageId = crypto.randomUUID();
 
       // Build replyTo info for optimistic display
       let replyToInfo: ReplyInfo | undefined;
@@ -1017,7 +1019,7 @@ export function useMessages(conversationId: string) {
       }
 
       const optimisticMessage: TransformedMessage = {
-        id: tempId,
+        id: messageId,
         senderId: userId,
         senderName: profile?.full_name || 'Moi',
         senderAvatar: profile?.avatar_url,
@@ -1034,11 +1036,14 @@ export function useMessages(conversationId: string) {
         replyTo: replyToInfo,
       };
 
+      // Register the ID before inserting so realtime won't duplicate it
+      loadedMessageIdsRef.current.add(messageId);
       setMessages(prev => [...prev, optimisticMessage]);
 
-      const { data: messageData, error } = await supabase
+      const { error } = await supabase
         .from('messages')
         .insert({
+          id: messageId,
           conversation_id: conversationId,
           sender_id: userId,
           content: type === 'text' ? content : null,
@@ -1046,14 +1051,13 @@ export function useMessages(conversationId: string) {
           media_url: mediaUrl || null,
           media_duration: mediaDuration || null,
           reply_to_message_id: replyToMessageId || null,
-        } as any)
-        .select()
-        .single();
+        } as any);
 
       if (error) {
+        loadedMessageIdsRef.current.delete(messageId);
         setMessages(prev =>
           prev.map(msg =>
-            msg.id === tempId
+            msg.id === messageId
               ? { ...msg, status: 'failed' as const }
               : msg
           )
@@ -1061,21 +1065,11 @@ export function useMessages(conversationId: string) {
         throw error;
       }
 
-      const insertedMessage = messageData as { id: string } | null;
-      if (!insertedMessage) throw new Error('Message insertion failed');
-
-      // Ajouter le vrai ID aux messages chargés pour éviter les doublons avec realtime
-      loadedMessageIdsRef.current.add(insertedMessage.id);
-
-      // Remplacer le message optimiste par le vrai message
+      // Update optimistic message status to delivered
       setMessages(prev =>
         prev.map(msg =>
-          msg.id === tempId
-            ? {
-                ...msg,
-                id: insertedMessage.id,
-                status: 'delivered' as const,
-              }
+          msg.id === messageId
+            ? { ...msg, status: 'delivered' as const }
             : msg
         )
       );
