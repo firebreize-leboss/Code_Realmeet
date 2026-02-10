@@ -978,7 +978,8 @@ export function useMessages(conversationId: string) {
     type: 'text' | 'image' | 'voice' = 'text',
     mediaUrl?: string,
     mediaDuration?: number,
-    replyToMessageId?: string
+    replyToMessageId?: string,
+    externalId?: string
   ) => {
     try {
       // Utiliser le cache si disponible, sinon charger
@@ -1002,7 +1003,7 @@ export function useMessages(conversationId: string) {
         profile = profileData as { full_name: string; avatar_url: string } | null;
       }
 
-      const messageId = crypto.randomUUID();
+      const messageId = externalId ?? crypto.randomUUID();
 
       // Build replyTo info for optimistic display
       let replyToInfo: ReplyInfo | undefined;

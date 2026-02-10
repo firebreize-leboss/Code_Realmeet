@@ -20,7 +20,7 @@ import { colors } from '@/styles/commonStyles';
 import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
 import { WebView } from 'react-native-webview';
 import { supabase } from '@/lib/supabase';
-import * as Location from 'expo-location';
+import { getLocationWithFallback } from '@/utils/locationFallback';
 import { PREDEFINED_CATEGORIES } from '@/constants/categories';
 import { useDataCache } from '@/contexts/DataCacheContext';
 import ActivityCard from '@/components/ActivityCard';
@@ -174,14 +174,11 @@ export default function BrowseScreen() {
 
   useEffect(() => {
     (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        const location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
+      const location = await getLocationWithFallback();
+      if (location) {
         setUserLocation({
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
+          latitude: location.latitude,
+          longitude: location.longitude,
         });
       }
     })();

@@ -26,6 +26,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
+import { randomUUID } from 'expo-crypto';
 import { useMessages, useConversations, TransformedMessage } from '@/hooks/useMessaging';
 import { messageStorageService } from '@/services/message-storage.service';
 import { voiceMessageService } from '@/services/voice-message.service';
@@ -579,7 +580,8 @@ export default function ChatDetailScreen() {
     setReplyToMessage(null);
 
     try {
-      await sendMessage(userMessage, 'text', undefined, undefined, replyId);
+      const messageId = randomUUID();
+      await sendMessage(userMessage, 'text', undefined, undefined, replyId, messageId);
 
       // Scroll to latest message (FlatList inverted = scroll to offset 0)
       setTimeout(() => {
