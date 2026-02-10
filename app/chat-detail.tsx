@@ -17,8 +17,8 @@ import {
 } from 'react-native';
 import Animated, {
   useAnimatedStyle,
+  FadeInDown,
   Easing,
-  withTiming,
 } from 'react-native-reanimated';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -89,27 +89,6 @@ const getDateKey = (timestamp: string): string => {
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 };
 
-// Custom entering animation for messages (Instagram DM style)
-// Note: For inverted FlatList, positive translateY moves DOWN (towards the input area)
-// so we animate FROM positive (below) TO 0 (final position)
-const createMessageEnteringAnimation = (isOwnMessage: boolean) => {
-  'worklet';
-  const initialValues = {
-    opacity: 0,
-    transform: [
-      { translateY: 20 }, // Start 20px below (in inverted list, this is towards input)
-      { scale: 0.95 },
-    ],
-  };
-  const animations = {
-    opacity: withTiming(1, { duration: 250, easing: Easing.out(Easing.cubic) }),
-    transform: [
-      { translateY: withTiming(0, { duration: 250, easing: Easing.out(Easing.cubic) }) },
-      { scale: withTiming(1, { duration: 250, easing: Easing.out(Easing.cubic) }) },
-    ],
-  };
-  return { initialValues, animations };
-};
 
 export default function ChatDetailScreen() {
   const router = useRouter();
@@ -875,7 +854,7 @@ export default function ChatDetailScreen() {
       return (
         <Animated.View
           style={[styles.messageRow, isOwnMessage && styles.ownMessageRow]}
-          entering={createMessageEnteringAnimation(isOwnMessage)}
+          entering={FadeInDown.duration(250).easing(Easing.out(Easing.cubic))}
         >
           {messageContent}
         </Animated.View>

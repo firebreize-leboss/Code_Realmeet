@@ -177,7 +177,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       // Récupérer les slots (on récupère ceux d'aujourd'hui et futurs, puis on filtre par heure côté client)
       const { data: slots } = await supabase
         .from('activity_slots')
-        .select('id, activity_id, date, time_start, time_end, duration, max_participants')
+        .select('id, activity_id, date, time, duration, max_participants')
         .in('activity_id', ids.length > 0 ? ids : ['__none__'])
         .gte('date', todayStr)
         .order('date', { ascending: true });
@@ -186,7 +186,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       const now = new Date();
       const filteredSlots = (slots || []).filter(s => {
         const slotDate = s.date; // Format YYYY-MM-DD
-        const timeStr = s.time_start || s.time_end; // time_start en priorité, time_end en fallback
+        const timeStr = s.time;
         const startDateTime = timeStr
           ? new Date(`${slotDate}T${timeStr}`)
           : new Date(`${slotDate}T23:59:59`); // fallback fin de journée
@@ -290,7 +290,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       // Récupérer toutes les dates uniques et max_participants des slots futurs pour chaque activité
       const { data: slotsData } = await supabase
         .from('activity_slots')
-        .select('activity_id, date, time_start, time_end, duration, max_participants')
+        .select('activity_id, date, time, duration, max_participants')
         .in('activity_id', activityIds.length > 0 ? activityIds : ['__none__'])
         .gte('date', todayStr)
         .order('date', { ascending: true });
@@ -298,7 +298,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       // Filtrer : garder uniquement les créneaux dont le début est strictement dans le futur
       const filteredSlotsData = (slotsData || []).filter(s => {
         const slotDate = s.date;
-        const timeStr = s.time_start || s.time_end;
+        const timeStr = s.time;
         const startDateTime = timeStr
           ? new Date(`${slotDate}T${timeStr}`)
           : new Date(`${slotDate}T23:59:59`);
