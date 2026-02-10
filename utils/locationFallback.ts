@@ -97,23 +97,27 @@ async function geocodeCity(city: string): Promise<{ latitude: number; longitude:
  *
  * Returns null only if both GPS and city fallback fail entirely.
  */
-export async function getLocationWithFallback(): Promise<LocationResult | null> {
-  // Step 1: Try GPS
-  try {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status === 'granted') {
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      return {
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-        source: 'gps',
-      };
+export async function getLocationWithFallback(
+  options?: { skipGPS?: boolean }
+): Promise<LocationResult | null> {
+  // Step 1: Try GPS (unless explicitly skipped)
+  if (!options?.skipGPS) {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        return {
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+          source: 'gps',
+        };
+      }
+      // Permission not granted — fall through to city fallback
+    } catch (error) {
+      console.warn('GPS location failed, falling back to city geocoding:', error);
     }
-    // Permission not granted — fall through to city fallback
-  } catch (error) {
-    console.warn('GPS location failed, falling back to city geocoding:', error);
   }
 
   // Step 2: Fallback — geocode the user's profile city

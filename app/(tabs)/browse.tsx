@@ -20,9 +20,9 @@ import { colors } from '@/styles/commonStyles';
 import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated';
 import { WebView } from 'react-native-webview';
 import { supabase } from '@/lib/supabase';
-import { getLocationWithFallback } from '@/utils/locationFallback';
 import { PREDEFINED_CATEGORIES } from '@/constants/categories';
 import { useDataCache } from '@/contexts/DataCacheContext';
+import { useLocation } from '@/contexts/LocationContext';
 import ActivityCard from '@/components/ActivityCard';
 import { useMapView } from '@/contexts/MapViewContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -90,12 +90,6 @@ interface SelectedActivity {
   totalMaxPlaces?: number;
 }
 
-interface UserLocation {
-  latitude: number;
-  longitude: number;
-}
-
-
 // Fonction pour calculer la distance entre deux points GPS (formule Haversine)
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371; // Rayon de la Terre en km
@@ -114,6 +108,7 @@ export default function BrowseScreen() {
   const params = useLocalSearchParams();
   const { cache, loading: cacheLoading, refreshActivities } = useDataCache();
   const { setIsMapViewActive } = useMapView();
+  const { userLocation, refreshLocation } = useLocation();
   const insets = useSafeAreaInsets();
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('liste');
@@ -124,7 +119,6 @@ export default function BrowseScreen() {
   }, [viewMode, setIsMapViewActive]);
   const [selectedActivity, setSelectedActivity] = useState<SelectedActivity | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const webViewRef = useRef<WebView>(null);
   const hasHandledParams = useRef(false);
   const hasCenteredOnActivity = useRef(false);
@@ -172,17 +166,6 @@ export default function BrowseScreen() {
   }, [filters]);
 
 
-  useEffect(() => {
-    (async () => {
-      const location = await getLocationWithFallback();
-      if (location) {
-        setUserLocation({
-          latitude: location.latitude,
-          longitude: location.longitude,
-        });
-      }
-    })();
-  }, []);
   // Mettre à jour le marker utilisateur quand la localisation change
   useEffect(() => {
     if (userLocation && webViewRef.current && viewMode === 'maps') {
@@ -199,7 +182,7 @@ export default function BrowseScreen() {
   });
   }, []);
 
-  // Rafraîchir les activités quand l'écran reprend le focus (retour depuis les détails)
+  // Rafraîchir les activités et la localisation quand l'écran reprend le focus
   useFocusEffect(
     useCallback(() => {
       // Ne pas rafraîchir lors du premier focus (le cache initial suffit)
@@ -213,13 +196,15 @@ export default function BrowseScreen() {
       }
       refreshDebounceTimer.current = setTimeout(() => {
         refreshActivities();
+        // Rafraîchir la localisation (respecte le cooldown de 5 min interne)
+        refreshLocation();
       }, 500);
       return () => {
         if (refreshDebounceTimer.current) {
           clearTimeout(refreshDebounceTimer.current);
         }
       };
-    }, [refreshActivities])
+    }, [refreshActivities, refreshLocation])
   );
 
 

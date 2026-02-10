@@ -18,14 +18,15 @@ import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles
 import { authService } from '@/services/auth.service';
 import { notificationService } from '@/lib/notifications';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLocation } from '@/contexts/LocationContext';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const { signOut } = useAuth();
+  const { isLocationEnabled, setIsLocationEnabled } = useLocation();
   const [notificationsEnabled, setNotificationsEnabled] = React.useState(true);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
-  const [locationEnabled, setLocationEnabled] = React.useState(true);
   const [logoutLoading, setLogoutLoading] = useState(false);
 
   // Charger l'état initial des notifications
@@ -310,8 +311,8 @@ export default function SettingsScreen() {
                 icon="location.fill"
                 title="Services de localisation"
                 subtitle="Trouver des activités près de vous"
-                value={locationEnabled}
-                onValueChange={setLocationEnabled}
+                value={isLocationEnabled}
+                onValueChange={setIsLocationEnabled}
               />
             </View>
           </View>

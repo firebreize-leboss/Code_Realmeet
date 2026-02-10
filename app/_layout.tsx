@@ -28,6 +28,7 @@ import { WidgetProvider } from "@/contexts/WidgetContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { DataCacheProvider } from "@/contexts/DataCacheContext";
 import { TabIndexProvider } from "@/contexts/TabIndexContext";
+import { LocationProvider } from "@/contexts/LocationContext";
 import { notificationService } from "@/lib/notifications";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -115,6 +116,7 @@ export default function RootLayout() {
         <AuthProvider>
           <TabIndexProvider>
           <DataCacheProvider>
+          <LocationProvider>
             <ThemeProvider
               value={CustomDefaultTheme}
             >
@@ -172,6 +174,7 @@ export default function RootLayout() {
                 </KeyboardProvider>
               </GestureHandlerRootView>
             </ThemeProvider>
+          </LocationProvider>
           </DataCacheProvider>
           </TabIndexProvider>
         </AuthProvider>
