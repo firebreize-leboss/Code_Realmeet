@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Location from 'expo-location';
 import { getLocationWithFallback } from '@/utils/locationFallback';
 
 const LOCATION_ENABLED_KEY = '@realmeet_location_enabled';
@@ -17,6 +18,8 @@ interface LocationContextType {
   setIsLocationEnabled: (enabled: boolean) => void;
   refreshLocation: () => Promise<void>;
   lastRefreshTime: number;
+  isMapViewActive: boolean;
+  setIsMapViewActive: (active: boolean) => void;
 }
 
 const LocationContext = createContext<LocationContextType | undefined>(undefined);
@@ -25,8 +28,10 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
   const [userLocation, setUserLocation] = useState<LocationData | null>(null);
   const [locationSource, setLocationSource] = useState<'gps' | 'city_fallback' | null>(null);
   const [isLocationEnabled, setIsLocationEnabledState] = useState(true);
+  const [isMapViewActive, setIsMapViewActive] = useState(false);
   const [initialLoaded, setInitialLoaded] = useState(false);
   const lastRefreshTimeRef = useRef<number>(0);
+  const watchSubscriptionRef = useRef<Location.LocationSubscription | null>(null);
 
   // Load persisted preference on mount
   useEffect(() => {
@@ -58,6 +63,60 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
     fetchLocation(!isLocationEnabled);
   }, [isLocationEnabled, initialLoaded, fetchLocation]);
 
+  // GPS live tracking: watch position when map is visible AND location is enabled
+  useEffect(() => {
+    if (!isMapViewActive || !isLocationEnabled) {
+      // Stop any existing watcher
+      if (watchSubscriptionRef.current) {
+        watchSubscriptionRef.current.remove();
+        watchSubscriptionRef.current = null;
+      }
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted' || cancelled) return;
+
+        const subscription = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.Balanced,
+            timeInterval: 5000,
+            distanceInterval: 10,
+          },
+          (location) => {
+            if (!cancelled) {
+              setUserLocation({
+                latitude: location.coords.latitude,
+                longitude: location.coords.longitude,
+              });
+              setLocationSource('gps');
+            }
+          }
+        );
+
+        if (cancelled) {
+          subscription.remove();
+        } else {
+          watchSubscriptionRef.current = subscription;
+        }
+      } catch (error) {
+        console.warn('GPS watcher failed to start:', error);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (watchSubscriptionRef.current) {
+        watchSubscriptionRef.current.remove();
+        watchSubscriptionRef.current = null;
+      }
+    };
+  }, [isMapViewActive, isLocationEnabled]);
+
   const setIsLocationEnabled = useCallback((enabled: boolean) => {
     setIsLocationEnabledState(enabled);
     AsyncStorage.setItem(LOCATION_ENABLED_KEY, String(enabled)).catch(() => {});
@@ -80,6 +139,8 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
         setIsLocationEnabled,
         refreshLocation,
         lastRefreshTime: lastRefreshTimeRef.current,
+        isMapViewActive,
+        setIsMapViewActive,
       }}
     >
       {children}

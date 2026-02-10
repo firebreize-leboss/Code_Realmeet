@@ -24,7 +24,6 @@ import { PREDEFINED_CATEGORIES } from '@/constants/categories';
 import { useDataCache } from '@/contexts/DataCacheContext';
 import { useLocation } from '@/contexts/LocationContext';
 import ActivityCard from '@/components/ActivityCard';
-import { useMapView } from '@/contexts/MapViewContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FLOATING_TAB_BAR_HEIGHT } from '@/components/FloatingTabBar';
 
@@ -107,8 +106,7 @@ export default function BrowseScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { cache, loading: cacheLoading, refreshActivities } = useDataCache();
-  const { setIsMapViewActive } = useMapView();
-  const { userLocation, refreshLocation } = useLocation();
+  const { userLocation, refreshLocation, setIsMapViewActive } = useLocation();
   const insets = useSafeAreaInsets();
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('liste');
@@ -117,6 +115,15 @@ export default function BrowseScreen() {
   useEffect(() => {
     setIsMapViewActive(viewMode === 'maps');
   }, [viewMode, setIsMapViewActive]);
+
+  // Stopper le GPS watcher quand browse perd le focus (navigation vers une autre page)
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        setIsMapViewActive(false);
+      };
+    }, [setIsMapViewActive])
+  );
   const [selectedActivity, setSelectedActivity] = useState<SelectedActivity | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const webViewRef = useRef<WebView>(null);

@@ -11,7 +11,7 @@ import SwipeableTabView from '@/components/SwipeableTabView';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTabIndex } from '@/contexts/TabIndexContext';
 import { colors } from '@/styles/commonStyles';
-import { MapViewProvider, useMapView } from '@/contexts/MapViewContext';
+import { useLocation } from '@/contexts/LocationContext';
 
 // Import des écrans
 import ProfileScreen from './profile';
@@ -134,13 +134,12 @@ function isDetailRoute(pathname: string): boolean {
   return detailPrefixes.some(prefix => pathname.startsWith(prefix));
 }
 
-// Composant interne qui utilise le contexte MapView
 function TabLayoutContent() {
   const { user, profile, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const params = useLocalSearchParams();
-  const { isMapViewActive } = useMapView();
+  const { isMapViewActive } = useLocation();
 
   const isBusiness = profile?.account_type === 'business';
   const tabs = useMemo(() => isBusiness ? businessTabs : userTabs, [isBusiness]);
@@ -302,11 +301,6 @@ function TabLayoutContent() {
   );
 }
 
-// Composant principal qui fournit le contexte MapView
 export default function TabLayout() {
-  return (
-    <MapViewProvider>
-      <TabLayoutContent />
-    </MapViewProvider>
-  );
+  return <TabLayoutContent />;
 }
