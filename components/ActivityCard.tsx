@@ -138,11 +138,10 @@ export default function ActivityCard({
   if (variant === 'browse') {
     const timeDisplay = getTimeDisplay();
 
+    // Texte participants: "Complet" ou "X/Y participants"
     const participantsText = isFull
       ? 'Complet'
-      : isAlmostFull
-        ? `${spotsLeft} place${spotsLeft > 1 ? 's' : ''}`
-        : `${activity.participants}/${activity.max_participants}`;
+      : `${activity.participants}/${activity.max_participants} participants`;
 
     return (
       <TouchableOpacity
@@ -182,8 +181,8 @@ export default function ActivityCard({
 
         {/* ── Bloc texte sous l'image (fond transparent, dégradé global) ── */}
         <View style={styles.browseContent}>
-          {/* 1. "Organisé par [Nom]" – mini avatar + petit texte gris/orange désaturé */}
-          {showHost && (
+          {/* 1. Host row – avatar circulaire + "Organisateur" */}
+          {showHost && (activity.host_avatar || activity.host_name) && (
             <TouchableOpacity
               style={styles.browseHostRow}
               onPress={handleHostPress}
@@ -193,10 +192,7 @@ export default function ActivityCard({
                 source={{ uri: getHostAvatar() }}
                 style={styles.browseHostAvatar}
               />
-              <Text style={styles.browseHostLabel}>Organisé par </Text>
-              <Text style={styles.browseHostName} numberOfLines={1}>
-                {activity.host_name || 'Organisateur'}
-              </Text>
+              <Text style={styles.browseHostLabel}>Organisateur</Text>
             </TouchableOpacity>
           )}
 
@@ -205,29 +201,39 @@ export default function ActivityCard({
             {activity.nom}
           </Text>
 
-          {/* 3. Ligne info compacte + prix orange à droite */}
+          {/* 3. Date/Ville + Prix à droite */}
           <View style={styles.browseInfoRow}>
             <View style={styles.browseMetaLine}>
+              {/* Calendar icon + date · heure */}
               {activity.date && (
-                <Text style={styles.browseMetaDate}>
-                  {`\u{1F4C5} ${formatDateShort(activity.date)}`}
-                  {timeDisplay ? ` \u00B7 ${timeDisplay}` : ''}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginRight: 6 }}>
+                  <Calendar size={13} color={TEXT_TERTIARY} />
+                  <Text style={styles.browseMetaDate}>
+                    {formatDateShort(activity.date)}{timeDisplay ? ` · ${timeDisplay}` : ''}
+                  </Text>
+                </View>
               )}
+              {/* MapPin icon + ville */}
               {activity.ville && (
-                <Text style={styles.browseMetaCity}>
-                  {`\u{1F4CD} ${activity.ville}`}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                  <MapPin size={13} color={TEXT_TERTIARY} />
+                  <Text style={styles.browseMetaCity}>{activity.ville}</Text>
+                </View>
               )}
-              <Text style={[
-                styles.browseMetaParticipants,
-                isFull && styles.browseMetaFull,
-                isAlmostFull && styles.browseMetaUrgent,
-              ]}>
-                {`\u{1F465} ${participantsText}`}
-              </Text>
             </View>
             <Text style={styles.browsePrice}>{formatPrice(activity.prix)}</Text>
+          </View>
+
+          {/* 4. Participants sur ligne séparée */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+            <Users size={13} color={TEXT_TERTIARY} />
+            <Text style={[
+              styles.browseMetaParticipants,
+              isFull && styles.browseMetaFull,
+              isAlmostFull && styles.browseMetaUrgent,
+            ]}>
+              {participantsText}
+            </Text>
           </View>
         </View>
       </TouchableOpacity>

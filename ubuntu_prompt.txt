@@ -1,0 +1,102 @@
+# Corrections ActivityCard variant browse + browse.tsx
+
+## Fichier: components/ActivityCard.tsx — variant "browse"
+
+### 1. Remplacer les Unicode emoji par des icônes grises lucide-react-native
+
+Dans le render de la variant `browse`, remplacer les emoji strings par des composants icônes :
+
+**Avant (actuel) :**
+```tsx
+<Text style={styles.browseMetaDate}>
+  {`\u{1F4C5} ${formatDateShort(activity.date)}`}
+  {timeDisplay ? ` \u00B7 ${timeDisplay}` : ''}
+</Text>
+<Text style={styles.browseMetaCity}>
+  {`\u{1F4CD} ${activity.ville}`}
+</Text>
+<Text style={styles.browseMetaParticipants}>
+  {`\u{1F465} ${participantsText}`}
+</Text>
+```
+
+**Après (corrigé) :**
+Utiliser des `<View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>` avec `<Calendar size={13} color={TEXT_TERTIARY} />`, `<MapPin size={13} color={TEXT_TERTIARY} />`, `<Users size={13} color={TEXT_TERTIARY} />` (déjà importés en haut du fichier) suivis des `<Text>` correspondants. Les icônes doivent être **grises monochromes** (`TEXT_TERTIARY = #8E8E93`), PAS des emoji colorés.
+
+### 2. Ajouter la ligne Host au-dessus du titre
+
+Dans le render `browseContent`, ajouter **avant** le titre :
+
+```tsx
+{/* Host row - avatar + label */}
+{showHost && (activity.host_avatar || activity.host_name) && (
+  <TouchableOpacity style={styles.browseHostRow} onPress={handleHostPress} activeOpacity={0.8}>
+    <Image source={{ uri: getHostAvatar() }} style={styles.browseHostAvatar} />
+    <Text style={styles.browseHostLabel}>Organisateur</Text>
+  </TouchableOpacity>
+)}
+```
+
+Les styles `browseHostRow`, `browseHostAvatar`, `browseHostLabel` existent déjà. Il faut juste ajouter un import de `Image` si pas déjà fait (il est déjà importé).
+
+### 3. Séparer les participants sur leur propre ligne
+
+Retirer `browseMetaParticipants` du `browseMetaLine` et le mettre sur une ligne séparée en dessous de `browseInfoRow`.
+
+La structure doit devenir :
+
+```tsx
+<View style={styles.browseContent}>
+  {/* 1. Host */}
+  {showHost && (...host row...)}
+  
+  {/* 2. Titre */}
+  <Text style={styles.browseTitle}>{activity.nom}</Text>
+  
+  {/* 3. Date/Ville + Prix à droite */}
+  <View style={styles.browseInfoRow}>
+    <View style={styles.browseMetaLine}>
+      {/* Calendar icon + date · heure */}
+      {activity.date && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginRight: 6 }}>
+          <Calendar size={13} color={TEXT_TERTIARY} />
+          <Text style={styles.browseMetaDate}>
+            {formatDateShort(activity.date)}{timeDisplay ? ` · ${timeDisplay}` : ''}
+          </Text>
+        </View>
+      )}
+      {/* MapPin icon + ville */}
+      {activity.ville && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+          <MapPin size={13} color={TEXT_TERTIARY} />
+          <Text style={styles.browseMetaCity}>{activity.ville}</Text>
+        </View>
+      )}
+    </View>
+    <Text style={styles.browsePrice}>{formatPrice(activity.prix)}</Text>
+  </View>
+  
+  {/* 4. Participants sur ligne séparée */}
+  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+    <Users size={13} color={TEXT_TERTIARY} />
+    <Text style={[styles.browseMetaParticipants, isFull && styles.browseMetaFull, isAlmostFull && styles.browseMetaUrgent]}>
+      {activity.participants}/{activity.max_participants} participants
+    </Text>
+  </View>
+</View>
+```
+
+### 4. Ajuster le texte participants
+
+Le `participantsText` pour la ligne séparée doit toujours montrer le format `X/Y participants` (avec le mot "participants" en toutes lettres), sauf si complet où il affiche "Complet".
+
+### 5. Supprimer le padding emoji des styles browseMetaDate/browseMetaCity
+
+Comme les emoji sont remplacés par des composants icônes séparés, les styles `browseMetaDate` et `browseMetaCity` ne doivent plus inclure les emoji dans leur texte. Le texte doit commencer directement par la valeur (ex: "11 févr · 20:00", "Paris").
+
+## Résumé des changements :
+- **Icônes grises** lucide au lieu d'emoji Unicode colorés
+- **Host row visible** (avatar circulaire orange + "Organisateur")
+- **Participants sur ligne séparée** avec mot "participants" en toutes lettres
+- **Prix aligné à droite** uniquement sur la ligne date/ville
+- Pas de changement sur browse.tsx header (déjà conforme)
