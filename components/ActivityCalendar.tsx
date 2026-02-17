@@ -359,9 +359,20 @@ export default function ActivityCalendar({
           if (error) throw error;
 
           // En mode select, masquer les créneaux débutant à moins de 24h
+          // SAUF le créneau auquel l'utilisateur est inscrit (visible jusqu'à la fin de l'activité = start + durée)
           const in24h = new Date(Date.now() + 24 * 60 * 60 * 1000);
+          const now = new Date();
           const filtered = (data || []).filter(s => {
             const startDt = new Date(`${s.date}T${s.time || '23:59:59'}`);
+
+            // Si c'est le créneau de l'utilisateur inscrit, le garder visible
+            // jusqu'à ce que l'activité soit terminée (heure de début + durée)
+            if (userJoinedSlotId && s.id === userJoinedSlotId) {
+              const durationMs = (s.duration || 60) * 60 * 1000;
+              const endDt = new Date(startDt.getTime() + durationMs);
+              return now < endDt;
+            }
+
             return startDt >= in24h;
           });
 
@@ -452,7 +463,7 @@ export default function ActivityCalendar({
     };
 
     load();
-  }, [activityId, mode, weekOffset, currentUserId, refreshTrigger]);
+  }, [activityId, mode, weekOffset, currentUserId, refreshTrigger, userJoinedSlotId]);
 
   // ---------- Pagination (select mode) ----------
   const visibleDays: DaySlots[] = useMemo(() => {
