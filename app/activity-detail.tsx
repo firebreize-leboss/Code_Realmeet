@@ -589,6 +589,7 @@ export default function ActivityDetailScreen() {
 
   const showFooter = (!isHost && !isActivityPast) || (isHost && isBusiness);
   const calculatedPaddingBottom = showFooter ? 70 + insets.bottom : 0;
+  const scrollBottomPadding = showFooter ? 0 : Math.max(insets.bottom, Platform.OS === 'android' ? 24 : 0);
 
   return (
     <View style={styles.container}>
@@ -633,7 +634,7 @@ export default function ActivityDetailScreen() {
         style={styles.scrollView}
         contentContainerStyle={[
           styles.contentContainer,
-          { flexGrow: 1 },
+          { flexGrow: 1, paddingBottom: scrollBottomPadding },
         ]}
         showsVerticalScrollIndicator={false}
         overScrollMode="never"

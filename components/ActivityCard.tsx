@@ -203,19 +203,30 @@ export default function ActivityCard({
 
           {/* 3. Date/Ville + Prix à droite */}
           <View style={styles.browseInfoRow}>
-            <View style={styles.browseMetaLine}>
-              {/* Calendar icon + date · heure */}
-              {activity.date && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginRight: 6 }}>
+            <View style={styles.browseMetaBlock}>
+              {/* Date badges (up to 3) */}
+              {activity.allDates && activity.allDates.length > 0 ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  {activity.allDates.slice(0, 3).map((dateStr, index) => (
+                    <View key={index} style={{ backgroundColor: BG_SUBTLE, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '500', color: TEXT_TERTIARY }}>{formatDateShort(dateStr)}</Text>
+                    </View>
+                  ))}
+                  {activity.allDates.length > 3 && (
+                    <Text style={{ fontSize: 12, fontWeight: '500', color: TEXT_TERTIARY }}>+{activity.allDates.length - 3}</Text>
+                  )}
+                </View>
+              ) : activity.date ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
                   <Calendar size={13} color={TEXT_TERTIARY} />
                   <Text style={styles.browseMetaDate}>
                     {formatDateShort(activity.date)}{timeDisplay ? ` · ${timeDisplay}` : ''}
                   </Text>
                 </View>
-              )}
-              {/* MapPin icon + ville */}
+              ) : null}
+              {/* Adresse – toujours sur sa propre ligne, sous les dates */}
               {activity.ville && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 }}>
                   <MapPin size={13} color={TEXT_TERTIARY} />
                   <Text style={styles.browseMetaCity}>{activity.ville}</Text>
                 </View>
@@ -1142,6 +1153,11 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
     rowGap: 2,
+  },
+  browseMetaBlock: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    flex: 1,
   },
   browseMetaDate: {
     fontSize: 13,

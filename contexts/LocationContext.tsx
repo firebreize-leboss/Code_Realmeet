@@ -53,6 +53,8 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
     if (result) {
       setUserLocation({ latitude: result.latitude, longitude: result.longitude });
       setLocationSource(result.source);
+    } else {
+      console.log('Aucune localisation disponible, fonctionnement sans géolocalisation');
     }
     lastRefreshTimeRef.current = Date.now();
   }, []);

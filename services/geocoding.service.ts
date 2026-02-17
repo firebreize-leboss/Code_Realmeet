@@ -163,7 +163,7 @@ class GeocodingService {
         },
       };
     } catch (error) {
-      console.error('Erreur de géocodage:', error);
+      console.warn('Géocodage non disponible:', error?.message || error);
       return null;
     }
   }

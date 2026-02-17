@@ -70,6 +70,8 @@ async function getUserCity(): Promise<string | null> {
  * Geocode a city name into lat/lng coordinates, using cache when available.
  */
 async function geocodeCity(city: string): Promise<{ latitude: number; longitude: number } | null> {
+  if (!city?.trim()) return null;
+
   const cached = await getCachedLocation(city);
   if (cached) {
     return { latitude: cached.latitude, longitude: cached.longitude };
@@ -140,7 +142,7 @@ export async function getLocationWithFallback(
       source: 'city_fallback',
     };
   } catch (error) {
-    console.warn('City fallback failed:', error);
+    console.log('City fallback failed:', error);
     return null;
   }
 }
