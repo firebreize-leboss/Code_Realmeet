@@ -470,7 +470,7 @@ export default function ActivityCalendar({
     };
 
     load();
-  }, [activityId, mode, weekOffset, currentUserId, refreshTrigger, userJoinedSlotId]);
+  }, [activityId, mode, weekOffset, currentUserId, refreshTrigger, userJoinedSlotId, pendingSlots]);
 
   // ---------- Pagination (select mode) ----------
   const visibleDays: DaySlots[] = useMemo(() => {
