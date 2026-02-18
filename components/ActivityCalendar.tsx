@@ -229,6 +229,8 @@ export default function ActivityCalendar({
               duration: s.duration,
               createdBy: currentUserId || '',
               date: s.date,
+              participantCount: 0,
+              maxParticipants: (s.max_groups || 2) * (s.participants_per_group || 5),
             }));
           return { ...day, slots: daySlots };
         });
@@ -243,6 +245,8 @@ export default function ActivityCalendar({
             duration: s.duration,
             createdBy: currentUserId || '',
             date: s.date,
+            participantCount: 0,
+            maxParticipants: (s.max_groups || 2) * (s.participants_per_group || 5),
           });
           grouped.set(s.date, list);
         });
