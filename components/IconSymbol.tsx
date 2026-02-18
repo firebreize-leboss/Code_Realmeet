@@ -111,6 +111,10 @@ const MAPPING = {
   "questionmark.circle": "help-outline",
   "shield.fill": "shield",
 
+  // Lists
+  "list.bullet.rectangle.fill": "list",
+  "list.bullet.rectangle": "list",
+
   // Shapes & Symbols
   "square": "crop-square",
   "square.grid.2x2.fill": "grid-view",
@@ -158,6 +162,7 @@ const MAPPING = {
   "clock.fill": "access-time",
   "clock": "access-time",
   "calendar": "event",
+  "calendar.badge.plus": "event",
   "timer": "timer",
 
   // User & Profile
@@ -165,6 +170,8 @@ const MAPPING = {
   "person.fill": "person",
   "person.2.fill": "group",
   "person.2": "group",
+  "person.3.fill": "groups",
+  "person.3": "groups",
   "person.circle.fill": "account-circle",
   "person.circle": "account-circle",
   "person.crop.circle.fill": "account-circle",

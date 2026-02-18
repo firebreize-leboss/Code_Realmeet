@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { useTabIndex } from '@/contexts/TabIndexContext';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles, typography, spacing, borderRadius } from '@/styles/commonStyles';
 import { useFriendRequests } from '@/hooks/useMessaging';
@@ -76,6 +77,7 @@ type ChatFilter = 'all' | 'activities' | 'friends';
 
 export default function ChatScreen() {
   const router = useRouter();
+  const { setCurrentTabIndex } = useTabIndex();
   const [showFriendsModal, setShowFriendsModal] = useState(false);
   const [activeFilter, setActiveFilter] = useState<ChatFilter>('all');
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
@@ -474,7 +476,7 @@ export default function ChatScreen() {
             title: 'Aucun groupe d\'activité',
             subtitle: 'Rejoignez une activité pour discuter avec les autres participants.',
             cta: 'Explorer les activités',
-            onPress: () => router.push('/(tabs)/browse'),
+            onPress: () => setCurrentTabIndex(1),
           };
         case 'friends':
           return {
@@ -490,7 +492,7 @@ export default function ChatScreen() {
             title: 'Pas encore de messages',
             subtitle: 'Vos conversations apparaîtront ici. Rejoignez une activité ou contactez un ami pour commencer.',
             cta: 'Explorer les activités',
-            onPress: () => router.push('/(tabs)/browse'),
+            onPress: () => setCurrentTabIndex(1),
           };
       }
     };

@@ -168,6 +168,9 @@ export default function BusinessGroupsScreen() {
         });
       }
 
+      // Trier par date de créneau décroissant (les plus récents en haut)
+      groupsData.sort((a, b) => b.slotDateTime.getTime() - a.slotDateTime.getTime());
+
       setGroups(groupsData);
     } catch (error) {
       console.error('Erreur chargement groupes:', error);

@@ -1,56 +1,40 @@
 // components/signup/steps/Step4City.tsx
-// Étape 4: Sélection de la ville
+// Étape 4: Sélection de la ville via autocomplétion API
 
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
-  ScrollView,
 } from 'react-native';
 import { IconSymbol } from '@/components/IconSymbol';
-import { SignupInput } from '../SignupInput';
+import { CityAutocomplete } from '@/components/CityAutocomplete';
 import { useSignup } from '@/contexts/SignupContext';
-import { colors, spacing, typography, borderRadius } from '@/styles/commonStyles';
-
-// Villes populaires en France
-const POPULAR_CITIES = [
-  'Paris',
-  'Lyon',
-  'Marseille',
-  'Toulouse',
-  'Bordeaux',
-  'Lille',
-  'Nantes',
-  'Nice',
-  'Strasbourg',
-  'Montpellier',
-  'Rennes',
-  'Grenoble',
-];
+import { colors, spacing, typography } from '@/styles/commonStyles';
 
 export function Step4City() {
-  const { formData, updateFormData, getStepErrors } = useSignup();
+  const { formData, updateFormData, updateMultipleFields, getStepErrors } = useSignup();
   const errors = getStepErrors(4);
-  const [showSuggestions, setShowSuggestions] = useState(true);
 
-  const handleCitySelect = (city: string) => {
-    updateFormData('city', city);
-    setShowSuggestions(false);
+  const handleCitySelect = (result: {
+    city: string;
+    postcode: string;
+    latitude: number;
+    longitude: number;
+    displayName: string;
+  }) => {
+    updateMultipleFields({
+      city: result.city,
+      citySelected: true,
+    });
   };
 
-  const handleInputChange = (text: string) => {
-    updateFormData('city', text);
-    setShowSuggestions(text.length === 0);
+  const handleCityChange = () => {
+    updateMultipleFields({
+      city: '',
+      citySelected: false,
+    });
   };
-
-  // Filtrer les villes si l'utilisateur tape
-  const filteredCities = formData.city.length > 0
-    ? POPULAR_CITIES.filter(city =>
-        city.toLowerCase().includes(formData.city.toLowerCase())
-      )
-    : POPULAR_CITIES;
 
   return (
     <View style={styles.container}>
@@ -62,51 +46,16 @@ export function Step4City() {
         </Text>
       </View>
 
-      {/* Champ ville */}
+      {/* Champ ville avec autocomplétion */}
       <View style={styles.form}>
-        <SignupInput
-          label="Ville"
-          required
-          icon="location.fill"
-          placeholder="Entrez votre ville"
+        <CityAutocomplete
           value={formData.city}
-          onChangeText={handleInputChange}
+          onCitySelect={handleCitySelect}
+          onCityChange={handleCityChange}
+          placeholder="Rechercher une ville..."
+          label="Ville *"
           error={errors.city}
-          autoCapitalize="words"
-          onFocus={() => setShowSuggestions(true)}
         />
-
-        {/* Suggestions de villes */}
-        {showSuggestions && filteredCities.length > 0 && (
-          <View style={styles.suggestionsContainer}>
-            <Text style={styles.suggestionsTitle}>Villes populaires</Text>
-            <View style={styles.citiesGrid}>
-              {filteredCities.map((city) => (
-                <TouchableOpacity
-                  key={city}
-                  style={[
-                    styles.cityChip,
-                    formData.city === city && styles.cityChipSelected,
-                  ]}
-                  onPress={() => handleCitySelect(city)}
-                  activeOpacity={0.7}
-                >
-                  <Text
-                    style={[
-                      styles.cityChipText,
-                      formData.city === city && styles.cityChipTextSelected,
-                    ]}
-                  >
-                    {city}
-                  </Text>
-                  {formData.city === city && (
-                    <IconSymbol name="checkmark" size={14} color={colors.textOnPrimary} />
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
       </View>
 
       {/* Note */}
@@ -147,44 +96,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   form: {
-    gap: spacing.xl,
-  },
-  suggestionsContainer: {
-    gap: spacing.md,
-  },
-  suggestionsTitle: {
-    fontSize: typography.sm,
-    fontFamily: 'Manrope_600SemiBold',
-    color: colors.textSecondary,
-    marginLeft: spacing.xs,
-  },
-  citiesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  cityChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.inputBackground,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.full,
-    gap: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-  },
-  cityChipSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  cityChipText: {
-    fontSize: typography.sm,
-    fontFamily: 'Manrope_500Medium',
-    color: colors.text,
-  },
-  cityChipTextSelected: {
-    color: colors.textOnPrimary,
+    zIndex: 1000,
   },
   noteCard: {
     marginTop: spacing.xxxl,

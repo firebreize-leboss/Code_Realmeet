@@ -23,6 +23,7 @@ import { decode } from 'base64-arraybuffer';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
+import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 
 const BUSINESS_CATEGORIES = [
   'Sport & Fitness',
@@ -409,15 +410,13 @@ export default function EditBusinessProfileScreen() {
             <Text style={styles.sectionTitle}>Contact</Text>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Adresse</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
+              <AddressAutocomplete
                 value={businessAddress}
-                onChangeText={setBusinessAddress}
-                placeholder="Adresse complète"
-                placeholderTextColor={colors.textSecondary}
-                multiline
-                numberOfLines={2}
+                onAddressSelect={(result) => {
+                  setBusinessAddress(`${result.address}, ${result.city}${result.postcode ? ` ${result.postcode}` : ''}`);
+                }}
+                placeholder="Rechercher une adresse..."
+                label="Adresse"
               />
             </View>
 

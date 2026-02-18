@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { useTabIndex } from '@/contexts/TabIndexContext';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
@@ -40,6 +41,7 @@ interface Activity {
 
 export default function ActivityScreen() {
   const router = useRouter();
+  const { setCurrentTabIndex } = useTabIndex();
   const { profile } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('ongoing');
   const [businessTab, setBusinessTab] = useState<BusinessTabType>('live');
@@ -731,7 +733,7 @@ export default function ActivityScreen() {
                 description="Découvrez des activités près de chez vous et inscrivez-vous !"
                 showCTA
                 ctaLabel="Explorer"
-                onCTAPress={() => router.push('/(tabs)/browse')}
+                onCTAPress={() => setCurrentTabIndex(1)}
               />
             ) : (
               <EmptyState

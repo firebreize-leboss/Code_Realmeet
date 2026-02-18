@@ -1,5 +1,5 @@
-// components/AddressAutocomplete.tsx
-// Composant d'autocomplétion d'adresse - CORRIGÉ sans FlatList
+// components/CityAutocomplete.tsx
+// Composant d'autocomplétion de ville via Nominatim API
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -15,43 +15,46 @@ import {
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
 
-interface AutocompleteResult {
+interface CityResult {
   placeId: string;
   displayName: string;
-  address: string;
   city: string;
+  country: string;
   postcode: string;
   latitude: number;
   longitude: number;
 }
 
-interface AddressAutocompleteProps {
+interface CityAutocompleteProps {
   value: string;
-  onAddressSelect: (result: {
-    address: string;
+  onCitySelect: (result: {
     city: string;
     postcode: string;
     latitude: number;
     longitude: number;
     displayName: string;
   }) => void;
-  onAddressChange?: () => void;
+  onCityChange?: () => void;
   placeholder?: string;
   label?: string;
+  inputStyle?: 'default' | 'premium';
+  error?: string;
 }
 
-export function AddressAutocomplete({
+export function CityAutocomplete({
   value,
-  onAddressSelect,
-  onAddressChange,
-  placeholder = 'Rechercher une adresse...',
-  label = 'Adresse *',
-}: AddressAutocompleteProps) {
+  onCitySelect,
+  onCityChange,
+  placeholder = 'Rechercher une ville...',
+  label,
+  inputStyle = 'default',
+  error,
+}: CityAutocompleteProps) {
   const [query, setQuery] = useState(value);
-  const [results, setResults] = useState<AutocompleteResult[]>([]);
+  const [results, setResults] = useState<CityResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showResults, setShowResults] = useState(false);
-  const [hasSelected, setHasSelected] = useState(false);
+  const [hasSelected, setHasSelected] = useState(!!value);
   const inputRef = useRef<TextInput>(null);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -61,9 +64,8 @@ export function AddressAutocomplete({
     }
   }, [value]);
 
-  // Fonction de recherche avec Nominatim
-  const searchAddress = async (searchQuery: string) => {
-    if (searchQuery.length < 3) {
+  const searchCity = async (searchQuery: string) => {
+    if (searchQuery.length < 2) {
       setResults([]);
       setShowResults(false);
       return;
@@ -76,7 +78,7 @@ export function AddressAutocomplete({
         format: 'json',
         limit: '5',
         addressdetails: '1',
-        countrycodes: 'fr',
+        featuretype: 'city',
       });
 
       const response = await fetch(
@@ -93,34 +95,37 @@ export function AddressAutocomplete({
 
       const data = await response.json();
 
-      const formattedResults: AutocompleteResult[] = data.map((item: any) => {
+      const formattedResults: CityResult[] = data.map((item: any) => {
         const address = item.address || {};
-        const streetParts: string[] = [];
-        if (address.house_number) streetParts.push(address.house_number);
-        if (address.road) streetParts.push(address.road);
+        const cityName = address.city || address.town || address.village || address.municipality || '';
 
         return {
           placeId: item.place_id.toString(),
           displayName: item.display_name,
-          address: streetParts.join(' ') || item.display_name.split(',')[0] || '',
-          city: address.city || address.town || address.village || address.municipality || '',
+          city: cityName || item.display_name.split(',')[0] || '',
+          country: address.country || '',
           postcode: address.postcode || '',
           latitude: parseFloat(item.lat),
           longitude: parseFloat(item.lon),
         };
       });
 
-      setResults(formattedResults);
-      setShowResults(formattedResults.length > 0);
+      // Deduplicate by city name + country
+      const uniqueCities = formattedResults.filter(
+        (result, index, self) =>
+          index === self.findIndex((r) => r.city === result.city && r.country === result.country)
+      );
+
+      setResults(uniqueCities);
+      setShowResults(uniqueCities.length > 0);
     } catch (error) {
-      console.error('Erreur autocomplétion:', error);
+      console.error('Erreur autocomplétion ville:', error);
       setResults([]);
     } finally {
       setIsSearching(false);
     }
   };
 
-  // Debounce la recherche
   useEffect(() => {
     if (hasSelected) return;
 
@@ -129,7 +134,7 @@ export function AddressAutocomplete({
     }
 
     debounceRef.current = setTimeout(() => {
-      searchAddress(query);
+      searchCity(query);
     }, 400);
 
     return () => {
@@ -139,14 +144,13 @@ export function AddressAutocomplete({
     };
   }, [query, hasSelected]);
 
-  const handleSelect = (result: AutocompleteResult) => {
+  const handleSelect = (result: CityResult) => {
     setHasSelected(true);
-    setQuery(result.address || result.displayName.split(',')[0]);
+    setQuery(result.city);
     setShowResults(false);
     Keyboard.dismiss();
 
-    onAddressSelect({
-      address: result.address || result.displayName.split(',')[0],
+    onCitySelect({
       city: result.city,
       postcode: result.postcode,
       latitude: result.latitude,
@@ -157,9 +161,9 @@ export function AddressAutocomplete({
 
   const handleChangeText = (text: string) => {
     setQuery(text);
-    if (hasSelected || value) {
+    if (hasSelected) {
       setHasSelected(false);
-      onAddressChange?.();
+      onCityChange?.();
     }
   };
 
@@ -168,17 +172,20 @@ export function AddressAutocomplete({
     setResults([]);
     setShowResults(false);
     setHasSelected(false);
-    onAddressChange?.();
+    onCityChange?.();
     inputRef.current?.focus();
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>{label}</Text>
+      {label && <Text style={styles.label}>{label}</Text>}
 
       <View style={styles.inputWrapper}>
-        <View style={styles.inputContainer}>
-          <IconSymbol name="magnifyingglass" size={20} color={colors.textSecondary} />
+        <View style={[
+          styles.inputContainer,
+          inputStyle === 'premium' && styles.inputContainerPremium,
+        ]}>
+          <IconSymbol name="location.fill" size={18} color={colors.textSecondary} />
           <TextInput
             ref={inputRef}
             style={styles.input}
@@ -187,7 +194,7 @@ export function AddressAutocomplete({
             value={query}
             onChangeText={handleChangeText}
             onFocus={() => {
-              if (results.length > 0) setShowResults(true);
+              if (results.length > 0 && !hasSelected) setShowResults(true);
             }}
           />
           {isSearching && (
@@ -200,7 +207,6 @@ export function AddressAutocomplete({
           )}
         </View>
 
-        {/* Résultats - Utilisation de ScrollView + map au lieu de FlatList */}
         {showResults && results.length > 0 && (
           <View style={styles.resultsContainer}>
             <ScrollView
@@ -216,14 +222,14 @@ export function AddressAutocomplete({
                   activeOpacity={0.7}
                 >
                   <View style={styles.resultIcon}>
-                    <IconSymbol name="location.fill" size={20} color={colors.primary} />
+                    <IconSymbol name="location.fill" size={18} color={colors.primary} />
                   </View>
                   <View style={styles.resultTextContainer}>
-                    <Text style={styles.resultAddress} numberOfLines={1}>
-                      {item.address || item.displayName.split(',')[0]}
-                    </Text>
                     <Text style={styles.resultCity} numberOfLines={1}>
-                      {[item.postcode, item.city].filter(Boolean).join(' ')}
+                      {item.city}
+                    </Text>
+                    <Text style={styles.resultPostcode} numberOfLines={1}>
+                      {[item.postcode, item.country].filter(Boolean).join(' - ')}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -236,7 +242,14 @@ export function AddressAutocomplete({
       {hasSelected && (
         <View style={styles.selectedIndicator}>
           <IconSymbol name="checkmark.circle.fill" size={16} color={colors.primary} />
-          <Text style={styles.selectedText}>Adresse sélectionnée</Text>
+          <Text style={styles.selectedText}>Ville sélectionnée</Text>
+        </View>
+      )}
+
+      {!hasSelected && error && query.length > 0 && (
+        <View style={styles.errorIndicator}>
+          <IconSymbol name="exclamationmark.triangle.fill" size={16} color="#EF4444" />
+          <Text style={styles.errorText}>{error}</Text>
         </View>
       )}
     </View>
@@ -266,9 +279,13 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     gap: 12,
   },
+  inputContainerPremium: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+  },
   input: {
     flex: 1,
-    paddingVertical: 16,
+    paddingVertical: 14,
     fontSize: 16,
     color: colors.text,
   },
@@ -285,7 +302,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
     borderWidth: 1,
     borderColor: colors.border,
-    maxHeight: 250,
+    maxHeight: 200,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
@@ -294,7 +311,7 @@ const styles = StyleSheet.create({
     zIndex: 1001,
   },
   resultsList: {
-    maxHeight: 250,
+    maxHeight: 200,
   },
   resultItem: {
     flexDirection: 'row',
@@ -306,9 +323,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   resultIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: colors.primary + '15',
     justifyContent: 'center',
     alignItems: 'center',
@@ -316,12 +333,12 @@ const styles = StyleSheet.create({
   resultTextContainer: {
     flex: 1,
   },
-  resultAddress: {
+  resultCity: {
     fontSize: 15,
     fontWeight: '500',
     color: colors.text,
   },
-  resultCity: {
+  resultPostcode: {
     fontSize: 13,
     color: colors.textSecondary,
     marginTop: 2,
@@ -336,5 +353,17 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.primary,
     fontWeight: '500',
+  },
+  errorIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 6,
+  },
+  errorText: {
+    fontSize: 13,
+    color: '#EF4444',
+    fontWeight: '500',
+    flex: 1,
   },
 });

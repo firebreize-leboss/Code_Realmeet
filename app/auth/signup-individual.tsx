@@ -24,6 +24,7 @@ import { authService } from '@/services/auth.service';
 import { userService } from '@/services/user.service';
 import { storageService } from '@/services/storage.service';
 import { UserIntention } from '@/lib/database.types';
+import { CityAutocomplete } from '@/components/CityAutocomplete';
 
 export default function SignupIndividualScreen() {
   const [firstName, setFirstName] = useState('');
@@ -306,17 +307,12 @@ export default function SignupIndividualScreen() {
 
             {/* Ville */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Ville *</Text>
-              <View style={styles.inputContainer}>
-                <IconSymbol name="location.fill" size={18} color={colors.textTertiary} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Paris"
-                  placeholderTextColor={colors.textMuted}
-                  value={city}
-                  onChangeText={setCity}
-                />
-              </View>
+              <CityAutocomplete
+                value={city}
+                onCitySelect={(result) => setCity(result.city)}
+                placeholder="Rechercher une ville..."
+                label="Ville *"
+              />
             </View>
 
             {/* Intention */}

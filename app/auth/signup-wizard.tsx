@@ -1,13 +1,11 @@
 // app/auth/signup-wizard.tsx
 // Écran principal du wizard d'inscription multi-étapes
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   BackHandler,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -45,11 +43,6 @@ function SignupWizardContent() {
     prevStep,
     goToStep,
     isStepValid,
-    saveDraft,
-    loadDraft,
-    clearDraft,
-    hasDraft,
-    isLoading: contextLoading,
   } = useSignup();
 
   const [mode, setMode] = useState<WizardMode>('steps');
@@ -64,33 +57,6 @@ function SignupWizardContent() {
     return () => backHandler.remove();
   }, [currentStep, mode]);
 
-  // Proposer de reprendre le brouillon au montage
-  useEffect(() => {
-    if (hasDraft && !contextLoading) {
-      Alert.alert(
-        'Reprendre votre inscription ?',
-        'Vous aviez commencé à créer votre compte. Voulez-vous reprendre où vous en étiez ?',
-        [
-          {
-            text: 'Recommencer',
-            style: 'destructive',
-            onPress: clearDraft,
-          },
-          {
-            text: 'Reprendre',
-            onPress: loadDraft,
-          },
-        ]
-      );
-    }
-  }, [hasDraft, contextLoading]);
-
-  // Sauvegarder le brouillon quand on quitte une étape
-  const handleSaveDraft = useCallback(() => {
-    if (currentStep > 1 || formData.firstName || formData.lastName) {
-      saveDraft();
-    }
-  }, [currentStep, formData, saveDraft]);
 
   const handleBack = () => {
     if (mode === 'success') {
@@ -104,33 +70,7 @@ function SignupWizardContent() {
     }
 
     if (currentStep === 1) {
-      // Proposer de sauvegarder avant de quitter
-      if (formData.firstName || formData.lastName || formData.email) {
-        Alert.alert(
-          'Sauvegarder et quitter ?',
-          'Votre progression sera sauvegardée pour plus tard.',
-          [
-            { text: 'Annuler', style: 'cancel' },
-            {
-              text: 'Quitter sans sauvegarder',
-              style: 'destructive',
-              onPress: () => {
-                clearDraft();
-                router.back();
-              },
-            },
-            {
-              text: 'Sauvegarder',
-              onPress: () => {
-                saveDraft();
-                router.back();
-              },
-            },
-          ]
-        );
-      } else {
-        router.back();
-      }
+      router.back();
     } else {
       prevStep();
     }
@@ -144,13 +84,13 @@ function SignupWizardContent() {
 
     Alert.alert(
       'Quitter l\'inscription ?',
-      'Votre progression sera sauvegardée.',
+      'Votre progression sera perdue.',
       [
         { text: 'Annuler', style: 'cancel' },
         {
-          text: 'Sauvegarder et quitter',
+          text: 'Quitter',
+          style: 'destructive',
           onPress: () => {
-            saveDraft();
             router.back();
           },
         },
@@ -162,8 +102,6 @@ function SignupWizardContent() {
     if (!isStepValid(currentStep)) {
       return;
     }
-
-    handleSaveDraft();
 
     if (currentStep === TOTAL_STEPS) {
       setMode('review');
@@ -227,9 +165,6 @@ function SignupWizardContent() {
         interests: formData.interests.length > 0 ? formData.interests : null,
         intention: formData.intention,
       });
-
-      // Supprimer le brouillon
-      await clearDraft();
 
       // Afficher l'écran de succès
       setMode('success');

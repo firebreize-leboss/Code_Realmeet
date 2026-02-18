@@ -90,6 +90,7 @@ export default function ActivityDetailScreen() {
   const [isActivityPast, setIsActivityPast] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [calendarRefreshTrigger, setCalendarRefreshTrigger] = useState(0);
+  const [joinedSlotId, setJoinedSlotId] = useState<string | undefined>(undefined);
   const [hasAlreadyReviewed, setHasAlreadyReviewed] = useState(false);
   const [canReview, setCanReview] = useState(false);
   const [pastSlotInfo, setPastSlotInfo] = useState<{ date: string; time: string } | null>(null);
@@ -157,6 +158,7 @@ export default function ActivityDetailScreen() {
             .maybeSingle();
 
           setIsJoined(!!participation);
+          setJoinedSlotId(participation?.slot_id || undefined);
 
           if (participation?.slot_id) {
             const { data: slotData } = await supabase
@@ -451,6 +453,7 @@ export default function ActivityDetailScreen() {
           .eq('id', activity.id);
 
         setIsJoined(false);
+        setJoinedSlotId(undefined);
         setSelectedSlot(null);
         setActivity({
           ...activity,
@@ -465,9 +468,10 @@ export default function ActivityDetailScreen() {
         if (!selectedSlot) return;
 
         // Règle J-1 : bloquer l'inscription si le créneau débute dans moins de 24h
-        const slotStart = new Date(`${selectedSlot.date}T${selectedSlot.time || '23:59:59'}`);
-        const in24h = new Date(Date.now() + 24 * 60 * 60 * 1000);
-        if (slotStart < in24h) {
+        const timePart = selectedSlot.time ? selectedSlot.time.slice(0, 5) : '00:00';
+        const slotStart = new Date(`${selectedSlot.date}T${timePart}:00`);
+        const in24hMs = Date.now() + 24 * 60 * 60 * 1000;
+        if (slotStart.getTime() <= in24hMs) {
           Alert.alert(
             'Inscription impossible',
             "L'activité se déroule dans moins de 24h. Vous ne pouvez plus vous inscrire."
@@ -512,6 +516,7 @@ export default function ActivityDetailScreen() {
           .eq('id', activity.id);
 
         setIsJoined(true);
+        setJoinedSlotId(selectedSlot.id);
         setActivity({
           ...activity,
           participants: newCount,
@@ -728,7 +733,7 @@ export default function ActivityDetailScreen() {
                 externalSelectedSlot={selectedSlot}
                 mode="select"
                 readOnly={isBusiness || isJoined}
-                userJoinedSlotId={isJoined ? selectedSlot?.id : undefined}
+                userJoinedSlotId={isJoined ? joinedSlotId : undefined}
                 maxParticipants={activity.capacity}
                 refreshTrigger={calendarRefreshTrigger}
               />

@@ -19,6 +19,8 @@ import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
+import { AddressAutocomplete } from '@/components/AddressAutocomplete';
+import { CityAutocomplete } from '@/components/CityAutocomplete';
 
 const BUSINESS_CATEGORIES = [
   'Sport & Fitness',
@@ -379,31 +381,26 @@ export default function RegisterBusinessScreen() {
       </View>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.label}>Adresse</Text>
-        <View style={styles.inputContainer}>
-          <IconSymbol name="location.fill" size={18} color={colors.textTertiary} />
-          <TextInput
-            style={styles.input}
-            value={address}
-            onChangeText={setAddress}
-            placeholder="Adresse de l'établissement"
-            placeholderTextColor={colors.textMuted}
-          />
-        </View>
+        <AddressAutocomplete
+          value={address}
+          onAddressSelect={(result) => {
+            setAddress(`${result.address}, ${result.city}${result.postcode ? ` ${result.postcode}` : ''}`);
+            if (!city) {
+              setCity(result.city);
+            }
+          }}
+          placeholder="Rechercher une adresse..."
+          label="Adresse"
+        />
       </View>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.label}>Ville</Text>
-        <View style={styles.inputContainer}>
-          <IconSymbol name="map.fill" size={18} color={colors.textTertiary} />
-          <TextInput
-            style={styles.input}
-            value={city}
-            onChangeText={setCity}
-            placeholder="Ville"
-            placeholderTextColor={colors.textMuted}
-          />
-        </View>
+        <CityAutocomplete
+          value={city}
+          onCitySelect={(result) => setCity(result.city)}
+          placeholder="Rechercher une ville..."
+          label="Ville"
+        />
       </View>
 
       <View style={styles.termsSection}>

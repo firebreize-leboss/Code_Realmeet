@@ -24,7 +24,6 @@ import { supabase } from '@/lib/supabase';
 import { storageService } from '@/services/storage.service';
 import { PREDEFINED_CATEGORIES } from '@/constants/categories';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
-import { DateTimeRangePicker } from '@/components/DateTimePicker';
 
 export default function EditActivityScreen() {
   const router = useRouter();
@@ -52,11 +51,6 @@ export default function EditActivityScreen() {
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
   const [addressSelected, setAddressSelected] = useState(false);
-
-  // États pour la date/heure
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [timeStart, setTimeStart] = useState<Date | null>(null);
-  const [timeEnd, setTimeEnd] = useState<Date | null>(null);
 
   // États pour le système de catégories
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
@@ -100,27 +94,6 @@ export default function EditActivityScreen() {
       setLatitude(data.latitude || null);
       setLongitude(data.longitude || null);
       setAddressSelected(!!(data.latitude && data.longitude));
-
-      // Parser la date
-      if (data.date) {
-        setSelectedDate(new Date(data.date));
-      }
-
-      // Parser l'heure de début
-      if (data.time_start) {
-        const [hours, minutes] = data.time_start.split(':');
-        const timeStartDate = new Date();
-        timeStartDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-        setTimeStart(timeStartDate);
-      }
-
-      // Parser l'heure de fin
-      if (data.time_end) {
-        const [hours, minutes] = data.time_end.split(':');
-        const timeEndDate = new Date();
-        timeEndDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-        setTimeEnd(timeEndDate);
-      }
     } catch (error: any) {
       console.error('Erreur chargement activité:', error);
       Alert.alert('Erreur', 'Impossible de charger l\'activité', [
@@ -178,14 +151,11 @@ export default function EditActivityScreen() {
     setAddressSelected(true);
   };
 
-  // Formatage de la date pour l'API
-  const formatDateForAPI = (date: Date): string => {
-    return date.toISOString().split('T')[0];
-  };
-
-  // Formatage de l'heure pour l'API
-  const formatTimeForAPI = (time: Date): string => {
-    return time.toTimeString().slice(0, 5);
+  // Quand l'utilisateur modifie le texte de l'adresse sans sélectionner un résultat
+  const handleAddressChange = () => {
+    setAddressSelected(false);
+    setLatitude(null);
+    setLongitude(null);
   };
 
   // Sélection de catégorie
@@ -206,11 +176,6 @@ export default function EditActivityScreen() {
     // Validation
     if (!nom.trim() || !description.trim() || !categorie.trim()) {
       Alert.alert('Erreur', 'Nom, description et catégorie principale sont requis');
-      return;
-    }
-
-    if (!selectedDate || !timeStart) {
-      Alert.alert('Erreur', 'Date et heure de début sont requises');
       return;
     }
 
@@ -251,9 +216,6 @@ export default function EditActivityScreen() {
           description: description.trim(),
           categorie: categorie.trim(),
           categorie2: categorie2.trim() || null,
-          date: formatDateForAPI(selectedDate),
-          time_start: formatTimeForAPI(timeStart),
-          time_end: timeEnd ? formatTimeForAPI(timeEnd) : null,
           adresse: adresse.trim(),
           ville: ville.trim(),
           code_postal: codePostal.trim() || null,
@@ -300,14 +262,20 @@ export default function EditActivityScreen() {
         </TouchableOpacity>
         <View style={{ flex: 1 }} />
         <TouchableOpacity
-          style={styles.saveHeaderButton}
-          onPress={handleSave}
+          style={[styles.saveHeaderButton, !addressSelected && styles.saveHeaderButtonDisabled]}
+          onPress={() => {
+            if (!addressSelected) {
+              Alert.alert('Adresse invalide', 'Veuillez sélectionner une adresse valide depuis les suggestions de recherche.');
+              return;
+            }
+            handleSave();
+          }}
           disabled={saving}
         >
           {saving ? (
             <ActivityIndicator size="small" color={colors.primary} />
           ) : (
-            <Text style={styles.saveHeaderText}>Enregistrer</Text>
+            <Text style={[styles.saveHeaderText, !addressSelected && styles.saveHeaderTextDisabled]}>Enregistrer</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -422,24 +390,6 @@ export default function EditActivityScreen() {
             )}
           </View>
 
-          {/* Séparateur Date/Heure */}
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>Date et horaire</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          {/* Sélection Date et Heure */}
-          <DateTimeRangePicker
-            date={selectedDate}
-            timeStart={timeStart}
-            timeEnd={timeEnd}
-            onDateChange={setSelectedDate}
-            onTimeStartChange={setTimeStart}
-            onTimeEndChange={setTimeEnd}
-            showTimeEnd={true}
-          />
-
           {/* Séparateur Adresse */}
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
@@ -451,12 +401,13 @@ export default function EditActivityScreen() {
           <AddressAutocomplete
             value={adresse}
             onAddressSelect={handleAddressSelect}
+            onAddressChange={handleAddressChange}
             placeholder="Rechercher une adresse..."
             label="Adresse *"
           />
 
-          {/* Affichage ville et code postal */}
-          {addressSelected && (
+          {/* Affichage ville et code postal ou message d'erreur */}
+          {addressSelected ? (
             <View style={styles.addressDetails}>
               <View style={styles.addressDetailRow}>
                 <IconSymbol name="location.fill" size={16} color={colors.primary} />
@@ -465,7 +416,14 @@ export default function EditActivityScreen() {
                 </Text>
               </View>
             </View>
-          )}
+          ) : adresse.length > 0 ? (
+            <View style={styles.addressError}>
+              <IconSymbol name="exclamationmark.triangle.fill" size={16} color="#EF4444" />
+              <Text style={styles.addressErrorText}>
+                Veuillez sélectionner une adresse dans la liste de suggestions
+              </Text>
+            </View>
+          ) : null}
 
           {/* Participants et Prix */}
           <View style={styles.row}>
@@ -498,8 +456,14 @@ export default function EditActivityScreen() {
         
         {/* Bouton de sauvegarde */}
         <TouchableOpacity
-          style={[styles.saveButton, (saving || uploadingImage) && styles.saveButtonDisabled]}
-          onPress={handleSave}
+          style={[styles.saveButton, (saving || uploadingImage || !addressSelected) && styles.saveButtonDisabled]}
+          onPress={() => {
+            if (!addressSelected) {
+              Alert.alert('Adresse invalide', 'Veuillez sélectionner une adresse valide depuis les suggestions de recherche.');
+              return;
+            }
+            handleSave();
+          }}
           disabled={saving || uploadingImage}
         >
           {saving || uploadingImage ? (
@@ -620,10 +584,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
+  saveHeaderButtonDisabled: {
+    opacity: 0.5,
+  },
   saveHeaderText: {
     fontSize: 16,
     fontWeight: '600',
     color: colors.primary,
+  },
+  saveHeaderTextDisabled: {
+    color: colors.textSecondary,
   },
   scrollView: {
     flex: 1,

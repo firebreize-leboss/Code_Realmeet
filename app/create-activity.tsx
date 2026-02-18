@@ -341,13 +341,6 @@ export default function CreateActivityScreen() {
             )}
           </View>
 
-          {/* Séparateur Date/Heure */}
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>Date et horaire</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
           {/* Séparateur Adresse */}
           <View style={styles.divider}>
             <View style={styles.dividerLine} />

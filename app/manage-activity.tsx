@@ -43,6 +43,7 @@ interface ActivityStats {
 interface SlotStats {
   id: string;
   date: string;
+  rawDate: string; // YYYY-MM-DD pour comparaison
   timeStart: string;
   timeEnd: string;
   participants: number;
@@ -215,6 +216,7 @@ export default function ManageActivityScreen() {
             day: 'numeric',
             month: 'short'
           }),
+          rawDate: slot.date,
           timeStart: slot.time_start?.slice(0, 5) || slot.time?.slice(0, 5) || '',
           timeEnd: slot.time_end?.slice(0, 5) || '',
           participants: countBySlotId[slot.id] || 0,
@@ -224,6 +226,9 @@ export default function ManageActivityScreen() {
           hasSlotGroups: slotsWithGroups.has(slot.id),
         };
       });
+
+      // Trier du plus récent au moins récent
+      slots.sort((a, b) => b.rawDate.localeCompare(a.rawDate));
 
       const totalParticipants = allParticipantsData.length;
       const totalRevenue = totalParticipants * (activityData.prix || 0);
@@ -275,6 +280,40 @@ export default function ManageActivityScreen() {
 
   const handleEditActivity = () => {
     router.push(`/edit-activity?id=${activity?.id}`);
+  };
+
+  const handleDeleteActivity = () => {
+    Alert.alert(
+      'Supprimer l\'activité',
+      `Êtes-vous sûr de vouloir supprimer "${activity?.title}" ? Cette action est irréversible.`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from('activities')
+                .delete()
+                .eq('id', activity?.id);
+
+              if (error) throw error;
+
+              Alert.alert('Succès', 'Activité supprimée', [
+                {
+                  text: 'OK',
+                  onPress: () => router.replace('/(tabs)/activity'),
+                },
+              ]);
+            } catch (error) {
+              console.error('Error deleting activity:', error);
+              Alert.alert('Erreur', 'Impossible de supprimer l\'activité');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handlePauseActivity = () => {
@@ -399,6 +438,9 @@ export default function ManageActivityScreen() {
         <View style={{ flex: 1 }} />
         <TouchableOpacity style={styles.headerButton} onPress={handleEditActivity}>
           <IconSymbol name="pencil" size={20} color={colors.text} />
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.headerButton, { marginLeft: 8 }]} onPress={handleDeleteActivity}>
+          <IconSymbol name="trash" size={20} color="#ef4444" />
         </TouchableOpacity>
       </View>
 
@@ -557,56 +599,65 @@ export default function ManageActivityScreen() {
               {activity.slots.length > 0 && (
                 <View style={styles.slotsListSection}>
                   <Text style={styles.slotsListTitle}>Détails des créneaux ({activity.slots.length})</Text>
-                  {activity.slots.map(slot => (
-                    <View key={slot.id} style={styles.slotCard}>
-                      <View style={styles.slotInfo}>
-                        <Text style={styles.slotDate}>{slot.date}</Text>
-                        <Text style={styles.slotTime}>
-                          {slot.timeStart}{slot.timeEnd ? ` - ${slot.timeEnd}` : ''}
-                        </Text>
-                        <View style={styles.slotParticipants}>
-                          <IconSymbol name="person.2.fill" size={14} color={colors.primary} />
-                          <Text style={styles.slotParticipantsText}>
-                            {slot.participants}/{slot.maxParticipants}
+                  {activity.slots.map(slot => {
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    const isPast = slot.rawDate < todayStr;
+                    return (
+                      <View key={slot.id} style={[styles.slotCard, isPast && styles.slotCardPast]}>
+                        <View style={styles.slotInfo}>
+                          <Text style={[styles.slotDate, isPast && { color: colors.textSecondary }]}>{slot.date}</Text>
+                          <Text style={styles.slotTime}>
+                            {slot.timeStart}{slot.timeEnd ? ` - ${slot.timeEnd}` : ''}
                           </Text>
+                          <View style={styles.slotParticipants}>
+                            <IconSymbol name="person.2.fill" size={14} color={isPast ? colors.textSecondary : colors.primary} />
+                            <Text style={[styles.slotParticipantsText, isPast && { color: colors.textSecondary }]}>
+                              {slot.participants}/{slot.maxParticipants}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.slotActions}>
+                          {isPast && (
+                            <View style={styles.pastBadge}>
+                              <Text style={styles.pastBadgeText}>Passé</Text>
+                            </View>
+                          )}
+                          {slot.participants >= 2 && (
+                            <TouchableOpacity
+                              style={[
+                                styles.composeGroupButton,
+                                slot.hasSlotGroups && styles.composeGroupButtonActive
+                              ]}
+                              onPress={() => handleManageGroups(slot)}
+                            >
+                              <IconSymbol
+                                name="person.3.fill"
+                                size={16}
+                                color={slot.hasSlotGroups ? colors.background : colors.primary}
+                              />
+                              <Text style={[
+                                styles.composeGroupText,
+                                slot.hasSlotGroups && styles.composeGroupTextActive
+                              ]}>
+                                {slot.hasSlotGroups ? 'Groupes' : 'Composer'}
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+
+                          {slot.hasGroup && slot.groupId && (
+                            <TouchableOpacity
+                              style={styles.viewGroupButton}
+                              onPress={() => handleViewGroup(slot.groupId!, slot.date)}
+                            >
+                              <IconSymbol name="bubble.left.and.bubble.right.fill" size={16} color={colors.primary} />
+                              <Text style={styles.viewGroupText}>Chat</Text>
+                            </TouchableOpacity>
+                          )}
                         </View>
                       </View>
-                      
-                      <View style={styles.slotActions}>
-                        {slot.participants >= 2 && (
-                          <TouchableOpacity 
-                            style={[
-                              styles.composeGroupButton,
-                              slot.hasSlotGroups && styles.composeGroupButtonActive
-                            ]}
-                            onPress={() => handleManageGroups(slot)}
-                          >
-                            <IconSymbol 
-                              name="person.3.fill" 
-                              size={16} 
-                              color={slot.hasSlotGroups ? colors.background : colors.primary} 
-                            />
-                            <Text style={[
-                              styles.composeGroupText,
-                              slot.hasSlotGroups && styles.composeGroupTextActive
-                            ]}>
-                              {slot.hasSlotGroups ? 'Groupes' : 'Composer'}
-                            </Text>
-                          </TouchableOpacity>
-                        )}
-                        
-                        {slot.hasGroup && slot.groupId && (
-                          <TouchableOpacity 
-                            style={styles.viewGroupButton}
-                            onPress={() => handleViewGroup(slot.groupId!, slot.date)}
-                          >
-                            <IconSymbol name="bubble.left.and.bubble.right.fill" size={16} color={colors.primary} />
-                            <Text style={styles.viewGroupText}>Chat</Text>
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    </View>
-                  ))}
+                    );
+                  })}
                 </View>
               )}
             </View>
@@ -922,6 +973,20 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 16,
     marginBottom: 10,
+  },
+  slotCardPast: {
+    opacity: 0.6,
+  },
+  pastBadge: {
+    backgroundColor: colors.textSecondary + '25',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  pastBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.textSecondary,
   },
   slotInfo: {
     flex: 1,

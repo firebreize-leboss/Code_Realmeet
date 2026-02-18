@@ -25,6 +25,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { userService } from '@/services/user.service';
 import { storageService } from '@/services/storage.service';
 import { UserIntention } from '@/lib/database.types';
+import { CityAutocomplete } from '@/components/CityAutocomplete';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 
 export default function EditProfileScreen() {
@@ -178,17 +179,12 @@ export default function EditProfileScreen() {
 
           {/* CITY */}
           <View style={styles.fieldSection}>
-            <Text style={styles.label}>Ville</Text>
-            <View style={styles.inputContainer}>
-              <IconSymbol name="location.fill" size={18} color={colors.textTertiary} />
-              <TextInput
-                style={styles.input}
-                placeholder="Paris"
-                placeholderTextColor={colors.textMuted}
-                value={city}
-                onChangeText={setCity}
-              />
-            </View>
+            <CityAutocomplete
+              value={city}
+              onCitySelect={(result) => setCity(result.city)}
+              placeholder="Rechercher une ville..."
+              label="Ville"
+            />
           </View>
 
           {/* PHONE */}

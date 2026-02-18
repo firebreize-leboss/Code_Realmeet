@@ -1,12 +1,8 @@
 // contexts/SignupContext.tsx
 // Contexte centralisé pour le wizard d'inscription multi-étapes
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { createContext, useContext, useState, useCallback } from 'react';
 import { UserIntention } from '@/lib/database.types';
-
-// Clé de stockage pour la sauvegarde du brouillon
-const SIGNUP_DRAFT_KEY = '@realmeet_signup_draft';
 
 // Types pour les données du formulaire
 export interface SignupFormData {
@@ -21,6 +17,7 @@ export interface SignupFormData {
   phone: string;
   // Étape 4: Ville
   city: string;
+  citySelected: boolean;
   // Étape 5: Intention
   intention: UserIntention;
   // Étape 6: Bio
@@ -40,6 +37,7 @@ const initialFormData: SignupFormData = {
   email: '',
   phone: '',
   city: '',
+  citySelected: false,
   intention: null,
   bio: '',
   interests: [],
@@ -75,13 +73,7 @@ interface SignupContextType {
   // Validation
   isStepValid: (step: number) => boolean;
   getStepErrors: (step: number) => Record<string, string>;
-  // Persistance
-  saveDraft: () => Promise<void>;
-  loadDraft: () => Promise<boolean>;
-  clearDraft: () => Promise<void>;
-  hasDraft: boolean;
   // État
-  isLoading: boolean;
   resetForm: () => void;
 }
 
@@ -90,24 +82,6 @@ const SignupContext = createContext<SignupContextType | null>(null);
 export function SignupProvider({ children }: { children: React.ReactNode }) {
   const [formData, setFormData] = useState<SignupFormData>(initialFormData);
   const [currentStep, setCurrentStep] = useState(1);
-  const [hasDraft, setHasDraft] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-
-  // Vérifier si un brouillon existe au montage
-  useEffect(() => {
-    checkForDraft();
-  }, []);
-
-  const checkForDraft = async () => {
-    try {
-      const draft = await AsyncStorage.getItem(SIGNUP_DRAFT_KEY);
-      setHasDraft(!!draft);
-    } catch (error) {
-      console.error('Erreur vérification brouillon:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   // Mettre à jour un champ unique
   const updateFormData = useCallback(<K extends keyof SignupFormData>(
@@ -199,6 +173,8 @@ export function SignupProvider({ children }: { children: React.ReactNode }) {
       case 4: // Ville
         if (!formData.city.trim()) {
           errors.city = 'La ville est requise';
+        } else if (!formData.citySelected) {
+          errors.city = 'Veuillez sélectionner une ville dans la liste de suggestions';
         }
         break;
 
@@ -229,57 +205,6 @@ export function SignupProvider({ children }: { children: React.ReactNode }) {
     return errors;
   }, [formData]);
 
-  // Persistance du brouillon
-  const saveDraft = useCallback(async () => {
-    try {
-      const draftData = {
-        formData: {
-          ...formData,
-          // Ne pas sauvegarder les mots de passe pour des raisons de sécurité
-          password: '',
-          confirmPassword: '',
-        },
-        currentStep,
-        savedAt: new Date().toISOString(),
-      };
-      await AsyncStorage.setItem(SIGNUP_DRAFT_KEY, JSON.stringify(draftData));
-      setHasDraft(true);
-    } catch (error) {
-      console.error('Erreur sauvegarde brouillon:', error);
-    }
-  }, [formData, currentStep]);
-
-  const loadDraft = useCallback(async (): Promise<boolean> => {
-    try {
-      const draftJson = await AsyncStorage.getItem(SIGNUP_DRAFT_KEY);
-      if (draftJson) {
-        const draft = JSON.parse(draftJson);
-        setFormData({
-          ...initialFormData,
-          ...draft.formData,
-          // Réinitialiser les mots de passe
-          password: '',
-          confirmPassword: '',
-        });
-        setCurrentStep(draft.currentStep || 1);
-        return true;
-      }
-      return false;
-    } catch (error) {
-      console.error('Erreur chargement brouillon:', error);
-      return false;
-    }
-  }, []);
-
-  const clearDraft = useCallback(async () => {
-    try {
-      await AsyncStorage.removeItem(SIGNUP_DRAFT_KEY);
-      setHasDraft(false);
-    } catch (error) {
-      console.error('Erreur suppression brouillon:', error);
-    }
-  }, []);
-
   // Réinitialiser le formulaire
   const resetForm = useCallback(() => {
     setFormData(initialFormData);
@@ -296,11 +221,6 @@ export function SignupProvider({ children }: { children: React.ReactNode }) {
     prevStep,
     isStepValid,
     getStepErrors,
-    saveDraft,
-    loadDraft,
-    clearDraft,
-    hasDraft,
-    isLoading,
     resetForm,
   };
 

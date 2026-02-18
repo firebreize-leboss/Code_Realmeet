@@ -348,6 +348,8 @@ export default function ActivityCalendar({
 
           setWeekDays(updated);
         } else {
+          // Calculer la date minimale pour la requête :
+          // On prend la date d'aujourd'hui car des créneaux de demain pourraient être >24h
           const { data, error } = await supabase
             .from('activity_slots')
             .select('id, date, time, duration, created_by, max_participants')
@@ -358,22 +360,27 @@ export default function ActivityCalendar({
 
           if (error) throw error;
 
-          // En mode select, masquer les créneaux débutant à moins de 24h
-          // SAUF le créneau auquel l'utilisateur est inscrit (visible jusqu'à la fin de l'activité = start + durée)
-          const in24h = new Date(Date.now() + 24 * 60 * 60 * 1000);
-          const now = new Date();
+          // Filtrer côté client : uniquement les créneaux dont le début est dans >24h
+          // EXCEPTION : le créneau auquel l'utilisateur est inscrit reste visible
+          // jusqu'à la fin de l'activité (heure de début + durée)
+          const nowMs = Date.now();
+          const in24hMs = nowMs + 24 * 60 * 60 * 1000;
           const filtered = (data || []).filter(s => {
-            const startDt = new Date(`${s.date}T${s.time || '23:59:59'}`);
+            // Parser la date+heure du créneau de manière fiable
+            const timePart = s.time ? s.time.slice(0, 5) : '00:00';
+            const startDt = new Date(`${s.date}T${timePart}:00`);
+            const startMs = startDt.getTime();
 
             // Si c'est le créneau de l'utilisateur inscrit, le garder visible
             // jusqu'à ce que l'activité soit terminée (heure de début + durée)
             if (userJoinedSlotId && s.id === userJoinedSlotId) {
               const durationMs = (s.duration || 60) * 60 * 1000;
-              const endDt = new Date(startDt.getTime() + durationMs);
-              return now < endDt;
+              const endMs = startMs + durationMs;
+              return nowMs < endMs;
             }
 
-            return startDt >= in24h;
+            // Pour tous les autres créneaux : le début doit être dans plus de 24h
+            return startMs > in24hMs;
           });
 
           const grouped = new Map<string, any[]>();

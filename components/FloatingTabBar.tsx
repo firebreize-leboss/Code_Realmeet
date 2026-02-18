@@ -9,7 +9,8 @@ import {
 } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { IconSymbol } from '@/components/IconSymbol';
+import { IconSymbol, type IconSymbolName } from '@/components/IconSymbol';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { BlurView } from 'expo-blur';
 import { useTheme } from '@react-navigation/native';
 import Animated, {
@@ -27,7 +28,8 @@ export const FLOATING_TAB_BAR_HEIGHT = 60;
 export interface TabBarItem {
   name: string;
   route: string;
-  icon: string;
+  icon: IconSymbolName;
+  androidIcon?: React.ComponentProps<typeof MaterialIcons>['name'];
   label: string;
 }
 
@@ -186,11 +188,19 @@ export default function FloatingTabBar({
                   activeOpacity={0.7}
                 >
                   <View style={styles.tabContent}>
-                    <IconSymbol
-                      name={tab.icon}
-                      size={22}
-                      color={isActive ? colors.primary : colors.textTertiary}
-                    />
+                    {Platform.OS !== 'ios' && tab.androidIcon ? (
+                      <MaterialIcons
+                        name={tab.androidIcon}
+                        size={22}
+                        color={isActive ? colors.primary : colors.textTertiary}
+                      />
+                    ) : (
+                      <IconSymbol
+                        name={tab.icon}
+                        size={22}
+                        color={isActive ? colors.primary : colors.textTertiary}
+                      />
+                    )}
                     <Text
                       style={[
                         styles.tabLabel,
