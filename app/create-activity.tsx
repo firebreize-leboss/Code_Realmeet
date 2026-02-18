@@ -57,6 +57,8 @@ export default function CreateActivityScreen() {
   const [uploadingImage, setUploadingImage] = useState(false);
 
   const [pendingSlots, setPendingSlots] = useState<{date: string; time: string; duration: number}[]>([]);
+  const [calendarKey, setCalendarKey] = useState(0);
+  const [calendarWeekOffset, setCalendarWeekOffset] = useState(0);
   const { profile } = useAuth();
   const isBusiness = profile?.account_type === 'business';
 
@@ -417,9 +419,42 @@ export default function CreateActivityScreen() {
               </Text>
               <View style={{ marginTop: 12 }}>
                 <ActivityCalendar
+                  key={calendarKey}
                   mode="edit"
                   pendingSlots={pendingSlots}
-                  onSlotsChange={setPendingSlots}
+                  initialWeekOffset={calendarWeekOffset}
+                  onSlotsChange={(newSlots: any) => {
+                    // newSlots est un tableau de PendingSlot[] en mode création (pas d'activityId)
+                    setPendingSlots(newSlots);
+
+                    // Calculer le weekOffset pour rester sur la bonne semaine
+                    if (Array.isArray(newSlots) && newSlots.length > 0) {
+                      const lastSlot = newSlots[newSlots.length - 1];
+                      if (lastSlot?.date) {
+                        const targetDate = new Date(lastSlot.date + 'T00:00:00');
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+
+                        const currentDay = today.getDay();
+                        const mondayOffset = currentDay === 0 ? -6 : 1 - currentDay;
+                        const currentMonday = new Date(today);
+                        currentMonday.setDate(today.getDate() + mondayOffset);
+
+                        const targetDay = targetDate.getDay();
+                        const targetMondayOffset = targetDay === 0 ? -6 : 1 - targetDay;
+                        const targetMonday = new Date(targetDate);
+                        targetMonday.setDate(targetDate.getDate() + targetMondayOffset);
+
+                        const diffTime = targetMonday.getTime() - currentMonday.getTime();
+                        const diffWeeks = Math.round(diffTime / (7 * 24 * 60 * 60 * 1000));
+
+                        setCalendarWeekOffset(diffWeeks);
+                      }
+                    }
+
+                    // Forcer le re-render du calendrier
+                    setCalendarKey(prev => prev + 1);
+                  }}
                 />
               </View>
             </View>

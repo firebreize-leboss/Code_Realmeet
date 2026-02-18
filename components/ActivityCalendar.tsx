@@ -117,6 +117,7 @@ export default function ActivityCalendar({
   const [selectedSlot, setSelectedSlot] = useState<SelectedSlot | null>(null);
   const initialLoadDone = useRef(false);
   const scrollRef = useRef<ScrollView>(null);
+  const pendingSlotsRef = useRef(pendingSlots);
 
   
  
@@ -210,13 +211,17 @@ export default function ActivityCalendar({
     setWeekDays(buildWeekDays(weekOffset));
   }, [mode, weekOffset]);
 
+  useEffect(() => {
+    pendingSlotsRef.current = pendingSlots;
+  }, [pendingSlots]);
+
   // Load slots
   useEffect(() => {
     // Mode création (pas d'activityId)
     if (!activityId) {
       if (mode === 'edit') {
         const days = buildWeekDays(weekOffset).map(day => {
-          const daySlots = pendingSlots
+          const daySlots = pendingSlotsRef.current
             .filter(s => s.date === day.dateStr)
             .map((s, idx) => ({
               id: `pending-${day.dateStr}-${idx}`,
@@ -230,7 +235,7 @@ export default function ActivityCalendar({
         setWeekDays(days);
       } else {
         const grouped = new Map<string, TimeSlot[]>();
-        pendingSlots.forEach((s, idx) => {
+        pendingSlotsRef.current.forEach((s, idx) => {
           const list = grouped.get(s.date) || [];
           list.push({
             id: `pending-${s.date}-${idx}`,
@@ -470,7 +475,7 @@ export default function ActivityCalendar({
     };
 
     load();
-  }, [activityId, mode, weekOffset, currentUserId, refreshTrigger, userJoinedSlotId, pendingSlots]);
+  }, [activityId, mode, weekOffset, currentUserId, refreshTrigger, userJoinedSlotId]);
 
   // ---------- Pagination (select mode) ----------
   const visibleDays: DaySlots[] = useMemo(() => {
