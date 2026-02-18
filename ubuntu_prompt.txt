@@ -1,102 +1,32 @@
-# Corrections ActivityCard variant browse + browse.tsx
+Il y a 2 bugs liés à l'affichage des activités sur Browse et category-activities. Voici les corrections à faire :
 
-## Fichier: components/ActivityCard.tsx — variant "browse"
+## BUG 1 : Compteur de participants incorrect (affiche des valeurs négatives comme -42/10)
 
-### 1. Remplacer les Unicode emoji par des icônes grises lucide-react-native
+### Cause racine
+Dans `contexts/DataCacheContext.tsx`, dans la fonction `loadActivities`, le `slotDataByActivity` est construit avec un mismatch :
+- `totalMaxPlaces` est recalculé côté client à partir des slots filtrés par datetime (date+heure)
+- `remainingPlaces` vient de `a.total_remaining_places` qui est retourné par la RPC `get_activities_with_slots` qui filtre uniquement par `date >= current_date` (sans l'heure)
 
-Dans le render de la variant `browse`, remplacer les emoji strings par des composants icônes :
+Quand des slots sont passés en heure mais pas en date, `remainingPlaces` inclut des places de slots que `totalMaxPlaces` a exclus. Ensuite dans `mapActivityForCard` (browse.tsx et category-activities.tsx), le calcul `totalParticipants = totalMaxPlaces - remainingPlaces` donne un nombre négatif.
 
-**Avant (actuel) :**
-```tsx
-<Text style={styles.browseMetaDate}>
-  {`\u{1F4C5} ${formatDateShort(activity.date)}`}
-  {timeDisplay ? ` \u00B7 ${timeDisplay}` : ''}
-</Text>
-<Text style={styles.browseMetaCity}>
-  {`\u{1F4CD} ${activity.ville}`}
-</Text>
-<Text style={styles.browseMetaParticipants}>
-  {`\u{1F465} ${participantsText}`}
-</Text>
-```
+### Fix
+Dans `contexts/DataCacheContext.tsx`, dans la fonction `loadActivities`, après avoir filtré `filteredSlotsData`, il faut aussi fetch les `slot_participants` pour les slots filtrés et recalculer `remainingPlaces` côté client au lieu d'utiliser `a.total_remaining_places`. Le pattern existe déjà dans `loadActivitiesFallback` : fetch les slot_participants par slot_id, puis calculer remainingPlaces = sum(max(0, slotCapacity - slotParticipantCount)) pour chaque slot filtré. Applique ce même pattern dans `loadActivities`. Concrètement :
+1. Après `filteredSlotsData`, récupérer les slot IDs filtrés
+2. Fetch `slot_participants` pour ces slot IDs
+3. Calculer `participantsBySlot` (count par slot_id)
+4. Dans la boucle qui construit `slotDataByActivity`, calculer `remainingPlaces` comme `sum(max(0, (slot.max_participants || 10) - participantsBySlot[slot.id]))` au lieu d'utiliser `a.total_remaining_places`
 
-**Après (corrigé) :**
-Utiliser des `<View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>` avec `<Calendar size={13} color={TEXT_TERTIARY} />`, `<MapPin size={13} color={TEXT_TERTIARY} />`, `<Users size={13} color={TEXT_TERTIARY} />` (déjà importés en haut du fichier) suivis des `<Text>` correspondants. Les icônes doivent être **grises monochromes** (`TEXT_TERTIARY = #8E8E93`), PAS des emoji colorés.
+Pour les slots filtrés, il faut aussi fetch le champ `id` en plus de `activity_id, date, time, duration, max_participants` dans la requête supabase des slots.
 
-### 2. Ajouter la ligne Host au-dessus du titre
+## BUG 2 : Les activités sans créneau > 24h dans le futur restent visibles sur Browse
 
-Dans le render `browseContent`, ajouter **avant** le titre :
+### Comportement actuel
+Une activité est affichée si elle a au moins un créneau dont la date+heure est dans le futur (même si c'est dans 1 minute).
 
-```tsx
-{/* Host row - avatar + label */}
-{showHost && (activity.host_avatar || activity.host_name) && (
-  <TouchableOpacity style={styles.browseHostRow} onPress={handleHostPress} activeOpacity={0.8}>
-    <Image source={{ uri: getHostAvatar() }} style={styles.browseHostAvatar} />
-    <Text style={styles.browseHostLabel}>Organisateur</Text>
-  </TouchableOpacity>
-)}
-```
+### Comportement souhaité
+Une activité ne doit être affichée sur Browse et category-activities QUE si elle a au moins un créneau dont la date+heure est dans plus de 24h. C'est cohérent avec la règle J-1 d'inscription (on ne peut pas s'inscrire à un créneau qui commence dans moins de 24h).
 
-Les styles `browseHostRow`, `browseHostAvatar`, `browseHostLabel` existent déjà. Il faut juste ajouter un import de `Image` si pas déjà fait (il est déjà importé).
+### Fix
+Dans `contexts/DataCacheContext.tsx`, modifier le filtre `filteredSlotsData` (et le filtre équivalent dans `loadActivitiesFallback`) : au lieu de `return startDateTime > now`, utiliser `return startDateTime > new Date(now.getTime() + 24 * 60 * 60 * 1000)` (24h dans le futur). Cela affectera automatiquement le calcul de `slotDataByActivity` et le filtre `activitiesWithSlots` qui exclut les activités sans slot futur.
 
-### 3. Séparer les participants sur leur propre ligne
-
-Retirer `browseMetaParticipants` du `browseMetaLine` et le mettre sur une ligne séparée en dessous de `browseInfoRow`.
-
-La structure doit devenir :
-
-```tsx
-<View style={styles.browseContent}>
-  {/* 1. Host */}
-  {showHost && (...host row...)}
-  
-  {/* 2. Titre */}
-  <Text style={styles.browseTitle}>{activity.nom}</Text>
-  
-  {/* 3. Date/Ville + Prix à droite */}
-  <View style={styles.browseInfoRow}>
-    <View style={styles.browseMetaLine}>
-      {/* Calendar icon + date · heure */}
-      {activity.date && (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginRight: 6 }}>
-          <Calendar size={13} color={TEXT_TERTIARY} />
-          <Text style={styles.browseMetaDate}>
-            {formatDateShort(activity.date)}{timeDisplay ? ` · ${timeDisplay}` : ''}
-          </Text>
-        </View>
-      )}
-      {/* MapPin icon + ville */}
-      {activity.ville && (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-          <MapPin size={13} color={TEXT_TERTIARY} />
-          <Text style={styles.browseMetaCity}>{activity.ville}</Text>
-        </View>
-      )}
-    </View>
-    <Text style={styles.browsePrice}>{formatPrice(activity.prix)}</Text>
-  </View>
-  
-  {/* 4. Participants sur ligne séparée */}
-  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
-    <Users size={13} color={TEXT_TERTIARY} />
-    <Text style={[styles.browseMetaParticipants, isFull && styles.browseMetaFull, isAlmostFull && styles.browseMetaUrgent]}>
-      {activity.participants}/{activity.max_participants} participants
-    </Text>
-  </View>
-</View>
-```
-
-### 4. Ajuster le texte participants
-
-Le `participantsText` pour la ligne séparée doit toujours montrer le format `X/Y participants` (avec le mot "participants" en toutes lettres), sauf si complet où il affiche "Complet".
-
-### 5. Supprimer le padding emoji des styles browseMetaDate/browseMetaCity
-
-Comme les emoji sont remplacés par des composants icônes séparés, les styles `browseMetaDate` et `browseMetaCity` ne doivent plus inclure les emoji dans leur texte. Le texte doit commencer directement par la valeur (ex: "11 févr · 20:00", "Paris").
-
-## Résumé des changements :
-- **Icônes grises** lucide au lieu d'emoji Unicode colorés
-- **Host row visible** (avatar circulaire orange + "Organisateur")
-- **Participants sur ligne séparée** avec mot "participants" en toutes lettres
-- **Prix aligné à droite** uniquement sur la ligne date/ville
-- Pas de changement sur browse.tsx header (déjà conforme)
+Ne touche PAS aux fichiers browse.tsx, category-activities.tsx, ni à la RPC SQL. Toutes les corrections se font uniquement dans contexts/DataCacheContext.tsx.

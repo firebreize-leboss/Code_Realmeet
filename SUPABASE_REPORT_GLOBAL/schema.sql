@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict wjUboxSBfpYECRdcSvDtgozupGJIM7vJJvm4ncRY0IDcSlwGwN2D7GsDrQFkJvc
+\restrict PhEoFDDgemUu6nUgReluFUJ6KDLwoqZgN89PjnJPnjyj9TR7vBhdq552F5jFr1O
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.7 (Ubuntu 17.7-0ubuntu0.25.04.1)
@@ -148,132 +148,75 @@ DECLARE
   v_group_name TEXT;
   v_avg_compatibility FLOAT;
 BEGIN
-  -- 1) Vérifier que le slot n'est pas déjà formé/verrouillé
-  SELECT * INTO v_slot 
-  FROM activity_slots 
-  WHERE id = p_slot_id;
-
+  SELECT * INTO v_slot FROM activity_slots WHERE id = p_slot_id;
   IF v_slot IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'Créneau non trouvé');
   END IF;
-
   IF v_slot.groups_formed = true OR v_slot.is_locked = true THEN
     RETURN jsonb_build_object('success', false, 'error', 'Groupes déjà formés ou créneau verrouillé');
   END IF;
 
-  -- 2) Récupérer l'activité
-  SELECT * INTO v_activity 
-  FROM activities 
-  WHERE id = v_slot.activity_id;
-
+  SELECT a.* INTO v_activity FROM activities a WHERE a.id = v_slot.activity_id;
   IF v_activity IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'Activité non trouvée');
   END IF;
 
-  -- 3) Compter les participants
   SELECT COUNT(*) INTO v_total_participants
-  FROM slot_participants
-  WHERE slot_id = p_slot_id;
+  FROM slot_participants WHERE slot_id = p_slot_id;
 
-  -- 4) Vérifier le seuil minimum
-  IF v_total_participants < COALESCE(v_slot.min_participants_per_group, 4) THEN
-    UPDATE activity_slots 
-    SET groups_formed = true, 
-        groups_formed_at = NOW(),
-        is_locked = true,
-        locked_at = NOW()
-    WHERE id = p_slot_id;
-
-    RETURN jsonb_build_object(
-      'success', true, 
-      'groups_created', 0, 
-      'total_participants', v_total_participants,
-      'reason', 'not_enough_participants',
-      'minimum_required', COALESCE(v_slot.min_participants_per_group, 4)
-    );
+  IF v_total_participants < 2 THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Pas assez de participants', 'count', v_total_participants);
   END IF;
 
-  -- 5) Calculer le nombre de groupes et leurs tailles (équilibré)
-  v_num_groups := LEAST(
-    COALESCE(v_slot.max_groups, 1),
-    CEIL(v_total_participants::FLOAT / COALESCE(v_slot.participants_per_group, 5)::FLOAT)
-  );
-  
-  -- S'assurer d'au moins 1 groupe
-  v_num_groups := GREATEST(1, v_num_groups);
+  v_num_groups := GREATEST(1, LEAST(
+    COALESCE(v_slot.max_groups, 10),
+    CEIL(v_total_participants::FLOAT / GREATEST(COALESCE(v_slot.participants_per_group, 5), 2))
+  ));
 
-  -- Calculer la distribution équilibrée (ex: 10 participants, 3 groupes = 4-3-3)
   v_base_size := v_total_participants / v_num_groups;
   v_remainder := v_total_participants % v_num_groups;
-  
-  -- Initialiser les tailles de groupes
   v_group_sizes := ARRAY[]::INTEGER[];
   FOR v_i IN 1..v_num_groups LOOP
     IF v_i <= v_remainder THEN
-      v_group_sizes := array_append(v_group_sizes, v_base_size + 1);
+      v_group_sizes := v_group_sizes || (v_base_size + 1);
     ELSE
-      v_group_sizes := array_append(v_group_sizes, v_base_size);
+      v_group_sizes := v_group_sizes || v_base_size;
     END IF;
   END LOOP;
 
-  -- 6) Créer table temporaire avec participants et leurs intérêts
-  DROP TABLE IF EXISTS _temp_group_assignment;
-  CREATE TEMP TABLE _temp_group_assignment (
+  CREATE TEMP TABLE IF NOT EXISTS _temp_group_assignment (
     user_id UUID PRIMARY KEY,
     interests TEXT[],
     assigned_group INTEGER DEFAULT 0
   );
+  DELETE FROM _temp_group_assignment;
 
   INSERT INTO _temp_group_assignment (user_id, interests)
-  SELECT 
-    sp.user_id,
-    COALESCE(p.interests, ARRAY[]::TEXT[])
+  SELECT sp.user_id, COALESCE(p.interests, ARRAY[]::TEXT[])
   FROM slot_participants sp
   JOIN profiles p ON p.id = sp.user_id
-  WHERE sp.slot_id = p_slot_id
-  ORDER BY RANDOM(); -- Mélanger pour éviter les biais
+  WHERE sp.slot_id = p_slot_id;
 
-  -- 7) Algorithme d'assignation par affinités d'intérêts
-  
-  -- 7a) Assigner le premier participant au groupe 1
-  UPDATE _temp_group_assignment
-  SET assigned_group = 1
-  WHERE user_id = (SELECT user_id FROM _temp_group_assignment LIMIT 1);
-
-  -- 7b-c) Pour chaque participant restant, calculer les affinités
   FOR v_participant IN 
-    SELECT user_id, interests 
-    FROM _temp_group_assignment 
-    WHERE assigned_group = 0
+    SELECT * FROM _temp_group_assignment ORDER BY random()
   LOOP
     v_best_group := 1;
     v_best_score := -1;
-    v_min_size := 999999;
+    v_min_size := v_total_participants + 1;
 
-    -- Parcourir chaque groupe
     FOR v_i IN 1..v_num_groups LOOP
-      -- Vérifier si le groupe n'est pas plein
       SELECT COUNT(*) INTO v_current_size
-      FROM _temp_group_assignment
-      WHERE assigned_group = v_i;
+      FROM _temp_group_assignment WHERE assigned_group = v_i;
 
       IF v_current_size < v_group_sizes[v_i] THEN
-        -- Calculer le score d'affinité avec ce groupe
         SELECT COALESCE(SUM(
-          array_length(
-            ARRAY(
-              SELECT unnest(t.interests) 
-              INTERSECT 
-              SELECT unnest(v_participant.interests)
-            ), 1
-          )
+          COALESCE(array_length(
+            ARRAY(SELECT unnest(v_participant.interests) INTERSECT SELECT unnest(t.interests)), 1
+          ), 0)
         ), 0) INTO v_current_score
-        FROM _temp_group_assignment t
-        WHERE t.assigned_group = v_i;
+        FROM _temp_group_assignment t WHERE t.assigned_group = v_i;
 
-        -- Choisir le meilleur score, ou en cas d'égalité le groupe le moins rempli
-        IF v_current_score > v_best_score 
-           OR (v_current_score = v_best_score AND v_current_size < v_min_size) THEN
+        IF v_current_score > v_best_score OR (v_current_score = v_best_score AND v_current_size < v_min_size) THEN
           v_best_score := v_current_score;
           v_best_group := v_i;
           v_min_size := v_current_size;
@@ -281,105 +224,67 @@ BEGIN
       END IF;
     END LOOP;
 
-    -- Assigner au meilleur groupe
-    UPDATE _temp_group_assignment
-    SET assigned_group = v_best_group
-    WHERE user_id = v_participant.user_id;
+    UPDATE _temp_group_assignment SET assigned_group = v_best_group WHERE user_id = v_participant.user_id;
   END LOOP;
 
-  -- 8-13) Créer les groupes, conversations et membres
   FOR v_i IN 1..v_num_groups LOOP
-    -- Vérifier qu'il y a des membres dans ce groupe
     IF EXISTS (SELECT 1 FROM _temp_group_assignment WHERE assigned_group = v_i) THEN
-      
-      -- 8) Créer le groupe
       v_group_name := v_activity.nom || ' - Groupe ' || v_i;
-      
+
       INSERT INTO slot_groups (slot_id, activity_id, group_number, group_name)
       VALUES (p_slot_id, v_slot.activity_id, v_i, v_group_name)
       RETURNING id INTO v_group_id;
 
-      -- 9) Insérer les membres avec leur score de compatibilité
       INSERT INTO slot_group_members (group_id, user_id, compatibility_score)
-      SELECT 
-        v_group_id,
-        t.user_id,
-        -- Calculer le score moyen d'affinité pour ce membre
+      SELECT v_group_id, t.user_id,
         COALESCE((
-          SELECT AVG(
-            COALESCE(array_length(
-              ARRAY(
-                SELECT unnest(t.interests) 
-                INTERSECT 
-                SELECT unnest(t2.interests)
-              ), 1
-            ), 0)
-          )::FLOAT
+          SELECT AVG(COALESCE(array_length(
+            ARRAY(SELECT unnest(t.interests) INTERSECT SELECT unnest(t2.interests)), 1
+          ), 0))::FLOAT
           FROM _temp_group_assignment t2
           WHERE t2.assigned_group = v_i AND t2.user_id != t.user_id
         ), 0)
-      FROM _temp_group_assignment t
-      WHERE t.assigned_group = v_i;
+      FROM _temp_group_assignment t WHERE t.assigned_group = v_i;
 
-      -- 10) Créer la conversation
-      INSERT INTO conversations (slot_id, name, image_url, is_group)
-      VALUES (
-        p_slot_id, 
-        v_group_name, 
-        v_activity.image_url, 
-        true
-      )
+      -- ✅ CORRIGÉ : ajout de activity_id
+      INSERT INTO conversations (slot_id, activity_id, name, image_url, is_group)
+      VALUES (p_slot_id, v_slot.activity_id, v_group_name, v_activity.image_url, true)
       RETURNING id INTO v_conversation_id;
 
-      -- 11) Ajouter les participants à la conversation
       INSERT INTO conversation_participants (conversation_id, user_id)
       SELECT v_conversation_id, t.user_id
-      FROM _temp_group_assignment t
-      WHERE t.assigned_group = v_i;
+      FROM _temp_group_assignment t WHERE t.assigned_group = v_i;
 
-      -- 12) Lier le groupe à la conversation
-      UPDATE slot_groups 
-      SET conversation_id = v_conversation_id 
-      WHERE id = v_group_id;
+      UPDATE slot_groups SET conversation_id = v_conversation_id WHERE id = v_group_id;
 
-      -- 13) Message système
       SELECT user_id INTO v_first_user_id
-      FROM _temp_group_assignment
-      WHERE assigned_group = v_i
-      LIMIT 1;
+      FROM _temp_group_assignment WHERE assigned_group = v_i LIMIT 1;
 
       INSERT INTO messages (conversation_id, sender_id, content, message_type)
-      VALUES (
-        v_conversation_id,
-        v_first_user_id,
+      VALUES (v_conversation_id, v_first_user_id,
         '🎉 Votre groupe a été formé ! Vous partagez des centres d''intérêt communs. L''activité commence bientôt !',
-        'system'
-      );
+        'system');
     END IF;
   END LOOP;
 
-  -- Nettoyer
-  DROP TABLE IF EXISTS _temp_group_assignment;
-
-  -- 14) Marquer le créneau comme formé et verrouillé
-  UPDATE activity_slots 
-  SET groups_formed = true, 
-      groups_formed_at = NOW(),
-      is_locked = true,
-      locked_at = NOW()
+  UPDATE activity_slots
+  SET groups_formed = true, groups_formed_at = NOW(), is_locked = true
   WHERE id = p_slot_id;
 
-  -- 15) Retourner le résultat
-  RETURN jsonb_build_object(
-    'success', true, 
-    'groups_created', v_num_groups, 
-    'total_participants', v_total_participants,
-    'group_distribution', v_group_sizes,
-    'algorithm', 'interests_affinity_v3'
-  );
+  SELECT AVG(sgm.compatibility_score) INTO v_avg_compatibility
+  FROM slot_group_members sgm
+  JOIN slot_groups sg ON sg.id = sgm.group_id
+  WHERE sg.slot_id = p_slot_id;
 
-EXCEPTION WHEN OTHERS THEN
-  RETURN jsonb_build_object('success', false, 'error', SQLERRM);
+  INSERT INTO group_formation_logs (slot_id, activity_id, total_participants, groups_created, avg_compatibility, status, details)
+  VALUES (p_slot_id, v_slot.activity_id, v_total_participants, v_num_groups,
+    COALESCE(v_avg_compatibility, 0), 'success',
+    jsonb_build_object('group_sizes', v_group_sizes, 'method', 'affinity_v3'));
+
+  DROP TABLE IF EXISTS _temp_group_assignment;
+
+  RETURN jsonb_build_object('success', true, 'groups_created', v_num_groups,
+    'total_participants', v_total_participants, 'avg_compatibility', COALESCE(v_avg_compatibility, 0));
 END;
 $$;
 
@@ -940,6 +845,7 @@ DECLARE
   v_slot RECORD;
   v_count INTEGER := 0;
   v_result JSONB;
+  v_now TIMESTAMP := NOW() AT TIME ZONE 'Europe/Paris';
 BEGIN
   FOR v_slot IN
     SELECT s.id, s.activity_id, s.date, s.time
@@ -949,25 +855,15 @@ BEGIN
       AND s.is_locked = false
       AND a.status = 'active'
       AND (s.date || ' ' || COALESCE(s.time::TEXT, '00:00'))::TIMESTAMP
-          BETWEEN NOW() + INTERVAL '23 hours'
-          AND NOW() + INTERVAL '24 hours 30 minutes'
+          BETWEEN v_now AND v_now + INTERVAL '24 hours'
   LOOP
     BEGIN
-      -- Appeler form_groups_v3
       v_result := form_groups_v3(v_slot.id);
       
-      -- Logger le résultat
       INSERT INTO group_formation_logs (
-        slot_id, 
-        activity_id, 
-        status, 
-        groups_created, 
-        participants_count, 
-        triggered_by
-      )
-      VALUES (
-        v_slot.id, 
-        v_slot.activity_id,
+        slot_id, activity_id, status, groups_created, participants_count, triggered_by
+      ) VALUES (
+        v_slot.id, v_slot.activity_id,
         CASE WHEN (v_result->>'success')::BOOLEAN THEN 'success' ELSE 'failed' END,
         COALESCE((v_result->>'groups_created')::INTEGER, 0),
         COALESCE((v_result->>'total_participants')::INTEGER, 0),
@@ -979,20 +875,10 @@ BEGIN
       END IF;
       
     EXCEPTION WHEN OTHERS THEN
-      -- Logger l'erreur
       INSERT INTO group_formation_logs (
-        slot_id, 
-        activity_id, 
-        status, 
-        error_message, 
-        triggered_by
-      )
-      VALUES (
-        v_slot.id, 
-        v_slot.activity_id, 
-        'failed', 
-        SQLERRM, 
-        'cron_v3'
+        slot_id, activity_id, status, error_message, triggered_by
+      ) VALUES (
+        v_slot.id, v_slot.activity_id, 'failed', SQLERRM, 'cron_v3'
       );
     END;
   END LOOP;
@@ -3116,13 +3002,6 @@ CREATE INDEX idx_slot_participants_user_id ON public.slot_participants USING btr
 
 
 --
--- Name: idx_unique_activity_conversation; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX idx_unique_activity_conversation ON public.conversations USING btree (activity_id) WHERE (activity_id IS NOT NULL);
-
-
---
 -- Name: activities activities_places_restantes; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -4081,5 +3960,5 @@ ALTER TABLE public.slot_participants ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict wjUboxSBfpYECRdcSvDtgozupGJIM7vJJvm4ncRY0IDcSlwGwN2D7GsDrQFkJvc
+\unrestrict PhEoFDDgemUu6nUgReluFUJ6KDLwoqZgN89PjnJPnjyj9TR7vBhdq552F5jFr1O
 

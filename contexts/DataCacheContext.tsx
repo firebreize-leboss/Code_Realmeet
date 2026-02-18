@@ -182,8 +182,9 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
         .gte('date', todayStr)
         .order('date', { ascending: true });
 
-      // Filtrer : garder uniquement les créneaux dont le début est strictement dans le futur
+      // Filtrer : garder uniquement les créneaux dont le début est dans plus de 24h
       const now = new Date();
+      const twentyFourHoursFromNow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
       const filteredSlots = (slots || []).filter(s => {
         const slotDate = s.date; // Format YYYY-MM-DD
         const timeStr = s.time;
@@ -191,7 +192,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
           ? new Date(`${slotDate}T${timeStr}`)
           : new Date(`${slotDate}T23:59:59`); // fallback fin de journée
 
-        return startDateTime > now;
+        return startDateTime > twentyFourHoursFromNow;
       });
 
       const slotIds = filteredSlots.map(s => s.id);
@@ -288,14 +289,16 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       const now = new Date();
 
       // Récupérer toutes les dates uniques et max_participants des slots futurs pour chaque activité
+      // On inclut aussi l'id pour pouvoir fetch les participants
       const { data: slotsData } = await supabase
         .from('activity_slots')
-        .select('activity_id, date, time, duration, max_participants')
+        .select('id, activity_id, date, time, duration, max_participants')
         .in('activity_id', activityIds.length > 0 ? activityIds : ['__none__'])
         .gte('date', todayStr)
         .order('date', { ascending: true });
 
-      // Filtrer : garder uniquement les créneaux dont le début est strictement dans le futur
+      // Filtrer : garder uniquement les créneaux dont le début est dans plus de 24h
+      const twentyFourHoursFromNow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
       const filteredSlotsData = (slotsData || []).filter(s => {
         const slotDate = s.date;
         const timeStr = s.time;
@@ -303,21 +306,41 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
           ? new Date(`${slotDate}T${timeStr}`)
           : new Date(`${slotDate}T23:59:59`);
 
-        return startDateTime > now;
+        return startDateTime > twentyFourHoursFromNow;
       });
 
-      // Grouper les dates uniques et calculer totalMaxPlaces par activité
+      // Récupérer les slot IDs filtrés pour fetch les participants
+      const filteredSlotIds = filteredSlotsData.map(s => s.id);
+
+      // Fetch les participants pour les slots filtrés
+      const { data: slotParticipants } = await supabase
+        .from('slot_participants')
+        .select('slot_id')
+        .in('slot_id', filteredSlotIds.length > 0 ? filteredSlotIds : ['__none__']);
+
+      // Calculer le nombre de participants par slot
+      const participantsBySlot: Record<string, number> = {};
+      (slotParticipants || []).forEach(sp => {
+        participantsBySlot[sp.slot_id] = (participantsBySlot[sp.slot_id] || 0) + 1;
+      });
+
+      // Grouper les dates uniques et calculer totalMaxPlaces + remainingPlaces par activité
       const datesByActivity: Record<string, string[]> = {};
       const totalMaxPlacesByActivity: Record<string, number> = {};
+      const remainingPlacesByActivity: Record<string, number> = {};
       activityIds.forEach(id => {
         datesByActivity[id] = [];
         totalMaxPlacesByActivity[id] = 0;
+        remainingPlacesByActivity[id] = 0;
       });
       filteredSlotsData.forEach(slot => {
         if (!datesByActivity[slot.activity_id].includes(slot.date)) {
           datesByActivity[slot.activity_id].push(slot.date);
         }
-        totalMaxPlacesByActivity[slot.activity_id] += slot.max_participants || 10;
+        const slotCapacity = slot.max_participants || 10;
+        const slotParticipantCount = participantsBySlot[slot.id] || 0;
+        totalMaxPlacesByActivity[slot.activity_id] += slotCapacity;
+        remainingPlacesByActivity[slot.activity_id] += Math.max(0, slotCapacity - slotParticipantCount);
       });
 
       // Construire slotDataByActivity depuis les données filtrées côté client
@@ -337,7 +360,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
         slotDataByActivity[a.id] = {
           latestDate,
           slotCount: slotCountByActivity[a.id] || 0,
-          remainingPlaces: a.total_remaining_places || 0,
+          remainingPlaces: remainingPlacesByActivity[a.id] || 0,
           totalMaxPlaces: totalMaxPlacesByActivity[a.id] || 0,
           allDates,
         };
