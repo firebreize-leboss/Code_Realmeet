@@ -19,6 +19,10 @@ public	blocked_users	Users can view their own blocks	PERMISSIVE	{public}	SELECT	
 public	business_stats	Business can insert own stats	PERMISSIVE	{public}	INSERT		(auth.uid() = business_id)
 public	business_stats	Business can update own stats	PERMISSIVE	{public}	UPDATE	(auth.uid() = business_id)	
 public	business_stats	Business can view own stats	PERMISSIVE	{public}	SELECT	(auth.uid() = business_id)	
+public	checkin_logs	Business sees own checkin logs	PERMISSIVE	{public}	SELECT	(EXISTS ( SELECT 1
+   FROM activities a
+  WHERE ((a.id = checkin_logs.activity_id) AND (a.host_id = auth.uid()))))	
+public	checkin_logs	Service inserts checkin logs	PERMISSIVE	{public}	INSERT		true
 public	conversation_participants	participants_delete	PERMISSIVE	{public}	DELETE	(user_id = auth.uid())	
 public	conversation_participants	participants_insert	PERMISSIVE	{public}	INSERT		true
 public	conversation_participants	participants_select	PERMISSIVE	{public}	SELECT	true	
@@ -101,4 +105,4 @@ storage	objects	Users can update their own avatar	PERMISSIVE	{public}	UPDATE	((b
 storage	objects	Users can upload activity images	PERMISSIVE	{authenticated}	INSERT		((bucket_id = 'activity-images'::text) AND ((auth.uid())::text = (storage.foldername(name))[1]))
 storage	objects	Users can upload their own avatar	PERMISSIVE	{public}	INSERT		((bucket_id = 'avatars'::text) AND ((storage.foldername(name))[1] = (auth.uid())::text))
 storage	objects	Users can upload voice messages	PERMISSIVE	{public}	INSERT		((bucket_id = 'voice-messages'::text) AND (auth.uid() IS NOT NULL))
-(79 rows)
+(81 rows)

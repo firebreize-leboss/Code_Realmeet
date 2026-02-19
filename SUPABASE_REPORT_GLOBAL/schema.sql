@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict PhEoFDDgemUu6nUgReluFUJ6KDLwoqZgN89PjnJPnjyj9TR7vBhdq552F5jFr1O
+\restrict HqkrX3cIvJ3Ax4KiBq2h3PEDK8xHBRb8xbWjTjhUZXm948uHTAVRVefEErM8id9
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.7 (Ubuntu 17.7-0ubuntu0.25.04.1)
@@ -1537,6 +1537,27 @@ CREATE TABLE public.business_stats (
 
 
 --
+-- Name: checkin_logs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.checkin_logs (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    slot_participant_id uuid,
+    slot_id uuid,
+    activity_id uuid,
+    action text NOT NULL,
+    performed_by uuid,
+    result text NOT NULL,
+    ip_address text,
+    user_agent text,
+    metadata jsonb DEFAULT '{}'::jsonb,
+    created_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT checkin_logs_action_check CHECK ((action = ANY (ARRAY['token_generated'::text, 'scan'::text, 'validate'::text, 'reject'::text, 'expire'::text]))),
+    CONSTRAINT checkin_logs_result_check CHECK ((result = ANY (ARRAY['success'::text, 'already_checked_in'::text, 'expired'::text, 'invalid_token'::text, 'invalid_window'::text, 'unauthorized'::text, 'not_found'::text, 'invalid_host'::text])))
+);
+
+
+--
 -- Name: conversation_participants; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1884,8 +1905,40 @@ CREATE TABLE public.slot_participants (
     slot_id uuid NOT NULL,
     activity_id uuid NOT NULL,
     user_id uuid NOT NULL,
-    joined_at timestamp with time zone DEFAULT now()
+    joined_at timestamp with time zone DEFAULT now(),
+    checked_in_at timestamp with time zone,
+    checked_in_by uuid,
+    checkin_nonce text,
+    checkin_token_expires_at timestamp with time zone
 );
+
+
+--
+-- Name: COLUMN slot_participants.checked_in_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.slot_participants.checked_in_at IS 'Timestamp de validation physique';
+
+
+--
+-- Name: COLUMN slot_participants.checked_in_by; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.slot_participants.checked_in_by IS 'UUID du staff partenaire qui a validé';
+
+
+--
+-- Name: COLUMN slot_participants.checkin_nonce; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.slot_participants.checkin_nonce IS 'Nonce unique anti-rejeu, invalidé après usage';
+
+
+--
+-- Name: COLUMN slot_participants.checkin_token_expires_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.slot_participants.checkin_token_expires_at IS 'Expiration du token QR en cours';
 
 
 --
@@ -2013,6 +2066,14 @@ ALTER TABLE ONLY public.business_stats
 
 ALTER TABLE ONLY public.business_stats
     ADD CONSTRAINT business_stats_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: checkin_logs checkin_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.checkin_logs
+    ADD CONSTRAINT checkin_logs_pkey PRIMARY KEY (id);
 
 
 --
@@ -2157,6 +2218,14 @@ ALTER TABLE ONLY public.slot_group_members
 
 ALTER TABLE ONLY public.slot_groups
     ADD CONSTRAINT slot_groups_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: slot_participants slot_participants_checkin_nonce_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.slot_participants
+    ADD CONSTRAINT slot_participants_checkin_nonce_key UNIQUE (checkin_nonce);
 
 
 --
@@ -2453,6 +2522,34 @@ CREATE INDEX idx_business_stats_business_id ON public.business_stats USING btree
 --
 
 CREATE INDEX idx_business_stats_date ON public.business_stats USING btree (date);
+
+
+--
+-- Name: idx_checkin_logs_activity; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_checkin_logs_activity ON public.checkin_logs USING btree (activity_id);
+
+
+--
+-- Name: idx_checkin_logs_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_checkin_logs_created ON public.checkin_logs USING btree (created_at DESC);
+
+
+--
+-- Name: idx_checkin_logs_participant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_checkin_logs_participant ON public.checkin_logs USING btree (slot_participant_id);
+
+
+--
+-- Name: idx_checkin_logs_slot; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_checkin_logs_slot ON public.checkin_logs USING btree (slot_id);
 
 
 --
@@ -3002,6 +3099,20 @@ CREATE INDEX idx_slot_participants_user_id ON public.slot_participants USING btr
 
 
 --
+-- Name: idx_sp_checked_in; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_sp_checked_in ON public.slot_participants USING btree (slot_id, checked_in_at) WHERE (checked_in_at IS NOT NULL);
+
+
+--
+-- Name: idx_sp_checkin_nonce; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_sp_checkin_nonce ON public.slot_participants USING btree (checkin_nonce) WHERE (checkin_nonce IS NOT NULL);
+
+
+--
 -- Name: activities activities_places_restantes; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -3171,6 +3282,38 @@ ALTER TABLE ONLY public.blocked_users
 
 ALTER TABLE ONLY public.business_stats
     ADD CONSTRAINT business_stats_business_id_fkey FOREIGN KEY (business_id) REFERENCES public.profiles(id) ON DELETE CASCADE;
+
+
+--
+-- Name: checkin_logs checkin_logs_activity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.checkin_logs
+    ADD CONSTRAINT checkin_logs_activity_id_fkey FOREIGN KEY (activity_id) REFERENCES public.activities(id) ON DELETE SET NULL;
+
+
+--
+-- Name: checkin_logs checkin_logs_performed_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.checkin_logs
+    ADD CONSTRAINT checkin_logs_performed_by_fkey FOREIGN KEY (performed_by) REFERENCES public.profiles(id);
+
+
+--
+-- Name: checkin_logs checkin_logs_slot_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.checkin_logs
+    ADD CONSTRAINT checkin_logs_slot_id_fkey FOREIGN KEY (slot_id) REFERENCES public.activity_slots(id) ON DELETE SET NULL;
+
+
+--
+-- Name: checkin_logs checkin_logs_slot_participant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.checkin_logs
+    ADD CONSTRAINT checkin_logs_slot_participant_id_fkey FOREIGN KEY (slot_participant_id) REFERENCES public.slot_participants(id) ON DELETE SET NULL;
 
 
 --
@@ -3398,6 +3541,14 @@ ALTER TABLE ONLY public.slot_participants
 
 
 --
+-- Name: slot_participants slot_participants_checked_in_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.slot_participants
+    ADD CONSTRAINT slot_participants_checked_in_by_fkey FOREIGN KEY (checked_in_by) REFERENCES public.profiles(id);
+
+
+--
 -- Name: slot_participants slot_participants_slot_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3519,6 +3670,15 @@ CREATE POLICY "Business can view participants of their activities" ON public.slo
 
 
 --
+-- Name: checkin_logs Business sees own checkin logs; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Business sees own checkin logs" ON public.checkin_logs FOR SELECT USING ((EXISTS ( SELECT 1
+   FROM public.activities a
+  WHERE ((a.id = checkin_logs.activity_id) AND (a.host_id = auth.uid())))));
+
+
+--
 -- Name: activity_slots Creators can delete their slots; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -3565,6 +3725,13 @@ CREATE POLICY "Service can manage slot_group_members" ON public.slot_group_membe
 --
 
 CREATE POLICY "Service can manage slot_groups" ON public.slot_groups USING (true);
+
+
+--
+-- Name: checkin_logs Service inserts checkin logs; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Service inserts checkin logs" ON public.checkin_logs FOR INSERT WITH CHECK (true);
 
 
 --
@@ -3795,6 +3962,12 @@ ALTER TABLE public.blocked_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.business_stats ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: checkin_logs; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.checkin_logs ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: conversation_participants; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -3960,5 +4133,5 @@ ALTER TABLE public.slot_participants ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict PhEoFDDgemUu6nUgReluFUJ6KDLwoqZgN89PjnJPnjyj9TR7vBhdq552F5jFr1O
+\unrestrict HqkrX3cIvJ3Ax4KiBq2h3PEDK8xHBRb8xbWjTjhUZXm948uHTAVRVefEErM8id9
 

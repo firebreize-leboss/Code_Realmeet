@@ -5,6 +5,7 @@ public	activity_revenue
 public	activity_slots
 public	blocked_users
 public	business_stats
+public	checkin_logs
 public	conversation_participants
 public	conversations
 public	conversations_with_last_message
@@ -24,4 +25,4 @@ public	slot_groups_backup
 public	slot_participants
 public	v_slots_pending_group_formation
 public	v_slow_queries
-(25 rows)
+(26 rows)

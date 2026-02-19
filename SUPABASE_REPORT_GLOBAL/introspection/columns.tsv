@@ -66,6 +66,17 @@ business_stats	activity_views	integer	YES
 business_stats	total_participants	integer	YES
 business_stats	total_revenue	numeric	YES
 business_stats	created_at	timestamp with time zone	YES
+checkin_logs	id	uuid	NO
+checkin_logs	slot_participant_id	uuid	YES
+checkin_logs	slot_id	uuid	YES
+checkin_logs	activity_id	uuid	YES
+checkin_logs	action	text	NO
+checkin_logs	performed_by	uuid	YES
+checkin_logs	result	text	NO
+checkin_logs	ip_address	text	YES
+checkin_logs	user_agent	text	YES
+checkin_logs	metadata	jsonb	YES
+checkin_logs	created_at	timestamp with time zone	YES
 conversation_participants	id	uuid	NO
 conversation_participants	conversation_id	uuid	NO
 conversation_participants	user_id	uuid	NO
@@ -212,6 +223,10 @@ slot_participants	slot_id	uuid	NO
 slot_participants	activity_id	uuid	NO
 slot_participants	user_id	uuid	NO
 slot_participants	joined_at	timestamp with time zone	YES
+slot_participants	checked_in_at	timestamp with time zone	YES
+slot_participants	checked_in_by	uuid	YES
+slot_participants	checkin_nonce	text	YES
+slot_participants	checkin_token_expires_at	timestamp with time zone	YES
 v_slots_pending_group_formation	slot_id	uuid	YES
 v_slots_pending_group_formation	activity_id	uuid	YES
 v_slots_pending_group_formation	activity_name	character varying	YES
@@ -231,4 +246,4 @@ v_slow_queries	total_exec_time	double precision	YES
 v_slow_queries	mean_exec_time	double precision	YES
 v_slow_queries	max_exec_time	double precision	YES
 v_slow_queries	rows	bigint	YES
-(232 rows)
+(247 rows)
