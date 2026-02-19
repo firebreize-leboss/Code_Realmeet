@@ -729,6 +729,7 @@ export default function ChatDetailScreen() {
     const msg = item as Message;
     const isOwnMessage = msg.senderId === currentUserId;
     const isSystemMessage = msg.type === 'system';
+    const isAdminMessage = msg.isAdminMessage === true;
 
     // Determine if this message should animate (new message, not initial load)
     const isNewMessage = !renderedMessageIds.current.has(msg.id) && !isInitialLoad.current;
@@ -770,8 +771,16 @@ export default function ChatDetailScreen() {
         )}
 
         <View style={styles.imageMessageContainer}>
+          {isAdminMessage && (
+            <View style={[styles.adminBadgeRow, { marginBottom: 6 }]}>
+              <View style={styles.adminBadge}>
+                <IconSymbol name="shield.fill" size={10} color="#B8860B" />
+                <Text style={styles.adminBadgeText}>Admin</Text>
+              </View>
+            </View>
+          )}
           {!isOwnMessage && isGroup && (
-            <Text style={[styles.senderName, { marginBottom: 6 }]}>{msg.senderName}</Text>
+            <Text style={[styles.senderName, { marginBottom: 6 }, isAdminMessage && styles.adminSenderName]}>{msg.senderName}</Text>
           )}
 
           {/* Reply quote au dessus de l'image */}
@@ -841,13 +850,29 @@ export default function ChatDetailScreen() {
         )}
 
         <TouchableOpacity
-          style={[styles.messageBubble, isOwnMessage && styles.ownMessageBubble]}
+          style={[
+            styles.messageBubble,
+            isOwnMessage && styles.ownMessageBubble,
+            isAdminMessage && !isOwnMessage && styles.adminMessageBubble,
+            isAdminMessage && isOwnMessage && styles.adminOwnMessageBubble,
+          ]}
           activeOpacity={0.8}
           onLongPress={() => handleMessageLongPress(msg)}
           delayLongPress={500}
         >
-          {!isOwnMessage && isGroup && (
+          {isAdminMessage && (
+            <View style={styles.adminBadgeRow}>
+              <View style={[styles.adminBadge, isOwnMessage && styles.adminBadgeOwn]}>
+                <IconSymbol name="shield.fill" size={10} color={isOwnMessage ? '#FFF' : '#B8860B'} />
+                <Text style={[styles.adminBadgeText, isOwnMessage && styles.adminBadgeTextOwn]}>Admin</Text>
+              </View>
+            </View>
+          )}
+          {!isOwnMessage && isGroup && !isAdminMessage && (
             <Text style={styles.senderName}>{msg.senderName}</Text>
+          )}
+          {!isOwnMessage && isGroup && isAdminMessage && (
+            <Text style={[styles.senderName, styles.adminSenderName]}>{msg.senderName}</Text>
           )}
 
           {/* Quoted / replied-to message */}
@@ -863,7 +888,12 @@ export default function ChatDetailScreen() {
           )}
 
           {msg.text && (
-            <Text style={[styles.messageText, isOwnMessage && styles.ownMessageText]}>
+            <Text style={[
+              styles.messageText,
+              isOwnMessage && styles.ownMessageText,
+              isAdminMessage && styles.adminMessageText,
+              isAdminMessage && isOwnMessage && styles.adminOwnMessageText,
+            ]}>
               {msg.text}
             </Text>
           )}
@@ -1563,6 +1593,61 @@ const styles = StyleSheet.create({
   ownMessageText: {
     color: COLORS.white,
   },
+
+  // === ADMIN MESSAGE PREMIUM STYLES ===
+  adminMessageBubble: {
+    backgroundColor: '#FFF9EF',
+    borderWidth: 1,
+    borderColor: 'rgba(184, 134, 11, 0.2)',
+  },
+  adminOwnMessageBubble: {
+    backgroundColor: '#C26A2A',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.3)',
+  },
+  adminBadgeRow: {
+    flexDirection: 'row',
+    marginBottom: 4,
+  },
+  adminBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(184, 134, 11, 0.1)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+    gap: 4,
+  },
+  adminBadgeOwn: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  adminBadgeText: {
+    fontSize: 10,
+    fontFamily: 'Manrope_700Bold',
+    fontWeight: '700',
+    color: '#B8860B',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  adminBadgeTextOwn: {
+    color: '#FFF',
+  },
+  adminSenderName: {
+    color: '#B8860B',
+    fontFamily: 'Manrope_700Bold',
+    fontWeight: '700',
+  },
+  adminMessageText: {
+    fontFamily: 'Manrope_600SemiBold',
+    fontWeight: '600',
+    color: '#1A1A1A',
+  },
+  adminOwnMessageText: {
+    fontFamily: 'Manrope_600SemiBold',
+    fontWeight: '600',
+    color: COLORS.white,
+  },
+
   messageImage: {
     width: 200,
     height: 200,

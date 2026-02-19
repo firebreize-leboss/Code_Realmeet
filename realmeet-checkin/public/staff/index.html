@@ -230,7 +230,7 @@ async function loadTodaySlots() {
   }
 
   bar.innerHTML = slots.map(s => `
-    <div class="slot-chip" data-id="${s.id}" onclick="selectSlot('${s.id}')">
+    <div class="slot-chip" data-id="${s.id}">
       <span class="slot-chip-time">${s.time?.substring(0,5)}</span>
       <span class="slot-chip-name">${s.activity.name}</span>
       <span class="slot-chip-stats">
@@ -238,6 +238,13 @@ async function loadTodaySlots() {
       </span>
     </div>
   `).join('');
+
+  // Ajouter les event listeners pour chaque slot chip
+  document.querySelectorAll('.slot-chip').forEach(chip => {
+    chip.addEventListener('click', function() {
+      selectSlot(this.dataset.id);
+    });
+  });
 
   // Auto-sélectionner le premier
   selectSlot(slots[0].id);
@@ -346,12 +353,14 @@ function showVerifyResult(data, token) {
         <span class="result-value">${data.activity.price}€</span>
       </div>` : ''}
     </div>
-    <button class="btn-validate" id="btn-do-validate" onclick="doValidate('${token}')">
+    <button class="btn-validate" id="btn-do-validate">
       ✅ Valider l'entrée
     </button>
-    <button class="btn-cancel" onclick="closeOverlay()">Annuler</button>
+    <button class="btn-cancel" id="btn-cancel-verify">Annuler</button>
   `;
   document.getElementById('result-overlay').classList.add('show');
+  document.getElementById('btn-do-validate').addEventListener('click', function() { doValidate(token); });
+  document.getElementById('btn-cancel-verify').addEventListener('click', closeOverlay);
 }
 
 function showAlreadyCheckedIn(data) {
@@ -367,9 +376,10 @@ function showAlreadyCheckedIn(data) {
     <p style="color:var(--muted);font-size:13px;margin-top:8px">
       Enregistré à ${time}
     </p>
-    <button class="btn-cancel" style="margin-top:20px" onclick="closeOverlay()">Fermer</button>
+    <button class="btn-cancel" style="margin-top:20px" id="btn-close-already">Fermer</button>
   `;
   document.getElementById('result-overlay').classList.add('show');
+  document.getElementById('btn-close-already').addEventListener('click', closeOverlay);
 }
 
 function showSuccess(message) {
@@ -390,9 +400,10 @@ function showError(message) {
   card.innerHTML = `
     <div class="badge-error">❌ Erreur</div>
     <p style="color:var(--dim);margin-top:8px">${message}</p>
-    <button class="btn-cancel" style="margin-top:20px" onclick="closeOverlay()">Fermer</button>
+    <button class="btn-cancel" style="margin-top:20px" id="btn-close-error">Fermer</button>
   `;
   document.getElementById('result-overlay').classList.add('show');
+  document.getElementById('btn-close-error').addEventListener('click', closeOverlay);
 }
 
 // ============================================================

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { supabase } from '@/lib/supabase';
 import { IconSymbol } from '@/components/IconSymbol';
 import { CheckinQRCode } from '@/components/CheckinQRCode';
@@ -14,24 +14,35 @@ interface Props {
 
 export function CheckinQRSection({ slotParticipantId, slotId, activityName, slotDate, slotTime }: Props) {
   const [groupsFormed, setGroupsFormed] = useState<boolean | null>(null);
+  const [checkedIn, setCheckedIn] = useState(false);
+  const [showQRFallback, setShowQRFallback] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    checkGroupsFormed();
-  }, [slotId]);
+    checkStatus();
+  }, [slotId, slotParticipantId]);
 
-  const checkGroupsFormed = async () => {
+  const checkStatus = async () => {
     try {
-      const { data, error } = await supabase
-        .from('activity_slots')
-        .select('groups_formed')
-        .eq('id', slotId)
-        .single();
+      // Vérifier groups_formed et checked_in_at en parallèle
+      const [slotResult, participantResult] = await Promise.all([
+        supabase
+          .from('activity_slots')
+          .select('groups_formed')
+          .eq('id', slotId)
+          .single(),
+        supabase
+          .from('slot_participants')
+          .select('checked_in_at')
+          .eq('id', slotParticipantId)
+          .single(),
+      ]);
 
-      if (error) throw error;
-      setGroupsFormed(data?.groups_formed || false);
+      if (slotResult.error) throw slotResult.error;
+      setGroupsFormed(slotResult.data?.groups_formed || false);
+      setCheckedIn(!!participantResult.data?.checked_in_at);
     } catch (err) {
-      console.error('Erreur vérification groups_formed:', err);
+      console.error('Erreur vérification statut checkin:', err);
       setGroupsFormed(false);
     } finally {
       setLoading(false);
@@ -62,6 +73,22 @@ export function CheckinQRSection({ slotParticipantId, slotId, activityName, slot
             Créneau : {slotDate} à {slotTime}
           </Text>
         )}
+      </View>
+    );
+  }
+
+  // TICKET DÉJÀ VALIDÉ → Afficher l'état validé
+  if (checkedIn && !showQRFallback) {
+    return (
+      <View style={styles.validatedContainer}>
+        <View style={styles.validatedIconWrapper}>
+          <IconSymbol name="checkmark.circle.fill" size={48} color="#34C759" />
+        </View>
+        <Text style={styles.validatedTitle}>Votre ticket a bien été validé</Text>
+        <Text style={styles.validatedHint}>Votre QR code n'a pas été correctement scanné ?</Text>
+        <TouchableOpacity style={styles.retryBtn} onPress={() => setShowQRFallback(true)}>
+          <Text style={styles.retryText}>Réessayer</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -122,6 +149,42 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748b',
     marginTop: 12,
+    textAlign: 'center',
+  },
+  validatedContainer: {
+    backgroundColor: 'rgba(242, 153, 74, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(242, 153, 74, 0.20)',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+  },
+  validatedIconWrapper: {
+    marginBottom: 16,
+  },
+  validatedTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  validatedHint: {
+    fontSize: 13,
+    color: '#D4A574',
+    textAlign: 'center',
+  },
+  retryBtn: {
+    marginTop: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(242, 153, 74, 0.15)',
+    borderRadius: 12,
+  },
+  retryText: {
+    color: '#F2994A',
+    fontWeight: '600',
+    fontSize: 14,
     textAlign: 'center',
   },
 });

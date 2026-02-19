@@ -31,6 +31,7 @@ export interface TransformedMessage {
   timestamp: string;
   status?: MessageStatus;
   replyTo?: ReplyInfo;
+  isAdminMessage?: boolean;
 }
 
 interface ConversationParticipant {
@@ -782,6 +783,7 @@ export function useMessages(conversationId: string) {
               }),
               status: 'delivered' as const,
               replyTo,
+              isAdminMessage: msg.is_admin_message || false,
             };
           });
 
@@ -856,6 +858,7 @@ export function useMessages(conversationId: string) {
           }),
           status: 'delivered',
           replyTo,
+          isAdminMessage: msg.is_admin_message || false,
         };
       }) || [];
 
@@ -954,6 +957,7 @@ export function useMessages(conversationId: string) {
             }),
             status: 'delivered',
             replyTo,
+            isAdminMessage: newMsg.is_admin_message || false,
           };
 
           setMessages(prev => {

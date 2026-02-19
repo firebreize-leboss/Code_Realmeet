@@ -1,6 +1,6 @@
 /**
  * Vérifie si le check-in est dans la fenêtre autorisée.
- * Fenêtre : slot_time - 30min → slot_time + 2h
+ * Fenêtre : slot_time - 24h → slot_time + duration
  * Les slots sont en heure Europe/Paris.
  */
 function isWithinCheckinWindow(slotDate, slotTime, slotDuration) {
@@ -9,8 +9,8 @@ function isWithinCheckinWindow(slotDate, slotTime, slotDuration) {
   const slotUtc = new Date(slotStr + offset);
   const now = new Date();
 
-  const windowStart = new Date(slotUtc.getTime() - 30 * 60_000);
-  const windowEnd   = new Date(slotUtc.getTime() + 2 * 3600_000);
+  const windowStart = new Date(slotUtc.getTime() - 24 * 3600_000);
+  const windowEnd   = new Date(slotUtc.getTime() + slotDuration * 60_000);
 
   return {
     allowed: now >= windowStart && now <= windowEnd,
@@ -22,11 +22,11 @@ function isWithinCheckinWindow(slotDate, slotTime, slotDuration) {
   };
 }
 
-function getCheckinTokenExpiry(slotDate, slotTime) {
+function getCheckinTokenExpiry(slotDate, slotTime, slotDuration = 120) {
   const slotStr = `${slotDate}T${slotTime}`;
   const offset = getParisTZOffset(new Date());
   const slotUtc = new Date(slotStr + offset);
-  return new Date(slotUtc.getTime() + 2 * 3600_000);
+  return new Date(slotUtc.getTime() + slotDuration * 60_000);
 }
 
 function getParisTZOffset(date) {

@@ -11,10 +11,10 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   TextInput,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, { useAnimatedStyle } from 'react-native-reanimated';
+import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
@@ -52,6 +52,13 @@ export default function BusinessGroupViewScreen() {
   const [sending, setSending] = useState(false);
   const [businessId, setBusinessId] = useState<string | null>(null);
   const [activityHostId, setActivityHostId] = useState<string | null>(null);
+
+  const insets = useSafeAreaInsets();
+  const { height: kbHeight } = useReanimatedKeyboardAnimation();
+
+  const animatedBottomStyle = useAnimatedStyle(() => ({
+    paddingBottom: Math.max(insets.bottom, -kbHeight.value),
+  }));
 
   useEffect(() => {
     if (conversationId) {
@@ -96,7 +103,7 @@ export default function BusinessGroupViewScreen() {
             isAdminMessage: payload.new.is_admin_message || false,
           };
 
-          setMessages(prev => [...prev, newMsg]);
+          setMessages(prev => [newMsg, ...prev]);
         }
       )
       .subscribe();
@@ -185,7 +192,7 @@ export default function BusinessGroupViewScreen() {
         `)
         .eq('conversation_id', conversationId)
         .is('deleted_at', null)
-        .order('created_at', { ascending: true });
+        .order('created_at', { ascending: false });
 
       if (msgError) {
         console.error('Erreur chargement messages:', msgError);
@@ -271,7 +278,7 @@ export default function BusinessGroupViewScreen() {
   );
 
   const renderMessage = ({ item, index }: { item: Message; index: number }) => {
-    const showDateHeader = index === 0 || messages[index - 1]?.fullDate !== item.fullDate;
+    const showDateHeader = index === messages.length - 1 || messages[index + 1]?.fullDate !== item.fullDate;
 
     return (
       <View>
@@ -340,7 +347,7 @@ export default function BusinessGroupViewScreen() {
   }
 
   return (
-    <SafeAreaView style={commonStyles.container} edges={['top', 'bottom']}>
+    <SafeAreaView style={commonStyles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -376,16 +383,12 @@ export default function BusinessGroupViewScreen() {
         data={messages}
         renderItem={renderMessage}
         keyExtractor={item => item.id}
+        inverted
         contentContainerStyle={[
           styles.messagesContent,
           messages.length === 0 && styles.emptyContent
         ]}
         showsVerticalScrollIndicator={false}
-        onContentSizeChange={() => {
-          if (messages.length > 0) {
-            flatListRef.current?.scrollToEnd();
-          }
-        }}
         ListEmptyComponent={
           <View style={styles.emptyMessages}>
             <IconSymbol name="bubble.left.and.bubble.right" size={48} color={colors.textSecondary} />
@@ -398,11 +401,8 @@ export default function BusinessGroupViewScreen() {
       />
 
       {/* Zone de saisie pour les messages admin */}
-      {isActivityHost ? (
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-        >
+      <Animated.View style={[styles.inputBottomWrapper, animatedBottomStyle]}>
+        {isActivityHost ? (
           <View style={styles.inputContainer}>
             <View style={styles.adminInputWrapper}>
               <IconSymbol name="shield.fill" size={16} color={colors.primary} />
@@ -428,15 +428,15 @@ export default function BusinessGroupViewScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </KeyboardAvoidingView>
-      ) : (
-        <View style={styles.footer}>
-          <IconSymbol name="info.circle.fill" size={16} color={colors.textSecondary} />
-          <Text style={styles.footerText}>
-            Vous ne pouvez pas envoyer de messages dans ce groupe
-          </Text>
-        </View>
-      )}
+        ) : (
+          <View style={styles.footer}>
+            <IconSymbol name="info.circle.fill" size={16} color={colors.textSecondary} />
+            <Text style={styles.footerText}>
+              Vous ne pouvez pas envoyer de messages dans ce groupe
+            </Text>
+          </View>
+        )}
+      </Animated.View>
     </SafeAreaView>
   );
 }
@@ -638,13 +638,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     flex: 1,
   },
+  inputBottomWrapper: {
+    backgroundColor: colors.surface,
+  },
   inputContainer: {
     backgroundColor: colors.surface,
     borderTopWidth: 1,
     borderTopColor: colors.border,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    paddingBottom: Platform.OS === 'ios' ? 12 : 20,
   },
   adminInputWrapper: {
     flexDirection: 'row',

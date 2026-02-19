@@ -425,7 +425,7 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xl,
-    paddingBottom: Platform.OS === 'ios' ? 100 : 120,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 50,
   },
   section: {
     marginBottom: spacing.xl,
@@ -522,7 +522,7 @@ const styles = StyleSheet.create({
     fontSize: typography.xs,
     fontFamily: 'Manrope_400Regular',
     color: colors.textMuted,
-    marginTop: spacing.xxl,
+    marginTop: spacing.lg,
     marginBottom: spacing.lg,
   },
 });
