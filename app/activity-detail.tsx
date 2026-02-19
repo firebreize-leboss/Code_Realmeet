@@ -25,6 +25,7 @@ import { useBusinessRestrictions } from '@/hooks/useBusinessRestrictions';
 import { LinearGradient } from 'expo-linear-gradient';
 import ReportModal from '@/components/ReportModal';
 import LeaveReviewModal from '@/components/LeaveReviewModal';
+import { CheckinQRSection } from '@/components/CheckinQRSection';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { useFonts, Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold } from '@expo-google-fonts/manrope';
 
@@ -91,6 +92,7 @@ export default function ActivityDetailScreen() {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [calendarRefreshTrigger, setCalendarRefreshTrigger] = useState(0);
   const [joinedSlotId, setJoinedSlotId] = useState<string | undefined>(undefined);
+  const [slotParticipantId, setSlotParticipantId] = useState<string | undefined>(undefined);
   const [hasAlreadyReviewed, setHasAlreadyReviewed] = useState(false);
   const [canReview, setCanReview] = useState(false);
   const [pastSlotInfo, setPastSlotInfo] = useState<{ date: string; time: string } | null>(null);
@@ -159,6 +161,7 @@ export default function ActivityDetailScreen() {
 
           setIsJoined(!!participation);
           setJoinedSlotId(participation?.slot_id || undefined);
+          setSlotParticipantId(participation?.id || undefined);
 
           if (participation?.slot_id) {
             const { data: slotData } = await supabase
@@ -454,6 +457,7 @@ export default function ActivityDetailScreen() {
 
         setIsJoined(false);
         setJoinedSlotId(undefined);
+        setSlotParticipantId(undefined);
         setSelectedSlot(null);
         setActivity({
           ...activity,
@@ -517,6 +521,17 @@ export default function ActivityDetailScreen() {
 
         setIsJoined(true);
         setJoinedSlotId(selectedSlot.id);
+
+        // Récupérer le slot_participant_id pour le QR code check-in
+        const { data: newParticipation } = await supabase
+          .from('slot_participants')
+          .select('id')
+          .eq('activity_id', activity.id)
+          .eq('user_id', currentUserId)
+          .eq('slot_id', selectedSlot.id)
+          .single();
+        if (newParticipation) setSlotParticipantId(newParticipation.id);
+
         setActivity({
           ...activity,
           participants: newCount,
@@ -818,6 +833,22 @@ export default function ActivityDetailScreen() {
                   ))}
                 </View>
               )}
+            </View>
+          </>
+        )}
+
+        {/* SECTION: QR Check-in */}
+        {isJoined && !isHost && !isBusiness && !isActivityPast && slotParticipantId && joinedSlotId && (
+          <>
+            <View style={styles.sectionDivider} />
+            <View style={styles.section}>
+              <CheckinQRSection
+                slotParticipantId={slotParticipantId}
+                slotId={joinedSlotId}
+                activityName={activity.title}
+                slotDate={selectedSlot?.date || ''}
+                slotTime={selectedSlot?.time || ''}
+              />
             </View>
           </>
         )}

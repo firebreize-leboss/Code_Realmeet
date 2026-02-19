@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 
-const CHECKIN_API = 'https://checkin.realmeet.app'; // Domaine VPS
+const CHECKIN_API = 'https://checkin.realmeet.fr'; // Domaine VPS
 
 export interface CheckinQR {
   token: string;

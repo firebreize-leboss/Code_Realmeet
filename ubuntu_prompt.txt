@@ -1,32 +1,254 @@
-Il y a 2 bugs liés à l'affichage des activités sur Browse et category-activities. Voici les corrections à faire :
+Intègre le système de QR code check-in dans la page activity-detail de l'app RealMeet. Le backend est déployé sur https://checkin.realmeet.fr. Les fichiers hooks/useCheckinQR.ts et components/CheckinQRCode.tsx existent déjà.
 
-## BUG 1 : Compteur de participants incorrect (affiche des valeurs négatives comme -42/10)
+## CONTEXTE EXISTANT À NE PAS CASSER
 
-### Cause racine
-Dans `contexts/DataCacheContext.tsx`, dans la fonction `loadActivities`, le `slotDataByActivity` est construit avec un mismatch :
-- `totalMaxPlaces` est recalculé côté client à partir des slots filtrés par datetime (date+heure)
-- `remainingPlaces` vient de `a.total_remaining_places` qui est retourné par la RPC `get_activities_with_slots` qui filtre uniquement par `date >= current_date` (sans l'heure)
+- app/activity-detail.tsx : page détail activité avec les états isJoined, joinedSlotId, isActivityPast, isHost, isBusiness, selectedSlot, currentUserId
+- Dans loadActivity(), la participation est récupérée avec : const { data: participation } = await supabase.from('slot_participants').select('id, slot_id').eq('activity_id', activityId).eq('user_id', userId).maybeSingle(); → participation.id EST le slot_participant_id
+- hooks/useCheckinQR.ts existe déjà (hook de génération QR)
+- components/CheckinQRCode.tsx existe déjà (composant d'affichage QR)
+- Les groupes sont formés 24h avant via form_groups_v3() qui met activity_slots.groups_formed = true
+- Design Aurora Glow (bleu-violet-rose sur fond sombre), police Manrope
+- IconSymbol est utilisé pour les icônes (ex: "clock.fill", "qrcode.viewfinder", "checkmark.circle.fill")
+- colors et spacing viennent de @/styles/commonStyles
 
-Quand des slots sont passés en heure mais pas en date, `remainingPlaces` inclut des places de slots que `totalMaxPlaces` a exclus. Ensuite dans `mapActivityForCard` (browse.tsx et category-activities.tsx), le calcul `totalParticipants = totalMaxPlaces - remainingPlaces` donne un nombre négatif.
+## MODIFICATIONS À FAIRE
 
-### Fix
-Dans `contexts/DataCacheContext.tsx`, dans la fonction `loadActivities`, après avoir filtré `filteredSlotsData`, il faut aussi fetch les `slot_participants` pour les slots filtrés et recalculer `remainingPlaces` côté client au lieu d'utiliser `a.total_remaining_places`. Le pattern existe déjà dans `loadActivitiesFallback` : fetch les slot_participants par slot_id, puis calculer remainingPlaces = sum(max(0, slotCapacity - slotParticipantCount)) pour chaque slot filtré. Applique ce même pattern dans `loadActivities`. Concrètement :
-1. Après `filteredSlotsData`, récupérer les slot IDs filtrés
-2. Fetch `slot_participants` pour ces slot IDs
-3. Calculer `participantsBySlot` (count par slot_id)
-4. Dans la boucle qui construit `slotDataByActivity`, calculer `remainingPlaces` comme `sum(max(0, (slot.max_participants || 10) - participantsBySlot[slot.id]))` au lieu d'utiliser `a.total_remaining_places`
+### 1. Corriger hooks/useCheckinQR.ts
 
-Pour les slots filtrés, il faut aussi fetch le champ `id` en plus de `activity_id, date, time, duration, max_participants` dans la requête supabase des slots.
+Changer l'URL de l'API de 'https://checkin.realmeet.app' vers 'https://checkin.realmeet.fr' :
+```
+const CHECKIN_API = 'https://checkin.realmeet.fr';
+```
 
-## BUG 2 : Les activités sans créneau > 24h dans le futur restent visibles sur Browse
+### 2. Créer components/CheckinQRSection.tsx
 
-### Comportement actuel
-Une activité est affichée si elle a au moins un créneau dont la date+heure est dans le futur (même si c'est dans 1 minute).
+Ce composant est un WRAPPER qui décide d'afficher soit le message d'attente soit le QR code selon l'état groups_formed du slot.
 
-### Comportement souhaité
-Une activité ne doit être affichée sur Browse et category-activities QUE si elle a au moins un créneau dont la date+heure est dans plus de 24h. C'est cohérent avec la règle J-1 d'inscription (on ne peut pas s'inscrire à un créneau qui commence dans moins de 24h).
+```typescript
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { supabase } from '@/lib/supabase';
+import { IconSymbol } from '@/components/IconSymbol';
+import { CheckinQRCode } from '@/components/CheckinQRCode';
+import { colors } from '@/styles/commonStyles';
 
-### Fix
-Dans `contexts/DataCacheContext.tsx`, modifier le filtre `filteredSlotsData` (et le filtre équivalent dans `loadActivitiesFallback`) : au lieu de `return startDateTime > now`, utiliser `return startDateTime > new Date(now.getTime() + 24 * 60 * 60 * 1000)` (24h dans le futur). Cela affectera automatiquement le calcul de `slotDataByActivity` et le filtre `activitiesWithSlots` qui exclut les activités sans slot futur.
+interface Props {
+  slotParticipantId: string;
+  slotId: string;
+  activityName: string;
+  slotDate: string;
+  slotTime: string;
+}
 
-Ne touche PAS aux fichiers browse.tsx, category-activities.tsx, ni à la RPC SQL. Toutes les corrections se font uniquement dans contexts/DataCacheContext.tsx.
+export function CheckinQRSection({ slotParticipantId, slotId, activityName, slotDate, slotTime }: Props) {
+  const [groupsFormed, setGroupsFormed] = useState<boolean | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    checkGroupsFormed();
+  }, [slotId]);
+
+  const checkGroupsFormed = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('activity_slots')
+        .select('groups_formed')
+        .eq('id', slotId)
+        .single();
+
+      if (error) throw error;
+      setGroupsFormed(data?.groups_formed || false);
+    } catch (err) {
+      console.error('Erreur vérification groups_formed:', err);
+      setGroupsFormed(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="small" color="#818CF8" />
+      </View>
+    );
+  }
+
+  // GROUPES PAS ENCORE FORMÉS → Message d'attente
+  if (!groupsFormed) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.iconWrapper}>
+          <IconSymbol name="clock.fill" size={28} color="#818CF8" />
+        </View>
+        <Text style={styles.title}>Votre billet d'entrée</Text>
+        <Text style={styles.message}>
+          Vous obtiendrez votre QR code 24h avant le début de l'activité, une fois votre groupe formé.
+        </Text>
+        {slotDate && slotTime && (
+          <Text style={styles.slotInfo}>
+            Créneau : {slotDate} à {slotTime}
+          </Text>
+        )}
+      </View>
+    );
+  }
+
+  // GROUPES FORMÉS → Afficher le QR code
+  return (
+    <View style={styles.containerQR}>
+      <CheckinQRCode
+        slotParticipantId={slotParticipantId}
+        activityName={activityName}
+        slotDate={slotDate}
+        slotTime={slotTime}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    backgroundColor: 'rgba(129,140,248,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(129,140,248,0.15)',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+  },
+  containerQR: {
+    backgroundColor: 'rgba(129,140,248,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(129,140,248,0.15)',
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  iconWrapper: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(129,140,248,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  message: {
+    fontSize: 13,
+    color: '#94a3b8',
+    textAlign: 'center',
+    lineHeight: 20,
+    paddingHorizontal: 8,
+  },
+  slotInfo: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 12,
+    textAlign: 'center',
+  },
+});
+```
+
+### 3. Modifier app/activity-detail.tsx
+
+ATTENTION: Ne modifier QUE ce qui est listé ci-dessous. Ne toucher à rien d'autre.
+
+a) Ajouter l'import en haut du fichier, avec les autres imports de composants :
+```typescript
+import { CheckinQRSection } from '@/components/CheckinQRSection';
+```
+
+b) Ajouter un nouveau state dans la liste des useState existants (à côté de joinedSlotId, hasAlreadyReviewed, etc.) :
+```typescript
+const [slotParticipantId, setSlotParticipantId] = useState<string | undefined>(undefined);
+```
+
+c) Dans la fonction loadActivity(), trouver le bloc où participation est récupéré. C'est le bloc :
+```typescript
+if (userId && !isBusiness) {
+  const { data: participation } = await supabase
+    .from('slot_participants')
+    .select('id, slot_id')
+    .eq('activity_id', activityId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  setIsJoined(!!participation);
+  setJoinedSlotId(participation?.slot_id || undefined);
+```
+
+Juste après la ligne `setJoinedSlotId(participation?.slot_id || undefined);`, ajouter :
+```typescript
+setSlotParticipantId(participation?.id || undefined);
+```
+
+d) Dans le JSX du ScrollView, trouver la section Participants qui se termine par :
+```tsx
+            </View>
+          </>
+        )}
+
+        {/* SECTION: Review */}
+```
+
+ENTRE la fin de la section Participants et le commentaire SECTION: Review, insérer :
+```tsx
+        {/* SECTION: QR Check-in */}
+        {isJoined && !isHost && !isBusiness && !isActivityPast && slotParticipantId && joinedSlotId && (
+          <>
+            <View style={styles.sectionDivider} />
+            <View style={styles.section}>
+              <CheckinQRSection
+                slotParticipantId={slotParticipantId}
+                slotId={joinedSlotId}
+                activityName={activity.title}
+                slotDate={selectedSlot?.date || ''}
+                slotTime={selectedSlot?.time || ''}
+              />
+            </View>
+          </>
+        )}
+```
+
+e) Dans la fonction handleJoinLeave, dans le bloc de désinscription (isJoined = true), après la ligne `setJoinedSlotId(undefined);` ajouter :
+```typescript
+setSlotParticipantId(undefined);
+```
+
+Et dans le bloc d'inscription (après le insert dans slot_participants réussit), il y a probablement un endroit où joinedSlotId est set. Au même endroit, ajouter :
+```typescript
+// Après avoir récupéré le résultat de l'insert dans slot_participants
+// Si le résultat du insert est dans une variable (ex: insertData), ajouter:
+// setSlotParticipantId(insertData.id);
+// Sinon, refaire un select pour récupérer l'id:
+const { data: newParticipation } = await supabase
+  .from('slot_participants')
+  .select('id')
+  .eq('activity_id', activity.id)
+  .eq('user_id', currentUserId)
+  .eq('slot_id', selectedSlot.id)
+  .single();
+if (newParticipation) setSlotParticipantId(newParticipation.id);
+```
+
+## RÉSUMÉ DES MODIFICATIONS
+
+1. hooks/useCheckinQR.ts → changer URL vers https://checkin.realmeet.fr
+2. components/CheckinQRSection.tsx → CRÉER ce nouveau fichier
+3. app/activity-detail.tsx → ajouter import, state, JSX section, cleanup au leave
+
+## CONTRAINTES STRICTES
+
+- NE PAS supprimer ou modifier du code existant qui fonctionne
+- NE PAS toucher aux styles existants
+- NE PAS modifier le composant CheckinQRCode.tsx existant
+- NE PAS modifier le hook useCheckinQR.ts sauf l'URL
+- La section QR ne doit apparaître QUE si isJoined && !isHost && !isBusiness && !isActivityPast && slotParticipantId && joinedSlotId
+- Si je browse une activité sans être inscrit, je ne dois RIEN voir de cette section
+- Tester que le import de CheckinQRSection ne crée pas d'erreur de compilation
