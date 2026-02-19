@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <title>RealMeet Staff — Scanner</title>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    :root {
+      --bg:#0a0a1a; --card:#1a1a2e; --border:#1e293b;
+      --blue:#60A5FA; --violet:#818CF8; --rose:#C084FC;
+      --green:#10b981; --red:#ef4444; --orange:#f59e0b;
+      --text:#f8fafc; --muted:#64748b; --dim:#94a3b8;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:'Manrope',sans-serif; background:var(--bg); color:var(--text);
+      min-height:100vh; min-height:100dvh; overflow-x:hidden; }
+
+    /* Header */
+    .header {
+      display:flex; justify-content:space-between; align-items:center;
+      padding:16px 20px; border-bottom:1px solid var(--border);
+      background:rgba(10,10,26,0.95); backdrop-filter:blur(12px);
+      position:sticky; top:0; z-index:100;
+    }
+    .header-brand { font-size:18px; font-weight:800;
+      background:linear-gradient(135deg,var(--blue),var(--violet),var(--rose));
+      -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+    .header-partner { font-size:13px; color:var(--dim); }
+    .btn-logout { background:none; border:1px solid #334155; color:var(--dim);
+      padding:6px 14px; border-radius:8px; font-size:12px; cursor:pointer; font-family:inherit; }
+
+    /* Slot selector */
+    .slot-bar {
+      padding:16px 20px; overflow-x:auto; white-space:nowrap;
+      border-bottom:1px solid var(--border); display:flex; gap:10px;
+    }
+    .slot-chip {
+      display:inline-flex; flex-direction:column; padding:12px 16px;
+      background:var(--card); border:1px solid var(--border); border-radius:12px;
+      cursor:pointer; min-width:140px; transition:all .2s; flex-shrink:0;
+    }
+    .slot-chip.active { border-color:var(--violet); background:rgba(129,140,248,0.1); }
+    .slot-chip-time { font-weight:700; font-size:15px; }
+    .slot-chip-name { font-size:11px; color:var(--muted); margin-top:2px;
+      overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:130px; }
+    .slot-chip-stats { font-size:11px; color:var(--dim); margin-top:6px; }
+    .slot-chip-stats .done { color:var(--green); font-weight:600; }
+
+    /* Scanner area */
+    .scanner-container { padding:20px; }
+    .scanner-box {
+      width:100%; max-width:400px; margin:0 auto;
+      border-radius:16px; overflow:hidden; position:relative;
+      border:2px solid var(--violet); background:#000;
+    }
+    .scanner-box video { width:100% !important; border-radius:14px; }
+    #qr-reader { width:100% !important; }
+    #qr-reader__scan_region { min-height:280px; }
+    #qr-reader__dashboard { display:none !important; }
+    .scanner-label {
+      text-align:center; margin-top:16px;
+      font-size:14px; color:var(--muted);
+    }
+
+    /* Result overlay */
+    .result-overlay {
+      position:fixed; inset:0; background:rgba(0,0,0,0.85);
+      display:none; align-items:center; justify-content:center;
+      z-index:200; padding:20px; backdrop-filter:blur(8px);
+    }
+    .result-overlay.show { display:flex; }
+    .result-card {
+      background:var(--card); border-radius:20px; padding:32px;
+      width:100%; max-width:380px; text-align:center;
+      border:1px solid var(--border); animation:slideUp .3s ease;
+    }
+    @keyframes slideUp { from{transform:translateY(40px);opacity:0} to{transform:none;opacity:1} }
+    .result-avatar {
+      width:72px; height:72px; border-radius:50%; margin:0 auto 12px;
+      object-fit:cover; border:3px solid var(--violet);
+    }
+    .result-name { font-size:20px; font-weight:700; margin-bottom:4px; }
+    .result-activity { font-size:13px; color:var(--dim); margin-bottom:20px; }
+    .result-info {
+      background:var(--bg); border-radius:12px; padding:14px;
+      margin-bottom:20px; text-align:left;
+    }
+    .result-row { display:flex; justify-content:space-between; padding:6px 0; }
+    .result-label { color:var(--muted); font-size:12px; }
+    .result-value { font-weight:600; font-size:13px; }
+    .btn-validate {
+      width:100%; padding:16px; border:none; border-radius:14px;
+      background:linear-gradient(135deg,#059669,#10b981);
+      color:#fff; font-size:16px; font-weight:700; cursor:pointer;
+      font-family:inherit; transition:all .2s;
+    }
+    .btn-validate:hover { opacity:0.9; }
+    .btn-validate:disabled { opacity:0.5; cursor:not-allowed; }
+    .btn-cancel {
+      width:100%; padding:12px; border:1px solid #334155; border-radius:12px;
+      background:none; color:var(--dim); font-size:14px; cursor:pointer;
+      font-family:inherit; margin-top:10px;
+    }
+
+    /* Status badges */
+    .badge-success { display:inline-block; padding:6px 16px; border-radius:20px;
+      background:rgba(16,185,129,0.15); color:var(--green); font-weight:700;
+      font-size:14px; margin-bottom:12px; }
+    .badge-error { display:inline-block; padding:6px 16px; border-radius:20px;
+      background:rgba(239,68,68,0.15); color:var(--red); font-weight:700;
+      font-size:14px; margin-bottom:12px; }
+    .badge-warning { display:inline-block; padding:6px 16px; border-radius:20px;
+      background:rgba(245,158,11,0.15); color:var(--orange); font-weight:700;
+      font-size:14px; margin-bottom:12px; }
+
+    /* Counter */
+    .counter-bar {
+      display:flex; justify-content:center; gap:24px;
+      padding:16px; border-bottom:1px solid var(--border);
+    }
+    .counter { text-align:center; }
+    .counter-value { font-size:28px; font-weight:800; }
+    .counter-value.green { color:var(--green); }
+    .counter-label { font-size:11px; color:var(--muted); margin-top:2px; }
+
+    /* Empty state */
+    .empty { text-align:center; padding:60px 20px; color:var(--muted); }
+    .empty-icon { font-size:48px; margin-bottom:16px; }
+
+    /* Loading */
+    .loading { text-align:center; padding:40px; color:var(--muted); }
+    .spinner { display:inline-block; width:24px; height:24px;
+      border:2px solid var(--border); border-top-color:var(--violet);
+      border-radius:50%; animation:spin .8s linear infinite; }
+    @keyframes spin { to{transform:rotate(360deg)} }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <div class="header-brand">RealMeet</div>
+      <div class="header-partner" id="partner-name">Chargement...</div>
+    </div>
+    <button class="btn-logout" id="btn-logout">Déconnexion</button>
+  </div>
+
+  <!-- Slot selector -->
+  <div class="slot-bar" id="slot-bar">
+    <div class="loading"><div class="spinner"></div></div>
+  </div>
+
+  <!-- Counter -->
+  <div class="counter-bar" id="counter-bar" style="display:none">
+    <div class="counter">
+      <div class="counter-value green" id="count-done">0</div>
+      <div class="counter-label">Enregistrés</div>
+    </div>
+    <div class="counter">
+      <div class="counter-value" id="count-remaining">0</div>
+      <div class="counter-label">Restants</div>
+    </div>
+    <div class="counter">
+      <div class="counter-value" id="count-total">0</div>
+      <div class="counter-label">Inscrits</div>
+    </div>
+  </div>
+
+  <!-- Scanner -->
+  <div class="scanner-container" id="scanner-section" style="display:none">
+    <div class="scanner-box">
+      <div id="qr-reader"></div>
+    </div>
+    <div class="scanner-label">📷 Scannez le QR code du participant</div>
+  </div>
+
+  <!-- Empty state -->
+  <div class="empty" id="empty-state" style="display:none">
+    <div class="empty-icon">📅</div>
+    <p>Aucun créneau aujourd'hui</p>
+  </div>
+
+  <!-- Result overlay -->
+  <div class="result-overlay" id="result-overlay">
+    <div class="result-card" id="result-card"></div>
+  </div>
+
+    
+<script>
+
+  
+// ============================================================
+// State
+// ============================================================
+let scanner = null;
+let selectedSlotId = null;
+let scannerPaused = false;
+let slotStats = { total:0, checkedIn:0 };
+
+// ============================================================
+// Init
+// ============================================================
+async function init() {
+  try {
+    const resp = await fetch('/api/auth/me', { credentials:'include' });
+    if (!resp.ok) { window.location.href = '/staff/login'; return; }
+    const { partner } = await resp.json();
+    document.getElementById('partner-name').textContent = partner.businessName || partner.name;
+    await loadTodaySlots();
+  } catch(e) {
+    window.location.href = '/staff/login';
+  }
+}
+
+// ============================================================
+// Load slots
+// ============================================================
+async function loadTodaySlots() {
+  const resp = await fetch('/api/checkin/today-slots', { credentials:'include' });
+  const { slots } = await resp.json();
+  const bar = document.getElementById('slot-bar');
+
+  if (!slots || slots.length === 0) {
+    bar.style.display = 'none';
+    document.getElementById('empty-state').style.display = 'block';
+    return;
+  }
+
+  bar.innerHTML = slots.map(s => `
+    <div class="slot-chip" data-id="${s.id}" onclick="selectSlot('${s.id}')">
+      <span class="slot-chip-time">${s.time?.substring(0,5)}</span>
+      <span class="slot-chip-name">${s.activity.name}</span>
+      <span class="slot-chip-stats">
+        <span class="done">${s.stats.checkedIn}</span> / ${s.stats.total} inscrits
+      </span>
+    </div>
+  `).join('');
+
+  // Auto-sélectionner le premier
+  selectSlot(slots[0].id);
+}
+
+// ============================================================
+// Select slot
+// ============================================================
+async function selectSlot(slotId) {
+  selectedSlotId = slotId;
+
+  // UI active chip
+  document.querySelectorAll('.slot-chip').forEach(c => c.classList.remove('active'));
+  document.querySelector(`.slot-chip[data-id="${slotId}"]`)?.classList.add('active');
+
+  // Load stats
+  const resp = await fetch(`/api/checkin/slot-status/${slotId}`, { credentials:'include' });
+  const data = await resp.json();
+
+  slotStats = data.stats;
+  document.getElementById('count-done').textContent = data.stats.checkedIn;
+  document.getElementById('count-remaining').textContent = data.stats.total - data.stats.checkedIn;
+  document.getElementById('count-total').textContent = data.stats.total;
+  document.getElementById('counter-bar').style.display = 'flex';
+
+  // Start scanner
+  document.getElementById('scanner-section').style.display = 'block';
+  startScanner();
+}
+
+// ============================================================
+// QR Scanner
+// ============================================================
+async function startScanner() {
+  if (scanner) { try { await scanner.stop(); } catch(e){} }
+
+  scanner = new Html5Qrcode("qr-reader");
+  scannerPaused = false;
+
+  await scanner.start(
+    { facingMode: "environment" },
+    { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 },
+    onScanSuccess,
+    () => {} // ignore errors
+  ).catch(err => {
+    console.error('Camera error:', err);
+    document.getElementById('scanner-section').innerHTML =
+      '<div class="empty"><div class="empty-icon">📷</div><p>Impossible d\'accéder à la caméra.<br>Vérifiez les permissions.</p></div>';
+  });
+}
+
+async function onScanSuccess(decodedText) {
+  if (scannerPaused) return;
+  scannerPaused = true;
+
+  // Vibrer pour feedback
+  if (navigator.vibrate) navigator.vibrate(100);
+
+  // Le QR contient le JWT directement
+  const token = decodedText.trim();
+
+  try {
+    // Vérifier via l'API
+    const resp = await fetch('/api/checkin/verify', {
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ token })
+    });
+    const data = await resp.json();
+
+    if (resp.ok && data.status === 'ready') {
+      showVerifyResult(data, token);
+    } else if (data.status === 'already_checked_in') {
+      showAlreadyCheckedIn(data);
+    } else {
+      showError(data.error || 'Erreur inconnue');
+    }
+  } catch(e) {
+    showError('Erreur réseau');
+  }
+}
+
+// ============================================================
+// Result displays
+// ============================================================
+function showVerifyResult(data, token) {
+  const card = document.getElementById('result-card');
+  card.innerHTML = `
+    ${data.participant.avatar
+      ? `<img src="${data.participant.avatar}" class="result-avatar" alt="">`
+      : '<div style="width:72px;height:72px;border-radius:50%;background:#1e293b;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;font-size:28px">👤</div>'
+    }
+    <div class="result-name">${data.participant.name}</div>
+    <div class="result-activity">${data.activity.name}</div>
+    <div class="result-info">
+      <div class="result-row">
+        <span class="result-label">Lieu</span>
+        <span class="result-value">${data.activity.address}</span>
+      </div>
+      <div class="result-row">
+        <span class="result-label">Créneau</span>
+        <span class="result-value">${data.slot.date} à ${data.slot.time?.substring(0,5)}</span>
+      </div>
+      ${data.activity.price ? `<div class="result-row">
+        <span class="result-label">Prix</span>
+        <span class="result-value">${data.activity.price}€</span>
+      </div>` : ''}
+    </div>
+    <button class="btn-validate" id="btn-do-validate" onclick="doValidate('${token}')">
+      ✅ Valider l'entrée
+    </button>
+    <button class="btn-cancel" onclick="closeOverlay()">Annuler</button>
+  `;
+  document.getElementById('result-overlay').classList.add('show');
+}
+
+function showAlreadyCheckedIn(data) {
+  const card = document.getElementById('result-card');
+  const time = data.checked_in_at ? new Date(data.checked_in_at).toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'}) : '';
+  card.innerHTML = `
+    <div class="badge-warning">⚠️ Déjà enregistré</div>
+    ${data.participant?.avatar
+      ? `<img src="${data.participant.avatar}" class="result-avatar" alt="">`
+      : ''
+    }
+    <div class="result-name">${data.participant?.name || 'Participant'}</div>
+    <p style="color:var(--muted);font-size:13px;margin-top:8px">
+      Enregistré à ${time}
+    </p>
+    <button class="btn-cancel" style="margin-top:20px" onclick="closeOverlay()">Fermer</button>
+  `;
+  document.getElementById('result-overlay').classList.add('show');
+}
+
+function showSuccess(message) {
+  const card = document.getElementById('result-card');
+  card.innerHTML = `
+    <div class="badge-success">✅ Validé</div>
+    <div class="result-name">${message}</div>
+    <p style="color:var(--muted);font-size:13px;margin-top:8px">
+      Le participant est enregistré.
+    </p>
+  `;
+  // Auto-fermer après 2s
+  setTimeout(closeOverlay, 2000);
+}
+
+function showError(message) {
+  const card = document.getElementById('result-card');
+  card.innerHTML = `
+    <div class="badge-error">❌ Erreur</div>
+    <p style="color:var(--dim);margin-top:8px">${message}</p>
+    <button class="btn-cancel" style="margin-top:20px" onclick="closeOverlay()">Fermer</button>
+  `;
+  document.getElementById('result-overlay').classList.add('show');
+}
+
+// ============================================================
+// Validate
+// ============================================================
+async function doValidate(token) {
+  const btn = document.getElementById('btn-do-validate');
+  btn.disabled = true; btn.textContent = 'Validation...';
+
+  try {
+    const resp = await fetch('/api/checkin/validate', {
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ token })
+    });
+    const data = await resp.json();
+
+    if (resp.ok && data.success) {
+      showSuccess(data.message);
+      // Mettre à jour les compteurs
+      slotStats.checkedIn++;
+      document.getElementById('count-done').textContent = slotStats.checkedIn;
+      document.getElementById('count-remaining').textContent = slotStats.total - slotStats.checkedIn;
+      // Mettre à jour le chip
+      const chip = document.querySelector(`.slot-chip[data-id="${selectedSlotId}"] .done`);
+      if (chip) chip.textContent = slotStats.checkedIn;
+    } else {
+      showError(data.error || 'Erreur de validation');
+    }
+  } catch(e) {
+    showError('Erreur réseau');
+  }
+}
+
+// ============================================================
+// UI helpers
+// ============================================================
+function closeOverlay() {
+  document.getElementById('result-overlay').classList.remove('show');
+  scannerPaused = false;
+}
+
+async function logout() {
+  await fetch('/api/auth/logout', { method:'POST', credentials:'include' });
+  window.location.href = '/staff/login';
+}
+
+// ============================================================
+// Start
+// ============================================================
+
+document.getElementById('btn-logout').addEventListener('click', function(e) {
+  e.preventDefault();
+  logout();
+});
+
+init();
+</script>
+</body>
+</html>

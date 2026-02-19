@@ -2,6 +2,7 @@
 // Hooks personnalisés pour le système de messagerie avec système de statut
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { randomUUID } from 'expo-crypto';
 import { supabase } from '@/lib/supabase';
 
 // ============================================
@@ -1003,7 +1004,7 @@ export function useMessages(conversationId: string) {
         profile = profileData as { full_name: string; avatar_url: string } | null;
       }
 
-      const messageId = externalId ?? crypto.randomUUID();
+      const messageId = externalId ?? randomUUID();
 
       // Build replyTo info for optimistic display
       let replyToInfo: ReplyInfo | undefined;

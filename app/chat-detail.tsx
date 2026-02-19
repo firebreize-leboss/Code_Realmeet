@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   Modal,
   Platform,
+  Dimensions,
 } from 'react-native';
 import Animated, {
   useAnimatedStyle,
@@ -148,6 +149,9 @@ export default function ChatDetailScreen() {
   // État pour le menu d'actions long press
   const [showMessageActions, setShowMessageActions] = useState(false);
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
+
+  // État pour la visionneuse d'image fullscreen
+  const [fullscreenImageUrl, setFullscreenImageUrl] = useState<string | null>(null);
 
   const { messages, loading: messagesLoading, sendMessage, deleteMessage, currentUserId } = useMessages(conversationId as string);
 
@@ -742,8 +746,83 @@ export default function ChatDetailScreen() {
       );
     }
 
+    // Détecter si c'est un message image seul (sans texte) pour l'affichage Instagram-style
+    const isImageOnly = !!msg.imageUrl && !msg.text && !msg.voiceUrl;
+
     // Message content (shared between animated and non-animated)
-    const messageContent = (
+    const messageContent = isImageOnly ? (
+      // === INSTAGRAM-STYLE IMAGE MESSAGE (pas de bulle) ===
+      <>
+        {!isOwnMessage && (
+          <TouchableOpacity
+            onPress={() => {
+              if (msg.senderId) {
+                router.push(`/user-profile?id=${msg.senderId}`);
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <Image
+              source={{ uri: msg.senderAvatar || 'https://via.placeholder.com/40' }}
+              style={styles.messageAvatar}
+            />
+          </TouchableOpacity>
+        )}
+
+        <View style={styles.imageMessageContainer}>
+          {!isOwnMessage && isGroup && (
+            <Text style={[styles.senderName, { marginBottom: 6 }]}>{msg.senderName}</Text>
+          )}
+
+          {/* Reply quote au dessus de l'image */}
+          {msg.replyTo && (
+            <View style={[styles.replyQuote, { marginBottom: 6, backgroundColor: COLORS.grayLight }]}>
+              <Text style={styles.replyQuoteName}>
+                {msg.replyTo.senderName}
+              </Text>
+              <Text style={styles.replyQuoteText} numberOfLines={2}>
+                {msg.replyTo.text || (msg.replyTo.type === 'image' ? 'Photo' : msg.replyTo.type === 'voice' ? 'Message vocal' : 'Message')}
+              </Text>
+            </View>
+          )}
+
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => setFullscreenImageUrl(msg.imageUrl!)}
+            onLongPress={() => handleMessageLongPress(msg)}
+            delayLongPress={500}
+          >
+            <Image source={{ uri: msg.imageUrl }} style={styles.imageMessagePhoto} />
+          </TouchableOpacity>
+
+          <View style={styles.imageMessageFooter}>
+            <Text style={styles.imageMessageTime}>
+              {msg.timestamp}
+            </Text>
+            {isOwnMessage && msg.status && (
+              <View style={styles.statusContainer}>
+                {msg.status === 'sending' && (
+                  <ActivityIndicator size="small" color={COLORS.grayText} />
+                )}
+                {msg.status === 'sent' && (
+                  <IconSymbol name="checkmark" size={12} color={COLORS.grayText} />
+                )}
+                {msg.status === 'delivered' && (
+                  <View style={styles.doubleCheck}>
+                    <IconSymbol name="checkmark" size={12} color={COLORS.grayText} />
+                    <IconSymbol name="checkmark" size={12} color={COLORS.grayText} style={{ marginLeft: -6 }} />
+                  </View>
+                )}
+                {msg.status === 'failed' && (
+                  <IconSymbol name="exclamationmark.circle" size={12} color={COLORS.error} />
+                )}
+              </View>
+            )}
+          </View>
+        </View>
+      </>
+    ) : (
+      // === MESSAGE CLASSIQUE AVEC BULLE ===
       <>
         {!isOwnMessage && (
           <TouchableOpacity
@@ -790,7 +869,12 @@ export default function ChatDetailScreen() {
           )}
 
           {msg.imageUrl && (
-            <Image source={{ uri: msg.imageUrl }} style={styles.messageImage} />
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={() => setFullscreenImageUrl(msg.imageUrl!)}
+            >
+              <Image source={{ uri: msg.imageUrl }} style={styles.messageImage} />
+            </TouchableOpacity>
           )}
 
           {msg.voiceUrl && (
@@ -1192,6 +1276,36 @@ export default function ChatDetailScreen() {
         targetId={reportTargetMessageId || ''}
       />
 
+      {/* Modal Visionneuse d'image fullscreen (Instagram-style) */}
+      <Modal
+        visible={!!fullscreenImageUrl}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFullscreenImageUrl(null)}
+      >
+        <View style={styles.fullscreenImageOverlay}>
+          <TouchableOpacity
+            style={styles.fullscreenImageClose}
+            onPress={() => setFullscreenImageUrl(null)}
+          >
+            <IconSymbol name="xmark" size={22} color={COLORS.white} />
+          </TouchableOpacity>
+          {fullscreenImageUrl && (
+            <TouchableOpacity
+              activeOpacity={1}
+              style={styles.fullscreenImageTouchable}
+              onPress={() => setFullscreenImageUrl(null)}
+            >
+              <Image
+                source={{ uri: fullscreenImageUrl }}
+                style={styles.fullscreenImage}
+                resizeMode="contain"
+              />
+            </TouchableOpacity>
+          )}
+        </View>
+      </Modal>
+
       {/* Modal Actions sur message (long press) */}
       <Modal
         visible={showMessageActions}
@@ -1454,6 +1568,57 @@ const styles = StyleSheet.create({
     height: 200,
     borderRadius: 12,
     marginTop: 4,
+  },
+
+  // === IMAGE MESSAGE INSTAGRAM-STYLE (sans bulle) ===
+  imageMessageContainer: {
+    maxWidth: '75%',
+  },
+  imageMessagePhoto: {
+    width: Dimensions.get('window').width * 0.65,
+    height: Dimensions.get('window').width * 0.65,
+    borderRadius: 16,
+  },
+  imageMessageFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    gap: 4,
+  },
+  imageMessageTime: {
+    fontSize: 11,
+    fontFamily: 'Manrope_400Regular',
+    color: COLORS.grayText,
+  },
+
+  // === FULLSCREEN IMAGE VIEWER ===
+  fullscreenImageOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullscreenImageClose: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  fullscreenImageTouchable: {
+    width: '100%',
+    height: '80%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullscreenImage: {
+    width: '100%',
+    height: '100%',
   },
 
   // === VOICE MESSAGE ===
