@@ -848,6 +848,7 @@ export default function ActivityDetailScreen() {
                 activityName={activity.title}
                 slotDate={selectedSlot?.date || ''}
                 slotTime={selectedSlot?.time || ''}
+                organizerName={activity.host?.name}
               />
             </View>
           </>

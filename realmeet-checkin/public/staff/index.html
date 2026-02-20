@@ -135,6 +135,67 @@
       border:2px solid var(--border); border-top-color:var(--violet);
       border-radius:50%; animation:spin .8s linear infinite; }
     @keyframes spin { to{transform:rotate(360deg)} }
+
+    /* Manual validation */
+    .btn-manual {
+      display:block; width:calc(100% - 40px); max-width:400px; margin:16px auto 0;
+      padding:14px; border-radius:12px; border:1px solid var(--violet);
+      background:rgba(129,140,248,0.1); color:var(--violet);
+      font-size:15px; font-weight:600; cursor:pointer; font-family:inherit;
+      transition:all .2s;
+    }
+    .btn-manual:hover { background:rgba(129,140,248,0.2); }
+
+    .manual-overlay {
+      position:fixed; inset:0; background:rgba(0,0,0,0.85);
+      display:none; align-items:center; justify-content:center;
+      z-index:200; padding:20px; backdrop-filter:blur(8px);
+    }
+    .manual-overlay.show { display:flex; }
+    .manual-card {
+      background:var(--card); border-radius:20px;
+      width:100%; max-width:420px; max-height:80vh;
+      border:1px solid var(--border); animation:slideUp .3s ease;
+      display:flex; flex-direction:column; overflow:hidden;
+    }
+    .manual-header {
+      display:flex; justify-content:space-between; align-items:center;
+      padding:20px 24px; border-bottom:1px solid var(--border);
+    }
+    .manual-title { font-size:18px; font-weight:700; }
+    .manual-close {
+      background:none; border:none; color:var(--muted);
+      font-size:20px; cursor:pointer; padding:4px 8px;
+    }
+    .manual-list {
+      overflow-y:auto; padding:12px; flex:1;
+    }
+    .manual-participant {
+      display:flex; align-items:center; padding:12px;
+      border-radius:12px; margin-bottom:8px; background:var(--bg);
+      gap:12px;
+    }
+    .manual-avatar {
+      width:44px; height:44px; border-radius:50%; object-fit:cover;
+      border:2px solid var(--border); flex-shrink:0;
+    }
+    .manual-avatar-placeholder {
+      width:44px; height:44px; border-radius:50%; background:var(--border);
+      display:flex; align-items:center; justify-content:center;
+      font-size:18px; flex-shrink:0;
+    }
+    .manual-name { flex:1; font-size:14px; font-weight:600; }
+    .manual-btn-validate {
+      padding:8px 16px; border-radius:8px; border:none;
+      background:var(--violet); color:white; font-size:13px;
+      font-weight:600; cursor:pointer; font-family:inherit;
+      transition:all .2s;
+    }
+    .manual-btn-validate:disabled { opacity:0.5; cursor:not-allowed; }
+    .manual-checked {
+      color:var(--green); font-size:13px; font-weight:600;
+      display:flex; align-items:center; gap:4px;
+    }
   </style>
 </head>
 <body>
@@ -175,6 +236,7 @@
       <div id="qr-reader"></div>
     </div>
     <div class="scanner-label">📷 Scannez le QR code du participant</div>
+    <button class="btn-manual" id="btn-manual" style="display:none">👥 Validation manuelle</button>
   </div>
 
   <!-- Empty state -->
@@ -186,6 +248,19 @@
   <!-- Result overlay -->
   <div class="result-overlay" id="result-overlay">
     <div class="result-card" id="result-card"></div>
+  </div>
+
+  <!-- Manual validation overlay -->
+  <div class="manual-overlay" id="manual-overlay">
+    <div class="manual-card" id="manual-card">
+      <div class="manual-header">
+        <h3 class="manual-title">Validation manuelle</h3>
+        <button class="manual-close" id="btn-manual-close">✕</button>
+      </div>
+      <div class="manual-list" id="manual-list">
+        <div class="loading"><div class="spinner"></div></div>
+      </div>
+    </div>
   </div>
 
     
@@ -272,6 +347,7 @@ async function selectSlot(slotId) {
 
   // Start scanner
   document.getElementById('scanner-section').style.display = 'block';
+  document.getElementById('btn-manual').style.display = 'block';
   startScanner();
 }
 
@@ -459,6 +535,97 @@ document.getElementById('btn-logout').addEventListener('click', function(e) {
   e.preventDefault();
   logout();
 });
+
+document.getElementById('btn-manual').addEventListener('click', openManualValidation);
+document.getElementById('btn-manual-close').addEventListener('click', closeManualOverlay);
+
+// ============================================================
+// Manual validation
+// ============================================================
+async function openManualValidation() {
+  scannerPaused = true;
+  document.getElementById('manual-overlay').classList.add('show');
+  document.getElementById('manual-list').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+  try {
+    const resp = await fetch(`/api/checkin/slot-status/${selectedSlotId}`, { credentials:'include' });
+    const data = await resp.json();
+    const participants = data.participants || [];
+
+    if (participants.length === 0) {
+      document.getElementById('manual-list').innerHTML = '<p style="text-align:center;color:var(--muted);padding:20px">Aucun participant inscrit</p>';
+      return;
+    }
+
+    document.getElementById('manual-list').innerHTML = participants.map(p => `
+      <div class="manual-participant">
+        ${p.avatar
+          ? `<img src="${p.avatar}" class="manual-avatar" alt="">`
+          : '<div class="manual-avatar-placeholder">👤</div>'
+        }
+        <span class="manual-name">${p.name}</span>
+        ${p.checkedIn
+          ? '<span class="manual-checked">✅ Enregistré</span>'
+          : `<button class="manual-btn-validate" data-id="${p.id}">Valider</button>`
+        }
+      </div>
+    `).join('');
+
+    // Attacher les event listeners sur les boutons de validation
+    document.querySelectorAll('.manual-btn-validate').forEach(btn => {
+      btn.addEventListener('click', function() {
+        manualValidate(this.dataset.id, this);
+      });
+    });
+
+  } catch(e) {
+    document.getElementById('manual-list').innerHTML = '<p style="text-align:center;color:var(--red);padding:20px">Erreur de chargement</p>';
+  }
+}
+
+async function manualValidate(participantId, btn) {
+  btn.disabled = true;
+  btn.textContent = '...';
+
+  try {
+    const resp = await fetch('/api/checkin/manual-validate', {
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ slot_participant_id: participantId })
+    });
+    const data = await resp.json();
+
+    if (resp.ok && data.success) {
+      // Remplacer le bouton par le badge
+      const span = document.createElement('span');
+      span.className = 'manual-checked';
+      span.textContent = '✅ Enregistré';
+      btn.replaceWith(span);
+
+      // Mettre à jour les compteurs
+      slotStats.checkedIn++;
+      document.getElementById('count-done').textContent = slotStats.checkedIn;
+      document.getElementById('count-remaining').textContent = slotStats.total - slotStats.checkedIn;
+
+      // Mettre à jour le chip du slot
+      const chip = document.querySelector(`.slot-chip[data-id="${selectedSlotId}"] .done`);
+      if (chip) chip.textContent = slotStats.checkedIn;
+    } else {
+      btn.disabled = false;
+      btn.textContent = 'Erreur';
+      alert(data.error || 'Erreur de validation');
+    }
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = 'Erreur';
+    alert('Erreur réseau');
+  }
+}
+
+function closeManualOverlay() {
+  document.getElementById('manual-overlay').classList.remove('show');
+  scannerPaused = false;
+}
 
 init();
 </script>

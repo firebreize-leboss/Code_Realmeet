@@ -196,6 +196,7 @@ const MAPPING = {
   // Search & Discovery
   "magnifyingglass": "search",
   "line.3.horizontal.decrease": "filter-list",
+  "line.3.horizontal.decrease.circle": "filter-list",
   "arrow.up.arrow.down": "sort",
 
   // Visibility & Display

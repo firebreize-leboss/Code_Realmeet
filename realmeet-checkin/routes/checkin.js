@@ -333,6 +333,78 @@ router.post('/validate', partnerAuth, validateLimiter, async (req, res) => {
 });
 
 // ============================================================
+// POST /api/checkin/manual-validate
+// Validation manuelle quand QR/caméra ne fonctionne pas.
+// ============================================================
+router.post('/manual-validate', partnerAuth, validateLimiter, async (req, res) => {
+  const { slot_participant_id } = req.body;
+  const partnerId = req.partner.id;
+  const ip = req.ip;
+  const ua = req.headers['user-agent'] || '';
+
+  if (!slot_participant_id) {
+    return res.status(400).json({ error: 'slot_participant_id requis' });
+  }
+
+  try {
+    // 1. Récupérer le participant
+    const { data: sp, error: spErr } = await supabase
+      .from('slot_participants')
+      .select(`
+        id, checked_in_at, slot_id, activity_id,
+        activities!inner(host_id),
+        profiles!slot_participants_user_id_fkey(full_name)
+      `)
+      .eq('id', slot_participant_id)
+      .single();
+
+    if (spErr || !sp) {
+      return res.status(404).json({ error: 'Participant introuvable' });
+    }
+
+    // 2. Vérifier que le staff est host de cette activité
+    if (sp.activities.host_id !== partnerId) {
+      return res.status(403).json({ error: 'Non autorisé' });
+    }
+
+    // 3. Vérifier pas déjà enregistré
+    if (sp.checked_in_at) {
+      return res.status(409).json({ error: 'Déjà enregistré' });
+    }
+
+    // 4. Validation atomique
+    const { data: updated, error: updateError } = await supabase
+      .from('slot_participants')
+      .update({
+        checked_in_at: new Date().toISOString(),
+        checked_in_by: partnerId,
+        checkin_nonce: null
+      })
+      .eq('id', slot_participant_id)
+      .is('checked_in_at', null)
+      .select('id, checked_in_at')
+      .single();
+
+    if (updateError || !updated) {
+      return res.status(409).json({ error: 'Validation impossible — race condition' });
+    }
+
+    // 5. Log succès
+    await logCheckin(sp.id, sp.slot_id, sp.activity_id, 'manual_validate', 'success', partnerId, ip, ua);
+
+    res.json({
+      success: true,
+      message: `${sp.profiles.full_name} enregistré(e) manuellement`,
+      checked_in_at: updated.checked_in_at
+    });
+
+  } catch (err) {
+    console.error('Manual validate error:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// ============================================================
 // GET /api/checkin/slot-status/:slotId
 // ============================================================
 router.get('/slot-status/:slotId', partnerAuth, async (req, res) => {
