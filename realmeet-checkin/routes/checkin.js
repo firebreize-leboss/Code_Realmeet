@@ -305,11 +305,9 @@ router.post('/validate', partnerAuth, validateLimiter, async (req, res) => {
         checkin_nonce: null
       })
       .eq('id', sp.id)
-      .is('checked_in_at', null)
-      .select('id, checked_in_at')
-      .single();
+      .select('id, checked_in_at');
 
-    if (updateError || !updated) {
+    if (updateError || !updated || updated.length === 0) {
       await logCheckin(sp.id, sp.slot_id, sp.activity_id, 'reject', 'already_checked_in', partnerId, ip, ua);
       return res.status(409).json({ error: 'Validation impossible — race condition' });
     }
@@ -320,7 +318,7 @@ router.post('/validate', partnerAuth, validateLimiter, async (req, res) => {
     res.json({
       success: true,
       message: `${sp.profiles.full_name} enregistré(e)`,
-      checked_in_at: updated.checked_in_at
+      checked_in_at: updated[0].checked_in_at
     });
 
   } catch (err) {
@@ -381,11 +379,9 @@ router.post('/manual-validate', partnerAuth, validateLimiter, async (req, res) =
         checkin_nonce: null
       })
       .eq('id', slot_participant_id)
-      .is('checked_in_at', null)
-      .select('id, checked_in_at')
-      .single();
+      .select('id, checked_in_at');
 
-    if (updateError || !updated) {
+    if (updateError || !updated || updated.length === 0) {
       return res.status(409).json({ error: 'Validation impossible — race condition' });
     }
 
@@ -395,7 +391,7 @@ router.post('/manual-validate', partnerAuth, validateLimiter, async (req, res) =
     res.json({
       success: true,
       message: `${sp.profiles.full_name} enregistré(e) manuellement`,
-      checked_in_at: updated.checked_in_at
+      checked_in_at: updated[0].checked_in_at
     });
 
   } catch (err) {
