@@ -432,6 +432,7 @@ export default function ActivityDetailScreen() {
 
     try {
       if (isJoined) {
+        // Logique de désinscription (reste inchangée)
         const { data: currentParticipation } = await supabase
           .from('slot_participants')
           .select('slot_id')
@@ -469,6 +470,7 @@ export default function ActivityDetailScreen() {
 
         Alert.alert('Succès', 'Vous vous êtes désinscrit de cette activité.');
       } else {
+        // Logique d'inscription - Redirection vers le flow de paiement
         if (!selectedSlot) return;
 
         // Règle J-1 : bloquer l'inscription si le créneau débute dans moins de 24h
@@ -496,62 +498,28 @@ export default function ActivityDetailScreen() {
           return;
         }
 
-        const { error: insertError } = await supabase
-          .from('slot_participants')
-          .insert({
-            slot_id: selectedSlot.id,
-            activity_id: activity.id,
-            user_id: currentUserId,
-          });
-
-        if (insertError) {
-          if (insertError.code === '23505') {
-            Alert.alert('Info', 'Vous êtes déjà inscrit à cette activité.');
-            setIsJoined(true);
-            return;
-          }
-          throw insertError;
-        }
-
-        const newCount = activity.participants + 1;
-        await supabase
-          .from('activities')
-          .update({ participants: newCount })
-          .eq('id', activity.id);
-
-        setIsJoined(true);
-        setJoinedSlotId(selectedSlot.id);
-
-        // Récupérer le slot_participant_id pour le QR code check-in
-        const { data: newParticipation } = await supabase
-          .from('slot_participants')
-          .select('id')
-          .eq('activity_id', activity.id)
-          .eq('user_id', currentUserId)
-          .eq('slot_id', selectedSlot.id)
-          .single();
-        if (newParticipation) setSlotParticipantId(newParticipation.id);
-
-        setActivity({
-          ...activity,
-          participants: newCount,
-          placesRestantes: activity.capacity - newCount,
+        // Formater la date pour l'affichage
+        const slotDateFormatted = new Date(selectedSlot.date).toLocaleDateString('fr-FR', {
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long',
         });
 
-        setCalendarRefreshTrigger(prev => prev + 1);
-
-        try {
-          const { intelligentGroupsService } = await import('@/services/intelligent-groups.service');
-          const formed = await intelligentGroupsService.checkAndFormGroupsIfNeeded(
-            selectedSlot.id,
-            activity.id
-          );
-          // Groupes formés si conditions remplies
-        } catch (err) {
-          console.error('Erreur formation groupes:', err);
-        }
-
-        Alert.alert('Succès', 'Vous avez rejoint l\'activité ! Un groupe se créra 24 h avant le début de l\'activité.');
+        // Naviguer vers le flow de paiement avec les paramètres nécessaires
+        router.push({
+          pathname: '/payment/select-method',
+          params: {
+            activity_id: activity.id,
+            slot_id: selectedSlot.id,
+            activity_name: activity.title,
+            slot_date: slotDateFormatted,
+            slot_time: selectedSlot.time,
+            price: activity.price,
+            host_id: activity.host.id,
+            max_participants: activity.capacity.toString(),
+            current_participants: activity.participants.toString(),
+          },
+        });
       }
     } catch (error: any) {
       console.error('Erreur inscription/désinscription:', error);

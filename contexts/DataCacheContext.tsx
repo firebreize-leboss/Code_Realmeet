@@ -6,6 +6,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from './AuthContext';
+import { blockService } from '@/services/block.service';
 
 // ============================================
 // TYPES
@@ -90,6 +91,7 @@ interface DataCacheContextType {
   refreshMyActivities: () => Promise<void>;
   refreshConversations: () => Promise<void>;
   refreshFriends: () => Promise<void>;
+  refreshBlockedUsers: () => Promise<void>;
 
   // Méthodes de mise à jour locale
   updateActivityInCache: (activityId: string, updates: Partial<Activity>) => void;
@@ -154,6 +156,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState(0);
   const isInitialLoad = useRef(true);
+  const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
 
   // ============================================
   // CHARGEMENT DES ACTIVITÉS (OPTIMISÉ via RPC)
@@ -708,6 +711,19 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
   }, [user, loadFriendsFallback]);
 
   // ============================================
+  // CHARGEMENT DES UTILISATEURS BLOQUÉS
+  // ============================================
+
+  const loadBlockedUsers = useCallback(async () => {
+    try {
+      const users = await blockService.getBlockedUsers();
+      setBlockedUserIds(new Set(users.map(u => u.blockedUserId)));
+    } catch (error) {
+      console.error('Error loading blocked users:', error);
+    }
+  }, []);
+
+  // ============================================
   // CHARGEMENT GLOBAL (OPTIMISÉ)
   // Maximum ~4-5 requêtes au lieu de 10+
   // ============================================
@@ -722,13 +738,14 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
         loadConversations(),
         loadFriends(),
       ]);
+      loadBlockedUsers();
       setLastUpdate(Date.now());
     } catch (error) {
       console.error('Error loading all data:', error);
     } finally {
       setLoading(false);
     }
-  }, [loadActivities, loadMyActivities, loadConversations, loadFriends]);
+  }, [loadActivities, loadMyActivities, loadConversations, loadFriends, loadBlockedUsers]);
 
   // ============================================
   // MÉTHODES DE RAFRAÎCHISSEMENT
@@ -902,6 +919,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
         },
         (payload: any) => {
           const newMsg = payload.new;
+          if (blockedUserIds.has(newMsg.sender_id)) return;
           setCache(prev => {
             const convIndex = prev.conversations.findIndex(c => c.id === newMsg.conversation_id);
             if (convIndex === -1) return prev;
@@ -928,10 +946,19 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       )
       .subscribe();
 
+    // Écouter les changements de blocked_users
+    const blockedChannel = supabase
+      .channel('cache_blocked_users')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'blocked_users' }, () => {
+        loadBlockedUsers();
+      })
+      .subscribe();
+
     return () => {
       supabase.removeChannel(messagesChannel);
+      supabase.removeChannel(blockedChannel);
     };
-  }, [user]);
+  }, [user, blockedUserIds, loadBlockedUsers]);
 
   return (
     <DataCacheContext.Provider
@@ -944,6 +971,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
         refreshMyActivities,
         refreshConversations,
         refreshFriends,
+        refreshBlockedUsers: loadBlockedUsers,
         updateActivityInCache,
         addConversationToCache,
         updateConversationInCache,

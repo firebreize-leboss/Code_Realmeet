@@ -1,1 +1,77 @@
-Sur le VPS dans ~/realmeet/realmeet-checkin/routes/checkin.js, dans la route POST /manual-validate, remplace le bloc de validation atomique (étape 4) qui fait .eq('id', slot_participant_id).is('checked_in_at', null).select('id, checked_in_at').single() par une version sans .is() et sans .single() : const { data: updated, error: updateError } = await supabase.from('slot_participants').update({ checked_in_at: new Date().toISOString(), checked_in_by: partnerId, checkin_nonce: null }).eq('id', slot_participant_id).select('id, checked_in_at') puis vérifie avec if (updateError || !updated || updated.length === 0). Et dans le res.json, remplace updated.checked_in_at par updated[0].checked_in_at. Fais la même correction dans la route POST /validate qui a le même pattern .is('checked_in_at', null).single().
+Dans le projet, il y a un problème de shadow ban : quand un utilisateur bloque quelqu'un, les messages du bloqué sont bien invisibles dans le chat (grâce à la RLS), mais l'aperçu dans la liste des conversations (chat.tsx) montre encore le dernier message du bloqué. C'est parce que les subscriptions realtime mettent à jour lastMessage côté client sans passer par la RLS.
+
+Il faut modifier 2 fichiers pour filtrer les messages des utilisateurs bloqués dans les mises à jour realtime de l'aperçu.
+
+=== FICHIER 1 : contexts/DataCacheContext.tsx ===
+
+1. Ajouter un import de blockService en haut du fichier :
+import { blockService } from '@/services/block.service';
+
+2. Ajouter un state pour stocker la liste des IDs bloqués :
+const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
+
+3. Ajouter une fonction pour charger les bloqués et un useEffect pour la déclencher :
+
+const loadBlockedUsers = useCallback(async () => {
+  try {
+    const users = await blockService.getBlockedUsers();
+    setBlockedUserIds(new Set(users.map(u => u.blockedUserId)));
+  } catch (error) {
+    console.error('Error loading blocked users:', error);
+  }
+}, []);
+
+Et dans le useEffect de chargement initial (celui avec loadAllData), ajouter l'appel à loadBlockedUsers() :
+Trouver le useEffect qui appelle loadAllData et ajouter loadBlockedUsers() juste après.
+
+4. Ajouter une subscription realtime sur blocked_users pour rafraîchir la liste quand on bloque/débloque :
+Dans le useEffect des subscriptions realtime (celui qui écoute les messages), ajouter un channel pour blocked_users :
+
+const blockedChannel = supabase
+  .channel('cache_blocked_users')
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'blocked_users' }, () => {
+    loadBlockedUsers();
+  })
+  .subscribe();
+
+Et dans le cleanup, ajouter : supabase.removeChannel(blockedChannel);
+
+5. Dans la subscription realtime des messages (le callback qui met à jour lastMessage dans setCache), ajouter une vérification au tout début du callback :
+
+Trouver le callback realtime des messages dans le useEffect des subscriptions. Au début du callback, AVANT toute mise à jour, ajouter :
+if (blockedUserIds.has(newMsg.sender_id)) return;
+
+Cela empêchera la mise à jour de l'aperçu si le message vient d'un utilisateur bloqué.
+
+6. Exposer loadBlockedUsers via le contexte pour que d'autres composants puissent rafraîchir la liste si besoin. Ajouter refreshBlockedUsers: loadBlockedUsers dans la value du provider et dans l'interface DataCacheContextType.
+
+=== FICHIER 2 : hooks/useMessaging.ts ===
+
+Dans le hook useConversations, même logique :
+
+1. Ajouter un import de blockService :
+import { blockService } from '@/services/block.service';
+
+2. Ajouter un state pour les bloqués :
+const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
+
+3. Charger les bloqués au montage :
+useEffect(() => {
+  const loadBlocked = async () => {
+    try {
+      const users = await blockService.getBlockedUsers();
+      setBlockedUserIds(new Set(users.map(u => u.blockedUserId)));
+    } catch (error) {
+      console.error('Error loading blocked users:', error);
+    }
+  };
+  loadBlocked();
+}, []);
+
+4. Dans la subscription realtime des messages (le callback qui fait setConversations pour mettre à jour lastMessage et lastMessageTime), ajouter au début :
+if (blockedUserIds.has(newMsg.sender_id)) return;
+
+=== IMPORTANT ===
+- Ne toucher à RIEN d'autre dans ces fichiers
+- La vérification blockedUserIds.has() doit être la PREMIÈRE chose dans chaque callback realtime des messages
+- Garder toute la logique existante intacte

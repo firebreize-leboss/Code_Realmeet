@@ -125,7 +125,6 @@ export default function ChatDetailScreen() {
 
   // États pour le blocage
   const [isBlocked, setIsBlocked] = useState(false);
-  const [hasBlockedMe, setHasBlockedMe] = useState(false);
 
   // États pour l'invitation en attente
   const [pendingInvitation, setPendingInvitation] = useState<{
@@ -355,13 +354,8 @@ export default function ChatDetailScreen() {
               setConvName(profile?.full_name || 'Utilisateur');
               setConvImage(profile?.avatar_url || '');
 
-              const [blocked, blockedByOther] = await Promise.all([
-                blockService.isUserBlocked(otherParticipant.user_id),
-                blockService.amIBlockedBy(otherParticipant.user_id)
-              ]);
-
+              const blocked = await blockService.isUserBlocked(otherParticipant.user_id);
               setIsBlocked(blocked);
-              setHasBlockedMe(blockedByOther);
             }
           }
         }
@@ -388,7 +382,7 @@ export default function ChatDetailScreen() {
 
   const canSendMessages = (): boolean => {
     if (conversationStatus.isClosed) return false;
-    if (isBlocked || hasBlockedMe) return false;
+    if (isBlocked) return false;
     if (pendingInvitation) return false;
     return true;
   };
@@ -401,7 +395,6 @@ export default function ChatDetailScreen() {
       return 'Cette conversation est fermée.';
     }
     if (isBlocked) return 'Vous avez bloqué cet utilisateur.';
-    if (hasBlockedMe) return 'Vous ne pouvez pas envoyer de messages à cet utilisateur.';
     if (pendingInvitation) {
       if (pendingInvitation.isRecipient) {
         return null;

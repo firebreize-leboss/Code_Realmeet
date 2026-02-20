@@ -136,6 +136,7 @@ function isDetailRoute(pathname: string): boolean {
     '/my-activities',
     '/my-custom-screen',
     '/my-participated-activities',
+    '/payment',
     '/settings',
     '/transparent-modal',
     '/user-activities',

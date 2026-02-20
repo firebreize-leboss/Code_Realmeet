@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { randomUUID } from 'expo-crypto';
 import { supabase } from '@/lib/supabase';
+import { blockService } from '@/services/block.service';
 
 // ============================================
 // TYPES
@@ -260,11 +261,13 @@ export function useConversations() {
   const [conversations, setConversations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-  
+  const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
+
   // ✅ Utiliser useRef pour stocker les IDs (évite les problèmes de closure)
   const userConversationIdsRef = useRef<string[]>([]);
   const channelRef = useRef<any>(null);
   const userIdRef = useRef<string | null>(null);
+  const blockedUserIdsRef = useRef<Set<string>>(new Set());
 
   const loadConversations = useCallback(async () => {
     try {
@@ -502,6 +505,21 @@ export function useConversations() {
     loadConversations();
   }, [loadConversations]);
 
+  // Charger les utilisateurs bloqués au montage
+  useEffect(() => {
+    const loadBlocked = async () => {
+      try {
+        const users = await blockService.getBlockedUsers();
+        const blockedIds = new Set(users.map(u => u.blockedUserId));
+        setBlockedUserIds(blockedIds);
+        blockedUserIdsRef.current = blockedIds;
+      } catch (error) {
+        console.error('Error loading blocked users:', error);
+      }
+    };
+    loadBlocked();
+  }, []);
+
   // ✅ SUBSCRIPTION REALTIME - séparée et optimisée
   useEffect(() => {
     // Nettoyer l'ancien channel si existant
@@ -521,12 +539,13 @@ export function useConversations() {
         },
         (payload: any) => {
           const newMsg = payload.new;
+          if (blockedUserIdsRef.current.has(newMsg.sender_id)) return;
           const convId = newMsg.conversation_id;
-          
+
           // ✅ Utiliser le ref pour vérifier (toujours à jour)
           const userConvIds = userConversationIdsRef.current;
           const currentUserId = userIdRef.current;
-          
+
           if (!userConvIds.includes(convId)) {
             return;
           }
