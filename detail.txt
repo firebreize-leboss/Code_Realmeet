@@ -1,0 +1,1004 @@
+================================================================================
+                     PLAN D'IMPLEMENTATION - SYSTEME +1 INVITATION
+================================================================================
+
+Ce document detaille l'implementation complete du systeme d'invitation +1 pour
+l'application RealMeet. Il permet aux participants d'inviter un ami a rejoindre
+une activite via un lien de partage securise.
+
+================================================================================
+                              TABLE DES MATIERES
+================================================================================
+
+1. ARCHITECTURE BASE DE DONNEES
+   1.1 Nouvelle table: plus_one_invitations
+   1.2 Modifications: activity_slots
+   1.3 Modifications: slot_participants
+
+2. FONCTIONS RPC SUPABASE
+   2.1 create_plus_one_invitation
+   2.2 validate_plus_one_token
+   2.3 accept_plus_one_invitation
+   2.4 cancel_plus_one_invitation
+   2.5 get_pending_invitations
+
+3. SERVICE TYPESCRIPT
+   3.1 invitation.service.ts
+
+4. DEEP LINKING & ROUTING
+   4.1 Configuration Expo
+   4.2 Route /invite/[token]
+   4.3 Ecran de preview invitation
+
+5. INTERFACE UTILISATEUR
+   5.1 Bouton +1 (Host)
+   5.2 Modal de creation d'invitation
+   5.3 Share natif
+   5.4 Badge +1 sur participant
+
+6. COMMANDES SQL MANUELLES
+
+================================================================================
+                    1. ARCHITECTURE BASE DE DONNEES
+================================================================================
+
+--------------------------------------------------------------------------------
+1.1 NOUVELLE TABLE: plus_one_invitations
+--------------------------------------------------------------------------------
+
+Cette table stocke toutes les invitations +1 avec leur statut et token securise.
+
+Colonnes:
+- id (uuid, PK)           : Identifiant unique de l'invitation
+- slot_id (uuid, FK)      : Reference vers activity_slots
+- inviter_id (uuid, FK)   : ID de l'utilisateur qui invite (host de l'invite)
+- invitee_id (uuid, FK)   : ID de l'utilisateur invite (null si pas encore accepte)
+- token (text, UNIQUE)    : Token securise pour le deep link (32 caracteres)
+- status (text)           : 'pending' | 'accepted' | 'expired' | 'cancelled'
+- payment_mode (text)     : 'host_pays' | 'guest_pays' (defaut: 'host_pays')
+- created_at (timestamptz): Date de creation
+- expires_at (timestamptz): Date d'expiration (created_at + 24h)
+- accepted_at (timestamptz): Date d'acceptation (null si pas accepte)
+
+Contraintes:
+- FK slot_id -> activity_slots(id) ON DELETE CASCADE
+- FK inviter_id -> profiles(id) ON DELETE CASCADE
+- FK invitee_id -> profiles(id) ON DELETE SET NULL
+- UNIQUE(token)
+- CHECK(status IN ('pending', 'accepted', 'expired', 'cancelled'))
+- CHECK(payment_mode IN ('host_pays', 'guest_pays'))
+
+Index:
+- idx_plus_one_token ON plus_one_invitations(token)
+- idx_plus_one_slot ON plus_one_invitations(slot_id)
+- idx_plus_one_inviter ON plus_one_invitations(inviter_id)
+- idx_plus_one_status ON plus_one_invitations(status)
+
+RLS Policies:
+- SELECT: Utilisateur peut voir ses invitations (inviter_id ou invitee_id = auth.uid())
+- INSERT: Utilisateur authentifie peut creer (inviter_id = auth.uid())
+- UPDATE: Seul l'inviteur peut modifier (inviter_id = auth.uid())
+- DELETE: Seul l'inviteur peut supprimer (inviter_id = auth.uid())
+
+--------------------------------------------------------------------------------
+1.2 MODIFICATIONS: activity_slots
+--------------------------------------------------------------------------------
+
+Nouvelle colonne:
+- discover_mode (boolean, DEFAULT false)
+
+Description:
+Lorsque discover_mode = true, les invitations +1 sont desactivees pour ce
+creneau. L'organisateur peut l'activer pour forcer les participants a venir
+seuls et rencontrer de nouvelles personnes.
+
+--------------------------------------------------------------------------------
+1.3 MODIFICATIONS: slot_participants
+--------------------------------------------------------------------------------
+
+Nouvelles colonnes:
+- is_plus_one (boolean, DEFAULT false)
+- invited_by (uuid, FK -> profiles(id))
+- plus_one_invitation_id (uuid, FK -> plus_one_invitations(id))
+
+Description:
+- is_plus_one: Indique si le participant a rejoint via une invitation +1
+- invited_by: ID de l'utilisateur qui l'a invite
+- plus_one_invitation_id: Reference vers l'invitation utilisee
+
+================================================================================
+                       2. FONCTIONS RPC SUPABASE
+================================================================================
+
+--------------------------------------------------------------------------------
+2.1 create_plus_one_invitation(p_slot_id uuid)
+--------------------------------------------------------------------------------
+
+Description:
+Cree une nouvelle invitation +1 pour un creneau donne.
+
+Parametres:
+- p_slot_id: ID du creneau pour lequel creer l'invitation
+
+Retour:
+- JSON { success: boolean, token?: string, error?: string }
+
+Logique:
+1. Verifier que l'utilisateur est participant du creneau
+2. Verifier que le creneau n'est pas en mode Discover
+3. Verifier que l'utilisateur n'a pas deja une invitation pending pour ce creneau
+4. Verifier que le creneau n'a pas atteint le max de +1 (default: 2)
+5. Generer un token securise (gen_random_uuid sans tirets + timestamp hash)
+6. Inserer l'invitation avec expiration = NOW() + 24h
+7. Retourner le token
+
+Erreurs possibles:
+- 'NOT_PARTICIPANT': L'utilisateur n'est pas inscrit au creneau
+- 'DISCOVER_MODE': Le mode Discover est active
+- 'ALREADY_HAS_PENDING': Une invitation pending existe deja
+- 'MAX_PLUS_ONE_REACHED': Limite de +1 atteinte pour ce creneau
+
+--------------------------------------------------------------------------------
+2.2 validate_plus_one_token(p_token text)
+--------------------------------------------------------------------------------
+
+Description:
+Valide un token d'invitation et retourne les informations associees.
+
+Parametres:
+- p_token: Token de l'invitation
+
+Retour:
+- JSON {
+    valid: boolean,
+    invitation?: {
+      id: string,
+      slot_id: string,
+      inviter_name: string,
+      inviter_avatar: string,
+      activity_name: string,
+      activity_image: string,
+      slot_date: string,
+      slot_time: string,
+      location: string,
+      expires_at: string,
+      payment_mode: string
+    },
+    error?: string
+  }
+
+Logique:
+1. Rechercher l'invitation par token
+2. Verifier le statut = 'pending'
+3. Verifier que expires_at > NOW()
+4. Recuperer les infos de l'inviteur, du creneau et de l'activite
+5. Retourner toutes les informations
+
+Erreurs possibles:
+- 'TOKEN_NOT_FOUND': Token invalide ou inexistant
+- 'INVITATION_EXPIRED': L'invitation a expire
+- 'INVITATION_ALREADY_USED': L'invitation a deja ete acceptee
+- 'INVITATION_CANCELLED': L'invitation a ete annulee
+
+--------------------------------------------------------------------------------
+2.3 accept_plus_one_invitation(p_token text)
+--------------------------------------------------------------------------------
+
+Description:
+Accepte une invitation +1 et inscrit l'utilisateur au creneau.
+
+Parametres:
+- p_token: Token de l'invitation
+
+Retour:
+- JSON { success: boolean, slot_id?: string, error?: string }
+
+Logique:
+1. Valider le token (appel interne a validate_plus_one_token)
+2. Verifier que l'utilisateur n'est pas deja inscrit au creneau
+3. Verifier que l'utilisateur n'est pas l'inviteur lui-meme
+4. Verifier qu'il reste des places (capacite non atteinte)
+5. Creer l'entree dans slot_participants avec is_plus_one = true
+6. Mettre a jour l'invitation: status = 'accepted', invitee_id, accepted_at
+7. Ajouter l'utilisateur au groupe de conversation du creneau
+8. Retourner le slot_id pour navigation
+
+Erreurs possibles:
+- Toutes les erreurs de validate_plus_one_token
+- 'ALREADY_PARTICIPANT': L'utilisateur est deja inscrit
+- 'CANNOT_INVITE_SELF': L'utilisateur est l'inviteur
+- 'SLOT_FULL': Le creneau est complet
+
+--------------------------------------------------------------------------------
+2.4 cancel_plus_one_invitation(p_invitation_id uuid)
+--------------------------------------------------------------------------------
+
+Description:
+Annule une invitation +1 en attente.
+
+Parametres:
+- p_invitation_id: ID de l'invitation a annuler
+
+Retour:
+- JSON { success: boolean, error?: string }
+
+Logique:
+1. Verifier que l'invitation existe
+2. Verifier que l'utilisateur est l'inviteur
+3. Verifier que le statut est 'pending'
+4. Mettre a jour le statut en 'cancelled'
+
+Erreurs possibles:
+- 'INVITATION_NOT_FOUND': Invitation inexistante
+- 'NOT_AUTHORIZED': L'utilisateur n'est pas l'inviteur
+- 'CANNOT_CANCEL': L'invitation n'est pas en attente
+
+--------------------------------------------------------------------------------
+2.5 get_pending_invitations(p_slot_id uuid)
+--------------------------------------------------------------------------------
+
+Description:
+Recupere toutes les invitations +1 en attente pour un creneau.
+
+Parametres:
+- p_slot_id: ID du creneau
+
+Retour:
+- JSON[] {
+    id: string,
+    token: string,
+    inviter_name: string,
+    created_at: string,
+    expires_at: string
+  }
+
+Logique:
+1. Filtrer par slot_id et status = 'pending'
+2. Joindre avec profiles pour le nom de l'inviteur
+3. Ordonner par created_at DESC
+
+================================================================================
+                       3. SERVICE TYPESCRIPT
+================================================================================
+
+--------------------------------------------------------------------------------
+3.1 invitation.service.ts
+--------------------------------------------------------------------------------
+
+Emplacement: /services/invitation.service.ts
+
+Interface PlusOneInvitation:
+```typescript
+interface PlusOneInvitation {
+  id: string;
+  slotId: string;
+  inviterId: string;
+  inviteeId?: string;
+  token: string;
+  status: 'pending' | 'accepted' | 'expired' | 'cancelled';
+  paymentMode: 'host_pays' | 'guest_pays';
+  createdAt: string;
+  expiresAt: string;
+  acceptedAt?: string;
+}
+```
+
+Interface InvitationPreview:
+```typescript
+interface InvitationPreview {
+  id: string;
+  slotId: string;
+  inviterName: string;
+  inviterAvatar: string;
+  activityName: string;
+  activityImage: string;
+  slotDate: string;
+  slotTime: string;
+  location: string;
+  expiresAt: string;
+  paymentMode: string;
+}
+```
+
+Methodes:
+
+async createInvitation(slotId: string): Promise<{ success: boolean; token?: string; error?: string }>
+  - Appelle la RPC create_plus_one_invitation
+  - Retourne le token pour le partage
+
+async validateToken(token: string): Promise<{ valid: boolean; invitation?: InvitationPreview; error?: string }>
+  - Appelle la RPC validate_plus_one_token
+  - Utilise pour afficher la preview de l'invitation
+
+async acceptInvitation(token: string): Promise<{ success: boolean; slotId?: string; error?: string }>
+  - Appelle la RPC accept_plus_one_invitation
+  - Retourne le slotId pour la navigation post-acceptation
+
+async cancelInvitation(invitationId: string): Promise<{ success: boolean; error?: string }>
+  - Appelle la RPC cancel_plus_one_invitation
+
+async getMyPendingInvitations(slotId: string): Promise<PlusOneInvitation[]>
+  - Appelle la RPC get_pending_invitations
+  - Filtre les invitations creees par l'utilisateur courant
+
+generateShareLink(token: string): string
+  - Retourne: `natively://invite/${token}`
+  - Format deep link compatible avec la configuration Expo
+
+async shareInvitation(token: string, activityName: string): Promise<void>
+  - Genere le message de partage
+  - Ouvre le Share natif du systeme
+  - Message: "Rejoins-moi pour [activityName] ! [lien]"
+
+================================================================================
+                       4. DEEP LINKING & ROUTING
+================================================================================
+
+--------------------------------------------------------------------------------
+4.1 Configuration Expo (app.json / app.config.js)
+--------------------------------------------------------------------------------
+
+Ajouter dans la configuration Expo:
+
+```json
+{
+  "expo": {
+    "scheme": "natively",
+    "ios": {
+      "associatedDomains": ["applinks:realmeet.app"]
+    },
+    "android": {
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "natively",
+              "host": "*",
+              "pathPrefix": "/invite"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
+    }
+  }
+}
+```
+
+--------------------------------------------------------------------------------
+4.2 Route /invite/[token]
+--------------------------------------------------------------------------------
+
+Nouveau fichier: /app/invite/[token].tsx
+
+Ce fichier gere l'ouverture de l'app via deep link.
+
+Logique:
+1. Recuperer le token depuis les params de route
+2. Verifier si l'utilisateur est authentifie
+   - Si non: rediriger vers login avec redirect_after=/invite/[token]
+3. Appeler invitationService.validateToken(token)
+4. Afficher l'ecran de preview ou erreur
+
+--------------------------------------------------------------------------------
+4.3 Ecran de preview invitation
+--------------------------------------------------------------------------------
+
+Composants de l'ecran InvitePreview:
+
+Header:
+- Image de l'activite en hero (pleine largeur)
+- Badge "Invitation +1"
+- Titre de l'activite
+
+Section Inviteur:
+- Avatar de l'inviteur
+- "Tu as ete invite(e) par [nom]"
+
+Section Details:
+- Date et heure du creneau
+- Lieu de l'activite
+- Mode de paiement (host_pays: "Gratuit pour toi!")
+
+Section Expiration:
+- Countdown jusqu'a expiration
+- "Cette invitation expire dans X heures"
+
+Footer:
+- Bouton principal: "Rejoindre l'activite"
+- Bouton secondaire: "Decliner"
+
+Etats:
+- Loading: Spinner pendant validation du token
+- Erreur: Message d'erreur + bouton retour
+- Valide: Preview complete avec CTA
+- Succes: Animation de confirmation + redirection vers activity-detail
+
+================================================================================
+                       5. INTERFACE UTILISATEUR
+================================================================================
+
+--------------------------------------------------------------------------------
+5.1 Bouton +1 (pour participant inscrit)
+--------------------------------------------------------------------------------
+
+Emplacement: activity-detail.tsx, section QR Check-in
+
+Condition d'affichage:
+- L'utilisateur est inscrit au creneau (isJoined = true)
+- Le creneau n'est pas en mode Discover
+- L'utilisateur n'a pas deja une invitation pending
+
+Design:
+- Bouton secondaire avec icone "person.badge.plus"
+- Texte: "Inviter un ami (+1)"
+- Couleur: Gris/secondaire
+
+--------------------------------------------------------------------------------
+5.2 Modal de creation d'invitation
+--------------------------------------------------------------------------------
+
+Nouveau composant: /components/InvitePlusOneModal.tsx
+
+Contenu:
+- Titre: "Inviter un +1"
+- Explication: "Partage ce lien avec un ami pour qu'il te rejoigne"
+- Apercu du lien (tronque)
+- Bouton "Copier le lien"
+- Bouton "Partager" (ouvre Share natif)
+- Note sur l'expiration: "Ce lien expire dans 24h"
+- Mode paiement (Phase 1: host_pays uniquement, afficher "Ton ami pourra rejoindre gratuitement")
+
+--------------------------------------------------------------------------------
+5.3 Share natif
+--------------------------------------------------------------------------------
+
+Utiliser l'API Share de React Native:
+
+```typescript
+import { Share } from 'react-native';
+
+const shareInvitation = async (token: string, activityName: string) => {
+  const link = `natively://invite/${token}`;
+  const message = `Rejoins-moi pour "${activityName}" !\n\nClique sur ce lien pour accepter mon invitation :\n${link}`;
+
+  await Share.share({
+    message,
+    title: `Invitation +1 - ${activityName}`,
+  });
+};
+```
+
+--------------------------------------------------------------------------------
+5.4 Badge +1 sur participant
+--------------------------------------------------------------------------------
+
+Emplacement: Liste des participants dans activity-detail.tsx
+
+Condition d'affichage:
+- Le participant a is_plus_one = true
+
+Design:
+- Petit badge "+1" a cote du nom
+- Couleur: Primaire/accent
+- Optionnel: "Invite par [nom]" en sous-texte
+
+================================================================================
+                       6. COMMANDES SQL MANUELLES
+================================================================================
+
+Les commandes suivantes doivent etre executees manuellement dans la console
+Supabase SQL Editor, dans l'ordre indique.
+
+--------------------------------------------------------------------------------
+ETAPE 1: Creer la table plus_one_invitations
+--------------------------------------------------------------------------------
+
+-- Table principale des invitations +1
+CREATE TABLE plus_one_invitations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  slot_id UUID NOT NULL REFERENCES activity_slots(id) ON DELETE CASCADE,
+  inviter_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  invitee_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  token TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'expired', 'cancelled')),
+  payment_mode TEXT NOT NULL DEFAULT 'host_pays' CHECK (payment_mode IN ('host_pays', 'guest_pays')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '24 hours'),
+  accepted_at TIMESTAMPTZ
+);
+
+-- Index pour les performances
+CREATE INDEX idx_plus_one_token ON plus_one_invitations(token);
+CREATE INDEX idx_plus_one_slot ON plus_one_invitations(slot_id);
+CREATE INDEX idx_plus_one_inviter ON plus_one_invitations(inviter_id);
+CREATE INDEX idx_plus_one_status ON plus_one_invitations(status);
+CREATE INDEX idx_plus_one_expires ON plus_one_invitations(expires_at) WHERE status = 'pending';
+
+-- Activer RLS
+ALTER TABLE plus_one_invitations ENABLE ROW LEVEL SECURITY;
+
+-- Policies RLS
+CREATE POLICY "Users can view their invitations"
+  ON plus_one_invitations FOR SELECT
+  USING (auth.uid() = inviter_id OR auth.uid() = invitee_id);
+
+CREATE POLICY "Users can create invitations"
+  ON plus_one_invitations FOR INSERT
+  WITH CHECK (auth.uid() = inviter_id);
+
+CREATE POLICY "Inviters can update their invitations"
+  ON plus_one_invitations FOR UPDATE
+  USING (auth.uid() = inviter_id);
+
+CREATE POLICY "Inviters can delete their invitations"
+  ON plus_one_invitations FOR DELETE
+  USING (auth.uid() = inviter_id);
+
+-- Policy speciale: permettre a n'importe qui de lire une invitation par token
+-- (necessaire pour la validation avant acceptation)
+CREATE POLICY "Anyone can validate token"
+  ON plus_one_invitations FOR SELECT
+  USING (true);
+
+--------------------------------------------------------------------------------
+ETAPE 2: Modifier la table activity_slots
+--------------------------------------------------------------------------------
+
+-- Ajouter la colonne discover_mode
+ALTER TABLE activity_slots
+ADD COLUMN discover_mode BOOLEAN NOT NULL DEFAULT false;
+
+-- Commentaire explicatif
+COMMENT ON COLUMN activity_slots.discover_mode IS
+'Lorsque true, les invitations +1 sont desactivees pour ce creneau';
+
+--------------------------------------------------------------------------------
+ETAPE 3: Modifier la table slot_participants
+--------------------------------------------------------------------------------
+
+-- Ajouter les colonnes pour le tracking +1
+ALTER TABLE slot_participants
+ADD COLUMN is_plus_one BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN invited_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
+ADD COLUMN plus_one_invitation_id UUID REFERENCES plus_one_invitations(id) ON DELETE SET NULL;
+
+-- Index pour les requetes sur les +1
+CREATE INDEX idx_slot_participants_plus_one ON slot_participants(slot_id) WHERE is_plus_one = true;
+
+-- Commentaires
+COMMENT ON COLUMN slot_participants.is_plus_one IS 'True si le participant a rejoint via une invitation +1';
+COMMENT ON COLUMN slot_participants.invited_by IS 'ID de l utilisateur qui a envoye l invitation +1';
+
+--------------------------------------------------------------------------------
+ETAPE 4: Fonction RPC - create_plus_one_invitation
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION create_plus_one_invitation(p_slot_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_user_id UUID;
+  v_slot_record RECORD;
+  v_existing_invitation RECORD;
+  v_plus_one_count INTEGER;
+  v_max_plus_one INTEGER := 2; -- Configurable
+  v_token TEXT;
+  v_invitation_id UUID;
+BEGIN
+  -- Recuperer l'utilisateur courant
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'NOT_AUTHENTICATED');
+  END IF;
+
+  -- Verifier que le creneau existe et recuperer ses infos
+  SELECT s.*, a.max_participants
+  INTO v_slot_record
+  FROM activity_slots s
+  JOIN activities a ON a.id = s.activity_id
+  WHERE s.id = p_slot_id;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'SLOT_NOT_FOUND');
+  END IF;
+
+  -- Verifier que l'utilisateur est participant du creneau
+  IF NOT EXISTS (
+    SELECT 1 FROM slot_participants
+    WHERE slot_id = p_slot_id AND user_id = v_user_id
+  ) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'NOT_PARTICIPANT');
+  END IF;
+
+  -- Verifier le mode Discover
+  IF v_slot_record.discover_mode = true THEN
+    RETURN jsonb_build_object('success', false, 'error', 'DISCOVER_MODE');
+  END IF;
+
+  -- Verifier si une invitation pending existe deja pour cet utilisateur/creneau
+  SELECT * INTO v_existing_invitation
+  FROM plus_one_invitations
+  WHERE slot_id = p_slot_id
+    AND inviter_id = v_user_id
+    AND status = 'pending'
+    AND expires_at > NOW();
+
+  IF FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'ALREADY_HAS_PENDING');
+  END IF;
+
+  -- Compter les +1 actuels pour ce creneau
+  SELECT COUNT(*) INTO v_plus_one_count
+  FROM slot_participants
+  WHERE slot_id = p_slot_id AND is_plus_one = true;
+
+  IF v_plus_one_count >= v_max_plus_one THEN
+    RETURN jsonb_build_object('success', false, 'error', 'MAX_PLUS_ONE_REACHED');
+  END IF;
+
+  -- Generer un token unique
+  v_token := replace(gen_random_uuid()::text, '-', '') ||
+             to_char(NOW(), 'YYMMDDHH24MISS');
+
+  -- Creer l'invitation
+  INSERT INTO plus_one_invitations (slot_id, inviter_id, token)
+  VALUES (p_slot_id, v_user_id, v_token)
+  RETURNING id INTO v_invitation_id;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'token', v_token,
+    'invitation_id', v_invitation_id
+  );
+END;
+$$;
+
+--------------------------------------------------------------------------------
+ETAPE 5: Fonction RPC - validate_plus_one_token
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION validate_plus_one_token(p_token TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_invitation RECORD;
+  v_inviter RECORD;
+  v_slot RECORD;
+  v_activity RECORD;
+BEGIN
+  -- Rechercher l'invitation
+  SELECT * INTO v_invitation
+  FROM plus_one_invitations
+  WHERE token = p_token;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('valid', false, 'error', 'TOKEN_NOT_FOUND');
+  END IF;
+
+  -- Verifier le statut
+  IF v_invitation.status = 'accepted' THEN
+    RETURN jsonb_build_object('valid', false, 'error', 'INVITATION_ALREADY_USED');
+  END IF;
+
+  IF v_invitation.status = 'cancelled' THEN
+    RETURN jsonb_build_object('valid', false, 'error', 'INVITATION_CANCELLED');
+  END IF;
+
+  IF v_invitation.status = 'expired' OR v_invitation.expires_at < NOW() THEN
+    -- Mettre a jour le statut si necessaire
+    UPDATE plus_one_invitations SET status = 'expired' WHERE id = v_invitation.id;
+    RETURN jsonb_build_object('valid', false, 'error', 'INVITATION_EXPIRED');
+  END IF;
+
+  -- Recuperer les infos de l'inviteur
+  SELECT full_name, avatar_url INTO v_inviter
+  FROM profiles WHERE id = v_invitation.inviter_id;
+
+  -- Recuperer les infos du creneau
+  SELECT * INTO v_slot
+  FROM activity_slots WHERE id = v_invitation.slot_id;
+
+  -- Recuperer les infos de l'activite
+  SELECT nom, titre, image_url, adresse, ville INTO v_activity
+  FROM activities WHERE id = v_slot.activity_id;
+
+  RETURN jsonb_build_object(
+    'valid', true,
+    'invitation', jsonb_build_object(
+      'id', v_invitation.id,
+      'slot_id', v_invitation.slot_id,
+      'inviter_name', COALESCE(v_inviter.full_name, 'Quelqu''un'),
+      'inviter_avatar', COALESCE(v_inviter.avatar_url, ''),
+      'activity_name', COALESCE(v_activity.nom, v_activity.titre, 'Activite'),
+      'activity_image', COALESCE(v_activity.image_url, ''),
+      'slot_date', v_slot.date,
+      'slot_time', v_slot.time,
+      'location', COALESCE(v_activity.adresse || ', ' || v_activity.ville, ''),
+      'expires_at', v_invitation.expires_at,
+      'payment_mode', v_invitation.payment_mode
+    )
+  );
+END;
+$$;
+
+--------------------------------------------------------------------------------
+ETAPE 6: Fonction RPC - accept_plus_one_invitation
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION accept_plus_one_invitation(p_token TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_user_id UUID;
+  v_validation JSONB;
+  v_invitation_id UUID;
+  v_slot_id UUID;
+  v_inviter_id UUID;
+  v_activity_id UUID;
+  v_slot_record RECORD;
+  v_current_participants INTEGER;
+  v_max_participants INTEGER;
+BEGIN
+  -- Recuperer l'utilisateur courant
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'NOT_AUTHENTICATED');
+  END IF;
+
+  -- Valider le token
+  v_validation := validate_plus_one_token(p_token);
+  IF NOT (v_validation->>'valid')::boolean THEN
+    RETURN v_validation;
+  END IF;
+
+  -- Extraire les infos de l'invitation
+  v_invitation_id := (v_validation->'invitation'->>'id')::UUID;
+  v_slot_id := (v_validation->'invitation'->>'slot_id')::UUID;
+
+  -- Recuperer l'inviteur
+  SELECT inviter_id INTO v_inviter_id
+  FROM plus_one_invitations WHERE id = v_invitation_id;
+
+  -- Verifier que l'utilisateur n'est pas l'inviteur
+  IF v_user_id = v_inviter_id THEN
+    RETURN jsonb_build_object('success', false, 'error', 'CANNOT_INVITE_SELF');
+  END IF;
+
+  -- Verifier que l'utilisateur n'est pas deja inscrit
+  IF EXISTS (
+    SELECT 1 FROM slot_participants
+    WHERE slot_id = v_slot_id AND user_id = v_user_id
+  ) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'ALREADY_PARTICIPANT');
+  END IF;
+
+  -- Recuperer les infos du creneau et verifier la capacite
+  SELECT s.*, a.max_participants, a.id as activity_id
+  INTO v_slot_record
+  FROM activity_slots s
+  JOIN activities a ON a.id = s.activity_id
+  WHERE s.id = v_slot_id;
+
+  SELECT COUNT(*) INTO v_current_participants
+  FROM slot_participants WHERE slot_id = v_slot_id;
+
+  IF v_current_participants >= v_slot_record.max_participants THEN
+    RETURN jsonb_build_object('success', false, 'error', 'SLOT_FULL');
+  END IF;
+
+  -- Inscrire le participant
+  INSERT INTO slot_participants (
+    slot_id,
+    user_id,
+    activity_id,
+    is_plus_one,
+    invited_by,
+    plus_one_invitation_id
+  ) VALUES (
+    v_slot_id,
+    v_user_id,
+    v_slot_record.activity_id,
+    true,
+    v_inviter_id,
+    v_invitation_id
+  );
+
+  -- Mettre a jour l'invitation
+  UPDATE plus_one_invitations
+  SET status = 'accepted',
+      invitee_id = v_user_id,
+      accepted_at = NOW()
+  WHERE id = v_invitation_id;
+
+  -- Ajouter au groupe de conversation (si existe)
+  INSERT INTO conversation_participants (conversation_id, user_id)
+  SELECT c.id, v_user_id
+  FROM conversations c
+  WHERE c.slot_id = v_slot_id
+  ON CONFLICT DO NOTHING;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'slot_id', v_slot_id,
+    'activity_id', v_slot_record.activity_id
+  );
+END;
+$$;
+
+--------------------------------------------------------------------------------
+ETAPE 7: Fonction RPC - cancel_plus_one_invitation
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION cancel_plus_one_invitation(p_invitation_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_user_id UUID;
+  v_invitation RECORD;
+BEGIN
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'NOT_AUTHENTICATED');
+  END IF;
+
+  -- Recuperer l'invitation
+  SELECT * INTO v_invitation
+  FROM plus_one_invitations
+  WHERE id = p_invitation_id;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'INVITATION_NOT_FOUND');
+  END IF;
+
+  -- Verifier les droits
+  IF v_invitation.inviter_id != v_user_id THEN
+    RETURN jsonb_build_object('success', false, 'error', 'NOT_AUTHORIZED');
+  END IF;
+
+  -- Verifier le statut
+  IF v_invitation.status != 'pending' THEN
+    RETURN jsonb_build_object('success', false, 'error', 'CANNOT_CANCEL');
+  END IF;
+
+  -- Annuler
+  UPDATE plus_one_invitations
+  SET status = 'cancelled'
+  WHERE id = p_invitation_id;
+
+  RETURN jsonb_build_object('success', true);
+END;
+$$;
+
+--------------------------------------------------------------------------------
+ETAPE 8: Fonction RPC - get_pending_invitations
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION get_pending_invitations(p_slot_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_user_id UUID;
+  v_invitations JSONB;
+BEGIN
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN
+    RETURN '[]'::JSONB;
+  END IF;
+
+  SELECT COALESCE(jsonb_agg(
+    jsonb_build_object(
+      'id', i.id,
+      'token', i.token,
+      'inviter_name', COALESCE(p.full_name, 'Utilisateur'),
+      'created_at', i.created_at,
+      'expires_at', i.expires_at
+    ) ORDER BY i.created_at DESC
+  ), '[]'::JSONB)
+  INTO v_invitations
+  FROM plus_one_invitations i
+  JOIN profiles p ON p.id = i.inviter_id
+  WHERE i.slot_id = p_slot_id
+    AND i.status = 'pending'
+    AND i.expires_at > NOW();
+
+  RETURN v_invitations;
+END;
+$$;
+
+--------------------------------------------------------------------------------
+ETAPE 9: Job d'expiration automatique (optionnel - via pg_cron si disponible)
+--------------------------------------------------------------------------------
+
+-- Si pg_cron est active sur votre instance Supabase:
+-- SELECT cron.schedule(
+--   'expire-plus-one-invitations',
+--   '*/15 * * * *', -- Toutes les 15 minutes
+--   $$
+--     UPDATE plus_one_invitations
+--     SET status = 'expired'
+--     WHERE status = 'pending' AND expires_at < NOW();
+--   $$
+-- );
+
+-- Alternative: trigger before select qui met a jour le statut
+CREATE OR REPLACE FUNCTION auto_expire_invitation()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.status = 'pending' AND NEW.expires_at < NOW() THEN
+    NEW.status := 'expired';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Note: Ce trigger est complexe a implementer sur SELECT.
+-- La validation dans validate_plus_one_token gere deja ce cas.
+
+--------------------------------------------------------------------------------
+ETAPE 10: Accorder les permissions d'execution des RPC
+--------------------------------------------------------------------------------
+
+-- Autoriser les utilisateurs authentifies a appeler les fonctions
+GRANT EXECUTE ON FUNCTION create_plus_one_invitation(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION validate_plus_one_token(TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION accept_plus_one_invitation(TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION cancel_plus_one_invitation(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION get_pending_invitations(UUID) TO authenticated;
+
+-- Autoriser les utilisateurs anonymes a valider un token (pour la preview)
+GRANT EXECUTE ON FUNCTION validate_plus_one_token(TEXT) TO anon;
+
+================================================================================
+                              NOTES IMPORTANTES
+================================================================================
+
+1. ORDRE D'EXECUTION
+   Executez les etapes dans l'ordre numerote. La table plus_one_invitations
+   doit etre creee avant les modifications des autres tables et les fonctions.
+
+2. BACKUP RECOMMANDE
+   Avant d'executer ces commandes, effectuez un backup de votre base de donnees
+   via le dashboard Supabase (Settings > Database > Backups).
+
+3. TEST EN ENVIRONNEMENT DE STAGING
+   Testez ces commandes sur une instance de staging avant la production.
+
+4. ROLLBACK
+   En cas de probleme, les commandes de rollback sont:
+
+   DROP FUNCTION IF EXISTS get_pending_invitations(UUID);
+   DROP FUNCTION IF EXISTS cancel_plus_one_invitation(UUID);
+   DROP FUNCTION IF EXISTS accept_plus_one_invitation(TEXT);
+   DROP FUNCTION IF EXISTS validate_plus_one_token(TEXT);
+   DROP FUNCTION IF EXISTS create_plus_one_invitation(UUID);
+
+   ALTER TABLE slot_participants
+     DROP COLUMN IF EXISTS plus_one_invitation_id,
+     DROP COLUMN IF EXISTS invited_by,
+     DROP COLUMN IF EXISTS is_plus_one;
+
+   ALTER TABLE activity_slots DROP COLUMN IF EXISTS discover_mode;
+
+   DROP TABLE IF EXISTS plus_one_invitations;
+
+5. CONFIGURATION MAX +1
+   Le nombre maximum de +1 par creneau est defini dans la fonction
+   create_plus_one_invitation (v_max_plus_one := 2). Pour le modifier,
+   mettez a jour cette valeur ou creez une colonne de configuration.
+
+================================================================================
+                              FIN DU DOCUMENT
+================================================================================

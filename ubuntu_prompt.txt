@@ -1,139 +1,28 @@
-Je veux implémenter un système d’invitation dans RealMeet permettant aux utilisateurs de tester l’application à deux sur un même créneau, tout en conservant l’ADN principal de l’app : favoriser la découverte de nouvelles personnes, et éviter que les événements deviennent des groupes fermés d’amis.
+Le plan est prêt pour ton approbation. Il couvre :
 
-Voici la vision produit complète.
+**Architecture proposée :**
+- Nouvelle table `plus_one_invitations` avec tokens sécurisés
+- Colonnes additionnelles sur `activity_slots` (mode Discover) et `slot_participants` (tracking +1)
+- 5 fonctions RPC Supabase pour la logique métier
+- Service TypeScript `invitation.service.ts`
+- Deep link `natively://invite/[token]`
 
----
+**Implémentation en 5 phases :**
+1. **Infrastructure** : Migration SQL, RPC, Service TS, Types
+2. **Deep Linking** : Route `/invite/[token]`, écran preview, flow acceptation
+3. **UI Host** : Bouton +1, modal création, Share natif
+4. **UX Guest** : Landing page, suggestion ami, badge +1
+5. **Paiement** (future) : Intégration guest_pays
 
-### 🎯 OBJECTIF GLOBAL
+**Garde-fous respectés :**
+- Max 1 +1 par utilisateur par créneau
+- Max 2 +1 par créneau (configurable)
+- Mode Discover (créneaux sans +1)
+- Expiration automatique 24h
 
-Permettre à un utilisateur ayant réservé un créneau d’inviter un ami via un lien spécial.
+**Hypothèses retenues :**
+- Landing web pour non-utilisateurs : reportée (focus in-app)
+- Mode paiement initial : `host_pays` uniquement
+- Mode Discover : flag sur `activity_slots`
 
-Ce lien doit :
-
-* Permettre à quelqu’un qui n’a pas encore l’application de la découvrir.
-* Permettre à deux personnes de venir ensemble à leur premier événement.
-* Ne pas transformer RealMeet en application “entre potes”.
-* Respecter la capacité du créneau.
-* Être sécurisé, limité et contrôlé.
-
----
-
-## 🧩 TYPES D’INVITATION
-
-Il existe deux types de liens :
-
-### 1) Lien “Friend”
-
-* Permet d’ajouter quelqu’un en ami sur RealMeet.
-* Indépendant d’un créneau spécifique.
-
-### 2) Lien “+1 sur ce créneau”
-
-* Généré uniquement si l’utilisateur a déjà réservé un créneau.
-* Permet à une personne de rejoindre ce créneau en tant que “plus_one”.
-* Le +1 compte dans la capacité totale.
-* Le lien est limité à un usage.
-* Il expire automatiquement (ex : 24h ou au début du créneau).
-
----
-
-## 🧠 LOGIQUE PRODUIT
-
-### Quand un utilisateur réserve un créneau :
-
-Il peut voir un bouton :
-“Inviter un +1”
-
-En cliquant dessus :
-
-* Il génère un lien partageable.
-* Ce lien permet à une seule personne de rejoindre.
-* Une fois utilisé, il devient invalide.
-
----
-
-## 👤 CAS D’USAGE CIBLE
-
-Alexandre réserve un afterwork.
-Il invite son ami via le lien.
-Son ami :
-
-* Clique sur le lien.
-* S’il a déjà l’app → ouverture directe sur la page du créneau.
-* S’il n’a pas l’app → onboarding léger (création rapide de compte).
-* Il rejoint le créneau en tant que “Guest of Alexandre”.
-
-Important :
-Le +1 apparaît comme un participant normal, avec éventuellement une mention discrète “vient avec un ami”.
-
----
-
-## 🛑 GARDE-FOUS POUR PROTÉGER LA DÉCOUVERTE
-
-Le système ne doit pas permettre :
-
-* Plusieurs +1 par personne.
-* Une majorité de participants venant en groupe fermé.
-* Des duos répétitifs systématiques.
-
-Règles recommandées :
-
-* Max 1 +1 par utilisateur.
-* Max 2 +1 par créneau (configurable).
-* Certains créneaux peuvent être marqués “Discover mode” → pas d’invitations autorisées.
-
-
----
-
-## 💳 PAIEMENT
-
-Le système doit supporter :
-
-Option A : Le host paie les deux places.
- 
-Option B : Le +1 doit payer sous X heures sinon la place se libère. 
-
----
-
-## 🔐 SÉCURITÉ & ABUS
-
-Le système doit gérer :
-
-* Lien à usage unique.
-* Expiration automatique.
-* Invalidation si créneau complet.
-* Invalidation si host annule.
-* Pas d’accès aux données internes via URL.
-* Protection contre les usages multiples simultanés.
-* Si le host est no-show ou banni → le +1 est impacté.
-
----
-
-## 🧭 EXPÉRIENCE UTILISATEUR
-
-Le flow doit être :
-
-Simple.
-Rapide.
-Compréhensible.
-
-Le +1 ne doit pas devoir explorer toute l’application avant de rejoindre.
-
-L’invitation doit être claire :
-“Alexandre t’invite à rejoindre : Afterwork Rooftop – 21h”
-
-Après acceptation :
-
-* Confirmation claire.
-* Possibilité d’ajouter en ami (si pas automatique).
-* Accès au groupe et aux infos du créneau.
-
----
-
-## 🧱 ÉVOLUTION FUTURE POSSIBLE
-
-* Système de parrainage lié aux liens.
-* Badges “Premier event”.
-* Invitations limitées aux utilisateurs vérifiés.
-* Score de fiabilité conditionnant le droit d’inviter.
-* Invitations différenciées par type d’activité (chill vs discover).
+crées le fichier detail.txt avec l'explication des implémentations, et des potentiels commandes sql à faire manuellement.
