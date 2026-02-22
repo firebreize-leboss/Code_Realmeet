@@ -1,3 +1,4 @@
+Implémente le système +1 invitation décrit ci-dessous dans l'ordre suivant : d'abord crée le service TypeScript /services/invitation.service.ts, ensuite le composant /components/InvitePlusOneModal.tsx, ensuite la route /app/invite/[token].tsx, et enfin modifie activity-detail.tsx pour intégrer le bouton et le badge. Les SQL sont à exécuter manuellement, ne les génère pas.
 ================================================================================
                      PLAN D'IMPLEMENTATION - SYSTEME +1 INVITATION
 ================================================================================

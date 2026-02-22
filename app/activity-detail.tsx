@@ -26,6 +26,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import ReportModal from '@/components/ReportModal';
 import LeaveReviewModal from '@/components/LeaveReviewModal';
 import { CheckinQRSection } from '@/components/CheckinQRSection';
+import InvitePlusOneModal from '@/components/InvitePlusOneModal';
+import { invitationService } from '@/services/invitation.service';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { useFonts, Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold } from '@expo-google-fonts/manrope';
 
@@ -85,6 +87,8 @@ export default function ActivityDetailScreen() {
     id: string;
     name: string;
     avatar: string;
+    isPlusOne?: boolean;
+    invitedByName?: string;
   }>>([]);
   const [showOptionsModal, setShowOptionsModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
@@ -97,6 +101,9 @@ export default function ActivityDetailScreen() {
   const [canReview, setCanReview] = useState(false);
   const [pastSlotInfo, setPastSlotInfo] = useState<{ date: string; time: string } | null>(null);
   const [activityRating, setActivityRating] = useState<{ average: number; count: number } | null>(null);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [canInvitePlusOne, setCanInvitePlusOne] = useState(false);
+  const [slotDiscoverMode, setSlotDiscoverMode] = useState(false);
 
   useEffect(() => {
     loadActivity();
@@ -166,7 +173,7 @@ export default function ActivityDetailScreen() {
           if (participation?.slot_id) {
             const { data: slotData } = await supabase
               .from('activity_slots')
-              .select('id, date, time, duration')
+              .select('id, date, time, duration, discover_mode')
               .eq('id', participation.slot_id)
               .single();
 
@@ -177,6 +184,13 @@ export default function ActivityDetailScreen() {
                 time: slotData.time?.slice(0, 5) || '',
                 duration: slotData.duration || 60,
               });
+              setSlotDiscoverMode(slotData.discover_mode || false);
+
+              // Vérifier si l'utilisateur peut créer une invitation +1
+              if (!slotData.discover_mode) {
+                const canInvite = await invitationService.canCreateInvitation(participation.slot_id);
+                setCanInvitePlusOne(canInvite.canCreate);
+              }
             }
           }
         }
@@ -277,10 +291,15 @@ export default function ActivityDetailScreen() {
             .from('slot_participants')
             .select(`
               user_id,
+              is_plus_one,
+              invited_by,
               profiles:user_id (
                 id,
                 full_name,
                 avatar_url
+              ),
+              inviter:invited_by (
+                full_name
               )
             `)
             .eq('slot_id', passedSlotId);
@@ -292,6 +311,8 @@ export default function ActivityDetailScreen() {
                   id: p.profiles?.id || p.user_id,
                   name: p.profiles?.full_name || 'Participant',
                   avatar: p.profiles?.avatar_url || '',
+                  isPlusOne: p.is_plus_one || false,
+                  invitedByName: p.inviter?.full_name,
                 }))
                 .filter(p => p.id !== userId)
             );
@@ -791,7 +812,21 @@ export default function ActivityDetailScreen() {
                           source={{ uri: participant.avatar || 'https://via.placeholder.com/44' }}
                           style={styles.participantAvatar}
                         />
-                        <Text style={styles.participantName}>{participant.name}</Text>
+                        <View style={styles.participantInfo}>
+                          <View style={styles.participantNameRow}>
+                            <Text style={styles.participantName}>{participant.name}</Text>
+                            {participant.isPlusOne && (
+                              <View style={styles.plusOneBadge}>
+                                <Text style={styles.plusOneBadgeText}>+1</Text>
+                              </View>
+                            )}
+                          </View>
+                          {participant.isPlusOne && participant.invitedByName && (
+                            <Text style={styles.invitedByText}>
+                              Invité par {participant.invitedByName}
+                            </Text>
+                          )}
+                        </View>
                         <IconSymbol name="chevron.right" size={16} color={colors.textMuted} />
                       </TouchableOpacity>
                       {index < participantsList.length - 1 && (
@@ -818,6 +853,18 @@ export default function ActivityDetailScreen() {
                 slotTime={selectedSlot?.time || ''}
                 organizerName={activity.host?.name}
               />
+
+              {/* Bouton Inviter +1 */}
+              {!slotDiscoverMode && (
+                <TouchableOpacity
+                  style={styles.invitePlusOneButton}
+                  onPress={() => setShowInviteModal(true)}
+                  activeOpacity={0.7}
+                >
+                  <IconSymbol name="person.badge.plus" size={20} color={colors.textSecondary} />
+                  <Text style={styles.invitePlusOneButtonText}>Inviter un ami (+1)</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </>
         )}
@@ -970,6 +1017,17 @@ export default function ActivityDetailScreen() {
         targetId={activity?.id || ''}
         targetName={activity?.title}
       />
+
+      {/* Modal Invitation +1 */}
+      {joinedSlotId && (
+        <InvitePlusOneModal
+          visible={showInviteModal}
+          onClose={() => setShowInviteModal(false)}
+          slotId={joinedSlotId}
+          activityName={activity?.title || ''}
+          onInvitationCreated={() => setCanInvitePlusOne(false)}
+        />
+      )}
     </View>
   );
 }
@@ -1304,11 +1362,35 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     backgroundColor: colors.borderSubtle,
   },
-  participantName: {
+  participantInfo: {
     flex: 1,
+  },
+  participantNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  participantName: {
     fontSize: typography.base,
     fontFamily: 'Manrope_500Medium',
     color: colors.text,
+  },
+  plusOneBadge: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  plusOneBadgeText: {
+    fontSize: 11,
+    fontFamily: 'Manrope_700Bold',
+    color: '#FFFFFF',
+  },
+  invitedByText: {
+    fontSize: typography.xs,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textTertiary,
+    marginTop: 2,
   },
 
   // Review
@@ -1474,5 +1556,25 @@ const styles = StyleSheet.create({
     fontFamily: 'Manrope_600SemiBold',
     color: colors.textTertiary,
     textAlign: 'center',
+  },
+
+  // Bouton Inviter +1
+  invitePlusOneButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.backgroundAccent,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: borderRadius.md,
+    marginTop: 16,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  invitePlusOneButtonText: {
+    fontSize: typography.base,
+    fontFamily: 'Manrope_500Medium',
+    color: colors.textSecondary,
   },
 });
