@@ -323,8 +323,8 @@ async getMyPendingInvitations(slotId: string): Promise<PlusOneInvitation[]>
   - Filtre les invitations creees par l'utilisateur courant
 
 generateShareLink(token: string): string
-  - Retourne: `natively://invite/${token}`
-  - Format deep link compatible avec la configuration Expo
+  - Retourne: `https://realmeet.fr/invite/${token}`
+  - Redirige vers un deep link via la page invite.html hébergée sur le serveur
 
 async shareInvitation(token: string, activityName: string): Promise<void>
   - Genere le message de partage

@@ -21,6 +21,8 @@ export interface PlusOneInvitation {
 export interface InvitationPreview {
   id: string;
   slotId: string;
+  activityId: string;
+  price: number;
   inviterName: string;
   inviterAvatar: string;
   activityName: string;
@@ -113,6 +115,8 @@ class InvitationService {
         invitation: {
           id: inv.id,
           slotId: inv.slot_id,
+          activityId: inv.activity_id,
+          price: inv.price ?? 0,
           inviterName: inv.inviter_name,
           inviterAvatar: inv.inviter_avatar,
           activityName: inv.activity_name,
@@ -323,7 +327,7 @@ class InvitationService {
    * Génère le lien de partage pour une invitation
    */
   generateShareLink(token: string): string {
-    return `natively://invite/${token}`;
+    return `https://realmeet.fr/invite/${token}`;
   }
 
   /**
@@ -335,7 +339,7 @@ class InvitationService {
   }> {
     try {
       const link = this.generateShareLink(token);
-      const message = `Rejoins-moi pour "${activityName}" !\n\nClique sur ce lien pour accepter mon invitation :\n${link}`;
+      const message = `Rejoins-moi pour "${activityName}" !\n\nClique sur ce lien pour accepter mon invitation (tu as 10 minutes) :\n${link}`;
 
       const result = await Share.share({
         message,
