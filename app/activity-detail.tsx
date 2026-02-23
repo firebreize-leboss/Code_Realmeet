@@ -29,6 +29,7 @@ import { CheckinQRSection } from '@/components/CheckinQRSection';
 import InvitePlusOneModal from '@/components/InvitePlusOneModal';
 import { invitationService } from '@/services/invitation.service';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
+import { getParisDate } from '@/utils/timezone';
 import { useFonts, Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold } from '@expo-google-fonts/manrope';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -104,6 +105,7 @@ export default function ActivityDetailScreen() {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [canInvitePlusOne, setCanInvitePlusOne] = useState(false);
   const [slotDiscoverMode, setSlotDiscoverMode] = useState(false);
+  const [isSlotCancelled, setIsSlotCancelled] = useState(false);
 
   useEffect(() => {
     loadActivity();
@@ -173,7 +175,7 @@ export default function ActivityDetailScreen() {
           if (participation?.slot_id) {
             const { data: slotData } = await supabase
               .from('activity_slots')
-              .select('id, date, time, duration, discover_mode')
+              .select('id, date, time, duration, discover_mode, is_cancelled')
               .eq('id', participation.slot_id)
               .single();
 
@@ -185,6 +187,7 @@ export default function ActivityDetailScreen() {
                 duration: slotData.duration || 60,
               });
               setSlotDiscoverMode(slotData.discover_mode || false);
+              setIsSlotCancelled(slotData.is_cancelled || false);
 
               // Vérifier si l'utilisateur peut créer une invitation +1
               if (!slotData.discover_mode) {
@@ -496,7 +499,7 @@ export default function ActivityDetailScreen() {
 
         // Règle J-1 : bloquer l'inscription si le créneau débute dans moins de 24h
         const timePart = selectedSlot.time ? selectedSlot.time.slice(0, 5) : '00:00';
-        const slotStart = new Date(`${selectedSlot.date}T${timePart}:00`);
+        const slotStart = getParisDate(selectedSlot.date, timePart);
         const in24hMs = Date.now() + 24 * 60 * 60 * 1000;
         if (slotStart.getTime() <= in24hMs) {
           Alert.alert(
@@ -654,6 +657,14 @@ export default function ActivityDetailScreen() {
           <View style={styles.pastActivityBanner}>
             <IconSymbol name="checkmark.circle.fill" size={20} color="#FFFFFF" />
             <Text style={styles.pastActivityBannerText}>Activité terminée</Text>
+          </View>
+        )}
+
+        {/* Badge créneau annulé */}
+        {isSlotCancelled && (
+          <View style={styles.cancelledSlotBanner}>
+            <IconSymbol name="xmark.circle.fill" size={20} color="#FFFFFF" />
+            <Text style={styles.cancelledSlotBannerText}>Créneau annulé</Text>
           </View>
         )}
 
@@ -841,7 +852,7 @@ export default function ActivityDetailScreen() {
         )}
 
         {/* SECTION: QR Check-in */}
-        {isJoined && !isHost && !isBusiness && !isActivityPast && slotParticipantId && joinedSlotId && (
+        {isJoined && !isHost && !isBusiness && !isActivityPast && !isSlotCancelled && slotParticipantId && joinedSlotId && (
           <>
             <View style={styles.sectionDivider} />
             <View style={styles.section}>
@@ -893,7 +904,7 @@ export default function ActivityDetailScreen() {
       </ScrollView>
 
       {/* Footer */}
-      {!isHost && !isActivityPast && (
+      {!isHost && !isActivityPast && !isSlotCancelled && (
         <SafeAreaView style={styles.footer} edges={['bottom']}>
           {isBusiness ? (
             <View style={styles.businessFooter}>
@@ -1231,6 +1242,23 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   pastActivityBannerText: {
+    fontSize: typography.base,
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#FFFFFF',
+  },
+  cancelledSlotBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#DC2626',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    marginHorizontal: 20,
+    marginTop: 20,
+    borderRadius: borderRadius.md,
+    gap: 8,
+  },
+  cancelledSlotBannerText: {
     fontSize: typography.base,
     fontFamily: 'Manrope_600SemiBold',
     color: '#FFFFFF',

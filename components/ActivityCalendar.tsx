@@ -28,6 +28,7 @@ interface TimeSlot {
   participantCount?: number;
   maxParticipants?: number;
   registrationClosed?: boolean;
+  isCancelled?: boolean;
 }
 
 interface DaySlots {
@@ -283,7 +284,7 @@ export default function ActivityCalendar({
 
           const { data, error } = await supabase
             .from('activity_slots')
-            .select('id, date, time, duration, created_by, max_participants')
+            .select('id, date, time, duration, created_by, max_participants, is_cancelled')
             .eq('activity_id', activityId)
             .gte('date', todayStr)
             .gte('date', startStr)
@@ -351,6 +352,7 @@ export default function ActivityCalendar({
               date: slot.date,
               participantCount: countBySlotId[slot.id] || 0,
               maxParticipants: slot.max_participants || maxParticipants,
+              isCancelled: slot.is_cancelled || false,
             }));
             return { ...day, slots: daySlots };
           });
@@ -361,7 +363,7 @@ export default function ActivityCalendar({
           // On prend la date d'aujourd'hui car des créneaux de demain pourraient être >24h
           const { data, error } = await supabase
             .from('activity_slots')
-            .select('id, date, time, duration, created_by, max_participants')
+            .select('id, date, time, duration, created_by, max_participants, is_cancelled')
             .eq('activity_id', activityId)
             .gte('date', todayStr)
             .order('date', { ascending: true })
@@ -456,6 +458,7 @@ export default function ActivityCalendar({
                 date: slot.date,
                 participantCount: countBySlotIdSelect[slot.id] || 0,
                 maxParticipants: slot.max_participants || maxParticipants,
+                isCancelled: slot.is_cancelled || false,
               }));
 
               return buildDaySlotsFromDateStr(dateStr, slots);
@@ -687,7 +690,7 @@ export default function ActivityCalendar({
   };
 
   const handleSlotSelect = (slot: TimeSlot) => {
-    if (mode === 'edit' || readOnly) return;
+    if (mode === 'edit' || readOnly || slot.isCancelled) return;
 
     if (selectedSlot?.id === slot.id) {
       setSelectedSlot(null);
@@ -758,9 +761,10 @@ export default function ActivityCalendar({
 
       <View style={styles.slotsContainer}>
         {day.slots.map(slot => {
-          
+
           const isUserJoined = userJoinedSlotId === slot.id;
           const isSelected = selectedSlot?.id === slot.id;
+          const isCancelled = slot.isCancelled || false;
 
           return (
             <TouchableOpacity
@@ -771,15 +775,22 @@ export default function ActivityCalendar({
                 isUserJoined && styles.slotBadgeJoined,
                 mode === 'edit' && styles.slotBadgeEdit,
                 readOnly && styles.slotBadgeReadOnly,
+                isCancelled && styles.slotBadgeCancelled,
               ]}
               onPress={() => handleSlotSelect(slot)}
               onLongPress={() => mode === 'edit' && handleDeleteSlot(slot)}
               delayLongPress={500}
-              disabled={readOnly && !isUserJoined}
+              disabled={(readOnly && !isUserJoined) || isCancelled}
             >
-              {isUserJoined && (
+              {isUserJoined && !isCancelled && (
                 <View style={styles.joinedIndicator}>
                   <IconSymbol name="checkmark.circle.fill" size={14} color={colors.primary} />
+                </View>
+              )}
+
+              {isCancelled && (
+                <View style={styles.cancelledBadge}>
+                  <Text style={styles.cancelledBadgeText}>Annulé</Text>
                 </View>
               )}
 
@@ -1206,6 +1217,23 @@ const styles = StyleSheet.create({
   },
   slotBadgeReadOnly: {
     opacity: 0.6,
+  },
+  slotBadgeCancelled: {
+    opacity: 0.5,
+    backgroundColor: '#F3F4F6',
+    borderColor: '#D1D5DB',
+  },
+  cancelledBadge: {
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+    marginBottom: 2,
+  },
+  cancelledBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 8,
+    fontWeight: '700',
   },
   joinedIndicator: {
     position: 'absolute',

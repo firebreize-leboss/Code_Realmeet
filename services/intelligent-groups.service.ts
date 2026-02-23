@@ -2,6 +2,7 @@
 // Service de formation intelligente de groupes basé sur les affinités
 
 import { supabase } from '@/lib/supabase';
+import { getParisDate } from '@/utils/timezone';
 
 interface ParticipantProfile {
   id: string;
@@ -43,6 +44,14 @@ export async function formIntelligentGroups(
       throw error;
     }
 
+    if (data.cancelled) {
+      console.log(`Créneau ${slotId} annulé : pas assez de participants (${data.count || 0})`);
+      return {
+        groups: [],
+        stats: { totalParticipants: data.count || 0, groupsFormed: 0, avgGroupSize: 0 },
+      };
+    }
+
     if (!data.success) {
       throw new Error(data.error || 'Erreur formation groupes');
     }
@@ -82,8 +91,8 @@ export async function shouldFormGroups(slotId: string): Promise<boolean> {
       return false;
     }
 
-    // Calculer la date/heure du créneau
-    const slotDateTime = new Date(`${slot.date}T${slot.time || '00:00'}`);
+    // Calculer la date/heure du créneau (en heure de Paris)
+    const slotDateTime = getParisDate(slot.date, slot.time || '00:00');
 
     // Calculer J-1 à la même heure
     const oneDayBefore = new Date(slotDateTime.getTime() - 24 * 60 * 60 * 1000);
