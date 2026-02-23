@@ -33,6 +33,7 @@ export default function InviteTokenScreen() {
   const [invitation, setInvitation] = useState<InvitationPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [countdown, setCountdown] = useState<string>('');
 
   useEffect(() => {
     checkAuthAndValidate();
@@ -69,31 +70,59 @@ export default function InviteTokenScreen() {
     }
   };
 
-  const handleAccept = async () => {
-    setState('accepting');
+  // Countdown timer temps réel
+  useEffect(() => {
+    if (!invitation?.expiresAt) return;
 
-    try {
-      const result = await invitationService.acceptInvitation(tokenString);
+    const updateCountdown = () => {
+      const now = new Date().getTime();
+      const expires = new Date(invitation.expiresAt).getTime();
+      const diff = expires - now;
 
-      if (!result.success) {
-        setError(result.error || 'Erreur lors de l\'acceptation');
+      if (diff <= 0) {
+        setCountdown('00:00');
+        setError('Cette invitation a expiré');
         setState('error');
         return;
       }
 
-      setState('success');
+      const minutes = Math.floor(diff / 60000);
+      const seconds = Math.floor((diff % 60000) / 1000);
+      setCountdown(`${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
+    };
 
-      // Rediriger vers le détail de l'activité après un court délai
-      setTimeout(() => {
-        router.replace({
-          pathname: '/activity-detail',
-          params: { id: result.activityId, slotId: result.slotId },
-        });
-      }, 1500);
-    } catch (err: any) {
-      setError(err.message || 'Erreur inattendue');
-      setState('error');
-    }
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [invitation?.expiresAt]);
+
+  const handleAccept = () => {
+    if (!invitation) return;
+
+    const slotDateFormatted = invitation.slotDate
+      ? new Date(invitation.slotDate).toLocaleDateString('fr-FR', {
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long',
+        })
+      : '';
+
+    const priceStr = invitation.price ? `${invitation.price}€` : 'Gratuit';
+
+    router.push({
+      pathname: '/payment/select-method',
+      params: {
+        activity_id: invitation.activityId,
+        slot_id: invitation.slotId,
+        activity_name: invitation.activityName,
+        slot_date: slotDateFormatted,
+        slot_time: invitation.slotTime || '',
+        price: priceStr,
+        host_id: '',
+        is_plus_one: 'true',
+        invitation_token: tokenString,
+      },
+    });
   };
 
   const handleDecline = () => {
@@ -310,11 +339,11 @@ export default function InviteTokenScreen() {
           </View>
         )}
 
-        {/* Expiration */}
+        {/* Expiration countdown temps réel */}
         <View style={styles.expirationBox}>
           <IconSymbol name="clock.badge.exclamationmark" size={16} color={colors.warning} />
           <Text style={styles.expirationText}>
-            {invitation ? formatExpirationCountdown(invitation.expiresAt) : ''}
+            Expire dans {countdown}
           </Text>
         </View>
       </View>

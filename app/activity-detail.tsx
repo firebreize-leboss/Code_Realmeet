@@ -911,30 +911,65 @@ export default function ActivityDetailScreen() {
                 <Text style={styles.footerPrice}>{activity.price}</Text>
                 <Text style={styles.footerLabel}>par personne</Text>
               </View>
-              <TouchableOpacity
-                style={[
-                  styles.actionButton,
-                  isJoined && styles.actionButtonLeave,
-                  !isJoined && !selectedSlot && styles.actionButtonDisabled,
-                  isFull && !isJoined && styles.actionButtonDisabled,
-                ]}
-                onPress={handleJoinLeave}
-                disabled={(!isJoined && !selectedSlot) || (isFull && !isJoined) || joiningInProgress}
-              >
-                {joiningInProgress ? (
-                  <ActivityIndicator size="small" color={isJoined ? colors.textSecondary : '#FFFFFF'} />
-                ) : (
-                  <Text style={[styles.actionButtonText, isJoined && styles.actionButtonTextLeave]}>
-                    {isFull && !isJoined
-                      ? 'Complet'
-                      : isJoined
-                      ? 'Se désinscrire'
-                      : !selectedSlot
-                      ? 'Choisir un créneau'
-                      : 'Rejoindre'}
-                  </Text>
+              <View style={styles.footerButtons}>
+                {/* Bouton "On vient à deux" - visible si pas inscrit, pas discover, >= 2 places */}
+                {!isJoined && !slotDiscoverMode && selectedSlot && activity.placesRestantes >= 2 && (
+                  <TouchableOpacity
+                    style={styles.duoButton}
+                    onPress={() => {
+                      if (!selectedSlot) return;
+                      const slotDateFormatted = new Date(selectedSlot.date).toLocaleDateString('fr-FR', {
+                        weekday: 'long',
+                        day: 'numeric',
+                        month: 'long',
+                      });
+                      router.push({
+                        pathname: '/payment/select-method',
+                        params: {
+                          activity_id: activity.id,
+                          slot_id: selectedSlot.id,
+                          activity_name: activity.title,
+                          slot_date: slotDateFormatted,
+                          slot_time: selectedSlot.time,
+                          price: activity.price,
+                          host_id: activity.host.id,
+                          max_participants: activity.capacity.toString(),
+                          current_participants: activity.participants.toString(),
+                          mode: 'duo',
+                        },
+                      });
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <IconSymbol name="person.2.fill" size={16} color={colors.primary} />
+                    <Text style={styles.duoButtonText}>On vient à deux</Text>
+                  </TouchableOpacity>
                 )}
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.actionButton,
+                    isJoined && styles.actionButtonLeave,
+                    !isJoined && !selectedSlot && styles.actionButtonDisabled,
+                    isFull && !isJoined && styles.actionButtonDisabled,
+                  ]}
+                  onPress={handleJoinLeave}
+                  disabled={(!isJoined && !selectedSlot) || (isFull && !isJoined) || joiningInProgress}
+                >
+                  {joiningInProgress ? (
+                    <ActivityIndicator size="small" color={isJoined ? colors.textSecondary : '#FFFFFF'} />
+                  ) : (
+                    <Text style={[styles.actionButtonText, isJoined && styles.actionButtonTextLeave]}>
+                      {isFull && !isJoined
+                        ? 'Complet'
+                        : isJoined
+                        ? 'Se désinscrire'
+                        : !selectedSlot
+                        ? 'Choisir un créneau'
+                        : 'Rejoindre'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </>
           )}
         </SafeAreaView>
@@ -1445,6 +1480,28 @@ const styles = StyleSheet.create({
     fontSize: typography.sm,
     fontFamily: 'Manrope_400Regular',
     color: colors.textTertiary,
+  },
+  footerButtons: {
+    flexDirection: 'column' as const,
+    gap: 8,
+    alignItems: 'stretch' as const,
+  },
+  duoButton: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: borderRadius.md,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  duoButtonText: {
+    fontSize: typography.sm,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.primary,
   },
   // Bouton Rejoindre - CTA principal orange
   actionButton: {

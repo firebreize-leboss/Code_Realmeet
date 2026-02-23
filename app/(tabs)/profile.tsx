@@ -14,6 +14,7 @@ import {
   Platform,
   RefreshControl,
   Dimensions,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -95,6 +96,7 @@ export default function ProfileScreen() {
   const [loadingStats, setLoadingStats] = useState(true);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<'7d' | '30d' | '90d'>('30d');
+  const [devInviteCode, setDevInviteCode] = useState('');
 
   const loadProfile = async () => {
     try {
@@ -490,6 +492,33 @@ export default function ProfileScreen() {
               ))}
             </View>
           )}
+
+          {/* ===== DEV: Tester invitation — À SUPPRIMER ===== */}
+          <View style={styles.devInviteContainer}>
+            <Text style={styles.devInviteLabel}>Dev - Tester un lien invitation</Text>
+            <View style={styles.devInviteRow}>
+              <TextInput
+                style={styles.devInviteInput}
+                placeholder="Code invitation..."
+                placeholderTextColor="#9CA3AF"
+                value={devInviteCode}
+                onChangeText={setDevInviteCode}
+                autoCapitalize="none"
+              />
+              <TouchableOpacity
+                style={styles.devInviteButton}
+                onPress={() => {
+                  if (devInviteCode.trim()) {
+                    router.push(`/invite/${devInviteCode.trim()}`);
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.devInviteButtonText}>Tester</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          {/* ===== FIN DEV ===== */}
         </View>
       </SafeAreaView>
     </LinearGradient>
@@ -1547,4 +1576,48 @@ const styles = StyleSheet.create({
     fontFamily: 'Manrope_600SemiBold',
     color: '#FFFFFF',
   },
+
+  // ===== DEV: À SUPPRIMER =====
+  devInviteContainer: {
+    width: '100%',
+    marginTop: 24,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderStyle: 'dashed',
+    backgroundColor: '#F9FAFB',
+  },
+  devInviteLabel: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    marginBottom: 8,
+  },
+  devInviteRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  devInviteInput: {
+    flex: 1,
+    height: 36,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    fontSize: 13,
+    color: '#1F2937',
+    backgroundColor: '#FFFFFF',
+  },
+  devInviteButton: {
+    backgroundColor: '#6B7280',
+    paddingHorizontal: 14,
+    borderRadius: 6,
+    justifyContent: 'center',
+  },
+  devInviteButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  // ===== FIN DEV =====
 });

@@ -133,18 +133,30 @@ export default function InvitePlusOneModal({
     );
   };
 
-  const formatExpirationTime = (expiresAt: string) => {
-    const expires = new Date(expiresAt);
-    const now = new Date();
-    const diffMs = expires.getTime() - now.getTime();
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+  const [countdown, setCountdown] = useState<string>('');
 
-    if (diffHours > 0) {
-      return `${diffHours}h ${diffMinutes}min`;
-    }
-    return `${diffMinutes} minutes`;
-  };
+  useEffect(() => {
+    if (!invitation?.expiresAt) return;
+
+    const updateCountdown = () => {
+      const now = new Date().getTime();
+      const expires = new Date(invitation.expiresAt).getTime();
+      const diff = expires - now;
+
+      if (diff <= 0) {
+        setCountdown('00:00');
+        return;
+      }
+
+      const minutes = Math.floor(diff / 60000);
+      const seconds = Math.floor((diff % 60000) / 1000);
+      setCountdown(`${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [invitation?.expiresAt]);
 
   const truncateLink = (token: string) => {
     const link = invitationService.generateShareLink(token);
@@ -219,7 +231,7 @@ export default function InvitePlusOneModal({
                 <View style={styles.infoBox}>
                   <IconSymbol name="clock" size={16} color={colors.textSecondary} />
                   <Text style={styles.infoText}>
-                    Ce lien expire dans {formatExpirationTime(invitation.expiresAt)}
+                    Ce lien expire dans {countdown || '--:--'}
                   </Text>
                 </View>
 
