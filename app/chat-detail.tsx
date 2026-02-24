@@ -184,12 +184,13 @@ export default function ChatDetailScreen() {
     );
 
     sortedMessages.forEach((msg) => {
-      const dateKey = getDateKey(msg.createdAt || new Date().toISOString());
+      const dateKey = getDateKey(msg.createdAt);
+      console.log('[DATE-DEBUG] msg.id:', msg.id, 'createdAt:', msg.createdAt, 'dateKey:', dateKey);
 
       if (dateKey !== lastDateKey) {
         result.push({
           type: 'date-separator',
-          date: formatMessageDate(msg.createdAt || new Date().toISOString()),
+          date: formatMessageDate(msg.createdAt),
           id: `separator-${dateKey}`,
         });
         lastDateKey = dateKey;

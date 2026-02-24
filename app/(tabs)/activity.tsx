@@ -111,7 +111,8 @@ export default function ActivityScreen() {
             const { count } = await supabase
               .from('slot_participants')
               .select('*', { count: 'exact', head: true })
-              .in('slot_id', futureSlotIds);
+              .in('slot_id', futureSlotIds)
+              .eq('status', 'active');
             participantsCount = count || 0;
           }
 

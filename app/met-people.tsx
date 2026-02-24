@@ -83,6 +83,7 @@ export default function MetPeopleScreen() {
           )
         `)
         .eq('user_id', userId)
+        .in('status', ['active', 'completed'])
         .gte('activity_slots.date', sevenDaysAgoStr)
         .lte('activity_slots.date', todayStr);
 
@@ -146,7 +147,8 @@ export default function MetPeopleScreen() {
           )
         `)
         .in('slot_id', pastSlotIds)
-        .neq('user_id', userId);
+        .neq('user_id', userId)
+        .in('status', ['active', 'completed']);
 
       if (!otherParticipants || otherParticipants.length === 0) {
         setPeople([]);

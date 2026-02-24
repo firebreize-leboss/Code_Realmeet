@@ -204,7 +204,8 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       const { data: slotParticipants } = await supabase
         .from('slot_participants')
         .select('slot_id, activity_id')
-        .in('slot_id', slotIds.length > 0 ? slotIds : ['__none__']);
+        .in('slot_id', slotIds.length > 0 ? slotIds : ['__none__'])
+        .eq('status', 'active');
 
       // Calculer les données par activité
       const participantsBySlot: Record<string, number> = {};
@@ -319,7 +320,8 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       const { data: slotParticipants } = await supabase
         .from('slot_participants')
         .select('slot_id')
-        .in('slot_id', filteredSlotIds.length > 0 ? filteredSlotIds : ['__none__']);
+        .in('slot_id', filteredSlotIds.length > 0 ? filteredSlotIds : ['__none__'])
+        .eq('status', 'active');
 
       // Calculer le nombre de participants par slot
       const participantsBySlot: Record<string, number> = {};

@@ -58,7 +58,8 @@ export default function MyParticipatedActivitiesScreen() {
       const { data: participations, error: partError } = await supabase
         .from('slot_participants')
         .select('activity_id, slot_id')
-        .eq('user_id', userData.user.id);
+        .eq('user_id', userData.user.id)
+        .in('status', ['active', 'completed']);
 
       if (partError) throw partError;
 

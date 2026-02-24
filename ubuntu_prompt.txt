@@ -1,1 +1,20 @@
-Dans app/activity-detail.tsx, trouve le calcul de la regle J-1 qui bloque linscription 24h avant (la ligne qui fait new Date avec selectedSlot.date et timePart). Le probleme est que new Date interprete lheure en timezone locale du telephone, mais les heures des creneaux sont en heure de Paris. Pour les utilisateurs hors de France metropolitaine ca cree un decalage. Corrige en forcant linterpretation en heure de Paris : construis la date du creneau avec le suffix +01:00 pour heure dhiver ou +02:00 pour heure dete. La maniere la plus simple est dutiliser une fonction helper qui ajoute le bon offset Europe/Paris. Cree un petit helper getParisDate(dateStr, timeStr) dans un fichier utils/timezone.ts qui prend une date YYYY-MM-DD et un time HH:MM, et retourne un objet Date correctement en heure de Paris. Utilise le fait que en France lheure dete va du dernier dimanche de mars au dernier dimanche doctobre. Applique ce helper dans activity-detail.tsx pour la regle J-1 et dans services/intelligent-groups.service.ts pour shouldFormGroups. Ne change rien dautre.
+Dans app/chat-detail.tsx, il y a un bug avec les séparateurs de date dans le chat. Quand je vais dans une conversation, le séparateur affiche toujours "Aujourd'hui" au lieu de la vraie date du message.
+
+Le problème vient du fallback `new Date().toISOString()` utilisé quand `msg.createdAt` est undefined/null. Ça fait que getDateKey et formatMessageDate reçoivent la date d'aujourd'hui au lieu de la vraie date du message.
+
+Voici ce qu'il faut corriger :
+
+1. Dans le `messagesWithDateSeparators` useMemo, la ligne :
+   `const dateKey = getDateKey(msg.createdAt || new Date().toISOString());`
+   Le fallback `new Date().toISOString()` est problématique. Vérifie d'abord d'où vient `createdAt` dans le type Message et dans le hook useMessaging pour voir si le mapping depuis la base (colonne `created_at`) vers `createdAt` se fait bien.
+
+2. Même problème sur la ligne juste en dessous :
+   `date: formatMessageDate(msg.createdAt || new Date().toISOString()),`
+
+3. Vérifie dans hooks/useMessaging.ts comment les messages sont transformés. La colonne Supabase s'appelle `created_at` (snake_case). Assure-toi que le mapping vers `createdAt` (camelCase) est bien fait et que la valeur n'est jamais undefined.
+
+4. Ajoute un console.log temporaire dans le useMemo pour debug :
+   `console.log('[DATE-DEBUG] msg.id:', msg.id, 'createdAt:', msg.createdAt, 'dateKey:', dateKey);`
+   pour vérifier si des messages arrivent avec createdAt undefined.
+
+Le fix le plus probable : soit le champ `createdAt` n'est pas mappé correctement depuis `created_at` dans useMessaging, soit certains messages (système, temps réel) n'ont pas ce champ défini. Corrige le mapping dans useMessaging ET garde un fallback plus robuste qui ne masque pas le problème.

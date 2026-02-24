@@ -30,6 +30,7 @@ export interface TransformedMessage {
   voiceDuration?: number;
   type: 'text' | 'image' | 'voice' | 'system';
   timestamp: string;
+  createdAt: string;
   status?: MessageStatus;
   replyTo?: ReplyInfo;
   isAdminMessage?: boolean;
@@ -800,6 +801,7 @@ export function useMessages(conversationId: string) {
                 hour: '2-digit',
                 minute: '2-digit',
               }),
+              createdAt: msg.created_at,
               status: 'delivered' as const,
               replyTo,
               isAdminMessage: msg.is_admin_message || false,
@@ -875,6 +877,7 @@ export function useMessages(conversationId: string) {
             hour: '2-digit',
             minute: '2-digit',
           }),
+          createdAt: msg.created_at,
           status: 'delivered',
           replyTo,
           isAdminMessage: msg.is_admin_message || false,
@@ -974,6 +977,7 @@ export function useMessages(conversationId: string) {
               hour: '2-digit',
               minute: '2-digit',
             }),
+            createdAt: newMsg.created_at,
             status: 'delivered',
             replyTo,
             isAdminMessage: newMsg.is_admin_message || false,
@@ -1057,6 +1061,7 @@ export function useMessages(conversationId: string) {
           hour: '2-digit',
           minute: '2-digit',
         }),
+        createdAt: new Date().toISOString(),
         status: 'sending',
         replyTo: replyToInfo,
       };

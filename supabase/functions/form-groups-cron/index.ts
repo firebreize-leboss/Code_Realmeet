@@ -67,6 +67,7 @@ serve(async (req) => {
           .from('slot_participants')
           .select('*', { count: 'exact', head: true })
           .eq('slot_id', slot.id)
+          .eq('status', 'active')
 
         if (!participantCount || participantCount === 0) {
           console.log(`Slot ${slot.id}: aucun participant, skip`)
@@ -144,6 +145,7 @@ async function formGroups(
       )
     `)
     .eq('slot_id', slot.id)
+    .eq('status', 'active')
 
   if (participantsError) throw participantsError
 

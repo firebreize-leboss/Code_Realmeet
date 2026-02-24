@@ -153,30 +153,66 @@ export default function ActivityDetailScreen() {
 
         const isHostBusiness = hostProfile?.account_type === 'business';
 
-        const { count: realParticipantCount } = await supabase
-          .from('slot_participants')
-          .select('*', { count: 'exact', head: true })
-          .eq('activity_id', activityId);
+        // Compter uniquement les participants actifs sur les slots futurs
+        const todayStr = new Date().toISOString().split('T')[0];
+        const { data: futureSlots } = await supabase
+          .from('activity_slots')
+          .select('id')
+          .eq('activity_id', activityId)
+          .gte('date', todayStr);
 
-        const participantCount = realParticipantCount || activityData.participants || 0;
+        let participantCount = 0;
+        const futureSlotIds = (futureSlots || []).map(s => s.id);
+        if (futureSlotIds.length > 0) {
+          const { count: realParticipantCount } = await supabase
+            .from('slot_participants')
+            .select('*', { count: 'exact', head: true })
+            .in('slot_id', futureSlotIds)
+            .eq('activity_id', activityId)
+            .eq('status', 'active');
+          participantCount = realParticipantCount || 0;
+        }
 
         if (userId && !isBusiness) {
-          const { data: participation } = await supabase
+          // Chercher une participation active sur un slot FUTUR
+          const { data: participations } = await supabase
             .from('slot_participants')
             .select('id, slot_id')
             .eq('activity_id', activityId)
             .eq('user_id', userId)
-            .maybeSingle();
+            .eq('status', 'active');
 
-          setIsJoined(!!participation);
-          setJoinedSlotId(participation?.slot_id || undefined);
-          setSlotParticipantId(participation?.id || undefined);
+          // Parmi les participations actives, trouver celle sur un slot futur
+          let activeParticipation: { id: string; slot_id: string } | null = null;
+          if (participations && participations.length > 0) {
+            for (const p of participations) {
+              if (p.slot_id) {
+                const { data: slotCheck } = await supabase
+                  .from('activity_slots')
+                  .select('date, time')
+                  .eq('id', p.slot_id)
+                  .single();
 
-          if (participation?.slot_id) {
+                if (slotCheck) {
+                  const slotDateTime = new Date(`${slotCheck.date}T${slotCheck.time || '00:00'}`);
+                  if (slotDateTime >= new Date()) {
+                    activeParticipation = p;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+
+          setIsJoined(!!activeParticipation);
+          setJoinedSlotId(activeParticipation?.slot_id || undefined);
+          setSlotParticipantId(activeParticipation?.id || undefined);
+
+          if (activeParticipation?.slot_id) {
             const { data: slotData } = await supabase
               .from('activity_slots')
               .select('id, date, time, duration, discover_mode, is_cancelled')
-              .eq('id', participation.slot_id)
+              .eq('id', activeParticipation.slot_id)
               .single();
 
             if (slotData) {
@@ -191,7 +227,7 @@ export default function ActivityDetailScreen() {
 
               // Vérifier si l'utilisateur peut créer une invitation +1
               if (!slotData.discover_mode) {
-                const canInvite = await invitationService.canCreateInvitation(participation.slot_id);
+                const canInvite = await invitationService.canCreateInvitation(activeParticipation.slot_id);
                 setCanInvitePlusOne(canInvite.canCreate);
               }
             }
@@ -305,7 +341,8 @@ export default function ActivityDetailScreen() {
                 full_name
               )
             `)
-            .eq('slot_id', passedSlotId);
+            .eq('slot_id', passedSlotId)
+            .in('status', ['active', 'completed']);
 
           if (participants) {
             setParticipantsList(
@@ -456,20 +493,22 @@ export default function ActivityDetailScreen() {
 
     try {
       if (isJoined) {
-        // Logique de désinscription (reste inchangée)
+        // Logique de désinscription — marquer comme 'cancelled' au lieu de supprimer
         const { data: currentParticipation } = await supabase
           .from('slot_participants')
           .select('slot_id')
           .eq('activity_id', activity.id)
           .eq('user_id', currentUserId)
+          .eq('status', 'active')
           .maybeSingle();
 
         if (currentParticipation?.slot_id) {
           await supabase
             .from('slot_participants')
-            .delete()
+            .update({ status: 'cancelled' })
             .eq('activity_id', activity.id)
-            .eq('user_id', currentUserId);
+            .eq('user_id', currentUserId)
+            .eq('status', 'active');
 
           await handleLeaveSlotGroup(currentParticipation.slot_id);
         }

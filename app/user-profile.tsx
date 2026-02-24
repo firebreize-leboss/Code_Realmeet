@@ -108,7 +108,8 @@ export default function UserProfileScreen() {
       const { count: joinedCount } = await supabase
         .from('slot_participants')
         .select('*', { count: 'exact', head: true })
-        .eq('user_id', targetId);
+        .eq('user_id', targetId)
+        .in('status', ['active', 'completed']);
 
       // Compter les activités organisées
       const { count: hostedCount } = await supabase
