@@ -76,7 +76,8 @@ export default function SlotParticipantsModal({
           )
         `)
         .eq('slot_id', slot.id)
-        .eq('activity_id', activityId);
+        .eq('activity_id', activityId)
+        .eq('status', 'active');
 
       if (error) throw error;
 

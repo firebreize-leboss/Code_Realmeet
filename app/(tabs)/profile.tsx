@@ -145,7 +145,8 @@ export default function ProfileScreen() {
         const { data: participations } = await supabase
           .from('slot_participants')
           .select('slot_id')
-          .eq('user_id', userId);
+          .eq('user_id', userId)
+          .in('status', ['active', 'completed']);
 
         let pastActivitiesCount = 0;
         if (participations && participations.length > 0) {
@@ -252,7 +253,8 @@ export default function ProfileScreen() {
           const { count } = await supabase
             .from('slot_participants')
             .select('*', { count: 'exact', head: true })
-            .in('slot_id', pastSlotIds);
+            .in('slot_id', pastSlotIds)
+            .in('status', ['active', 'completed']);
 
           totalParticipants = count || 0;
 
@@ -262,7 +264,8 @@ export default function ProfileScreen() {
           const { data: participantsData } = await supabase
             .from('slot_participants')
             .select('slot_id')
-            .in('slot_id', pastSlotIds);
+            .in('slot_id', pastSlotIds)
+            .in('status', ['active', 'completed']);
 
           totalRevenue = (participantsData || []).reduce((sum: number, p: any) => {
             const activityId = slotActivityMap.get(p.slot_id);

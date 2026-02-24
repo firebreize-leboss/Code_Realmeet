@@ -50,7 +50,8 @@ class GroupsService {
             personality_tags
           )
         `)
-        .eq('slot_id', slotId);
+        .eq('slot_id', slotId)
+        .eq('status', 'active');
 
       if (partError) throw partError;
 

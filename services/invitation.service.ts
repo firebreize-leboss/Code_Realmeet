@@ -383,6 +383,7 @@ class InvitationService {
         .select('id')
         .eq('slot_id', slotId)
         .eq('user_id', user.id)
+        .eq('status', 'active')
         .maybeSingle();
 
       if (!participation) {

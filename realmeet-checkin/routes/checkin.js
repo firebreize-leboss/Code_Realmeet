@@ -53,6 +53,7 @@ router.post('/generate-token', tokenLimiter, async (req, res) => {
         activities!inner(id, nom, host_id)
       `)
       .eq('id', slot_participant_id)
+      .eq('status', 'active')
       .single();
 
     if (spError || !sp) {
@@ -158,6 +159,7 @@ router.post('/verify', partnerAuth, validateLimiter, async (req, res) => {
         profiles!slot_participants_user_id_fkey(full_name, avatar_url)
       `)
       .eq('id', payload.sp)
+      .eq('status', 'active')
       .single();
 
     if (spErr || !sp) {
@@ -263,6 +265,7 @@ router.post('/validate', partnerAuth, validateLimiter, async (req, res) => {
         profiles!slot_participants_user_id_fkey(full_name)
       `)
       .eq('id', payload.sp)
+      .eq('status', 'active')
       .single();
 
     if (spErr || !sp) {
@@ -354,6 +357,7 @@ router.post('/manual-validate', partnerAuth, validateLimiter, async (req, res) =
         profiles!slot_participants_user_id_fkey(full_name)
       `)
       .eq('id', slot_participant_id)
+      .eq('status', 'active')
       .single();
 
     if (spErr || !sp) {
@@ -421,7 +425,8 @@ router.get('/slot-status/:slotId', partnerAuth, async (req, res) => {
     const { data: participants } = await supabase
       .from('slot_participants')
       .select('id, user_id, checked_in_at, profiles!slot_participants_user_id_fkey(full_name, avatar_url)')
-      .eq('slot_id', slotId);
+      .eq('slot_id', slotId)
+      .eq('status', 'active');
 
     const total = participants?.length || 0;
     const checkedIn = participants?.filter(p => p.checked_in_at).length || 0;
@@ -472,12 +477,14 @@ router.get('/today-slots', partnerAuth, async (req, res) => {
       const { count: totalParticipants } = await supabase
         .from('slot_participants')
         .select('*', { count: 'exact', head: true })
-        .eq('slot_id', slot.id);
+        .eq('slot_id', slot.id)
+        .eq('status', 'active');
 
       const { count: checkedInCount } = await supabase
         .from('slot_participants')
         .select('*', { count: 'exact', head: true })
         .eq('slot_id', slot.id)
+        .eq('status', 'active')
         .not('checked_in_at', 'is', null);
 
       return {

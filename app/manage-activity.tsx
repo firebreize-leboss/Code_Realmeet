@@ -117,7 +117,8 @@ export default function ManageActivityScreen() {
             date
           )
         `)
-        .in('slot_id', slotIds.length > 0 ? slotIds : ['00000000-0000-0000-0000-000000000000']);
+        .in('slot_id', slotIds.length > 0 ? slotIds : ['00000000-0000-0000-0000-000000000000'])
+        .eq('status', 'active');
 
       // Récupérer aussi les membres des groupes (slot_group_members via slot_groups)
       // Car les inscriptions au planning peuvent être stockées directement dans slot_group_members

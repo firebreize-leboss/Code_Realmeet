@@ -195,7 +195,8 @@ export default function ChatScreen() {
       const { data: myParticipations } = await supabase
         .from('slot_participants')
         .select('slot_id, activity_id')
-        .eq('user_id', userData.user.id);
+        .eq('user_id', userData.user.id)
+        .in('status', ['active', 'completed']);
 
       if (!myParticipations || myParticipations.length === 0) {
         setActivityContacts([]);
@@ -237,7 +238,8 @@ export default function ChatScreen() {
           )
         `)
         .in('slot_id', validSlotIds)
-        .neq('user_id', userData.user.id);
+        .neq('user_id', userData.user.id)
+        .in('status', ['active', 'completed']);
 
       if (!otherParticipants) {
         setActivityContacts([]);

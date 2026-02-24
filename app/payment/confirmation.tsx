@@ -238,6 +238,7 @@ export default function ConfirmationScreen() {
         .select('id')
         .eq('activity_id', activityId)
         .eq('user_id', currentUserId)
+        .eq('status', 'active')
         .maybeSingle();
 
       if (existingParticipation) {

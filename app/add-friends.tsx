@@ -57,7 +57,8 @@ export default function AddFriendsScreen() {
       const { data: myParticipations } = await supabase
         .from('slot_participants')
         .select('slot_id, activity_id')
-        .eq('user_id', currentUserId);
+        .eq('user_id', currentUserId)
+        .in('status', ['active', 'completed']);
 
       if (!myParticipations || myParticipations.length === 0) {
         setActivityContacts([]);
@@ -88,7 +89,8 @@ export default function AddFriendsScreen() {
           )
         `)
         .in('slot_id', slotIds)
-        .neq('user_id', currentUserId);
+        .neq('user_id', currentUserId)
+        .in('status', ['active', 'completed']);
 
       if (!otherParticipants) {
         setActivityContacts([]);

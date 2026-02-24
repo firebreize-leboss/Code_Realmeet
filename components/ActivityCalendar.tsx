@@ -301,7 +301,8 @@ export default function ActivityCalendar({
             const { data: participants, error: pErr } = await supabase
               .from('slot_participants')
               .select('slot_id, user_id')
-              .in('slot_id', slotIds);
+              .in('slot_id', slotIds)
+              .eq('status', 'active');
 
             // Récupérer aussi les membres des groupes (slot_group_members via slot_groups)
             const { data: slotGroupsWithMembers } = await supabase
@@ -410,7 +411,8 @@ export default function ActivityCalendar({
             const { data: participants } = await supabase
               .from('slot_participants')
               .select('slot_id, user_id')
-              .in('slot_id', allSlotIds);
+              .in('slot_id', allSlotIds)
+              .eq('status', 'active');
 
             const { data: slotGroupsWithMembers } = await supabase
               .from('slot_groups')
