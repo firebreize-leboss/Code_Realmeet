@@ -52,8 +52,12 @@ export function useCancellationCheck() {
           [
             {
               text: 'Compris',
-              onPress: () => {
-                supabase.rpc('mark_cancellations_seen', { p_slot_participant_ids: ids });
+              onPress: async () => {
+                try {
+                  await supabase.rpc('mark_cancellations_seen', { p_slot_participant_ids: ids });
+                } catch (err) {
+                  console.error('Failed to mark cancellations as seen:', err);
+                }
               },
             },
           ]
@@ -69,8 +73,12 @@ export function useCancellationCheck() {
           [
             {
               text: 'Compris',
-              onPress: () => {
-                supabase.rpc('mark_cancellations_seen', { p_slot_participant_ids: ids });
+              onPress: async () => {
+                try {
+                  await supabase.rpc('mark_cancellations_seen', { p_slot_participant_ids: ids });
+                } catch (err) {
+                  console.error('Failed to mark cancellations as seen:', err);
+                }
               },
             },
           ]

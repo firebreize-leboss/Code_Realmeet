@@ -16,6 +16,7 @@ public	friendships
 public	group_formation_logs
 public	messages
 public	met_people_hidden
+public	plus_one_invitations
 public	profiles
 public	reports
 public	reviews
@@ -25,4 +26,4 @@ public	slot_groups_backup
 public	slot_participants
 public	v_slots_pending_group_formation
 public	v_slow_queries
-(26 rows)
+(27 rows)

@@ -54,6 +54,11 @@ activity_slots	groups_formed_at	timestamp with time zone	YES
 activity_slots	is_locked	boolean	YES
 activity_slots	locked_at	timestamp with time zone	YES
 activity_slots	min_participants_per_group	integer	YES
+activity_slots	discover_mode	boolean	NO
+activity_slots	is_cancelled	boolean	NO
+activity_slots	cancelled_reason	text	YES
+activity_slots	cancelled_at	timestamp with time zone	YES
+activity_slots	registration_closed	boolean	NO
 blocked_users	id	uuid	NO
 blocked_users	blocker_id	uuid	NO
 blocked_users	blocked_id	uuid	NO
@@ -138,6 +143,9 @@ group_formation_logs	participants_count	integer	YES
 group_formation_logs	error_message	text	YES
 group_formation_logs	triggered_by	text	YES
 group_formation_logs	created_at	timestamp with time zone	YES
+group_formation_logs	total_participants	integer	YES
+group_formation_logs	avg_compatibility	double precision	YES
+group_formation_logs	details	jsonb	YES
 messages	id	uuid	NO
 messages	conversation_id	uuid	NO
 messages	sender_id	uuid	NO
@@ -153,6 +161,16 @@ messages	reply_to_message_id	uuid	YES
 met_people_hidden	user_id	uuid	NO
 met_people_hidden	hidden_user_id	uuid	NO
 met_people_hidden	created_at	timestamp with time zone	NO
+plus_one_invitations	id	uuid	NO
+plus_one_invitations	slot_id	uuid	NO
+plus_one_invitations	inviter_id	uuid	NO
+plus_one_invitations	invitee_id	uuid	YES
+plus_one_invitations	token	text	NO
+plus_one_invitations	status	text	NO
+plus_one_invitations	payment_mode	text	NO
+plus_one_invitations	created_at	timestamp with time zone	NO
+plus_one_invitations	expires_at	timestamp with time zone	NO
+plus_one_invitations	accepted_at	timestamp with time zone	YES
 profiles	id	uuid	NO
 profiles	username	text	NO
 profiles	full_name	text	YES
@@ -227,6 +245,11 @@ slot_participants	checked_in_at	timestamp with time zone	YES
 slot_participants	checked_in_by	uuid	YES
 slot_participants	checkin_nonce	text	YES
 slot_participants	checkin_token_expires_at	timestamp with time zone	YES
+slot_participants	is_plus_one	boolean	NO
+slot_participants	invited_by	uuid	YES
+slot_participants	plus_one_invitation_id	uuid	YES
+slot_participants	cancelled_notified	boolean	NO
+slot_participants	status	character varying	YES
 v_slots_pending_group_formation	slot_id	uuid	YES
 v_slots_pending_group_formation	activity_id	uuid	YES
 v_slots_pending_group_formation	activity_name	character varying	YES
@@ -246,4 +269,4 @@ v_slow_queries	total_exec_time	double precision	YES
 v_slow_queries	mean_exec_time	double precision	YES
 v_slow_queries	max_exec_time	double precision	YES
 v_slow_queries	rows	bigint	YES
-(247 rows)
+(270 rows)

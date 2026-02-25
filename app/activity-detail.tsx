@@ -494,7 +494,8 @@ export default function ActivityDetailScreen() {
     try {
       if (isJoined) {
         // Logique de désinscription — marquer comme 'cancelled' au lieu de supprimer
-        const { data: currentParticipation } = await supabase
+
+        const { data: currentParticipation, error: selectError } = await supabase
           .from('slot_participants')
           .select('slot_id')
           .eq('activity_id', activity.id)
@@ -503,21 +504,23 @@ export default function ActivityDetailScreen() {
           .maybeSingle();
 
         if (currentParticipation?.slot_id) {
-          await supabase
+          const { data: cancelData, error: cancelError } = await supabase
             .from('slot_participants')
             .update({ status: 'cancelled' })
             .eq('activity_id', activity.id)
             .eq('user_id', currentUserId)
-            .eq('status', 'active');
+            .eq('status', 'active')
+            .select();
 
           await handleLeaveSlotGroup(currentParticipation.slot_id);
         }
 
         const newCount = Math.max(0, activity.participants - 1);
-        await supabase
+        const { data: updateCountData, error: updateCountError } = await supabase
           .from('activities')
           .update({ participants: newCount })
-          .eq('id', activity.id);
+          .eq('id', activity.id)
+          .select();
 
         setIsJoined(false);
         setJoinedSlotId(undefined);

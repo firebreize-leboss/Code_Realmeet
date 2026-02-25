@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict HqkrX3cIvJ3Ax4KiBq2h3PEDK8xHBRb8xbWjTjhUZXm948uHTAVRVefEErM8id9
+\restrict J8QmAjpGNgfw3XxIgmNjMplQeQVF9ry5QRdCahfpnqygGeGT0MYnzpHyKbRVDWl
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.7 (Ubuntu 17.7-0ubuntu0.25.04.1)
@@ -74,6 +74,182 @@ $$;
 
 
 --
+-- Name: accept_plus_one_invitation(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.accept_plus_one_invitation(p_token text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $$
+DECLARE
+  v_user_id UUID;
+  v_validation JSONB;
+  v_invitation_id UUID;
+  v_slot_id UUID;
+  v_inviter_id UUID;
+  v_slot_record RECORD;
+  v_current_participants INTEGER;
+  v_pending_invitations INTEGER;
+BEGIN
+  -- Recuperer l'utilisateur courant
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'NOT_AUTHENTICATED');
+  END IF;
+
+  -- Valider le token
+  v_validation := validate_plus_one_token(p_token);
+  IF NOT (v_validation->>'valid')::boolean THEN
+    RETURN v_validation;
+  END IF;
+
+  -- Extraire les infos de l'invitation
+  v_invitation_id := (v_validation->'invitation'->>'id')::UUID;
+  v_slot_id := (v_validation->'invitation'->>'slot_id')::UUID;
+
+  -- Recuperer l'inviteur
+  SELECT inviter_id INTO v_inviter_id
+  FROM plus_one_invitations WHERE id = v_invitation_id;
+
+  -- Verifier que l'utilisateur n'est pas l'inviteur
+  IF v_user_id = v_inviter_id THEN
+    RETURN jsonb_build_object('success', false, 'error', 'CANNOT_INVITE_SELF');
+  END IF;
+
+  -- Verifier que l'utilisateur n'est pas deja inscrit
+  IF EXISTS (
+    SELECT 1 FROM slot_participants
+    WHERE slot_id = v_slot_id AND user_id = v_user_id
+  ) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'ALREADY_PARTICIPANT');
+  END IF;
+
+  -- Recuperer les infos du creneau et verifier la capacite
+  SELECT s.*, a.max_participants, a.id as activity_id
+  INTO v_slot_record
+  FROM activity_slots s
+  JOIN activities a ON a.id = s.activity_id
+  WHERE s.id = v_slot_id;
+
+  -- Compter les participants actuels
+  SELECT COUNT(*) INTO v_current_participants
+  FROM slot_participants WHERE slot_id = v_slot_id;
+
+  -- [DUO] Compter les invitations pending (hors celle en cours d'acceptation)
+  -- pour avoir une image reelle des places reservees
+  SELECT COUNT(*) INTO v_pending_invitations
+  FROM plus_one_invitations
+  WHERE slot_id = v_slot_id
+    AND status = 'pending'
+    AND expires_at > NOW()
+    AND id != v_invitation_id;
+
+  -- Verifier la capacite en incluant les invitations pending
+  IF (v_current_participants + v_pending_invitations) >= v_slot_record.max_participants THEN
+    RETURN jsonb_build_object('success', false, 'error', 'SLOT_FULL');
+  END IF;
+
+  -- Inscrire le participant
+  INSERT INTO slot_participants (
+    slot_id,
+    user_id,
+    activity_id,
+    is_plus_one,
+    invited_by,
+    plus_one_invitation_id
+  ) VALUES (
+    v_slot_id,
+    v_user_id,
+    v_slot_record.activity_id,
+    true,
+    v_inviter_id,
+    v_invitation_id
+  );
+
+  -- Mettre a jour l'invitation
+  UPDATE plus_one_invitations
+  SET status = 'accepted',
+      invitee_id = v_user_id,
+      accepted_at = NOW()
+  WHERE id = v_invitation_id;
+
+  -- Ajouter au groupe de conversation (si existe)
+  INSERT INTO conversation_participants (conversation_id, user_id)
+  SELECT c.id, v_user_id
+  FROM conversations c
+  WHERE c.slot_id = v_slot_id
+  ON CONFLICT DO NOTHING;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'slot_id', v_slot_id,
+    'activity_id', v_slot_record.activity_id
+  );
+END;
+$$;
+
+
+--
+-- Name: auto_expire_invitation(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.auto_expire_invitation() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF NEW.status = 'pending' AND NEW.expires_at < NOW() THEN
+    NEW.status := 'expired';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: cancel_plus_one_invitation(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.cancel_plus_one_invitation(p_invitation_id uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $$
+DECLARE
+  v_user_id UUID;
+  v_invitation RECORD;
+BEGIN
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'NOT_AUTHENTICATED');
+  END IF;
+
+  -- Recuperer l'invitation
+  SELECT * INTO v_invitation
+  FROM plus_one_invitations
+  WHERE id = p_invitation_id;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'INVITATION_NOT_FOUND');
+  END IF;
+
+  -- Verifier les droits
+  IF v_invitation.inviter_id != v_user_id THEN
+    RETURN jsonb_build_object('success', false, 'error', 'NOT_AUTHORIZED');
+  END IF;
+
+  -- Verifier le statut
+  IF v_invitation.status != 'pending' THEN
+    RETURN jsonb_build_object('success', false, 'error', 'CANNOT_CANCEL');
+  END IF;
+
+  -- Annuler
+  UPDATE plus_one_invitations
+  SET status = 'cancelled'
+  WHERE id = p_invitation_id;
+
+  RETURN jsonb_build_object('success', true);
+END;
+$$;
+
+
+--
 -- Name: cleanup_slot_groups(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -121,13 +297,118 @@ $$;
 
 
 --
+-- Name: create_plus_one_invitation(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.create_plus_one_invitation(p_slot_id uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $$
+DECLARE
+  v_user_id UUID;
+  v_slot_record RECORD;
+  v_existing_invitation RECORD;
+  v_plus_one_count INTEGER;
+  v_pending_invitations INTEGER;
+  v_current_participants INTEGER;
+  v_max_plus_one INTEGER := 2;
+  v_token TEXT;
+  v_invitation_id UUID;
+BEGIN
+  -- Recuperer l'utilisateur courant
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'NOT_AUTHENTICATED');
+  END IF;
+
+  -- Verifier que le creneau existe et recuperer ses infos
+  SELECT s.*, a.max_participants
+  INTO v_slot_record
+  FROM activity_slots s
+  JOIN activities a ON a.id = s.activity_id
+  WHERE s.id = p_slot_id;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'SLOT_NOT_FOUND');
+  END IF;
+
+  -- Verifier que l'utilisateur est participant du creneau
+  IF NOT EXISTS (
+    SELECT 1 FROM slot_participants
+    WHERE slot_id = p_slot_id AND user_id = v_user_id
+  ) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'NOT_PARTICIPANT');
+  END IF;
+
+  -- Verifier le mode Discover
+  IF v_slot_record.discover_mode = true THEN
+    RETURN jsonb_build_object('success', false, 'error', 'DISCOVER_MODE');
+  END IF;
+
+  -- Verifier si une invitation pending existe deja pour cet utilisateur/creneau
+  SELECT * INTO v_existing_invitation
+  FROM plus_one_invitations
+  WHERE slot_id = p_slot_id
+    AND inviter_id = v_user_id
+    AND status = 'pending'
+    AND expires_at > NOW();
+
+  IF FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'ALREADY_HAS_PENDING');
+  END IF;
+
+  -- Compter les +1 actuels pour ce creneau
+  SELECT COUNT(*) INTO v_plus_one_count
+  FROM slot_participants
+  WHERE slot_id = p_slot_id AND is_plus_one = true;
+
+  IF v_plus_one_count >= v_max_plus_one THEN
+    RETURN jsonb_build_object('success', false, 'error', 'MAX_PLUS_ONE_REACHED');
+  END IF;
+
+  -- [DUO] Compter les invitations pending non expirees pour ce creneau
+  -- Cela reserve virtuellement les places pour eviter le surbooking
+  SELECT COUNT(*) INTO v_pending_invitations
+  FROM plus_one_invitations
+  WHERE slot_id = p_slot_id
+    AND status = 'pending'
+    AND expires_at > NOW();
+
+  -- Compter les participants actuels
+  SELECT COUNT(*) INTO v_current_participants
+  FROM slot_participants
+  WHERE slot_id = p_slot_id;
+
+  -- Verifier que participants + invitations pending ne depassent pas la capacite
+  IF (v_current_participants + v_pending_invitations) >= v_slot_record.max_participants THEN
+    RETURN jsonb_build_object('success', false, 'error', 'SLOT_FULL_WITH_PENDING');
+  END IF;
+
+  -- Generer un token unique
+  v_token := replace(gen_random_uuid()::text, '-', '') ||
+             to_char(NOW(), 'YYMMDDHH24MISS');
+
+  -- [DUO] Creer l'invitation avec expiration a 10 minutes
+  INSERT INTO plus_one_invitations (slot_id, inviter_id, token, expires_at)
+  VALUES (p_slot_id, v_user_id, v_token, NOW() + INTERVAL '10 minutes')
+  RETURNING id INTO v_invitation_id;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'token', v_token,
+    'invitation_id', v_invitation_id,
+    'expires_at', (NOW() + INTERVAL '10 minutes')
+  );
+END;
+$$;
+
+
+--
 -- Name: form_groups_v3(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
 CREATE FUNCTION public.form_groups_v3(p_slot_id uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    AS $$
-DECLARE
+    AS $$DECLARE
   v_slot RECORD;
   v_activity RECORD;
   v_total_participants INTEGER;
@@ -136,6 +417,7 @@ DECLARE
   v_remainder INTEGER;
   v_group_sizes INTEGER[];
   v_participant RECORD;
+  v_duo_pair RECORD;
   v_group_id UUID;
   v_conversation_id UUID;
   v_first_user_id UUID;
@@ -148,6 +430,9 @@ DECLARE
   v_group_name TEXT;
   v_avg_compatibility FLOAT;
 BEGIN
+  -- ============================================
+  -- 1. VALIDATIONS
+  -- ============================================
   SELECT * INTO v_slot FROM activity_slots WHERE id = p_slot_id;
   IF v_slot IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'Créneau non trouvé');
@@ -164,10 +449,66 @@ BEGIN
   SELECT COUNT(*) INTO v_total_participants
   FROM slot_participants WHERE slot_id = p_slot_id;
 
-  IF v_total_participants < 2 THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Pas assez de participants', 'count', v_total_participants);
+  -- ============================================
+  -- 2. CHECK MINIMUM PARTICIPANTS → ANNULATION SI PAS ASSEZ
+  -- (remplace l'ancien check < 2)
+  -- ============================================
+  IF v_total_participants < COALESCE(v_slot.min_participants_per_group, 4) THEN
+
+    -- Envoyer un message système dans les conversations du slot
+    FOR v_conversation_id IN
+      SELECT c.id FROM conversations c WHERE c.slot_id = p_slot_id
+    LOOP
+      SELECT user_id INTO v_first_user_id
+      FROM conversation_participants WHERE conversation_id = v_conversation_id LIMIT 1;
+
+      IF v_first_user_id IS NOT NULL THEN
+        INSERT INTO messages (conversation_id, sender_id, content, message_type)
+        VALUES (v_conversation_id, v_first_user_id,
+          '⚠️ Ce créneau a été annulé car il n''y avait pas assez de participants. Vous serez intégralement remboursé.',
+          'system');
+      END IF;
+    END LOOP;
+
+    -- NE PAS supprimer les slot_participants, mettre cancelled_notified = false
+    UPDATE slot_participants
+    SET cancelled_notified = false
+    WHERE slot_id = p_slot_id;
+
+    -- Décrémenter le compteur participants dans activities
+    UPDATE activities
+    SET participants = GREATEST(0, participants - v_total_participants)
+    WHERE id = v_slot.activity_id;
+
+    -- Marquer le créneau comme annulé
+    UPDATE activity_slots
+    SET is_cancelled = true,
+        cancelled_reason = 'insufficient_participants',
+        cancelled_at = NOW(),
+        groups_formed = true,
+        groups_formed_at = NOW(),
+        is_locked = true,
+        registration_closed = true
+    WHERE id = p_slot_id;
+
+    -- Logger
+    INSERT INTO group_formation_logs (slot_id, activity_id, status, participants_count, error_message, triggered_by)
+    VALUES (p_slot_id, v_slot.activity_id, 'cancelled', v_total_participants,
+      'Pas assez de participants (' || v_total_participants || '/' || COALESCE(v_slot.min_participants_per_group, 4) || ')',
+      'form_groups_v3');
+
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'SLOT_CANCELLED_INSUFFICIENT_PARTICIPANTS',
+      'cancelled', true,
+      'count', v_total_participants,
+      'minimum', COALESCE(v_slot.min_participants_per_group, 4)
+    );
   END IF;
 
+  -- ============================================
+  -- 3. CALCUL DU NOMBRE DE GROUPES
+  -- ============================================
   v_num_groups := GREATEST(1, LEAST(
     COALESCE(v_slot.max_groups, 10),
     CEIL(v_total_participants::FLOAT / GREATEST(COALESCE(v_slot.participants_per_group, 5), 2))
@@ -184,12 +525,15 @@ BEGIN
     END IF;
   END LOOP;
 
-  CREATE TEMP TABLE IF NOT EXISTS _temp_group_assignment (
+  -- ============================================
+  -- 4. TABLE TEMPORAIRE
+  -- ============================================
+  DROP TABLE IF EXISTS _temp_group_assignment;
+  CREATE TEMP TABLE _temp_group_assignment (
     user_id UUID PRIMARY KEY,
     interests TEXT[],
     assigned_group INTEGER DEFAULT 0
   );
-  DELETE FROM _temp_group_assignment;
 
   INSERT INTO _temp_group_assignment (user_id, interests)
   SELECT sp.user_id, COALESCE(p.interests, ARRAY[]::TEXT[])
@@ -197,8 +541,76 @@ BEGIN
   JOIN profiles p ON p.id = sp.user_id
   WHERE sp.slot_id = p_slot_id;
 
-  FOR v_participant IN 
-    SELECT * FROM _temp_group_assignment ORDER BY random()
+  -- ============================================
+  -- 5. ASSIGNER LES PAIRES DUO D'ABORD
+  -- ============================================
+  FOR v_duo_pair IN
+    SELECT
+      sp_invitee.user_id AS invitee_id,
+      sp_invitee.invited_by AS inviter_id
+    FROM slot_participants sp_invitee
+    WHERE sp_invitee.slot_id = p_slot_id
+      AND sp_invitee.invited_by IS NOT NULL
+      AND sp_invitee.is_plus_one = true
+      AND EXISTS (
+        SELECT 1 FROM slot_participants sp2
+        WHERE sp2.slot_id = p_slot_id AND sp2.user_id = sp_invitee.invited_by
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM _temp_group_assignment t
+        WHERE t.user_id = sp_invitee.invited_by AND t.assigned_group > 0
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM _temp_group_assignment t
+        WHERE t.user_id = sp_invitee.user_id AND t.assigned_group > 0
+      )
+  LOOP
+    v_best_group := 1;
+    v_best_score := -1;
+    v_min_size := v_total_participants + 1;
+
+    FOR v_i IN 1..v_num_groups LOOP
+      SELECT COUNT(*) INTO v_current_size
+      FROM _temp_group_assignment WHERE assigned_group = v_i;
+
+      IF v_current_size + 2 <= v_group_sizes[v_i] + 1 THEN
+        SELECT COALESCE(SUM(
+          COALESCE(array_length(
+            ARRAY(
+              SELECT unnest(inviter_t.interests) INTERSECT SELECT unnest(t.interests)
+            ), 1
+          ), 0)
+          +
+          COALESCE(array_length(
+            ARRAY(
+              SELECT unnest(invitee_t.interests) INTERSECT SELECT unnest(t.interests)
+            ), 1
+          ), 0)
+        ), 0) INTO v_current_score
+        FROM _temp_group_assignment t
+        CROSS JOIN _temp_group_assignment inviter_t
+        CROSS JOIN _temp_group_assignment invitee_t
+        WHERE t.assigned_group = v_i
+          AND inviter_t.user_id = v_duo_pair.inviter_id
+          AND invitee_t.user_id = v_duo_pair.invitee_id;
+
+        IF v_current_score > v_best_score OR (v_current_score = v_best_score AND v_current_size < v_min_size) THEN
+          v_best_score := v_current_score;
+          v_best_group := v_i;
+          v_min_size := v_current_size;
+        END IF;
+      END IF;
+    END LOOP;
+
+    UPDATE _temp_group_assignment SET assigned_group = v_best_group WHERE user_id = v_duo_pair.inviter_id;
+    UPDATE _temp_group_assignment SET assigned_group = v_best_group WHERE user_id = v_duo_pair.invitee_id;
+  END LOOP;
+
+  -- ============================================
+  -- 6. ASSIGNER LES PARTICIPANTS SOLO
+  -- ============================================
+  FOR v_participant IN
+    SELECT * FROM _temp_group_assignment WHERE assigned_group = 0 ORDER BY random()
   LOOP
     v_best_group := 1;
     v_best_score := -1;
@@ -227,6 +639,9 @@ BEGIN
     UPDATE _temp_group_assignment SET assigned_group = v_best_group WHERE user_id = v_participant.user_id;
   END LOOP;
 
+  -- ============================================
+  -- 7. CRÉER LES GROUPES, CONVERSATIONS, MESSAGES
+  -- ============================================
   FOR v_i IN 1..v_num_groups LOOP
     IF EXISTS (SELECT 1 FROM _temp_group_assignment WHERE assigned_group = v_i) THEN
       v_group_name := v_activity.nom || ' - Groupe ' || v_i;
@@ -246,7 +661,6 @@ BEGIN
         ), 0)
       FROM _temp_group_assignment t WHERE t.assigned_group = v_i;
 
-      -- ✅ CORRIGÉ : ajout de activity_id
       INSERT INTO conversations (slot_id, activity_id, name, image_url, is_group)
       VALUES (p_slot_id, v_slot.activity_id, v_group_name, v_activity.image_url, true)
       RETURNING id INTO v_conversation_id;
@@ -267,26 +681,24 @@ BEGIN
     END IF;
   END LOOP;
 
+  -- ============================================
+  -- 8. FINALISATION
+  -- ============================================
   UPDATE activity_slots
-  SET groups_formed = true, groups_formed_at = NOW(), is_locked = true
+  SET groups_formed = true,
+      groups_formed_at = NOW(),
+      is_locked = true,
+      registration_closed = true
   WHERE id = p_slot_id;
-
-  SELECT AVG(sgm.compatibility_score) INTO v_avg_compatibility
-  FROM slot_group_members sgm
-  JOIN slot_groups sg ON sg.id = sgm.group_id
-  WHERE sg.slot_id = p_slot_id;
-
-  INSERT INTO group_formation_logs (slot_id, activity_id, total_participants, groups_created, avg_compatibility, status, details)
-  VALUES (p_slot_id, v_slot.activity_id, v_total_participants, v_num_groups,
-    COALESCE(v_avg_compatibility, 0), 'success',
-    jsonb_build_object('group_sizes', v_group_sizes, 'method', 'affinity_v3'));
 
   DROP TABLE IF EXISTS _temp_group_assignment;
 
-  RETURN jsonb_build_object('success', true, 'groups_created', v_num_groups,
-    'total_participants', v_total_participants, 'avg_compatibility', COALESCE(v_avg_compatibility, 0));
-END;
-$$;
+  RETURN jsonb_build_object(
+    'success', true,
+    'groups_created', v_num_groups,
+    'total_participants', v_total_participants
+  );
+END;$$;
 
 
 --
@@ -612,7 +1024,13 @@ BEGIN
             cp.last_read_at
         FROM conversation_participants cp
         WHERE cp.user_id = p_user_id
-          AND cp.is_hidden = false  -- ✅ AJOUT DU FILTRE ICI
+          AND cp.is_hidden = false
+    ),
+    -- ✅ AJOUT : récupérer les IDs des utilisateurs bloqués par p_user_id
+    blocked AS (
+        SELECT blocked_id 
+        FROM blocked_users 
+        WHERE blocker_id = p_user_id
     ),
     conversation_data AS (
         SELECT
@@ -640,6 +1058,8 @@ BEGIN
         INNER JOIN conversation_data cd ON m.conversation_id = cd.id
         LEFT JOIN profiles p ON m.sender_id = p.id
         WHERE m.deleted_at IS NULL
+          -- ✅ AJOUT : exclure les messages des utilisateurs bloqués
+          AND m.sender_id NOT IN (SELECT blocked_id FROM blocked)
         ORDER BY m.conversation_id, m.created_at DESC
     ),
     participant_counts AS (
@@ -662,26 +1082,31 @@ BEGIN
           AND cd.is_group = false
         ORDER BY cp.conversation_id
     ),
-    unread_counts AS (
+    unread AS (
         SELECT
             m.conversation_id,
-            COUNT(*) as unread
+            COUNT(*) as cnt
         FROM messages m
         INNER JOIN conversation_data cd ON m.conversation_id = cd.id
         WHERE m.sender_id != p_user_id
-          AND m.deleted_at IS NULL
           AND m.message_type != 'system'
-          AND (cd.last_read_at IS NULL OR m.created_at > cd.last_read_at)
+          AND m.deleted_at IS NULL
+          -- ✅ AJOUT : ne pas compter les messages des bloqués comme non lus
+          AND m.sender_id NOT IN (SELECT blocked_id FROM blocked)
+          AND (
+              cd.last_read_at IS NULL
+              OR m.created_at > cd.last_read_at
+          )
         GROUP BY m.conversation_id
     ),
     slot_info AS (
         SELECT
             cd.id as conversation_id,
             s.date as slot_date,
-            s.time as slot_time,
-            CASE
+            s."time" as slot_time,
+            CASE 
                 WHEN s.date < CURRENT_DATE THEN true
-                WHEN s.date = CURRENT_DATE AND s.time < CURRENT_TIME THEN true
+                WHEN s.date = CURRENT_DATE AND s."time" < CURRENT_TIME THEN true
                 ELSE false
             END as is_past
         FROM conversation_data cd
@@ -692,20 +1117,20 @@ BEGIN
         cd.id as conversation_id,
         cd.name as conversation_name,
         cd.image_url as conversation_image,
-        COALESCE(cd.is_group, false) as is_group,
+        cd.is_group,
         cd.activity_id,
         cd.slot_id,
         cd.updated_at,
-        COALESCE(cd.is_closed, false) as is_closed,
+        cd.is_closed,
         lm.content as last_message_content,
         lm.message_type as last_message_type,
         lm.created_at as last_message_at,
         lm.sender_id as last_message_sender_id,
         lm.sender_name as last_message_sender_name,
-        COALESCE(pc.cnt, 0)::BIGINT as participant_count,
+        COALESCE(pc.cnt, 0) as participant_count,
         op.full_name as other_participant_name,
         op.avatar_url as other_participant_avatar,
-        COALESCE(uc.unread, 0)::BIGINT as unread_count,
+        COALESCE(u.cnt, 0) as unread_count,
         si.slot_date,
         si.slot_time,
         COALESCE(si.is_past, false) as is_past_activity
@@ -713,9 +1138,46 @@ BEGIN
     LEFT JOIN last_messages lm ON cd.id = lm.conversation_id
     LEFT JOIN participant_counts pc ON cd.id = pc.conversation_id
     LEFT JOIN other_participants op ON cd.id = op.conversation_id
-    LEFT JOIN unread_counts uc ON cd.id = uc.conversation_id
+    LEFT JOIN unread u ON cd.id = u.conversation_id
     LEFT JOIN slot_info si ON cd.id = si.conversation_id
-    ORDER BY cd.updated_at DESC;
+    ORDER BY COALESCE(lm.created_at, cd.updated_at) DESC NULLS LAST;
+END;
+$$;
+
+
+--
+-- Name: get_pending_invitations(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.get_pending_invitations(p_slot_id uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $$
+DECLARE
+  v_user_id UUID;
+  v_invitations JSONB;
+BEGIN
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN
+    RETURN '[]'::JSONB;
+  END IF;
+
+  SELECT COALESCE(jsonb_agg(
+    jsonb_build_object(
+      'id', i.id,
+      'token', i.token,
+      'inviter_name', COALESCE(p.full_name, 'Utilisateur'),
+      'created_at', i.created_at,
+      'expires_at', i.expires_at
+    ) ORDER BY i.created_at DESC
+  ), '[]'::JSONB)
+  INTO v_invitations
+  FROM plus_one_invitations i
+  JOIN profiles p ON p.id = i.inviter_id
+  WHERE i.slot_id = p_slot_id
+    AND i.status = 'pending'
+    AND i.expires_at > NOW();
+
+  RETURN v_invitations;
 END;
 $$;
 
@@ -734,6 +1196,45 @@ BEGIN
   WHERE slot_id = p_slot_id;
 
   RETURN COALESCE(v_count, 0);
+END;
+$$;
+
+
+--
+-- Name: get_unseen_cancellations(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.get_unseen_cancellations() RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $$
+DECLARE
+  v_user_id UUID;
+  v_result JSONB;
+BEGIN
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN
+    RETURN '[]'::JSONB;
+  END IF;
+
+  SELECT COALESCE(jsonb_agg(
+    jsonb_build_object(
+      'slot_participant_id', sp.id,
+      'slot_id', sp.slot_id,
+      'activity_name', COALESCE(a.nom, a.titre, 'Activité'),
+      'slot_date', s.date,
+      'slot_time', s.time,
+      'cancelled_reason', s.cancelled_reason
+    )
+  ), '[]'::JSONB)
+  INTO v_result
+  FROM slot_participants sp
+  JOIN activity_slots s ON s.id = sp.slot_id
+  JOIN activities a ON a.id = s.activity_id
+  WHERE sp.user_id = v_user_id
+    AND s.is_cancelled = true
+    AND sp.cancelled_notified = false;
+
+  RETURN v_result;
 END;
 $$;
 
@@ -790,6 +1291,24 @@ CREATE FUNCTION public.handle_updated_at() RETURNS trigger
 BEGIN
   NEW.updated_at = NOW();
   RETURN NEW;
+END;
+$$;
+
+
+--
+-- Name: mark_cancellations_seen(uuid[]); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.mark_cancellations_seen(p_slot_participant_ids uuid[]) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $$
+BEGIN
+  UPDATE slot_participants
+  SET cancelled_notified = true
+  WHERE id = ANY(p_slot_participant_ids)
+    AND user_id = auth.uid();
+
+  RETURN jsonb_build_object('success', true);
 END;
 $$;
 
@@ -1413,6 +1932,77 @@ END;
 $$;
 
 
+--
+-- Name: validate_plus_one_token(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.validate_plus_one_token(p_token text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $$
+DECLARE
+  v_invitation RECORD;
+  v_inviter RECORD;
+  v_slot RECORD;
+  v_activity RECORD;
+BEGIN
+  -- Rechercher l'invitation
+  SELECT * INTO v_invitation
+  FROM plus_one_invitations
+  WHERE token = p_token;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('valid', false, 'error', 'TOKEN_NOT_FOUND');
+  END IF;
+
+  -- Verifier le statut
+  IF v_invitation.status = 'accepted' THEN
+    RETURN jsonb_build_object('valid', false, 'error', 'INVITATION_ALREADY_USED');
+  END IF;
+
+  IF v_invitation.status = 'cancelled' THEN
+    RETURN jsonb_build_object('valid', false, 'error', 'INVITATION_CANCELLED');
+  END IF;
+
+  IF v_invitation.status = 'expired' OR v_invitation.expires_at < NOW() THEN
+    -- Mettre a jour le statut si necessaire
+    UPDATE plus_one_invitations SET status = 'expired' WHERE id = v_invitation.id;
+    RETURN jsonb_build_object('valid', false, 'error', 'INVITATION_EXPIRED');
+  END IF;
+
+  -- Recuperer les infos de l'inviteur
+  SELECT full_name, avatar_url INTO v_inviter
+  FROM profiles WHERE id = v_invitation.inviter_id;
+
+  -- Recuperer les infos du creneau
+  SELECT * INTO v_slot
+  FROM activity_slots WHERE id = v_invitation.slot_id;
+
+  -- [DUO] Recuperer les infos de l'activite avec le prix
+  SELECT id, nom, titre, image_url, adresse, ville, prix INTO v_activity
+  FROM activities WHERE id = v_slot.activity_id;
+
+  RETURN jsonb_build_object(
+    'valid', true,
+    'invitation', jsonb_build_object(
+      'id', v_invitation.id,
+      'slot_id', v_invitation.slot_id,
+      'inviter_name', COALESCE(v_inviter.full_name, 'Quelqu''un'),
+      'inviter_avatar', COALESCE(v_inviter.avatar_url, ''),
+      'activity_name', COALESCE(v_activity.nom, v_activity.titre, 'Activite'),
+      'activity_image', COALESCE(v_activity.image_url, ''),
+      'activity_id', v_activity.id,
+      'price', COALESCE(v_activity.prix, 0),
+      'slot_date', v_slot.date,
+      'slot_time', v_slot.time,
+      'location', COALESCE(v_activity.adresse || ', ' || v_activity.ville, ''),
+      'expires_at', v_invitation.expires_at,
+      'payment_mode', v_invitation.payment_mode
+    )
+  );
+END;
+$$;
+
+
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
@@ -1502,9 +2092,21 @@ CREATE TABLE public.activity_slots (
     is_locked boolean DEFAULT false,
     locked_at timestamp with time zone,
     min_participants_per_group integer DEFAULT 4,
+    discover_mode boolean DEFAULT false NOT NULL,
+    is_cancelled boolean DEFAULT false NOT NULL,
+    cancelled_reason text,
+    cancelled_at timestamp with time zone,
+    registration_closed boolean DEFAULT false NOT NULL,
     CONSTRAINT activity_slots_min_participants_per_group_check CHECK ((min_participants_per_group >= 2)),
     CONSTRAINT check_min_less_than_max CHECK ((min_participants_per_group <= participants_per_group))
 );
+
+
+--
+-- Name: COLUMN activity_slots.discover_mode; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.activity_slots.discover_mode IS 'Lorsque true, les invitations +1 sont desactivees pour ce creneau';
 
 
 --
@@ -1682,7 +2284,7 @@ COMMENT ON COLUMN public.profiles.personality_tags IS 'Tags de personnalité/amb
 -- Name: conversations_with_last_message; Type: VIEW; Schema: public; Owner: -
 --
 
-CREATE VIEW public.conversations_with_last_message AS
+CREATE VIEW public.conversations_with_last_message WITH (security_invoker='true') AS
  SELECT c.id AS conversation_id,
     c.last_message_at,
     m.content AS last_message_content,
@@ -1721,7 +2323,7 @@ CREATE TABLE public.friend_requests (
 -- Name: friend_requests_with_profiles; Type: VIEW; Schema: public; Owner: -
 --
 
-CREATE VIEW public.friend_requests_with_profiles AS
+CREATE VIEW public.friend_requests_with_profiles WITH (security_invoker='true') AS
  SELECT fr.id,
     fr.sender_id,
     fr.receiver_id,
@@ -1753,7 +2355,7 @@ CREATE TABLE public.friendships (
 -- Name: friends_with_profiles; Type: VIEW; Schema: public; Owner: -
 --
 
-CREATE VIEW public.friends_with_profiles AS
+CREATE VIEW public.friends_with_profiles WITH (security_invoker='true') AS
  SELECT f.user_id,
     f.friend_id,
     p.full_name,
@@ -1777,7 +2379,10 @@ CREATE TABLE public.group_formation_logs (
     participants_count integer DEFAULT 0,
     error_message text,
     triggered_by text,
-    created_at timestamp with time zone DEFAULT now()
+    created_at timestamp with time zone DEFAULT now(),
+    total_participants integer DEFAULT 0,
+    avg_compatibility double precision DEFAULT 0,
+    details jsonb
 );
 
 
@@ -1789,6 +2394,26 @@ CREATE TABLE public.met_people_hidden (
     user_id uuid NOT NULL,
     hidden_user_id uuid NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: plus_one_invitations; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.plus_one_invitations (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    slot_id uuid NOT NULL,
+    inviter_id uuid NOT NULL,
+    invitee_id uuid,
+    token text NOT NULL,
+    status text DEFAULT 'pending'::text NOT NULL,
+    payment_mode text DEFAULT 'host_pays'::text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    expires_at timestamp with time zone DEFAULT (now() + '24:00:00'::interval) NOT NULL,
+    accepted_at timestamp with time zone,
+    CONSTRAINT plus_one_invitations_payment_mode_check CHECK ((payment_mode = ANY (ARRAY['host_pays'::text, 'guest_pays'::text]))),
+    CONSTRAINT plus_one_invitations_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'accepted'::text, 'expired'::text, 'cancelled'::text])))
 );
 
 
@@ -1909,7 +2534,12 @@ CREATE TABLE public.slot_participants (
     checked_in_at timestamp with time zone,
     checked_in_by uuid,
     checkin_nonce text,
-    checkin_token_expires_at timestamp with time zone
+    checkin_token_expires_at timestamp with time zone,
+    is_plus_one boolean DEFAULT false NOT NULL,
+    invited_by uuid,
+    plus_one_invitation_id uuid,
+    cancelled_notified boolean DEFAULT false NOT NULL,
+    status character varying DEFAULT 'active'::character varying
 );
 
 
@@ -1942,10 +2572,24 @@ COMMENT ON COLUMN public.slot_participants.checkin_token_expires_at IS 'Expirati
 
 
 --
+-- Name: COLUMN slot_participants.is_plus_one; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.slot_participants.is_plus_one IS 'True si le participant a rejoint via une invitation +1';
+
+
+--
+-- Name: COLUMN slot_participants.invited_by; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.slot_participants.invited_by IS 'ID de l utilisateur qui a envoye l invitation +1';
+
+
+--
 -- Name: v_slots_pending_group_formation; Type: VIEW; Schema: public; Owner: -
 --
 
-CREATE VIEW public.v_slots_pending_group_formation AS
+CREATE VIEW public.v_slots_pending_group_formation WITH (security_invoker='true') AS
  SELECT s.id AS slot_id,
     a.id AS activity_id,
     a.nom AS activity_name,
@@ -1976,7 +2620,7 @@ CREATE VIEW public.v_slots_pending_group_formation AS
 -- Name: v_slow_queries; Type: VIEW; Schema: public; Owner: -
 --
 
-CREATE VIEW public.v_slow_queries AS
+CREATE VIEW public.v_slow_queries WITH (security_invoker='true') AS
  SELECT query,
     calls,
     total_exec_time,
@@ -2154,6 +2798,22 @@ ALTER TABLE ONLY public.messages
 
 ALTER TABLE ONLY public.met_people_hidden
     ADD CONSTRAINT met_people_hidden_pkey PRIMARY KEY (user_id, hidden_user_id);
+
+
+--
+-- Name: plus_one_invitations plus_one_invitations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.plus_one_invitations
+    ADD CONSTRAINT plus_one_invitations_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: plus_one_invitations plus_one_invitations_token_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.plus_one_invitations
+    ADD CONSTRAINT plus_one_invitations_token_key UNIQUE (token);
 
 
 --
@@ -2854,6 +3514,41 @@ CREATE INDEX idx_met_people_hidden_user_id ON public.met_people_hidden USING btr
 
 
 --
+-- Name: idx_plus_one_expires; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_plus_one_expires ON public.plus_one_invitations USING btree (expires_at) WHERE (status = 'pending'::text);
+
+
+--
+-- Name: idx_plus_one_inviter; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_plus_one_inviter ON public.plus_one_invitations USING btree (inviter_id);
+
+
+--
+-- Name: idx_plus_one_slot; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_plus_one_slot ON public.plus_one_invitations USING btree (slot_id);
+
+
+--
+-- Name: idx_plus_one_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_plus_one_status ON public.plus_one_invitations USING btree (status);
+
+
+--
+-- Name: idx_plus_one_token; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_plus_one_token ON public.plus_one_invitations USING btree (token);
+
+
+--
 -- Name: idx_profiles_account_type; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -3054,6 +3749,13 @@ CREATE INDEX idx_slot_participants_activity ON public.slot_participants USING bt
 --
 
 CREATE INDEX idx_slot_participants_activity_id ON public.slot_participants USING btree (activity_id);
+
+
+--
+-- Name: idx_slot_participants_plus_one; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_slot_participants_plus_one ON public.slot_participants USING btree (slot_id) WHERE (is_plus_one = true);
 
 
 --
@@ -3461,6 +4163,30 @@ ALTER TABLE ONLY public.met_people_hidden
 
 
 --
+-- Name: plus_one_invitations plus_one_invitations_invitee_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.plus_one_invitations
+    ADD CONSTRAINT plus_one_invitations_invitee_id_fkey FOREIGN KEY (invitee_id) REFERENCES public.profiles(id) ON DELETE SET NULL;
+
+
+--
+-- Name: plus_one_invitations plus_one_invitations_inviter_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.plus_one_invitations
+    ADD CONSTRAINT plus_one_invitations_inviter_id_fkey FOREIGN KEY (inviter_id) REFERENCES public.profiles(id) ON DELETE CASCADE;
+
+
+--
+-- Name: plus_one_invitations plus_one_invitations_slot_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.plus_one_invitations
+    ADD CONSTRAINT plus_one_invitations_slot_id_fkey FOREIGN KEY (slot_id) REFERENCES public.activity_slots(id) ON DELETE CASCADE;
+
+
+--
 -- Name: profiles profiles_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3549,6 +4275,22 @@ ALTER TABLE ONLY public.slot_participants
 
 
 --
+-- Name: slot_participants slot_participants_invited_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.slot_participants
+    ADD CONSTRAINT slot_participants_invited_by_fkey FOREIGN KEY (invited_by) REFERENCES public.profiles(id) ON DELETE SET NULL;
+
+
+--
+-- Name: slot_participants slot_participants_plus_one_invitation_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.slot_participants
+    ADD CONSTRAINT slot_participants_plus_one_invitation_id_fkey FOREIGN KEY (plus_one_invitation_id) REFERENCES public.plus_one_invitations(id) ON DELETE SET NULL;
+
+
+--
 -- Name: slot_participants slot_participants_slot_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3562,6 +4304,13 @@ ALTER TABLE ONLY public.slot_participants
 
 ALTER TABLE ONLY public.slot_participants
     ADD CONSTRAINT slot_participants_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.profiles(id) ON DELETE CASCADE;
+
+
+--
+-- Name: plus_one_invitations Anyone can validate token; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Anyone can validate token" ON public.plus_one_invitations FOR SELECT USING (true);
 
 
 --
@@ -3627,19 +4376,6 @@ CREATE POLICY "Business can insert own stats" ON public.business_stats FOR INSER
 
 
 --
--- Name: messages Business can read messages in their activity groups; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Business can read messages in their activity groups" ON public.messages FOR SELECT USING (((EXISTS ( SELECT 1
-   FROM public.conversation_participants cp
-  WHERE ((cp.conversation_id = messages.conversation_id) AND (cp.user_id = auth.uid())))) OR (EXISTS ( SELECT 1
-   FROM ((public.conversations c
-     JOIN public.activity_slots s ON ((s.id = c.slot_id)))
-     JOIN public.activities a ON ((a.id = s.activity_id)))
-  WHERE ((c.id = messages.conversation_id) AND (a.host_id = auth.uid()))))));
-
-
---
 -- Name: business_stats Business can update own stats; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -3700,6 +4436,20 @@ CREATE POLICY "Insertion authentifiée" ON public.activities FOR INSERT TO authe
 
 
 --
+-- Name: plus_one_invitations Inviters can delete their invitations; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Inviters can delete their invitations" ON public.plus_one_invitations FOR DELETE USING ((auth.uid() = inviter_id));
+
+
+--
+-- Name: plus_one_invitations Inviters can update their invitations; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Inviters can update their invitations" ON public.plus_one_invitations FOR UPDATE USING ((auth.uid() = inviter_id));
+
+
+--
 -- Name: activities Lecture publique des activités; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -3753,6 +4503,13 @@ CREATE POLICY "Users can create blocks" ON public.blocked_users FOR INSERT WITH 
 --
 
 CREATE POLICY "Users can create friend requests" ON public.friend_requests FOR INSERT WITH CHECK ((auth.uid() = sender_id));
+
+
+--
+-- Name: plus_one_invitations Users can create invitations; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Users can create invitations" ON public.plus_one_invitations FOR INSERT WITH CHECK ((auth.uid() = inviter_id));
 
 
 --
@@ -3835,6 +4592,13 @@ CREATE POLICY "Users can unhide users" ON public.met_people_hidden FOR DELETE US
 
 
 --
+-- Name: slot_participants Users can update own participation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Users can update own participation" ON public.slot_participants FOR UPDATE USING ((user_id = auth.uid()));
+
+
+--
 -- Name: profiles Users can update own profile; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -3859,14 +4623,16 @@ CREATE POLICY "Users can update their received friend requests" ON public.friend
 -- Name: messages Users can view messages in their conversations; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view messages in their conversations" ON public.messages FOR SELECT USING (((EXISTS ( SELECT 1
+CREATE POLICY "Users can view messages in their conversations" ON public.messages FOR SELECT USING ((((EXISTS ( SELECT 1
    FROM public.conversation_participants
   WHERE ((conversation_participants.conversation_id = messages.conversation_id) AND (conversation_participants.user_id = auth.uid())))) OR (EXISTS ( SELECT 1
    FROM (public.conversations c
      JOIN public.activities a ON (((c.activity_id = a.id) OR (EXISTS ( SELECT 1
            FROM public.activity_slots s
           WHERE ((s.id = c.slot_id) AND (s.activity_id = a.id)))))))
-  WHERE ((c.id = messages.conversation_id) AND (a.host_id = auth.uid()))))));
+  WHERE ((c.id = messages.conversation_id) AND (a.host_id = auth.uid()))))) AND (NOT (EXISTS ( SELECT 1
+   FROM public.blocked_users
+  WHERE ((blocked_users.blocker_id = auth.uid()) AND (blocked_users.blocked_id = messages.sender_id)))))));
 
 
 --
@@ -3895,6 +4661,13 @@ CREATE POLICY "Users can view slot_groups" ON public.slot_groups FOR SELECT USIN
 --
 
 CREATE POLICY "Users can view their friendships" ON public.friendships FOR SELECT USING ((auth.uid() = user_id));
+
+
+--
+-- Name: plus_one_invitations Users can view their invitations; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Users can view their invitations" ON public.plus_one_invitations FOR SELECT USING (((auth.uid() = inviter_id) OR (auth.uid() = invitee_id)));
 
 
 --
@@ -4059,6 +4832,12 @@ CREATE POLICY participants_update ON public.conversation_participants FOR UPDATE
 
 
 --
+-- Name: plus_one_invitations; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.plus_one_invitations ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: profiles; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -4124,6 +4903,12 @@ ALTER TABLE public.slot_group_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.slot_groups ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: slot_groups_backup; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.slot_groups_backup ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: slot_participants; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -4133,5 +4918,5 @@ ALTER TABLE public.slot_participants ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict HqkrX3cIvJ3Ax4KiBq2h3PEDK8xHBRb8xbWjTjhUZXm948uHTAVRVefEErM8id9
+\unrestrict J8QmAjpGNgfw3XxIgmNjMplQeQVF9ry5QRdCahfpnqygGeGT0MYnzpHyKbRVDWl
 
