@@ -19,6 +19,7 @@ public	_group_formation_logs
 public	_gtrgm
 public	_messages
 public	_met_people_hidden
+public	_plus_one_invitations
 public	_profiles
 public	_reports
 public	_reviews
@@ -48,6 +49,7 @@ public	group_formation_logs
 public	gtrgm
 public	messages
 public	met_people_hidden
+public	plus_one_invitations
 public	profiles
 public	reports
 public	reviews
@@ -57,4 +59,4 @@ public	slot_groups_backup
 public	slot_participants
 public	v_slots_pending_group_formation
 public	v_slow_queries
-(58 rows)
+(60 rows)

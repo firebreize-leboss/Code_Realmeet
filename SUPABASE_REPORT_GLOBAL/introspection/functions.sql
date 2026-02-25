@@ -36,6 +36,172 @@ BEGIN
 END;
 $function$
 
+public|accept_plus_one_invitation|CREATE OR REPLACE FUNCTION public.accept_plus_one_invitation(p_token text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+DECLARE
+  v_user_id UUID;
+  v_validation JSONB;
+  v_invitation_id UUID;
+  v_slot_id UUID;
+  v_inviter_id UUID;
+  v_slot_record RECORD;
+  v_current_participants INTEGER;
+  v_pending_invitations INTEGER;
+BEGIN
+  -- Recuperer l'utilisateur courant
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'NOT_AUTHENTICATED');
+  END IF;
+
+  -- Valider le token
+  v_validation := validate_plus_one_token(p_token);
+  IF NOT (v_validation->>'valid')::boolean THEN
+    RETURN v_validation;
+  END IF;
+
+  -- Extraire les infos de l'invitation
+  v_invitation_id := (v_validation->'invitation'->>'id')::UUID;
+  v_slot_id := (v_validation->'invitation'->>'slot_id')::UUID;
+
+  -- Recuperer l'inviteur
+  SELECT inviter_id INTO v_inviter_id
+  FROM plus_one_invitations WHERE id = v_invitation_id;
+
+  -- Verifier que l'utilisateur n'est pas l'inviteur
+  IF v_user_id = v_inviter_id THEN
+    RETURN jsonb_build_object('success', false, 'error', 'CANNOT_INVITE_SELF');
+  END IF;
+
+  -- Verifier que l'utilisateur n'est pas deja inscrit
+  IF EXISTS (
+    SELECT 1 FROM slot_participants
+    WHERE slot_id = v_slot_id AND user_id = v_user_id
+  ) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'ALREADY_PARTICIPANT');
+  END IF;
+
+  -- Recuperer les infos du creneau et verifier la capacite
+  SELECT s.*, a.max_participants, a.id as activity_id
+  INTO v_slot_record
+  FROM activity_slots s
+  JOIN activities a ON a.id = s.activity_id
+  WHERE s.id = v_slot_id;
+
+  -- Compter les participants actuels
+  SELECT COUNT(*) INTO v_current_participants
+  FROM slot_participants WHERE slot_id = v_slot_id;
+
+  -- [DUO] Compter les invitations pending (hors celle en cours d'acceptation)
+  -- pour avoir une image reelle des places reservees
+  SELECT COUNT(*) INTO v_pending_invitations
+  FROM plus_one_invitations
+  WHERE slot_id = v_slot_id
+    AND status = 'pending'
+    AND expires_at > NOW()
+    AND id != v_invitation_id;
+
+  -- Verifier la capacite en incluant les invitations pending
+  IF (v_current_participants + v_pending_invitations) >= v_slot_record.max_participants THEN
+    RETURN jsonb_build_object('success', false, 'error', 'SLOT_FULL');
+  END IF;
+
+  -- Inscrire le participant
+  INSERT INTO slot_participants (
+    slot_id,
+    user_id,
+    activity_id,
+    is_plus_one,
+    invited_by,
+    plus_one_invitation_id
+  ) VALUES (
+    v_slot_id,
+    v_user_id,
+    v_slot_record.activity_id,
+    true,
+    v_inviter_id,
+    v_invitation_id
+  );
+
+  -- Mettre a jour l'invitation
+  UPDATE plus_one_invitations
+  SET status = 'accepted',
+      invitee_id = v_user_id,
+      accepted_at = NOW()
+  WHERE id = v_invitation_id;
+
+  -- Ajouter au groupe de conversation (si existe)
+  INSERT INTO conversation_participants (conversation_id, user_id)
+  SELECT c.id, v_user_id
+  FROM conversations c
+  WHERE c.slot_id = v_slot_id
+  ON CONFLICT DO NOTHING;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'slot_id', v_slot_id,
+    'activity_id', v_slot_record.activity_id
+  );
+END;
+$function$
+
+public|auto_expire_invitation|CREATE OR REPLACE FUNCTION public.auto_expire_invitation()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  IF NEW.status = 'pending' AND NEW.expires_at < NOW() THEN
+    NEW.status := 'expired';
+  END IF;
+  RETURN NEW;
+END;
+$function$
+
+public|cancel_plus_one_invitation|CREATE OR REPLACE FUNCTION public.cancel_plus_one_invitation(p_invitation_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+DECLARE
+  v_user_id UUID;
+  v_invitation RECORD;
+BEGIN
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'NOT_AUTHENTICATED');
+  END IF;
+
+  -- Recuperer l'invitation
+  SELECT * INTO v_invitation
+  FROM plus_one_invitations
+  WHERE id = p_invitation_id;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'INVITATION_NOT_FOUND');
+  END IF;
+
+  -- Verifier les droits
+  IF v_invitation.inviter_id != v_user_id THEN
+    RETURN jsonb_build_object('success', false, 'error', 'NOT_AUTHORIZED');
+  END IF;
+
+  -- Verifier le statut
+  IF v_invitation.status != 'pending' THEN
+    RETURN jsonb_build_object('success', false, 'error', 'CANNOT_CANCEL');
+  END IF;
+
+  -- Annuler
+  UPDATE plus_one_invitations
+  SET status = 'cancelled'
+  WHERE id = p_invitation_id;
+
+  RETURN jsonb_build_object('success', true);
+END;
+$function$
+
 public|cleanup_slot_groups|CREATE OR REPLACE FUNCTION public.cleanup_slot_groups(p_slot_id uuid)
  RETURNS void
  LANGUAGE plpgsql
@@ -76,11 +242,114 @@ BEGIN
 END;
 $function$
 
-public|cube|CREATE OR REPLACE FUNCTION public.cube(cube, double precision, double precision)
+public|create_plus_one_invitation|CREATE OR REPLACE FUNCTION public.create_plus_one_invitation(p_slot_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+DECLARE
+  v_user_id UUID;
+  v_slot_record RECORD;
+  v_existing_invitation RECORD;
+  v_plus_one_count INTEGER;
+  v_pending_invitations INTEGER;
+  v_current_participants INTEGER;
+  v_max_plus_one INTEGER := 2;
+  v_token TEXT;
+  v_invitation_id UUID;
+BEGIN
+  -- Recuperer l'utilisateur courant
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'NOT_AUTHENTICATED');
+  END IF;
+
+  -- Verifier que le creneau existe et recuperer ses infos
+  SELECT s.*, a.max_participants
+  INTO v_slot_record
+  FROM activity_slots s
+  JOIN activities a ON a.id = s.activity_id
+  WHERE s.id = p_slot_id;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'SLOT_NOT_FOUND');
+  END IF;
+
+  -- Verifier que l'utilisateur est participant du creneau
+  IF NOT EXISTS (
+    SELECT 1 FROM slot_participants
+    WHERE slot_id = p_slot_id AND user_id = v_user_id
+  ) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'NOT_PARTICIPANT');
+  END IF;
+
+  -- Verifier le mode Discover
+  IF v_slot_record.discover_mode = true THEN
+    RETURN jsonb_build_object('success', false, 'error', 'DISCOVER_MODE');
+  END IF;
+
+  -- Verifier si une invitation pending existe deja pour cet utilisateur/creneau
+  SELECT * INTO v_existing_invitation
+  FROM plus_one_invitations
+  WHERE slot_id = p_slot_id
+    AND inviter_id = v_user_id
+    AND status = 'pending'
+    AND expires_at > NOW();
+
+  IF FOUND THEN
+    RETURN jsonb_build_object('success', false, 'error', 'ALREADY_HAS_PENDING');
+  END IF;
+
+  -- Compter les +1 actuels pour ce creneau
+  SELECT COUNT(*) INTO v_plus_one_count
+  FROM slot_participants
+  WHERE slot_id = p_slot_id AND is_plus_one = true;
+
+  IF v_plus_one_count >= v_max_plus_one THEN
+    RETURN jsonb_build_object('success', false, 'error', 'MAX_PLUS_ONE_REACHED');
+  END IF;
+
+  -- [DUO] Compter les invitations pending non expirees pour ce creneau
+  -- Cela reserve virtuellement les places pour eviter le surbooking
+  SELECT COUNT(*) INTO v_pending_invitations
+  FROM plus_one_invitations
+  WHERE slot_id = p_slot_id
+    AND status = 'pending'
+    AND expires_at > NOW();
+
+  -- Compter les participants actuels
+  SELECT COUNT(*) INTO v_current_participants
+  FROM slot_participants
+  WHERE slot_id = p_slot_id;
+
+  -- Verifier que participants + invitations pending ne depassent pas la capacite
+  IF (v_current_participants + v_pending_invitations) >= v_slot_record.max_participants THEN
+    RETURN jsonb_build_object('success', false, 'error', 'SLOT_FULL_WITH_PENDING');
+  END IF;
+
+  -- Generer un token unique
+  v_token := replace(gen_random_uuid()::text, '-', '') ||
+             to_char(NOW(), 'YYMMDDHH24MISS');
+
+  -- [DUO] Creer l'invitation avec expiration a 10 minutes
+  INSERT INTO plus_one_invitations (slot_id, inviter_id, token, expires_at)
+  VALUES (p_slot_id, v_user_id, v_token, NOW() + INTERVAL '10 minutes')
+  RETURNING id INTO v_invitation_id;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'token', v_token,
+    'invitation_id', v_invitation_id,
+    'expires_at', (NOW() + INTERVAL '10 minutes')
+  );
+END;
+$function$
+
+public|cube|CREATE OR REPLACE FUNCTION public.cube(cube, double precision)
  RETURNS cube
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/cube', $function$cube_c_f8_f8$function$
+AS '$libdir/cube', $function$cube_c_f8$function$
 
 public|cube|CREATE OR REPLACE FUNCTION public.cube(double precision[], double precision[])
  RETURNS cube
@@ -106,11 +375,11 @@ public|cube|CREATE OR REPLACE FUNCTION public.cube(double precision, double prec
  IMMUTABLE PARALLEL SAFE STRICT
 AS '$libdir/cube', $function$cube_f8_f8$function$
 
-public|cube|CREATE OR REPLACE FUNCTION public.cube(cube, double precision)
+public|cube|CREATE OR REPLACE FUNCTION public.cube(cube, double precision, double precision)
  RETURNS cube
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/cube', $function$cube_c_f8$function$
+AS '$libdir/cube', $function$cube_c_f8_f8$function$
 
 public|cube_cmp|CREATE OR REPLACE FUNCTION public.cube_cmp(cube, cube)
  RETURNS integer
@@ -302,8 +571,7 @@ public|form_groups_v3|CREATE OR REPLACE FUNCTION public.form_groups_v3(p_slot_id
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
-AS $function$
-DECLARE
+AS $function$DECLARE
   v_slot RECORD;
   v_activity RECORD;
   v_total_participants INTEGER;
@@ -312,6 +580,7 @@ DECLARE
   v_remainder INTEGER;
   v_group_sizes INTEGER[];
   v_participant RECORD;
+  v_duo_pair RECORD;
   v_group_id UUID;
   v_conversation_id UUID;
   v_first_user_id UUID;
@@ -324,6 +593,9 @@ DECLARE
   v_group_name TEXT;
   v_avg_compatibility FLOAT;
 BEGIN
+  -- ============================================
+  -- 1. VALIDATIONS
+  -- ============================================
   SELECT * INTO v_slot FROM activity_slots WHERE id = p_slot_id;
   IF v_slot IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'Créneau non trouvé');
@@ -340,10 +612,66 @@ BEGIN
   SELECT COUNT(*) INTO v_total_participants
   FROM slot_participants WHERE slot_id = p_slot_id;
 
-  IF v_total_participants < 2 THEN
-    RETURN jsonb_build_object('success', false, 'error', 'Pas assez de participants', 'count', v_total_participants);
+  -- ============================================
+  -- 2. CHECK MINIMUM PARTICIPANTS → ANNULATION SI PAS ASSEZ
+  -- (remplace l'ancien check < 2)
+  -- ============================================
+  IF v_total_participants < COALESCE(v_slot.min_participants_per_group, 4) THEN
+
+    -- Envoyer un message système dans les conversations du slot
+    FOR v_conversation_id IN
+      SELECT c.id FROM conversations c WHERE c.slot_id = p_slot_id
+    LOOP
+      SELECT user_id INTO v_first_user_id
+      FROM conversation_participants WHERE conversation_id = v_conversation_id LIMIT 1;
+
+      IF v_first_user_id IS NOT NULL THEN
+        INSERT INTO messages (conversation_id, sender_id, content, message_type)
+        VALUES (v_conversation_id, v_first_user_id,
+          '⚠️ Ce créneau a été annulé car il n''y avait pas assez de participants. Vous serez intégralement remboursé.',
+          'system');
+      END IF;
+    END LOOP;
+
+    -- NE PAS supprimer les slot_participants, mettre cancelled_notified = false
+    UPDATE slot_participants
+    SET cancelled_notified = false
+    WHERE slot_id = p_slot_id;
+
+    -- Décrémenter le compteur participants dans activities
+    UPDATE activities
+    SET participants = GREATEST(0, participants - v_total_participants)
+    WHERE id = v_slot.activity_id;
+
+    -- Marquer le créneau comme annulé
+    UPDATE activity_slots
+    SET is_cancelled = true,
+        cancelled_reason = 'insufficient_participants',
+        cancelled_at = NOW(),
+        groups_formed = true,
+        groups_formed_at = NOW(),
+        is_locked = true,
+        registration_closed = true
+    WHERE id = p_slot_id;
+
+    -- Logger
+    INSERT INTO group_formation_logs (slot_id, activity_id, status, participants_count, error_message, triggered_by)
+    VALUES (p_slot_id, v_slot.activity_id, 'cancelled', v_total_participants,
+      'Pas assez de participants (' || v_total_participants || '/' || COALESCE(v_slot.min_participants_per_group, 4) || ')',
+      'form_groups_v3');
+
+    RETURN jsonb_build_object(
+      'success', false,
+      'error', 'SLOT_CANCELLED_INSUFFICIENT_PARTICIPANTS',
+      'cancelled', true,
+      'count', v_total_participants,
+      'minimum', COALESCE(v_slot.min_participants_per_group, 4)
+    );
   END IF;
 
+  -- ============================================
+  -- 3. CALCUL DU NOMBRE DE GROUPES
+  -- ============================================
   v_num_groups := GREATEST(1, LEAST(
     COALESCE(v_slot.max_groups, 10),
     CEIL(v_total_participants::FLOAT / GREATEST(COALESCE(v_slot.participants_per_group, 5), 2))
@@ -360,12 +688,15 @@ BEGIN
     END IF;
   END LOOP;
 
-  CREATE TEMP TABLE IF NOT EXISTS _temp_group_assignment (
+  -- ============================================
+  -- 4. TABLE TEMPORAIRE
+  -- ============================================
+  DROP TABLE IF EXISTS _temp_group_assignment;
+  CREATE TEMP TABLE _temp_group_assignment (
     user_id UUID PRIMARY KEY,
     interests TEXT[],
     assigned_group INTEGER DEFAULT 0
   );
-  DELETE FROM _temp_group_assignment;
 
   INSERT INTO _temp_group_assignment (user_id, interests)
   SELECT sp.user_id, COALESCE(p.interests, ARRAY[]::TEXT[])
@@ -373,8 +704,76 @@ BEGIN
   JOIN profiles p ON p.id = sp.user_id
   WHERE sp.slot_id = p_slot_id;
 
-  FOR v_participant IN 
-    SELECT * FROM _temp_group_assignment ORDER BY random()
+  -- ============================================
+  -- 5. ASSIGNER LES PAIRES DUO D'ABORD
+  -- ============================================
+  FOR v_duo_pair IN
+    SELECT
+      sp_invitee.user_id AS invitee_id,
+      sp_invitee.invited_by AS inviter_id
+    FROM slot_participants sp_invitee
+    WHERE sp_invitee.slot_id = p_slot_id
+      AND sp_invitee.invited_by IS NOT NULL
+      AND sp_invitee.is_plus_one = true
+      AND EXISTS (
+        SELECT 1 FROM slot_participants sp2
+        WHERE sp2.slot_id = p_slot_id AND sp2.user_id = sp_invitee.invited_by
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM _temp_group_assignment t
+        WHERE t.user_id = sp_invitee.invited_by AND t.assigned_group > 0
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM _temp_group_assignment t
+        WHERE t.user_id = sp_invitee.user_id AND t.assigned_group > 0
+      )
+  LOOP
+    v_best_group := 1;
+    v_best_score := -1;
+    v_min_size := v_total_participants + 1;
+
+    FOR v_i IN 1..v_num_groups LOOP
+      SELECT COUNT(*) INTO v_current_size
+      FROM _temp_group_assignment WHERE assigned_group = v_i;
+
+      IF v_current_size + 2 <= v_group_sizes[v_i] + 1 THEN
+        SELECT COALESCE(SUM(
+          COALESCE(array_length(
+            ARRAY(
+              SELECT unnest(inviter_t.interests) INTERSECT SELECT unnest(t.interests)
+            ), 1
+          ), 0)
+          +
+          COALESCE(array_length(
+            ARRAY(
+              SELECT unnest(invitee_t.interests) INTERSECT SELECT unnest(t.interests)
+            ), 1
+          ), 0)
+        ), 0) INTO v_current_score
+        FROM _temp_group_assignment t
+        CROSS JOIN _temp_group_assignment inviter_t
+        CROSS JOIN _temp_group_assignment invitee_t
+        WHERE t.assigned_group = v_i
+          AND inviter_t.user_id = v_duo_pair.inviter_id
+          AND invitee_t.user_id = v_duo_pair.invitee_id;
+
+        IF v_current_score > v_best_score OR (v_current_score = v_best_score AND v_current_size < v_min_size) THEN
+          v_best_score := v_current_score;
+          v_best_group := v_i;
+          v_min_size := v_current_size;
+        END IF;
+      END IF;
+    END LOOP;
+
+    UPDATE _temp_group_assignment SET assigned_group = v_best_group WHERE user_id = v_duo_pair.inviter_id;
+    UPDATE _temp_group_assignment SET assigned_group = v_best_group WHERE user_id = v_duo_pair.invitee_id;
+  END LOOP;
+
+  -- ============================================
+  -- 6. ASSIGNER LES PARTICIPANTS SOLO
+  -- ============================================
+  FOR v_participant IN
+    SELECT * FROM _temp_group_assignment WHERE assigned_group = 0 ORDER BY random()
   LOOP
     v_best_group := 1;
     v_best_score := -1;
@@ -403,6 +802,9 @@ BEGIN
     UPDATE _temp_group_assignment SET assigned_group = v_best_group WHERE user_id = v_participant.user_id;
   END LOOP;
 
+  -- ============================================
+  -- 7. CRÉER LES GROUPES, CONVERSATIONS, MESSAGES
+  -- ============================================
   FOR v_i IN 1..v_num_groups LOOP
     IF EXISTS (SELECT 1 FROM _temp_group_assignment WHERE assigned_group = v_i) THEN
       v_group_name := v_activity.nom || ' - Groupe ' || v_i;
@@ -422,7 +824,6 @@ BEGIN
         ), 0)
       FROM _temp_group_assignment t WHERE t.assigned_group = v_i;
 
-      -- ✅ CORRIGÉ : ajout de activity_id
       INSERT INTO conversations (slot_id, activity_id, name, image_url, is_group)
       VALUES (p_slot_id, v_slot.activity_id, v_group_name, v_activity.image_url, true)
       RETURNING id INTO v_conversation_id;
@@ -443,26 +844,24 @@ BEGIN
     END IF;
   END LOOP;
 
+  -- ============================================
+  -- 8. FINALISATION
+  -- ============================================
   UPDATE activity_slots
-  SET groups_formed = true, groups_formed_at = NOW(), is_locked = true
+  SET groups_formed = true,
+      groups_formed_at = NOW(),
+      is_locked = true,
+      registration_closed = true
   WHERE id = p_slot_id;
-
-  SELECT AVG(sgm.compatibility_score) INTO v_avg_compatibility
-  FROM slot_group_members sgm
-  JOIN slot_groups sg ON sg.id = sgm.group_id
-  WHERE sg.slot_id = p_slot_id;
-
-  INSERT INTO group_formation_logs (slot_id, activity_id, total_participants, groups_created, avg_compatibility, status, details)
-  VALUES (p_slot_id, v_slot.activity_id, v_total_participants, v_num_groups,
-    COALESCE(v_avg_compatibility, 0), 'success',
-    jsonb_build_object('group_sizes', v_group_sizes, 'method', 'affinity_v3'));
 
   DROP TABLE IF EXISTS _temp_group_assignment;
 
-  RETURN jsonb_build_object('success', true, 'groups_created', v_num_groups,
-    'total_participants', v_total_participants, 'avg_compatibility', COALESCE(v_avg_compatibility, 0));
-END;
-$function$
+  RETURN jsonb_build_object(
+    'success', true,
+    'groups_created', v_num_groups,
+    'total_participants', v_total_participants
+  );
+END;$function$
 
 public|g_cube_consistent|CREATE OR REPLACE FUNCTION public.g_cube_consistent(internal, cube, smallint, oid, internal)
  RETURNS boolean
@@ -815,7 +1214,13 @@ BEGIN
             cp.last_read_at
         FROM conversation_participants cp
         WHERE cp.user_id = p_user_id
-          AND cp.is_hidden = false  -- ✅ AJOUT DU FILTRE ICI
+          AND cp.is_hidden = false
+    ),
+    -- ✅ AJOUT : récupérer les IDs des utilisateurs bloqués par p_user_id
+    blocked AS (
+        SELECT blocked_id 
+        FROM blocked_users 
+        WHERE blocker_id = p_user_id
     ),
     conversation_data AS (
         SELECT
@@ -843,6 +1248,8 @@ BEGIN
         INNER JOIN conversation_data cd ON m.conversation_id = cd.id
         LEFT JOIN profiles p ON m.sender_id = p.id
         WHERE m.deleted_at IS NULL
+          -- ✅ AJOUT : exclure les messages des utilisateurs bloqués
+          AND m.sender_id NOT IN (SELECT blocked_id FROM blocked)
         ORDER BY m.conversation_id, m.created_at DESC
     ),
     participant_counts AS (
@@ -865,26 +1272,31 @@ BEGIN
           AND cd.is_group = false
         ORDER BY cp.conversation_id
     ),
-    unread_counts AS (
+    unread AS (
         SELECT
             m.conversation_id,
-            COUNT(*) as unread
+            COUNT(*) as cnt
         FROM messages m
         INNER JOIN conversation_data cd ON m.conversation_id = cd.id
         WHERE m.sender_id != p_user_id
-          AND m.deleted_at IS NULL
           AND m.message_type != 'system'
-          AND (cd.last_read_at IS NULL OR m.created_at > cd.last_read_at)
+          AND m.deleted_at IS NULL
+          -- ✅ AJOUT : ne pas compter les messages des bloqués comme non lus
+          AND m.sender_id NOT IN (SELECT blocked_id FROM blocked)
+          AND (
+              cd.last_read_at IS NULL
+              OR m.created_at > cd.last_read_at
+          )
         GROUP BY m.conversation_id
     ),
     slot_info AS (
         SELECT
             cd.id as conversation_id,
             s.date as slot_date,
-            s.time as slot_time,
-            CASE
+            s."time" as slot_time,
+            CASE 
                 WHEN s.date < CURRENT_DATE THEN true
-                WHEN s.date = CURRENT_DATE AND s.time < CURRENT_TIME THEN true
+                WHEN s.date = CURRENT_DATE AND s."time" < CURRENT_TIME THEN true
                 ELSE false
             END as is_past
         FROM conversation_data cd
@@ -895,20 +1307,20 @@ BEGIN
         cd.id as conversation_id,
         cd.name as conversation_name,
         cd.image_url as conversation_image,
-        COALESCE(cd.is_group, false) as is_group,
+        cd.is_group,
         cd.activity_id,
         cd.slot_id,
         cd.updated_at,
-        COALESCE(cd.is_closed, false) as is_closed,
+        cd.is_closed,
         lm.content as last_message_content,
         lm.message_type as last_message_type,
         lm.created_at as last_message_at,
         lm.sender_id as last_message_sender_id,
         lm.sender_name as last_message_sender_name,
-        COALESCE(pc.cnt, 0)::BIGINT as participant_count,
+        COALESCE(pc.cnt, 0) as participant_count,
         op.full_name as other_participant_name,
         op.avatar_url as other_participant_avatar,
-        COALESCE(uc.unread, 0)::BIGINT as unread_count,
+        COALESCE(u.cnt, 0) as unread_count,
         si.slot_date,
         si.slot_time,
         COALESCE(si.is_past, false) as is_past_activity
@@ -916,9 +1328,43 @@ BEGIN
     LEFT JOIN last_messages lm ON cd.id = lm.conversation_id
     LEFT JOIN participant_counts pc ON cd.id = pc.conversation_id
     LEFT JOIN other_participants op ON cd.id = op.conversation_id
-    LEFT JOIN unread_counts uc ON cd.id = uc.conversation_id
+    LEFT JOIN unread u ON cd.id = u.conversation_id
     LEFT JOIN slot_info si ON cd.id = si.conversation_id
-    ORDER BY cd.updated_at DESC;
+    ORDER BY COALESCE(lm.created_at, cd.updated_at) DESC NULLS LAST;
+END;
+$function$
+
+public|get_pending_invitations|CREATE OR REPLACE FUNCTION public.get_pending_invitations(p_slot_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+DECLARE
+  v_user_id UUID;
+  v_invitations JSONB;
+BEGIN
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN
+    RETURN '[]'::JSONB;
+  END IF;
+
+  SELECT COALESCE(jsonb_agg(
+    jsonb_build_object(
+      'id', i.id,
+      'token', i.token,
+      'inviter_name', COALESCE(p.full_name, 'Utilisateur'),
+      'created_at', i.created_at,
+      'expires_at', i.expires_at
+    ) ORDER BY i.created_at DESC
+  ), '[]'::JSONB)
+  INTO v_invitations
+  FROM plus_one_invitations i
+  JOIN profiles p ON p.id = i.inviter_id
+  WHERE i.slot_id = p_slot_id
+    AND i.status = 'pending'
+    AND i.expires_at > NOW();
+
+  RETURN v_invitations;
 END;
 $function$
 
@@ -934,6 +1380,42 @@ BEGIN
   WHERE slot_id = p_slot_id;
 
   RETURN COALESCE(v_count, 0);
+END;
+$function$
+
+public|get_unseen_cancellations|CREATE OR REPLACE FUNCTION public.get_unseen_cancellations()
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+DECLARE
+  v_user_id UUID;
+  v_result JSONB;
+BEGIN
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN
+    RETURN '[]'::JSONB;
+  END IF;
+
+  SELECT COALESCE(jsonb_agg(
+    jsonb_build_object(
+      'slot_participant_id', sp.id,
+      'slot_id', sp.slot_id,
+      'activity_name', COALESCE(a.nom, a.titre, 'Activité'),
+      'slot_date', s.date,
+      'slot_time', s.time,
+      'cancelled_reason', s.cancelled_reason
+    )
+  ), '[]'::JSONB)
+  INTO v_result
+  FROM slot_participants sp
+  JOIN activity_slots s ON s.id = sp.slot_id
+  JOIN activities a ON a.id = s.activity_id
+  WHERE sp.user_id = v_user_id
+    AND s.is_cancelled = true
+    AND sp.cancelled_notified = false;
+
+  RETURN v_result;
 END;
 $function$
 
@@ -1090,6 +1572,21 @@ public|longitude|CREATE OR REPLACE FUNCTION public.longitude(earth)
  LANGUAGE sql
  IMMUTABLE PARALLEL SAFE STRICT
 RETURN degrees(atan2(cube_ll_coord(($1)::cube, 2), cube_ll_coord(($1)::cube, 1)))
+
+public|mark_cancellations_seen|CREATE OR REPLACE FUNCTION public.mark_cancellations_seen(p_slot_participant_ids uuid[])
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+BEGIN
+  UPDATE slot_participants
+  SET cancelled_notified = true
+  WHERE id = ANY(p_slot_participant_ids)
+    AND user_id = auth.uid();
+
+  RETURN jsonb_build_object('success', true);
+END;
+$function$
 
 public|notify_push|CREATE OR REPLACE FUNCTION public.notify_push(p_user_id uuid, p_title text, p_body text, p_data jsonb DEFAULT '{}'::jsonb)
  RETURNS void
@@ -1732,6 +2229,74 @@ BEGIN
 END;
 $function$
 
+public|validate_plus_one_token|CREATE OR REPLACE FUNCTION public.validate_plus_one_token(p_token text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+DECLARE
+  v_invitation RECORD;
+  v_inviter RECORD;
+  v_slot RECORD;
+  v_activity RECORD;
+BEGIN
+  -- Rechercher l'invitation
+  SELECT * INTO v_invitation
+  FROM plus_one_invitations
+  WHERE token = p_token;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('valid', false, 'error', 'TOKEN_NOT_FOUND');
+  END IF;
+
+  -- Verifier le statut
+  IF v_invitation.status = 'accepted' THEN
+    RETURN jsonb_build_object('valid', false, 'error', 'INVITATION_ALREADY_USED');
+  END IF;
+
+  IF v_invitation.status = 'cancelled' THEN
+    RETURN jsonb_build_object('valid', false, 'error', 'INVITATION_CANCELLED');
+  END IF;
+
+  IF v_invitation.status = 'expired' OR v_invitation.expires_at < NOW() THEN
+    -- Mettre a jour le statut si necessaire
+    UPDATE plus_one_invitations SET status = 'expired' WHERE id = v_invitation.id;
+    RETURN jsonb_build_object('valid', false, 'error', 'INVITATION_EXPIRED');
+  END IF;
+
+  -- Recuperer les infos de l'inviteur
+  SELECT full_name, avatar_url INTO v_inviter
+  FROM profiles WHERE id = v_invitation.inviter_id;
+
+  -- Recuperer les infos du creneau
+  SELECT * INTO v_slot
+  FROM activity_slots WHERE id = v_invitation.slot_id;
+
+  -- [DUO] Recuperer les infos de l'activite avec le prix
+  SELECT id, nom, titre, image_url, adresse, ville, prix INTO v_activity
+  FROM activities WHERE id = v_slot.activity_id;
+
+  RETURN jsonb_build_object(
+    'valid', true,
+    'invitation', jsonb_build_object(
+      'id', v_invitation.id,
+      'slot_id', v_invitation.slot_id,
+      'inviter_name', COALESCE(v_inviter.full_name, 'Quelqu''un'),
+      'inviter_avatar', COALESCE(v_inviter.avatar_url, ''),
+      'activity_name', COALESCE(v_activity.nom, v_activity.titre, 'Activite'),
+      'activity_image', COALESCE(v_activity.image_url, ''),
+      'activity_id', v_activity.id,
+      'price', COALESCE(v_activity.prix, 0),
+      'slot_date', v_slot.date,
+      'slot_time', v_slot.time,
+      'location', COALESCE(v_activity.adresse || ', ' || v_activity.ville, ''),
+      'expires_at', v_invitation.expires_at,
+      'payment_mode', v_invitation.payment_mode
+    )
+  );
+END;
+$function$
+
 public|word_similarity|CREATE OR REPLACE FUNCTION public.word_similarity(text, text)
  RETURNS real
  LANGUAGE c
@@ -1762,4 +2327,4 @@ public|word_similarity_op|CREATE OR REPLACE FUNCTION public.word_similarity_op(t
  STABLE PARALLEL SAFE STRICT
 AS '$libdir/pg_trgm', $function$word_similarity_op$function$
 
-(110 rows)
+(118 rows)
