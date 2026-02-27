@@ -232,17 +232,17 @@ export default function ConfirmationScreen() {
         return;
       }
 
-      // Vérifier si l'utilisateur est déjà inscrit
+      // Vérifier si l'utilisateur est déjà inscrit à ce créneau
       const { data: existingParticipation } = await supabase
         .from('slot_participants')
         .select('id')
-        .eq('activity_id', activityId)
+        .eq('slot_id', slotId)
         .eq('user_id', currentUserId)
         .eq('status', 'active')
         .maybeSingle();
 
       if (existingParticipation) {
-        Alert.alert('Info', 'Vous êtes déjà inscrit à cette activité.');
+        Alert.alert('Info', 'Vous êtes déjà inscrit à ce créneau.');
         setInscriptionDone(true);
         setIsInscribing(false);
         return;
@@ -269,7 +269,7 @@ export default function ConfirmationScreen() {
 
       if (insertError) {
         if (insertError.code === '23505') {
-          Alert.alert('Info', 'Vous êtes déjà inscrit à cette activité.');
+          Alert.alert('Info', 'Vous êtes déjà inscrit à ce créneau.');
           setInscriptionDone(true);
           setIsInscribing(false);
           return;
