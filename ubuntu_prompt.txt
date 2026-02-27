@@ -1,19 +1,17 @@
-Dans app/activity-detail.tsx, corrige 3 problèmes majeurs liés à la gestion par créneau vs globale :
+Ajouter un système d'écoute en temps réel des annulations d'activités pour notifier l'utilisateur immédiatement, que l'app soit en foreground ou en background.
 
-PROBLÈME 1 - "COMPLET" GLOBAL AU LIEU DE PAR SLOT :
-Actuellement participantCount compte les actifs sur TOUS les slots futurs et placesRestantes = capacity - participantCount, ce qui fait qu'un seul slot plein rend toute l'activité "Complète". Le fix :
-- Remplacer le calcul de participantCount global par un calcul par slot. Au lieu de compter tous les actifs de tous les slots futurs, il faut calculer si TOUS les slots futurs sont pleins pour déterminer si l'activité entière est complète.
-- Après avoir récupéré les futureSlots, pour chaque slot récupérer le count de participants actifs et le max_participants du slot. L'activité est "complète" uniquement si TOUS les slots futurs non-annulés (is_cancelled != true) sont pleins (participants >= max_participants du slot).
-- Pour le champ activity.participants affiché, utiliser le total mais pour activity.placesRestantes utiliser la somme des places restantes sur tous les slots futurs non-annulés.
-- Le isFull (qui contrôle le bouton "Complet" dans le footer) doit être true UNIQUEMENT si tous les slots futurs non-annulés sont pleins.
-- Quand un slot spécifique est sélectionné par l'utilisateur, vérifier si CE slot est plein avant de bloquer l'inscription. Dans handleJoinLeave, remplacer le check "activity.placesRestantes <= 0" par une vérification du slot sélectionné : récupérer le count de participants actifs du selectedSlot et comparer à son max_participants.
+1. Créer le fichier hooks/useActivityCancellationListener.ts :
+- Écouter via Supabase Realtime les UPDATE sur la table "activities" où le status passe à "paused" ou "cancelled"
+- Écouter aussi les DELETE sur "activities"
+- Quand un changement est détecté, vérifier si l'utilisateur courant (via useAuth) est inscrit à cette activité en cherchant dans slot_participants avec status 'confirmed' et activity_slots.activity_id correspondant
+- Si l'app est en foreground (AppState === 'active') → afficher un Alert.alert avec le nom de l'activité (champ "nom") et un bouton "Voir détails" qui navigue vers /activity-detail?id=...
+- Si l'app est en background → envoyer une notification locale immédiate via Notifications.scheduleNotificationAsync avec trigger: null, title "😔 Activité annulée", body avec le nom, et data { type: 'activity', activityId: ... }
+- Cleanup les channels Supabase et AppState listener dans le return du useEffect
+- Le hook dépend de user?.id
 
-PROBLÈME 2 - "CRÉNEAU ANNULÉ" BLOQUE TOUTE LA PAGE :
-Actuellement isSlotCancelled masque tout le footer via la condition !isSlotCancelled et affiche un gros banner "Créneau annulé" en haut. Le fix :
-- Supprimer complètement le banner "Créneau annulé" (le bloc avec styles.cancelledSlotBanner). Les personnes concernées reçoivent déjà une notification et sont désinscrites, pas besoin d'un banner permanent.
-- Supprimer la condition !isSlotCancelled du footer. Le footer doit toujours être visible tant que l'activité n'est pas passée (!isActivityPast) et que l'utilisateur n'est pas host.
-- Si l'utilisateur était inscrit au slot annulé, il doit pouvoir se réinscrire à un autre slot. Donc si isSlotCancelled est true, reset isJoined à false, joinedSlotId à undefined, selectedSlot à null pour que l'utilisateur puisse choisir un autre créneau.
-- Dans le ActivityCalendar, les slots annulés sont déjà marqués visuellement avec un badge "Annulé" et désactivés (isCancelled && styles.slotBadgeCancelled + disabled), c'est suffisant. Ne rien changer au calendrier.
+2. Dans app/_layout.tsx :
+- Importer et appeler useActivityCancellationListener() dans RootLayout, après les autres hooks existants
 
-PROBLÈME 3 - LE BOUTON DUO UTILISE AUSSI placesRestantes GLOBAL :
-Le bouton "On vient à deux" a la condition activity.placesRestantes >= 2. Remplacer par une vérification par slot : si un selectedSlot est choisi, vérifier que ce slot a au moins 2 places restantes (max_participants du slot - participants actifs du slot >= 2). Pour cela, stocker les infos de places par slot dans un state (par exemple selectedSlotRemainingPlaces) mis à jour quand l'utilisateur sélectionne un slot.
+3. Dans lib/notifications.ts, dans la méthode initialize(), modifier le receivedListener pour ignorer les push de type 'activity_cancelled' (éviter le doublon avec le Realtime) :
+- Si notification.request.content.data?.type === 'activity_cancelled', faire un return sans traitement
+- Garder le console.log pour les autres types
