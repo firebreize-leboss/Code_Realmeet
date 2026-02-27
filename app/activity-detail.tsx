@@ -106,6 +106,7 @@ export default function ActivityDetailScreen() {
   const [canInvitePlusOne, setCanInvitePlusOne] = useState(false);
   const [slotDiscoverMode, setSlotDiscoverMode] = useState(false);
   const [isSlotCancelled, setIsSlotCancelled] = useState(false);
+  const [selectedSlotRemainingPlaces, setSelectedSlotRemainingPlaces] = useState<number | null>(null);
 
   useEffect(() => {
     loadActivity();
@@ -153,24 +154,40 @@ export default function ActivityDetailScreen() {
 
         const isHostBusiness = hostProfile?.account_type === 'business';
 
-        // Compter uniquement les participants actifs sur les slots futurs
+        // Calculer les places restantes par slot (pas globalement)
         const todayStr = new Date().toISOString().split('T')[0];
         const { data: futureSlots } = await supabase
           .from('activity_slots')
-          .select('id')
+          .select('id, max_participants, is_cancelled')
           .eq('activity_id', activityId)
           .gte('date', todayStr);
 
-        let participantCount = 0;
+        let totalParticipants = 0;
+        let totalRemainingPlaces = 0;
         const futureSlotIds = (futureSlots || []).map(s => s.id);
+
         if (futureSlotIds.length > 0) {
-          const { count: realParticipantCount } = await supabase
+          const { data: slotParticipantsData } = await supabase
             .from('slot_participants')
-            .select('*', { count: 'exact', head: true })
+            .select('slot_id')
             .in('slot_id', futureSlotIds)
             .eq('activity_id', activityId)
             .eq('status', 'active');
-          participantCount = realParticipantCount || 0;
+
+          // Compter les participants par slot
+          const countBySlot: Record<string, number> = {};
+          for (const sp of (slotParticipantsData || [])) {
+            countBySlot[sp.slot_id] = (countBySlot[sp.slot_id] || 0) + 1;
+          }
+
+          for (const slot of (futureSlots || [])) {
+            const slotCount = countBySlot[slot.id] || 0;
+            totalParticipants += slotCount;
+            if (!slot.is_cancelled) {
+              const slotMax = slot.max_participants || activityData.max_participants || 0;
+              totalRemainingPlaces += Math.max(0, slotMax - slotCount);
+            }
+          }
         }
 
         if (userId && !isBusiness) {
@@ -225,6 +242,14 @@ export default function ActivityDetailScreen() {
               setSlotDiscoverMode(slotData.discover_mode || false);
               setIsSlotCancelled(slotData.is_cancelled || false);
 
+              // Si le slot est annulé, reset pour permettre de choisir un autre créneau
+              if (slotData.is_cancelled) {
+                setIsJoined(false);
+                setJoinedSlotId(undefined);
+                setSelectedSlot(null);
+                setSelectedSlotRemainingPlaces(null);
+              }
+
               // Vérifier si l'utilisateur peut créer une invitation +1
               if (!slotData.discover_mode) {
                 const canInvite = await invitationService.canCreateInvitation(activeParticipation.slot_id);
@@ -265,8 +290,8 @@ export default function ActivityDetailScreen() {
           location: activityData.adresse || '',
           city: `${activityData.ville || ''} ${activityData.code_postal || ''}`.trim(),
           capacity: activityData.max_participants || 0,
-          participants: participantCount,
-          placesRestantes: (activityData.max_participants || 0) - participantCount,
+          participants: totalParticipants,
+          placesRestantes: totalRemainingPlaces,
           category: activityData.categorie || '',
           price: activityData.prix ? `${activityData.prix}€` : 'Gratuit',
           includes: activityData.inclusions || [],
@@ -476,6 +501,28 @@ export default function ActivityDetailScreen() {
     }
   };
 
+  const handleSlotSelect = async (slot: {id: string; date: string; time: string; duration?: number; registrationClosed?: boolean} | null) => {
+    setSelectedSlot(slot);
+    if (slot) {
+      const { data: slotInfo } = await supabase
+        .from('activity_slots')
+        .select('max_participants')
+        .eq('id', slot.id)
+        .single();
+
+      const { count: slotParticipantCount } = await supabase
+        .from('slot_participants')
+        .select('*', { count: 'exact', head: true })
+        .eq('slot_id', slot.id)
+        .eq('status', 'active');
+
+      const slotMax = slotInfo?.max_participants || activity?.capacity || 0;
+      setSelectedSlotRemainingPlaces(slotMax - (slotParticipantCount || 0));
+    } else {
+      setSelectedSlotRemainingPlaces(null);
+    }
+  };
+
   const handleJoinLeave = async () => {
     if (isBusiness) {
       showJoinRestriction();
@@ -559,8 +606,9 @@ export default function ActivityDetailScreen() {
           return;
         }
 
-        if (activity.placesRestantes <= 0) {
-          Alert.alert('Complet', 'Cette activité est complète.');
+        // Vérifier si le slot sélectionné est plein (pas globalement)
+        if (selectedSlotRemainingPlaces !== null && selectedSlotRemainingPlaces <= 0) {
+          Alert.alert('Complet', 'Ce créneau est complet.');
           return;
         }
 
@@ -637,7 +685,9 @@ export default function ActivityDetailScreen() {
     );
   }
 
-  const isFull = activity.placesRestantes <= 0;
+  const isFull = selectedSlot
+    ? (selectedSlotRemainingPlaces !== null && selectedSlotRemainingPlaces <= 0)
+    : activity.placesRestantes <= 0;
   const isHost = currentUserId === activity.host.id;
   const isCompetitorActivity = isBusiness && activity.host.id !== currentUserId;
 
@@ -699,14 +749,6 @@ export default function ActivityDetailScreen() {
           <View style={styles.pastActivityBanner}>
             <IconSymbol name="checkmark.circle.fill" size={20} color="#FFFFFF" />
             <Text style={styles.pastActivityBannerText}>Activité terminée</Text>
-          </View>
-        )}
-
-        {/* Badge créneau annulé */}
-        {isSlotCancelled && (
-          <View style={styles.cancelledSlotBanner}>
-            <IconSymbol name="xmark.circle.fill" size={20} color="#FFFFFF" />
-            <Text style={styles.cancelledSlotBannerText}>Créneau annulé</Text>
           </View>
         )}
 
@@ -786,7 +828,7 @@ export default function ActivityDetailScreen() {
             <View style={styles.sectionSlots}>
               <ActivityCalendar
                 activityId={activity.id}
-                onSlotSelect={(isBusiness || isJoined) ? undefined : (slot) => setSelectedSlot(slot)}
+                onSlotSelect={(isBusiness || isJoined) ? undefined : (slot) => handleSlotSelect(slot)}
                 externalSelectedSlot={selectedSlot}
                 mode="select"
                 readOnly={isBusiness || isJoined}
@@ -946,7 +988,7 @@ export default function ActivityDetailScreen() {
       </ScrollView>
 
       {/* Footer */}
-      {!isHost && !isActivityPast && !isSlotCancelled && (
+      {!isHost && !isActivityPast && (
         <SafeAreaView style={styles.footer} edges={['bottom']}>
           {isBusiness ? (
             <View style={styles.businessFooter}>
@@ -966,7 +1008,7 @@ export default function ActivityDetailScreen() {
               </View>
               <View style={styles.footerButtons}>
                 {/* Bouton "On vient à deux" - visible si pas inscrit, pas discover, >= 2 places */}
-                {!isJoined && !slotDiscoverMode && selectedSlot && activity.placesRestantes >= 2 && (
+                {!isJoined && !slotDiscoverMode && selectedSlot && selectedSlotRemainingPlaces !== null && selectedSlotRemainingPlaces >= 2 && (
                   <TouchableOpacity
                     style={styles.duoButton}
                     onPress={() => {
@@ -1284,23 +1326,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   pastActivityBannerText: {
-    fontSize: typography.base,
-    fontFamily: 'Manrope_600SemiBold',
-    color: '#FFFFFF',
-  },
-  cancelledSlotBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#DC2626',
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    marginHorizontal: 20,
-    marginTop: 20,
-    borderRadius: borderRadius.md,
-    gap: 8,
-  },
-  cancelledSlotBannerText: {
     fontSize: typography.base,
     fontFamily: 'Manrope_600SemiBold',
     color: '#FFFFFF',
