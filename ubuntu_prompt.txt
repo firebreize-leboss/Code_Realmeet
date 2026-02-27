@@ -1,16 +1,16 @@
 Ajouter un système d'écoute en temps réel des annulations d'activités pour notifier l'utilisateur immédiatement, que l'app soit en foreground ou en background.
 
 1. Créer le fichier hooks/useActivityCancellationListener.ts :
-- Écouter via Supabase Realtime les UPDATE sur la table "activities" où le status passe à "paused" ou "cancelled"
+- Écouter via Supabase Realtime les UPDATE sur la table "activities" où le status change vers "paused" ou "ended" (pas "cancelled" qui n'existe pas dans le schema)
 - Écouter aussi les DELETE sur "activities"
-- Quand un changement est détecté, vérifier si l'utilisateur courant (via useAuth) est inscrit à cette activité en cherchant dans slot_participants avec status 'confirmed' et activity_slots.activity_id correspondant
+- Quand un changement est détecté, vérifier si l'utilisateur courant (via useAuth) est inscrit à cette activité en cherchant dans slot_participants jointure avec activity_slots.activity_id correspondant. ATTENTION : slot_participants n'a PAS de champ "status", la simple présence d'une row confirme la participation, donc pas de filtre .eq('status', 'confirmed')
 - Si l'app est en foreground (AppState === 'active') → afficher un Alert.alert avec le nom de l'activité (champ "nom") et un bouton "Voir détails" qui navigue vers /activity-detail?id=...
 - Si l'app est en background → envoyer une notification locale immédiate via Notifications.scheduleNotificationAsync avec trigger: null, title "😔 Activité annulée", body avec le nom, et data { type: 'activity', activityId: ... }
 - Cleanup les channels Supabase et AppState listener dans le return du useEffect
 - Le hook dépend de user?.id
 
-2. Dans app/_layout.tsx :
-- Importer et appeler useActivityCancellationListener() dans RootLayout, après les autres hooks existants
+2. Dans app/(tabs)/_layout.tsx (PAS app/_layout.tsx car useAuth nécessite d'être dans AuthProvider, comme c'est déjà le cas pour useCancellationCheck) :
+- Importer et appeler useActivityCancellationListener() après les autres hooks existants
 
 3. Dans lib/notifications.ts, dans la méthode initialize(), modifier le receivedListener pour ignorer les push de type 'activity_cancelled' (éviter le doublon avec le Realtime) :
 - Si notification.request.content.data?.type === 'activity_cancelled', faire un return sans traitement
