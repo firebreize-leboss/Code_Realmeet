@@ -50,6 +50,10 @@ class NotificationService {
     // Listener quand une notification est reçue en foreground
     this.receivedListener = Notifications.addNotificationReceivedListener(
       (notification) => {
+        // Ignorer les push de type activity_cancelled (géré par le Realtime listener)
+        if (notification.request.content.data?.type === 'activity_cancelled') {
+          return;
+        }
         console.log('📬 Notification received:', notification);
       }
     );

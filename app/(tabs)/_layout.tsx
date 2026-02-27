@@ -13,6 +13,7 @@ import { useTabIndex } from '@/contexts/TabIndexContext';
 import { colors } from '@/styles/commonStyles';
 import { useLocation } from '@/contexts/LocationContext';
 import { useCancellationCheck } from '@/hooks/useCancellationCheck';
+import { useActivityCancellationListener } from '@/hooks/useActivityCancellationListener';
 
 // Import des écrans
 import ProfileScreen from './profile';
@@ -287,6 +288,9 @@ function TabLayoutContent() {
 
   // Vérifier les créneaux annulés non vus
   useCancellationCheck();
+
+  // Écouter en temps réel les annulations d'activités
+  useActivityCancellationListener();
 
   // Écran de chargement pendant la vérification du type de compte ou redirection
   if (loading || isRedirecting || !user) {
