@@ -1,6 +1,8 @@
 tgname|table_name|definition
 activities_places_restantes|activities|CREATE TRIGGER activities_places_restantes BEFORE INSERT OR UPDATE ON public.activities FOR EACH ROW EXECUTE FUNCTION update_places_restantes()
 activities_updated_at|activities|CREATE TRIGGER activities_updated_at BEFORE UPDATE ON public.activities FOR EACH ROW EXECUTE FUNCTION update_activities_updated_at()
+on_activity_cancelled_push|activities|CREATE TRIGGER on_activity_cancelled_push AFTER UPDATE ON public.activities FOR EACH ROW WHEN ((((old.status)::text IS DISTINCT FROM (new.status)::text) AND ((new.status)::text = ANY ((ARRAY['paused'::character varying, 'cancelled'::character varying])::text[])))) EXECUTE FUNCTION notify_participants_on_cancel()
+on_activity_deleted_push|activities|CREATE TRIGGER on_activity_deleted_push BEFORE DELETE ON public.activities FOR EACH ROW EXECUTE FUNCTION notify_participants_on_cancel()
 enforce_bucket_name_length_trigger|buckets|CREATE TRIGGER enforce_bucket_name_length_trigger BEFORE INSERT OR UPDATE OF name ON storage.buckets FOR EACH ROW EXECUTE FUNCTION storage.enforce_bucket_name_length()
 protect_buckets_delete|buckets|CREATE TRIGGER protect_buckets_delete BEFORE DELETE ON storage.buckets FOR EACH STATEMENT EXECUTE FUNCTION storage.protect_delete()
 update_conversations_updated_at|conversations|CREATE TRIGGER update_conversations_updated_at BEFORE UPDATE ON public.conversations FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()
@@ -17,4 +19,4 @@ reports_updated_at_trigger|reports|CREATE TRIGGER reports_updated_at_trigger BEF
 reviews_update_business_rating|reviews|CREATE TRIGGER reviews_update_business_rating AFTER INSERT OR DELETE OR UPDATE ON public.reviews FOR EACH ROW EXECUTE FUNCTION trigger_update_business_rating()
 trigger_update_business_stats|slot_participants|CREATE TRIGGER trigger_update_business_stats AFTER INSERT ON public.slot_participants FOR EACH ROW EXECUTE FUNCTION update_business_stats()
 tr_check_filters|subscription|CREATE TRIGGER tr_check_filters BEFORE INSERT OR UPDATE ON realtime.subscription FOR EACH ROW EXECUTE FUNCTION realtime.subscription_check_filters()
-(18 rows)
+(20 rows)

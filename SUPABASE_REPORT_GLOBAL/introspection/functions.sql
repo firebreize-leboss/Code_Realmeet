@@ -345,18 +345,6 @@ BEGIN
 END;
 $function$
 
-public|cube|CREATE OR REPLACE FUNCTION public.cube(cube, double precision)
- RETURNS cube
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/cube', $function$cube_c_f8$function$
-
-public|cube|CREATE OR REPLACE FUNCTION public.cube(double precision[], double precision[])
- RETURNS cube
- LANGUAGE c
- IMMUTABLE PARALLEL SAFE STRICT
-AS '$libdir/cube', $function$cube_a_f8_f8$function$
-
 public|cube|CREATE OR REPLACE FUNCTION public.cube(double precision[])
  RETURNS cube
  LANGUAGE c
@@ -375,11 +363,23 @@ public|cube|CREATE OR REPLACE FUNCTION public.cube(double precision, double prec
  IMMUTABLE PARALLEL SAFE STRICT
 AS '$libdir/cube', $function$cube_f8_f8$function$
 
+public|cube|CREATE OR REPLACE FUNCTION public.cube(cube, double precision)
+ RETURNS cube
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/cube', $function$cube_c_f8$function$
+
 public|cube|CREATE OR REPLACE FUNCTION public.cube(cube, double precision, double precision)
  RETURNS cube
  LANGUAGE c
  IMMUTABLE PARALLEL SAFE STRICT
 AS '$libdir/cube', $function$cube_c_f8_f8$function$
+
+public|cube|CREATE OR REPLACE FUNCTION public.cube(double precision[], double precision[])
+ RETURNS cube
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/cube', $function$cube_a_f8_f8$function$
 
 public|cube_cmp|CREATE OR REPLACE FUNCTION public.cube_cmp(cube, cube)
  RETURNS integer
@@ -1588,6 +1588,59 @@ BEGIN
 END;
 $function$
 
+public|notify_participants_on_cancel|CREATE OR REPLACE FUNCTION public.notify_participants_on_cancel()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+DECLARE
+  v_participant RECORD;
+  v_activity_name TEXT;
+  v_request_id BIGINT;
+BEGIN
+  -- Déterminer le nom de l'activité
+  IF TG_OP = 'DELETE' THEN
+    v_activity_name := OLD.nom;
+  ELSE
+    v_activity_name := NEW.nom;
+  END IF;
+
+  -- Récupérer tous les participants inscrits à cette activité
+  FOR v_participant IN
+    SELECT DISTINCT sp.user_id
+    FROM slot_participants sp
+    JOIN activity_slots asl ON asl.id = sp.slot_id
+    WHERE asl.activity_id = COALESCE(OLD.id, NEW.id)
+      AND sp.status = 'confirmed'
+  LOOP
+    -- Appeler l'Edge Function send-push via pg_net (extension HTTP)
+    SELECT net.http_post(
+      url := current_setting('app.settings.supabase_url', true) || '/functions/v1/send-push',
+      headers := jsonb_build_object(
+        'Content-Type', 'application/json',
+        'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key', true)
+      ),
+      body := jsonb_build_object(
+        'user_id', v_participant.user_id,
+        'title', '😔 Activité annulée',
+        'body', v_activity_name || ' a été annulée par l''organisateur.',
+        'data', jsonb_build_object(
+          'type', 'activity_cancelled',
+          'activityId', COALESCE(OLD.id, NEW.id)::text
+        )
+      )
+    ) INTO v_request_id;
+  END LOOP;
+
+  -- Retourner le bon enregistrement selon l'opération
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  ELSE
+    RETURN NEW;
+  END IF;
+END;
+$function$
+
 public|notify_push|CREATE OR REPLACE FUNCTION public.notify_push(p_user_id uuid, p_title text, p_body text, p_data jsonb DEFAULT '{}'::jsonb)
  RETURNS void
  LANGUAGE plpgsql
@@ -2327,4 +2380,4 @@ public|word_similarity_op|CREATE OR REPLACE FUNCTION public.word_similarity_op(t
  STABLE PARALLEL SAFE STRICT
 AS '$libdir/pg_trgm', $function$word_similarity_op$function$
 
-(118 rows)
+(119 rows)

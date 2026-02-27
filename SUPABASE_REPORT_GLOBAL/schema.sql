@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict J8QmAjpGNgfw3XxIgmNjMplQeQVF9ry5QRdCahfpnqygGeGT0MYnzpHyKbRVDWl
+\restrict 50WczzNyN6wS5QURt74CiObyCEOBbkdkhOF4oeefuNYdmKFzIKPZXryUAUrraHU
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.7 (Ubuntu 17.7-0ubuntu0.25.04.1)
@@ -1309,6 +1309,62 @@ BEGIN
     AND user_id = auth.uid();
 
   RETURN jsonb_build_object('success', true);
+END;
+$$;
+
+
+--
+-- Name: notify_participants_on_cancel(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.notify_participants_on_cancel() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $$
+DECLARE
+  v_participant RECORD;
+  v_activity_name TEXT;
+  v_request_id BIGINT;
+BEGIN
+  -- Déterminer le nom de l'activité
+  IF TG_OP = 'DELETE' THEN
+    v_activity_name := OLD.nom;
+  ELSE
+    v_activity_name := NEW.nom;
+  END IF;
+
+  -- Récupérer tous les participants inscrits à cette activité
+  FOR v_participant IN
+    SELECT DISTINCT sp.user_id
+    FROM slot_participants sp
+    JOIN activity_slots asl ON asl.id = sp.slot_id
+    WHERE asl.activity_id = COALESCE(OLD.id, NEW.id)
+      AND sp.status = 'confirmed'
+  LOOP
+    -- Appeler l'Edge Function send-push via pg_net (extension HTTP)
+    SELECT net.http_post(
+      url := current_setting('app.settings.supabase_url', true) || '/functions/v1/send-push',
+      headers := jsonb_build_object(
+        'Content-Type', 'application/json',
+        'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key', true)
+      ),
+      body := jsonb_build_object(
+        'user_id', v_participant.user_id,
+        'title', '😔 Activité annulée',
+        'body', v_activity_name || ' a été annulée par l''organisateur.',
+        'data', jsonb_build_object(
+          'type', 'activity_cancelled',
+          'activityId', COALESCE(OLD.id, NEW.id)::text
+        )
+      )
+    ) INTO v_request_id;
+  END LOOP;
+
+  -- Retourner le bon enregistrement selon l'opération
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  ELSE
+    RETURN NEW;
+  END IF;
 END;
 $$;
 
@@ -3829,6 +3885,20 @@ CREATE TRIGGER activities_updated_at BEFORE UPDATE ON public.activities FOR EACH
 
 
 --
+-- Name: activities on_activity_cancelled_push; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER on_activity_cancelled_push AFTER UPDATE ON public.activities FOR EACH ROW WHEN ((((old.status)::text IS DISTINCT FROM (new.status)::text) AND ((new.status)::text = ANY ((ARRAY['paused'::character varying, 'cancelled'::character varying])::text[])))) EXECUTE FUNCTION public.notify_participants_on_cancel();
+
+
+--
+-- Name: activities on_activity_deleted_push; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER on_activity_deleted_push BEFORE DELETE ON public.activities FOR EACH ROW EXECUTE FUNCTION public.notify_participants_on_cancel();
+
+
+--
 -- Name: friend_requests on_friend_request_insert_push; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -4918,5 +4988,5 @@ ALTER TABLE public.slot_participants ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict J8QmAjpGNgfw3XxIgmNjMplQeQVF9ry5QRdCahfpnqygGeGT0MYnzpHyKbRVDWl
+\unrestrict 50WczzNyN6wS5QURt74CiObyCEOBbkdkhOF4oeefuNYdmKFzIKPZXryUAUrraHU
 
