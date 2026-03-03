@@ -37,6 +37,7 @@ interface Activity {
   user_slot_id?: string;
   hasLiveSlots?: boolean;
   isPublished?: boolean;
+  isCancelled?: boolean;
 }
 
 export default function ActivityScreen() {
@@ -236,7 +237,8 @@ export default function ActivityScreen() {
       const { data: participations, error: partError } = await supabase
         .from('slot_participants')
         .select('activity_id, slot_id')
-        .eq('user_id', currentUser.id);
+        .eq('user_id', currentUser.id)
+        .in('status', ['active', 'completed']);
 
       if (partError) {
         console.error('Erreur chargement participations:', partError);
@@ -267,7 +269,7 @@ export default function ActivityScreen() {
           if (participation?.slot_id) {
             const { data: slotData } = await supabase
               .from('activity_slots')
-              .select('date, time')
+              .select('date, time, is_cancelled')
               .eq('id', participation.slot_id)
               .single();
 
@@ -277,6 +279,7 @@ export default function ActivityScreen() {
                 ...activity,
                 date_heure: slotDateTime,
                 user_slot_id: participation?.slot_id,
+                isCancelled: slotData?.is_cancelled || false,
               };
             }
           }
@@ -434,8 +437,17 @@ export default function ActivityScreen() {
             </Text>
             {isPast && (
               <View style={styles.pastBadge}>
-                <IconSymbol name="checkmark.circle.fill" size={12} color={colors.textTertiary} />
-                <Text style={styles.pastBadgeText}>Terminé</Text>
+                {item.isCancelled ? (
+                  <>
+                    <IconSymbol name="xmark.circle.fill" size={12} color="#EF4444" />
+                    <Text style={[styles.pastBadgeText, { color: '#EF4444' }]}>Annulé</Text>
+                  </>
+                ) : (
+                  <>
+                    <IconSymbol name="checkmark.circle.fill" size={12} color={colors.textTertiary} />
+                    <Text style={styles.pastBadgeText}>Terminé</Text>
+                  </>
+                )}
               </View>
             )}
           </View>
