@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 50WczzNyN6wS5QURt74CiObyCEOBbkdkhOF4oeefuNYdmKFzIKPZXryUAUrraHU
+\restrict MvsWNZiTqCFwvVGPklfcPhmGCORzMeONOrZxpjg3jOJNuaBLcTfr89dFNSQfUhn
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.7 (Ubuntu 17.7-0ubuntu0.25.04.1)
@@ -1013,90 +1013,68 @@ $$;
 -- Name: get_my_conversations_v2(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.get_my_conversations_v2(p_user_id uuid) RETURNS TABLE(conversation_id uuid, conversation_name text, conversation_image text, is_group boolean, activity_id uuid, slot_id uuid, updated_at timestamp with time zone, is_closed boolean, last_message_content text, last_message_type text, last_message_at timestamp with time zone, last_message_sender_id uuid, last_message_sender_name text, participant_count bigint, other_participant_name text, other_participant_avatar text, unread_count bigint, slot_date date, slot_time time without time zone, is_past_activity boolean)
+CREATE FUNCTION public.get_my_conversations_v2(p_user_id uuid) RETURNS TABLE(conversation_id uuid, conversation_name text, conversation_image text, is_group boolean, activity_id uuid, slot_id uuid, updated_at timestamp with time zone, is_closed boolean, last_message_content text, last_message_type text, last_message_at timestamp with time zone, last_message_sender_id uuid, last_message_sender_name text, participant_count bigint, other_participant_name text, other_participant_avatar text, unread_count bigint, slot_date date, slot_time time without time zone, is_past_activity boolean, is_slot_cancelled boolean)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     AS $$
 BEGIN
     RETURN QUERY
     WITH user_conversations AS (
-        SELECT
-            cp.conversation_id,
-            cp.last_read_at
+        SELECT cp.conversation_id, cp.last_read_at
         FROM conversation_participants cp
-        WHERE cp.user_id = p_user_id
-          AND cp.is_hidden = false
+        WHERE cp.user_id = p_user_id AND cp.is_hidden = false
     ),
-    -- ✅ AJOUT : récupérer les IDs des utilisateurs bloqués par p_user_id
     blocked AS (
-        SELECT blocked_id 
-        FROM blocked_users 
-        WHERE blocker_id = p_user_id
+        SELECT blocked_id FROM blocked_users WHERE blocker_id = p_user_id
     ),
     conversation_data AS (
-        SELECT
-            c.id,
-            c.name,
-            c.image_url,
-            c.is_group,
-            c.activity_id,
-            c.slot_id,
-            c.updated_at,
-            c.is_closed,
-            uc.last_read_at
+        SELECT c.id, c.name, c.image_url, c.is_group, c.activity_id, c.slot_id, 
+               c.updated_at, c.is_closed, c.friend_request_id,
+               uc.last_read_at
         FROM conversations c
         INNER JOIN user_conversations uc ON c.id = uc.conversation_id
+        WHERE c.is_group = true 
+           OR NOT EXISTS (
+               SELECT 1 FROM conversation_participants cp2 
+               WHERE cp2.conversation_id = c.id 
+                 AND cp2.user_id != p_user_id 
+                 AND cp2.user_id IN (SELECT blocked_id FROM blocked)
+           )
     ),
     last_messages AS (
         SELECT DISTINCT ON (m.conversation_id)
-            m.conversation_id,
-            m.content,
-            m.message_type,
-            m.created_at,
-            m.sender_id,
+            m.conversation_id, m.content, m.message_type, m.created_at, m.sender_id,
             p.full_name as sender_name
         FROM messages m
         INNER JOIN conversation_data cd ON m.conversation_id = cd.id
-        LEFT JOIN profiles p ON m.sender_id = p.id
+        INNER JOIN profiles p ON m.sender_id = p.id
         WHERE m.deleted_at IS NULL
-          -- ✅ AJOUT : exclure les messages des utilisateurs bloqués
           AND m.sender_id NOT IN (SELECT blocked_id FROM blocked)
         ORDER BY m.conversation_id, m.created_at DESC
     ),
     participant_counts AS (
-        SELECT
-            cp.conversation_id,
-            COUNT(*) as cnt
+        SELECT cp.conversation_id, COUNT(*)::bigint as cnt
         FROM conversation_participants cp
         INNER JOIN conversation_data cd ON cp.conversation_id = cd.id
         GROUP BY cp.conversation_id
     ),
     other_participants AS (
         SELECT DISTINCT ON (cp.conversation_id)
-            cp.conversation_id,
-            p.full_name,
-            p.avatar_url
+            cp.conversation_id, p.full_name, p.avatar_url
         FROM conversation_participants cp
         INNER JOIN conversation_data cd ON cp.conversation_id = cd.id
         INNER JOIN profiles p ON cp.user_id = p.id
-        WHERE cp.user_id != p_user_id
-          AND cd.is_group = false
+        WHERE cp.user_id != p_user_id AND cd.is_group = false
         ORDER BY cp.conversation_id
     ),
     unread AS (
-        SELECT
-            m.conversation_id,
-            COUNT(*) as cnt
+        SELECT m.conversation_id, COUNT(*) as cnt
         FROM messages m
         INNER JOIN conversation_data cd ON m.conversation_id = cd.id
         WHERE m.sender_id != p_user_id
           AND m.message_type != 'system'
           AND m.deleted_at IS NULL
-          -- ✅ AJOUT : ne pas compter les messages des bloqués comme non lus
           AND m.sender_id NOT IN (SELECT blocked_id FROM blocked)
-          AND (
-              cd.last_read_at IS NULL
-              OR m.created_at > cd.last_read_at
-          )
+          AND (cd.last_read_at IS NULL OR m.created_at > cd.last_read_at)
         GROUP BY m.conversation_id
     ),
     slot_info AS (
@@ -1108,7 +1086,8 @@ BEGIN
                 WHEN s.date < CURRENT_DATE THEN true
                 WHEN s.date = CURRENT_DATE AND s."time" < CURRENT_TIME THEN true
                 ELSE false
-            END as is_past
+            END as is_past,
+            s.is_cancelled as slot_cancelled
         FROM conversation_data cd
         INNER JOIN activity_slots s ON cd.slot_id = s.id
         WHERE cd.slot_id IS NOT NULL
@@ -1133,7 +1112,8 @@ BEGIN
         COALESCE(u.cnt, 0) as unread_count,
         si.slot_date,
         si.slot_time,
-        COALESCE(si.is_past, false) as is_past_activity
+        COALESCE(si.is_past, false) as is_past_activity,
+        COALESCE(si.slot_cancelled, false) as is_slot_cancelled
     FROM conversation_data cd
     LEFT JOIN last_messages lm ON cd.id = lm.conversation_id
     LEFT JOIN participant_counts pc ON cd.id = pc.conversation_id
@@ -1459,6 +1439,28 @@ BEGIN
   END LOOP;
 
   RETURN v_count;
+END;
+$$;
+
+
+--
+-- Name: remove_bidirectional_friendship(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.remove_bidirectional_friendship(p_friend_id uuid) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    AS $$
+DECLARE
+  v_user_id uuid := auth.uid();
+BEGIN
+  DELETE FROM friendships 
+  WHERE (user_id = v_user_id AND friend_id = p_friend_id)
+     OR (user_id = p_friend_id AND friend_id = v_user_id);
+  
+  -- Optionnel : supprimer aussi la friend_request associée
+  DELETE FROM friend_requests
+  WHERE (sender_id = v_user_id AND receiver_id = p_friend_id)
+     OR (sender_id = p_friend_id AND receiver_id = v_user_id);
 END;
 $$;
 
@@ -4988,5 +4990,5 @@ ALTER TABLE public.slot_participants ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 50WczzNyN6wS5QURt74CiObyCEOBbkdkhOF4oeefuNYdmKFzIKPZXryUAUrraHU
+\unrestrict MvsWNZiTqCFwvVGPklfcPhmGCORzMeONOrZxpjg3jOJNuaBLcTfr89dFNSQfUhn
 
