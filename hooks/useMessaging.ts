@@ -450,7 +450,7 @@ export function useConversations() {
           // Récupérer la date du slot
           const { data: slotData } = await supabase
             .from('activity_slots')
-            .select('date, time')
+            .select('date, time, is_cancelled')
             .eq('id', conv.slotId)
             .single();
 
@@ -460,10 +460,11 @@ export function useConversations() {
               ...conv,
               slotDate: slotData.date,
               isPastActivity: slotDateTime < now,
+              isCancelled: slotData?.is_cancelled || false,
             };
           }
 
-          return { ...conv, isPastActivity: false };
+          return { ...conv, isPastActivity: false, isCancelled: false };
         })
       );
 

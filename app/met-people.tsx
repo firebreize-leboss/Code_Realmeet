@@ -1,5 +1,5 @@
 // app/met-people.tsx
-// Écran "Rencontrés" - Liste des personnes croisées lors d'activités TERMINÉES (7 derniers jours)
+// Écran "Rencontrés" - Liste des personnes croisées lors d'activités TERMINÉES
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -63,11 +63,7 @@ export default function MetPeopleScreen() {
       const userId = userData.user.id;
       setCurrentUserId(userId);
 
-      // Calculer la date limite (7 jours en arrière)
       const now = new Date();
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
       const todayStr = now.toISOString().split('T')[0];
 
       // Récupérer les créneaux auxquels l'utilisateur a participé dans les 7 derniers jours
@@ -84,7 +80,6 @@ export default function MetPeopleScreen() {
         `)
         .eq('user_id', userId)
         .in('status', ['active', 'completed'])
-        .gte('activity_slots.date', sevenDaysAgoStr)
         .lte('activity_slots.date', todayStr);
 
       if (!myParticipations || myParticipations.length === 0) {
@@ -407,7 +402,7 @@ export default function MetPeopleScreen() {
       <IconSymbol name="person.2.slash" size={64} color={colors.textSecondary} />
       <Text style={styles.emptyTitle}>Aucune rencontre récente</Text>
       <Text style={styles.emptySubtitle}>
-        Les personnes avec qui vous avez participé à des activités terminées ces 7 derniers jours apparaîtront ici
+        Les personnes avec qui vous avez participé à des activités terminées apparaîtront ici
       </Text>
       <TouchableOpacity
         style={styles.browseButton}
@@ -428,7 +423,7 @@ export default function MetPeopleScreen() {
 
       <View style={styles.infoBar}>
         <IconSymbol name="clock" size={16} color={colors.textSecondary} />
-        <Text style={styles.infoText}>Activités terminées ces 7 derniers jours</Text>
+        <Text style={styles.infoText}>Personnes rencontrées lors d'activités terminées</Text>
       </View>
 
       {loading ? (

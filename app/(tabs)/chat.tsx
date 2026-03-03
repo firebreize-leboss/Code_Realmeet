@@ -64,6 +64,7 @@ interface Conversation {
   slotDate?: string | null;
   isActivityGroup?: boolean;
   isPastActivity?: boolean;
+  isCancelled?: boolean;
   isMuted?: boolean;
   is_online?: boolean;
   activity_name?: string;
@@ -408,6 +409,16 @@ export default function ChatScreen() {
               <Text style={[styles.chatTime, hasUnread && styles.chatTimeUnread]}>
                 {chat.lastMessageTime}
               </Text>
+              {chat.isPastActivity && (
+                <Text style={{
+                  fontSize: 10,
+                  fontFamily: 'Manrope_500Medium',
+                  color: chat.isCancelled ? '#EF4444' : colors.textMuted,
+                  marginLeft: 6,
+                }}>
+                  {chat.isCancelled ? 'Annulée' : 'Terminée'}
+                </Text>
+              )}
             </View>
 
             <View style={styles.chatSubline}>
@@ -744,24 +755,46 @@ export default function ChatScreen() {
                     {activeActivities.map(renderChatItem)}
                   </>
                 )}
-                {pastActivities.length > 0 && (
-                  <>
-                    <Text style={{
-                      fontSize: 13,
-                      fontFamily: 'Manrope_600SemiBold',
-                      color: colors.textSecondary,
-                      marginTop: 16,
-                      marginBottom: 8,
-                      marginLeft: 16,
-                      paddingBottom: 8,
-                    }}>
-                      Activités passées ({pastActivities.length})
-                    </Text>
+                {pastActivities.length > 0 && (() => {
+                  const completedActivities = pastActivities.filter(c => !c.isCancelled);
+                  const cancelledActivities = pastActivities.filter(c => c.isCancelled);
+                  return (
                     <View style={{ opacity: 0.6 }}>
-                      {pastActivities.map(renderChatItem)}
+                      {completedActivities.length > 0 && (
+                        <>
+                          <Text style={{
+                            fontSize: 13,
+                            fontFamily: 'Manrope_600SemiBold',
+                            color: colors.textSecondary,
+                            marginTop: 16,
+                            marginBottom: 8,
+                            marginLeft: 16,
+                            paddingBottom: 8,
+                          }}>
+                            Terminées ({completedActivities.length})
+                          </Text>
+                          {completedActivities.map(renderChatItem)}
+                        </>
+                      )}
+                      {cancelledActivities.length > 0 && (
+                        <>
+                          <Text style={{
+                            fontSize: 13,
+                            fontFamily: 'Manrope_600SemiBold',
+                            color: '#EF4444',
+                            marginTop: 16,
+                            marginBottom: 8,
+                            marginLeft: 16,
+                            paddingBottom: 8,
+                          }}>
+                            Annulées ({cancelledActivities.length})
+                          </Text>
+                          {cancelledActivities.map(renderChatItem)}
+                        </>
+                      )}
                     </View>
-                  </>
-                )}
+                  );
+                })()}
               </View>
             ) : (
               <EmptyState />
