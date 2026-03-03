@@ -21,6 +21,7 @@ import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles
 import { supabase } from '@/lib/supabase';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
 import { CityAutocomplete } from '@/components/CityAutocomplete';
+import { PhoneInput, PhoneValue, validatePhone, formatFullPhone } from '@/components/PhoneInput';
 
 const BUSINESS_CATEGORIES = [
   'Sport & Fitness',
@@ -54,7 +55,8 @@ export default function RegisterBusinessScreen() {
 
   // Step 3: Contact info
   const [contactName, setContactName] = useState('');
-  const [phone, setPhone] = useState('');
+  const [phoneValue, setPhoneValue] = useState<PhoneValue>({ countryCode: '+33', localNumber: '' });
+  const [phoneError, setPhoneError] = useState('');
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
 
@@ -102,6 +104,13 @@ export default function RegisterBusinessScreen() {
       Alert.alert('Erreur', 'Le nom du contact est requis');
       return false;
     }
+    const phoneValidationError = validatePhone(phoneValue);
+    if (phoneValidationError) {
+      setPhoneError(phoneValidationError);
+      Alert.alert('Erreur', phoneValidationError);
+      return false;
+    }
+    setPhoneError('');
     return true;
   };
 
@@ -138,13 +147,13 @@ export default function RegisterBusinessScreen() {
           username: businessName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''),
           full_name: contactName.trim(),
           city: city.trim() || null,
-          phone: phone.trim() || null,
+          phone: formatFullPhone(phoneValue),
           account_type: 'business',
           business_name: businessName.trim(),
           business_category: businessCategory,
           business_siret: siret.trim() || null,
           business_address: address.trim() || null,
-          business_phone: phone.trim() || null,
+          business_phone: formatFullPhone(phoneValue),
           business_email: cleanedEmail,
         });
 
@@ -366,18 +375,13 @@ export default function RegisterBusinessScreen() {
       </View>
 
       <View style={styles.inputGroup}>
-        <Text style={styles.label}>Téléphone</Text>
-        <View style={styles.inputContainer}>
-          <IconSymbol name="phone.fill" size={18} color={colors.textTertiary} />
-          <TextInput
-            style={styles.input}
-            value={phone}
-            onChangeText={setPhone}
-            placeholder="+33 X XX XX XX XX"
-            placeholderTextColor={colors.textMuted}
-            keyboardType="phone-pad"
-          />
-        </View>
+        <PhoneInput
+          label="Téléphone"
+          required
+          value={phoneValue}
+          onChangeValue={setPhoneValue}
+          error={phoneError}
+        />
       </View>
 
       <View style={styles.inputGroup}>

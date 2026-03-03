@@ -357,6 +357,24 @@ export default function ChatDetailScreen() {
 
               const blocked = await blockService.isUserBlocked(otherParticipant.user_id);
               setIsBlocked(blocked);
+
+              // Vérifier si les deux utilisateurs sont encore amis (conv privée uniquement)
+              if (convData.is_group === false) {
+                const { data: friendshipData } = await supabase
+                  .from('friendships')
+                  .select('id')
+                  .eq('user_id', currentUser.id)
+                  .eq('friend_id', otherParticipant.user_id)
+                  .maybeSingle();
+
+                if (!friendshipData && convData.is_closed) {
+                  setConversationStatus({
+                    isClosed: true,
+                    closedReason: 'not_friends',
+                    closedAt: convData.closed_at,
+                  });
+                }
+              }
             }
           }
         }
@@ -390,6 +408,9 @@ export default function ChatDetailScreen() {
 
   const getInputWarning = (): string | null => {
     if (conversationStatus.isClosed) {
+      if (conversationStatus.closedReason === 'not_friends') {
+        return 'Vous devez être amis pour envoyer des messages.';
+      }
       if (conversationStatus.closedReason === 'activity_ended') {
         return "L'activité est terminée. Vous ne pouvez plus envoyer de messages.";
       }

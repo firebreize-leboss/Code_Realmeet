@@ -125,20 +125,18 @@ export function StepReview({ onEditStep }: StepReviewProps) {
           </View>
 
           {/* Téléphone */}
-          {formData.phone && (
-            <View style={styles.detailRow}>
-              <View style={styles.detailLeft}>
-                <View style={styles.detailIcon}>
-                  <IconSymbol name="phone.fill" size={16} color={colors.textTertiary} />
-                </View>
-                <View>
-                  <Text style={styles.detailLabel}>Téléphone</Text>
-                  <Text style={styles.detailValue}>{formData.phone}</Text>
-                </View>
+          <View style={styles.detailRow}>
+            <View style={styles.detailLeft}>
+              <View style={styles.detailIcon}>
+                <IconSymbol name="phone.fill" size={16} color={colors.textTertiary} />
               </View>
-              {renderEditButton(3)}
+              <View>
+                <Text style={styles.detailLabel}>Téléphone</Text>
+                <Text style={styles.detailValue}>{formData.phoneCountryCode} {formData.phone}</Text>
+              </View>
             </View>
-          )}
+            {renderEditButton(3)}
+          </View>
 
           {/* Intention */}
           <View style={styles.detailRow}>

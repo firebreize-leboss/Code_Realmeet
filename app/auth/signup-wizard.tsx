@@ -138,7 +138,7 @@ function SignupWizardContent() {
         avatar_url: null,
         city: formData.city,
         date_of_birth: formData.birthDate,
-        phone: formData.phone || undefined,
+        phone: formData.phone ? `${formData.phoneCountryCode}${formData.phone.replace(/[\s\-\.\(\)]/g, '').replace(/^0/, '')}` : undefined,
       });
 
       if (!accountResult.success) {

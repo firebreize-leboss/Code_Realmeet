@@ -1,17 +1,76 @@
-Ajouter un système d'écoute en temps réel des annulations d'activités pour notifier l'utilisateur immédiatement, que l'app soit en foreground ou en background.
+# Prompt Claude Code — Suppression d'ami avec blocage de conversation
 
-1. Créer le fichier hooks/useActivityCancellationListener.ts :
-- Écouter via Supabase Realtime les UPDATE sur la table "activities" où le status change vers "paused" ou "ended" (pas "cancelled" qui n'existe pas dans le schema)
-- Écouter aussi les DELETE sur "activities"
-- Quand un changement est détecté, vérifier si l'utilisateur courant (via useAuth) est inscrit à cette activité en cherchant dans slot_participants jointure avec activity_slots.activity_id correspondant. ATTENTION : slot_participants n'a PAS de champ "status", la simple présence d'une row confirme la participation, donc pas de filtre .eq('status', 'confirmed')
-- Si l'app est en foreground (AppState === 'active') → afficher un Alert.alert avec le nom de l'activité (champ "nom") et un bouton "Voir détails" qui navigue vers /activity-detail?id=...
-- Si l'app est en background → envoyer une notification locale immédiate via Notifications.scheduleNotificationAsync avec trigger: null, title "😔 Activité annulée", body avec le nom, et data { type: 'activity', activityId: ... }
-- Cleanup les channels Supabase et AppState listener dans le return du useEffect
-- Le hook dépend de user?.id
+Copie ce prompt en une seule ligne dans ton terminal Claude Code :
 
-2. Dans app/(tabs)/_layout.tsx (PAS app/_layout.tsx car useAuth nécessite d'être dans AuthProvider, comme c'est déjà le cas pour useCancellationCheck) :
-- Importer et appeler useActivityCancellationListener() après les autres hooks existants
+---
 
-3. Dans lib/notifications.ts, dans la méthode initialize(), modifier le receivedListener pour ignorer les push de type 'activity_cancelled' (éviter le doublon avec le Realtime) :
-- Si notification.request.content.data?.type === 'activity_cancelled', faire un return sans traitement
-- Garder le console.log pour les autres types
+```
+Implémente la logique complète de suppression d'ami avec blocage de conversation privée. Voici le comportement attendu : quand A retire B de ses amis, l'amitié est supprimée dans les deux sens, la conversation privée reste visible en lecture seule (historique conservé), et plus aucun des deux ne peut envoyer de message dans cette conversation tant qu'ils ne redeviennent pas amis. Voici les étapes précises :
+
+ÉTAPE 1 — Fonction RPC remove_bidirectional_friendship : Crée dans Supabase (via SQL dans le dashboard ou migration) une fonction SECURITY DEFINER qui : supprime les deux lignes de friendships (user_id=caller/friend_id=target ET user_id=target/friend_id=caller), supprime la friend_request associée (dans les deux sens sender/receiver), et met à jour la conversation privée entre les deux utilisateurs en settant is_closed=true. Pour trouver la conversation privée, cherche dans conversations WHERE is_group=false et qui a exactement 2 participants (les deux users concernés) via conversation_participants. Le SQL exact :
+
+CREATE OR REPLACE FUNCTION remove_bidirectional_friendship(p_friend_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = 'public'
+AS $$
+DECLARE
+  v_user_id uuid := auth.uid();
+  v_conversation_id uuid;
+BEGIN
+  -- 1) Supprimer les deux sens de l'amitié
+  DELETE FROM friendships 
+  WHERE (user_id = v_user_id AND friend_id = p_friend_id)
+     OR (user_id = p_friend_id AND friend_id = v_user_id);
+  
+  -- 2) Supprimer la friend_request associée
+  DELETE FROM friend_requests
+  WHERE (sender_id = v_user_id AND receiver_id = p_friend_id)
+     OR (sender_id = p_friend_id AND receiver_id = v_user_id);
+
+  -- 3) Trouver et fermer la conversation privée entre les deux
+  SELECT cp1.conversation_id INTO v_conversation_id
+  FROM conversation_participants cp1
+  JOIN conversation_participants cp2 ON cp1.conversation_id = cp2.conversation_id
+  JOIN conversations c ON c.id = cp1.conversation_id
+  WHERE cp1.user_id = v_user_id 
+    AND cp2.user_id = p_friend_id
+    AND c.is_group = false;
+
+  IF v_conversation_id IS NOT NULL THEN
+    UPDATE conversations 
+    SET is_closed = true 
+    WHERE id = v_conversation_id;
+  END IF;
+END;
+$$;
+
+ÉTAPE 2 — Modifier removeFriend dans lib/supabase.ts : Remplace la fonction removeFriend actuelle par un appel RPC simple : const { error } = await supabase.rpc('remove_bidirectional_friendship', { p_friend_id: friendId }). Supprime les deux appels DELETE séparés qui existent actuellement.
+
+ÉTAPE 3 — Modifier chat-detail.tsx pour gérer la conversation fermée entre ex-amis : Dans le useEffect qui charge les infos de conversation (celui qui vérifie isBlocked, otherUserId, etc.), ajoute une vérification : si la conversation n'est PAS un groupe (is_group=false), vérifie si les deux utilisateurs sont encore amis en cherchant dans friendships si une relation existe entre currentUser.id et otherUserId. Si aucune amitié n'existe ET que is_closed=true sur la conversation, set conversationStatus à { isClosed: true, closedReason: 'not_friends' }. 
+
+ÉTAPE 4 — Modifier getInputWarning dans chat-detail.tsx : Ajoute un cas pour closedReason === 'not_friends' qui retourne le message "Vous devez être amis pour envoyer des messages.". Ce message s'affichera à la place de la zone de saisie.
+
+ÉTAPE 5 — Réactivation automatique si redeviennent amis : Dans la fonction accept_friend_request existante (RPC SQL), ajoute AVANT la fin de la fonction : cherche une conversation fermée entre les deux utilisateurs (même logique que l'étape 1 pour trouver la conv privée), et si elle existe avec is_closed=true, remet is_closed=false. Ajoute ce bloc SQL à la fin de accept_friend_request, juste avant le END :
+
+  -- Réactiver la conversation privée si elle existait
+  SELECT cp1.conversation_id INTO v_conversation_id
+  FROM conversation_participants cp1
+  JOIN conversation_participants cp2 ON cp1.conversation_id = cp2.conversation_id
+  JOIN conversations c ON c.id = cp1.conversation_id
+  WHERE cp1.user_id = v_sender_id 
+    AND cp2.user_id = v_receiver_id
+    AND c.is_group = false
+    AND c.is_closed = true;
+
+  IF v_conversation_id IS NOT NULL THEN
+    UPDATE conversations SET is_closed = false WHERE id = v_conversation_id;
+  END IF;
+
+Note : il faudra déclarer v_conversation_id uuid; dans le DECLARE de accept_friend_request.
+
+ÉTAPE 6 — Vérification : Assure-toi que la colonne is_closed existe déjà sur la table conversations (elle devrait exister d'après le schema). Si elle n'existe pas, crée-la : ALTER TABLE conversations ADD COLUMN is_closed boolean DEFAULT false. Vérifie aussi que closedReason 'not_friends' est bien géré dans le type ConversationStatus si ce type est défini quelque part.
+
+Résumé du comportement final : A retire B → amitié supprimée des 2 côtés, friend_request supprimée, conversation privée marquée is_closed=true → les deux voient l'historique mais ne peuvent plus écrire, message "Vous devez être amis pour envoyer des messages" affiché → si l'un renvoie une demande d'ami et qu'elle est acceptée, la conversation se réouvre automatiquement avec tout l'historique.
+```

@@ -25,13 +25,15 @@ import { userService } from '@/services/user.service';
 import { storageService } from '@/services/storage.service';
 import { UserIntention } from '@/lib/database.types';
 import { CityAutocomplete } from '@/components/CityAutocomplete';
+import { PhoneInput, PhoneValue, validatePhone, formatFullPhone } from '@/components/PhoneInput';
 
 export default function SignupIndividualScreen() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [birthDate, setBirthDate] = useState('');
   const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
+  const [phoneValue, setPhoneValue] = useState<PhoneValue>({ countryCode: '+33', localNumber: '' });
+  const [phoneError, setPhoneError] = useState('');
   const [city, setCity] = useState('');
   const [bio, setBio] = useState('');
   const [interests, setInterests] = useState<string[]>([]);
@@ -63,6 +65,14 @@ export default function SignupIndividualScreen() {
       Alert.alert('Erreur', 'Veuillez remplir tous les champs obligatoires');
       return;
     }
+
+    const phoneValidationError = validatePhone(phoneValue);
+    if (phoneValidationError) {
+      setPhoneError(phoneValidationError);
+      Alert.alert('Erreur', phoneValidationError);
+      return;
+    }
+    setPhoneError('');
 
     if (!intention) {
       Alert.alert('Erreur', 'Veuillez indiquer ce que vous recherchez sur RealMeet');
@@ -112,7 +122,7 @@ export default function SignupIndividualScreen() {
         avatar_url: null,
         city,
         date_of_birth: birthDate,
-        phone,
+        phone: formatFullPhone(phoneValue),
       });
 
       if (!accountResult.success) {
@@ -291,18 +301,13 @@ export default function SignupIndividualScreen() {
 
             {/* Téléphone */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Téléphone</Text>
-              <View style={styles.inputContainer}>
-                <IconSymbol name="phone.fill" size={18} color={colors.textTertiary} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="+33 6 12 34 56 78"
-                  placeholderTextColor={colors.textMuted}
-                  value={phone}
-                  onChangeText={setPhone}
-                  keyboardType="phone-pad"
-                />
-              </View>
+              <PhoneInput
+                label="Téléphone"
+                required
+                value={phoneValue}
+                onChangeValue={setPhoneValue}
+                error={phoneError}
+              />
             </View>
 
             {/* Ville */}
