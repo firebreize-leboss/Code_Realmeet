@@ -49,6 +49,7 @@ interface Conversation {
   slotId?: string | null;
   isActivityGroup?: boolean;
   isPastActivity?: boolean;
+  isCancelled?: boolean;
   slotDate?: string;
   slotTime?: string;
   updated_at: string;
@@ -561,6 +562,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
           updated_at: conv.updated_at,
           unreadCount: unreadCounts[conv.id] || 0,
           isPastActivity: false,
+          isCancelled: false,
           isMuted: isMutedMap[conv.id] || false,
         };
       }) || [];
@@ -620,6 +622,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
           slotId: conv.slot_id || null,
           isActivityGroup,
           isPastActivity: conv.is_past_activity || false,
+          isCancelled: conv.is_cancelled || false,
           slotDate: conv.slot_date || null,
           slotTime: conv.slot_time || null,
           updated_at: conv.updated_at,
