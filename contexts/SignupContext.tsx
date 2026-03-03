@@ -3,6 +3,7 @@
 
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { UserIntention } from '@/lib/database.types';
+import { validatePhone, formatFullPhone } from '@/components/PhoneInput';
 
 // Types pour les données du formulaire
 export interface SignupFormData {
@@ -15,6 +16,7 @@ export interface SignupFormData {
   // Étape 3: Contact
   email: string;
   phone: string;
+  phoneCountryCode: string;
   // Étape 4: Ville
   city: string;
   citySelected: boolean;
@@ -36,6 +38,7 @@ const initialFormData: SignupFormData = {
   birthDate: '',
   email: '',
   phone: '',
+  phoneCountryCode: '+33',
   city: '',
   citySelected: false,
   intention: null,
@@ -161,12 +164,13 @@ export function SignupProvider({ children }: { children: React.ReactNode }) {
             errors.email = 'Format d\'email invalide';
           }
         }
-        // Téléphone optionnel mais si renseigné, vérifier le format
-        if (formData.phone && formData.phone.length > 0) {
-          const phoneClean = formData.phone.replace(/[\s\-\.\(\)]/g, '');
-          if (phoneClean.length < 10) {
-            errors.phone = 'Numéro de téléphone invalide';
-          }
+        // Téléphone obligatoire avec validation du format
+        const phoneError = validatePhone({
+          countryCode: formData.phoneCountryCode,
+          localNumber: formData.phone,
+        });
+        if (phoneError) {
+          errors.phone = phoneError;
         }
         break;
 

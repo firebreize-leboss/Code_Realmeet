@@ -324,32 +324,11 @@ export async function rejectFriendRequest(requestId: string) {
  */
 export async function removeFriend(friendId: string) {
   try {
-    const user = await getCurrentUser();
-    if (!user) throw new Error('No user logged in');
+    const { error } = await supabase.rpc('remove_bidirectional_friendship', {
+      p_friend_id: friendId,
+    });
 
-    // Supprimer la relation dans les deux sens
-    const { error: error1 } = await supabase
-      .from('friendships')
-      .delete()
-      .eq('user_id', user.id)
-      .eq('friend_id', friendId);
-
-    if (error1) throw error1;
-
-    const { error: error2 } = await supabase
-      .from('friendships')
-      .delete()
-      .eq('user_id', friendId)
-      .eq('friend_id', user.id);
-
-    if (error2) throw error2;
-
-    // Supprimer aussi les demandes d'ami acceptées entre les deux utilisateurs
-    // pour qu'une nouvelle demande puisse être envoyée
-    await supabase
-      .from('friend_requests')
-      .delete()
-      .or(`and(sender_id.eq.${user.id},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${user.id})`);
+    if (error) throw error;
 
     return { success: true };
   } catch (error) {

@@ -8,11 +8,12 @@ import {
   StyleSheet,
 } from 'react-native';
 import { SignupInput } from '../SignupInput';
+import { PhoneInput } from '@/components/PhoneInput';
 import { useSignup } from '@/contexts/SignupContext';
 import { colors, spacing, typography } from '@/styles/commonStyles';
 
 export function Step3Contact() {
-  const { formData, updateFormData, getStepErrors } = useSignup();
+  const { formData, updateFormData, updateMultipleFields, getStepErrors } = useSignup();
   const errors = getStepErrors(3);
 
   return (
@@ -41,16 +42,20 @@ export function Step3Contact() {
           autoCorrect={false}
         />
 
-        <SignupInput
+        <PhoneInput
           label="Téléphone"
-          icon="phone.fill"
-          placeholder="+33 6 12 34 56 78"
-          value={formData.phone}
-          onChangeText={(text) => updateFormData('phone', text)}
+          required
+          value={{
+            countryCode: formData.phoneCountryCode,
+            localNumber: formData.phone,
+          }}
+          onChangeValue={(phoneValue) => {
+            updateMultipleFields({
+              phoneCountryCode: phoneValue.countryCode,
+              phone: phoneValue.localNumber,
+            });
+          }}
           error={errors.phone}
-          helper="Optionnel — pour les notifications importantes"
-          keyboardType="phone-pad"
-          autoComplete="tel"
         />
       </View>
 
