@@ -622,7 +622,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
           slotId: conv.slot_id || null,
           isActivityGroup,
           isPastActivity: conv.is_past_activity || false,
-          isCancelled: conv.is_cancelled || false,
+          isCancelled: conv.is_slot_cancelled || false,
           slotDate: conv.slot_date || null,
           slotTime: conv.slot_time || null,
           updated_at: conv.updated_at,
