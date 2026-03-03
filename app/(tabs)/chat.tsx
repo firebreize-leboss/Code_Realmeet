@@ -110,7 +110,7 @@ export default function ChatScreen() {
   const groupsCount = conversations.filter(c => c.isActivityGroup).length;
   const friendsCount = friends.length;
 
-  const activitiesCount = conversations.filter(c => c.isActivityGroup && !c.isPastActivity).length;
+  const activitiesCount = conversations.filter(c => c.isActivityGroup).length;
   const privateCount = conversations.filter(c => !c.isGroup).length;
 
   const handleCreateConversation = async (friendId: string) => {
@@ -279,7 +279,7 @@ export default function ChatScreen() {
 
     switch (activeFilter) {
       case 'activities':
-        return filtered.filter(c => c.isActivityGroup && !c.isPastActivity);
+        return filtered.filter(c => c.isActivityGroup);
       case 'friends':
         return filtered.filter(c => !c.isGroup);
       default:
@@ -722,6 +722,51 @@ export default function ChatScreen() {
           <View style={styles.loadingState}>
             <ActivityIndicator size="large" color={colors.primary} />
           </View>
+        ) : activeFilter === 'activities' ? (
+          (() => {
+            const activeActivities = getFilteredConversations().filter(c => !c.isPastActivity);
+            const pastActivities = getFilteredConversations().filter(c => c.isPastActivity);
+            return activeActivities.length > 0 || pastActivities.length > 0 ? (
+              <View style={styles.conversationsList}>
+                {activeActivities.length > 0 && (
+                  <>
+                    <Text style={{
+                      fontSize: 13,
+                      fontFamily: 'Manrope_600SemiBold',
+                      color: colors.textSecondary,
+                      marginTop: 16,
+                      marginBottom: 8,
+                      marginLeft: 16,
+                      paddingBottom: 8,
+                    }}>
+                      Activités en cours ({activeActivities.length})
+                    </Text>
+                    {activeActivities.map(renderChatItem)}
+                  </>
+                )}
+                {pastActivities.length > 0 && (
+                  <>
+                    <Text style={{
+                      fontSize: 13,
+                      fontFamily: 'Manrope_600SemiBold',
+                      color: colors.textSecondary,
+                      marginTop: 16,
+                      marginBottom: 8,
+                      marginLeft: 16,
+                      paddingBottom: 8,
+                    }}>
+                      Activités passées ({pastActivities.length})
+                    </Text>
+                    <View style={{ opacity: 0.6 }}>
+                      {pastActivities.map(renderChatItem)}
+                    </View>
+                  </>
+                )}
+              </View>
+            ) : (
+              <EmptyState />
+            );
+          })()
         ) : getFilteredConversations().length > 0 ? (
           <View style={styles.conversationsList}>
             {getFilteredConversations().map(renderChatItem)}
