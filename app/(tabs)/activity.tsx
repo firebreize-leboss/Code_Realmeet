@@ -236,9 +236,9 @@ export default function ActivityScreen() {
 
       const { data: participations, error: partError } = await supabase
         .from('slot_participants')
-        .select('activity_id, slot_id')
+        .select('activity_id, slot_id, status')
         .eq('user_id', currentUser.id)
-        .in('status', ['active', 'completed']);
+        .in('status', ['active', 'completed', 'cancelled']);
 
       if (partError) {
         console.error('Erreur chargement participations:', partError);
@@ -262,7 +262,7 @@ export default function ActivityScreen() {
         console.error('Erreur chargement activités:', actError);
       }
 
-      const activitiesWithSlotDates = await Promise.all(
+      const activitiesWithSlotDates = (await Promise.all(
         (activities || []).map(async (activity) => {
           const participation = participations?.find(p => p.activity_id === activity.id);
 
@@ -274,6 +274,11 @@ export default function ActivityScreen() {
               .single();
 
             if (slotData) {
+              // Désinscription volontaire : participation cancelled mais slot pas annulé → exclure
+              if (participation.status === 'cancelled' && !slotData.is_cancelled) {
+                return null;
+              }
+
               const slotDateTime = `${slotData.date}T${slotData.time || '00:00'}`;
               return {
                 ...activity,
@@ -294,7 +299,7 @@ export default function ActivityScreen() {
             user_slot_id: participation?.slot_id,
           };
         })
-      );
+      )).filter(Boolean) as typeof activities;
 
       const ongoing: Activity[] = [];
       const past: Activity[] = [];
