@@ -106,6 +106,7 @@ export default function ActivityDetailScreen() {
   const [canInvitePlusOne, setCanInvitePlusOne] = useState(false);
   const [slotDiscoverMode, setSlotDiscoverMode] = useState(false);
   const [isSlotCancelled, setIsSlotCancelled] = useState(false);
+  const [isSlotSystemCancelled, setIsSlotSystemCancelled] = useState(false);
   const [selectedSlotRemainingPlaces, setSelectedSlotRemainingPlaces] = useState<number | null>(null);
 
   useEffect(() => {
@@ -316,13 +317,14 @@ export default function ActivityDetailScreen() {
         if (passedSlotId) {
           const { data: slotInfo } = await supabase
             .from('activity_slots')
-            .select('date, time')
+            .select('date, time, is_cancelled')
             .eq('id', passedSlotId)
             .single();
 
           if (slotInfo) {
             const slotDateTime = new Date(`${slotInfo.date}T${slotInfo.time || '00:00'}`);
             activityIsPast = slotDateTime < new Date();
+            setIsSlotSystemCancelled(slotInfo?.is_cancelled || false);
 
             setPastSlotInfo({
               date: new Date(slotInfo.date).toLocaleDateString('fr-FR', {
@@ -746,10 +748,17 @@ export default function ActivityDetailScreen() {
       >
         {/* Badge activité terminée */}
         {isActivityPast && (
-          <View style={styles.pastActivityBanner}>
-            <IconSymbol name="checkmark.circle.fill" size={20} color="#FFFFFF" />
-            <Text style={styles.pastActivityBannerText}>Activité terminée</Text>
-          </View>
+          isSlotSystemCancelled ? (
+            <View style={[styles.pastActivityBanner, { backgroundColor: '#EF4444' }]}>
+              <IconSymbol name="xmark.circle.fill" size={20} color="#FFFFFF" />
+              <Text style={styles.pastActivityBannerText}>Activité annulée</Text>
+            </View>
+          ) : (
+            <View style={styles.pastActivityBanner}>
+              <IconSymbol name="checkmark.circle.fill" size={20} color="#FFFFFF" />
+              <Text style={styles.pastActivityBannerText}>Activité terminée</Text>
+            </View>
+          )
         )}
 
         {/* SECTION: Rating */}
@@ -965,7 +974,7 @@ export default function ActivityDetailScreen() {
         )}
 
         {/* SECTION: Review */}
-        {isActivityPast && !isHost && !isBusiness && (
+        {isActivityPast && !isHost && !isBusiness && !isSlotSystemCancelled && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Votre avis</Text>
 
