@@ -1,0 +1,361 @@
+---
+title: "RealMeet — Data Model (ERD)"
+---
+
+erDiagram
+
+  %% ============================================================
+  %% AUTHENTIFICATION & PROFIL
+  %% ============================================================
+
+  profiles {
+    uuid id PK "FK → auth.users"
+    text username UK
+    text full_name
+    text avatar_url
+    text bio
+    text city
+    date date_of_birth
+    text phone
+    array interests
+    text intention "amicaux | rencontres | reseau | decouverte"
+    array personality_tags
+    varchar account_type "user | business"
+    text expo_push_token
+    boolean notifications_enabled
+    varchar business_name
+    text business_description
+    varchar business_category
+    varchar business_siret
+    boolean business_verified
+    numeric business_rating
+    integer business_review_count
+    jsonb business_hours
+    jsonb business_social_links
+    timestamptz created_at
+    timestamptz updated_at
+  }
+
+  %% ============================================================
+  %% ACTIVITÉS & CRÉNEAUX
+  %% ============================================================
+
+  activities {
+    uuid id PK
+    varchar nom
+    varchar titre
+    varchar categorie
+    text categorie2
+    text description
+    text image_url
+    uuid host_id FK "→ auth.users"
+    varchar host_type "Particulier | Entreprise"
+    varchar date
+    time time_start
+    time time_end
+    text adresse
+    varchar ville
+    varchar code_postal
+    float latitude
+    float longitude
+    integer participants
+    integer max_participants
+    integer places_restantes
+    numeric prix
+    varchar prix_devise "EUR"
+    array inclusions
+    array regles
+    varchar status "active | cancelled"
+    timestamptz created_at
+  }
+
+  activity_slots {
+    uuid id PK
+    uuid activity_id FK "→ activities"
+    date date
+    time time
+    integer duration "minutes"
+    integer max_participants
+    integer max_groups
+    integer participants_per_group
+    integer min_participants_per_group "≥ 2"
+    boolean groups_formed
+    timestamptz groups_formed_at
+    boolean is_locked
+    boolean is_cancelled
+    text cancelled_reason
+    boolean registration_closed
+    boolean discover_mode
+    uuid created_by FK "→ profiles"
+    timestamptz created_at
+  }
+
+  slot_participants {
+    uuid id PK
+    uuid slot_id FK "→ activity_slots"
+    uuid activity_id FK "→ activities"
+    uuid user_id FK "→ profiles"
+    varchar status "active | cancelled"
+    timestamptz joined_at
+    timestamptz checked_in_at
+    uuid checked_in_by FK "→ profiles"
+    text checkin_nonce UK
+    timestamptz checkin_token_expires_at
+    boolean is_plus_one
+    uuid invited_by FK "→ profiles"
+    uuid plus_one_invitation_id FK "→ plus_one_invitations"
+    boolean cancelled_notified
+  }
+
+  activity_participants {
+    uuid id PK
+    uuid activity_id FK "→ activities"
+    uuid user_id FK "→ profiles"
+    timestamptz joined_at
+  }
+
+  %% ============================================================
+  %% GROUPES
+  %% ============================================================
+
+  slot_groups {
+    uuid id PK
+    uuid slot_id FK "→ activity_slots"
+    uuid activity_id FK "→ activities"
+    integer group_number
+    text group_name
+    uuid conversation_id FK "→ conversations"
+    timestamptz created_at
+  }
+
+  slot_group_members {
+    uuid id PK
+    uuid group_id FK "→ slot_groups"
+    uuid user_id FK "→ profiles"
+    numeric compatibility_score "0-1"
+    timestamptz created_at
+  }
+
+  group_formation_logs {
+    uuid id PK
+    uuid slot_id FK "→ activity_slots"
+    uuid activity_id FK "→ activities"
+    text status "success | error | skipped"
+    integer groups_created
+    integer participants_count
+    integer total_participants
+    float avg_compatibility
+    text error_message
+    text triggered_by
+    jsonb details
+    timestamptz created_at
+  }
+
+  %% ============================================================
+  %% MESSAGERIE
+  %% ============================================================
+
+  conversations {
+    uuid id PK
+    uuid activity_id FK "→ activities"
+    uuid slot_id FK "→ activity_slots"
+    uuid friend_request_id FK "→ friend_requests"
+    text name
+    text image_url
+    boolean is_group
+    boolean is_closed
+    timestamptz closed_at
+    text closed_reason
+    timestamptz last_message_at
+    timestamptz created_at
+    timestamptz updated_at
+  }
+
+  conversation_participants {
+    uuid id PK
+    uuid conversation_id FK "→ conversations"
+    uuid user_id FK "→ auth.users + profiles"
+    timestamptz joined_at
+    timestamptz last_read_at
+    boolean is_muted
+    boolean is_hidden
+  }
+
+  messages {
+    uuid id PK
+    uuid conversation_id FK "→ conversations"
+    uuid sender_id FK "→ auth.users + profiles"
+    text content
+    text message_type "text | image | voice | system"
+    text media_url
+    integer media_duration
+    boolean is_admin_message
+    uuid reply_to_message_id FK "→ messages"
+    timestamptz created_at
+    timestamptz deleted_at
+  }
+
+  %% ============================================================
+  %% SOCIAL
+  %% ============================================================
+
+  friend_requests {
+    uuid id PK
+    uuid sender_id FK "→ auth.users"
+    uuid receiver_id FK "→ auth.users"
+    text status "pending | accepted | rejected"
+    timestamptz created_at
+    timestamptz updated_at
+  }
+
+  friendships {
+    uuid id PK
+    uuid user_id FK "→ auth.users"
+    uuid friend_id FK "→ auth.users"
+    timestamptz created_at
+  }
+
+  blocked_users {
+    uuid id PK
+    uuid blocker_id FK "→ profiles"
+    uuid blocked_id FK "→ profiles"
+    timestamptz created_at
+  }
+
+  met_people_hidden {
+    uuid user_id PK,FK "→ profiles"
+    uuid hidden_user_id PK,FK "→ profiles"
+    timestamptz created_at
+  }
+
+  %% ============================================================
+  %% INVITATION +1
+  %% ============================================================
+
+  plus_one_invitations {
+    uuid id PK
+    uuid slot_id FK "→ activity_slots"
+    uuid inviter_id FK "→ profiles"
+    uuid invitee_id FK "→ profiles"
+    text token UK
+    text status "pending | accepted | expired | cancelled"
+    text payment_mode "host_pays | guest_pays"
+    timestamptz created_at
+    timestamptz expires_at
+    timestamptz accepted_at
+  }
+
+  %% ============================================================
+  %% CHECK-IN
+  %% ============================================================
+
+  checkin_logs {
+    uuid id PK
+    uuid slot_participant_id FK "→ slot_participants"
+    uuid slot_id FK "→ activity_slots"
+    uuid activity_id FK "→ activities"
+    uuid performed_by FK "→ profiles"
+    text action "token_generated | scan | validate | reject | expire"
+    text result "success | already_checked_in | expired | ..."
+    text ip_address
+    text user_agent
+    jsonb metadata
+    timestamptz created_at
+  }
+
+  %% ============================================================
+  %% BUSINESS
+  %% ============================================================
+
+  business_stats {
+    uuid id PK
+    uuid business_id FK "→ profiles"
+    date date
+    integer views
+    integer activity_views
+    integer total_participants
+    numeric total_revenue
+    timestamptz created_at
+  }
+
+  activity_revenue {
+    uuid id PK
+    uuid activity_id FK "→ activities"
+    uuid business_id FK "→ profiles"
+    uuid participant_id FK "→ profiles"
+    numeric amount
+    varchar currency "EUR"
+    varchar payment_status "pending | completed | refunded | cancelled"
+    timestamptz created_at
+  }
+
+  reviews {
+    uuid id PK
+    uuid activity_id FK "→ activities"
+    uuid reviewer_id FK "→ profiles"
+    integer rating "1-5"
+    text comment
+    timestamptz created_at
+  }
+
+  %% ============================================================
+  %% MODÉRATION
+  %% ============================================================
+
+  reports {
+    uuid id PK
+    uuid reported_by FK "→ profiles"
+    text target_type "profile | message | activity"
+    uuid target_id
+    text reason "harassment | spam | fake_profile | ..."
+    text description
+    text status "new | reviewing | resolved | dismissed"
+    timestamptz created_at
+    timestamptz updated_at
+  }
+
+  %% ============================================================
+  %% RELATIONS
+  %% ============================================================
+
+  profiles ||--o{ activities : "host_id"
+  profiles ||--o{ slot_participants : "user_id"
+  profiles ||--o{ activity_participants : "user_id"
+  profiles ||--o{ slot_group_members : "user_id"
+  profiles ||--o{ reviews : "reviewer_id"
+  profiles ||--o{ reports : "reported_by"
+  profiles ||--o{ blocked_users : "blocker_id"
+  profiles ||--o{ business_stats : "business_id"
+  profiles ||--o{ activity_revenue : "business_id"
+  profiles ||--o{ plus_one_invitations : "inviter_id"
+  profiles ||--o{ checkin_logs : "performed_by"
+
+  activities ||--o{ activity_slots : "activity_id"
+  activities ||--o{ slot_participants : "activity_id"
+  activities ||--o{ activity_participants : "activity_id"
+  activities ||--o{ conversations : "activity_id"
+  activities ||--o{ slot_groups : "activity_id"
+  activities ||--o{ reviews : "activity_id"
+  activities ||--o{ activity_revenue : "activity_id"
+  activities ||--o{ checkin_logs : "activity_id"
+  activities ||--o{ group_formation_logs : "activity_id"
+
+  activity_slots ||--o{ slot_participants : "slot_id"
+  activity_slots ||--o{ slot_groups : "slot_id"
+  activity_slots ||--o{ conversations : "slot_id"
+  activity_slots ||--o{ plus_one_invitations : "slot_id"
+  activity_slots ||--o{ checkin_logs : "slot_id"
+  activity_slots ||--o{ group_formation_logs : "slot_id"
+
+  slot_groups ||--o{ slot_group_members : "group_id"
+  slot_groups ||--o| conversations : "conversation_id"
+
+  conversations ||--o{ conversation_participants : "conversation_id"
+  conversations ||--o{ messages : "conversation_id"
+
+  friend_requests ||--o| conversations : "friend_request_id"
+
+  slot_participants ||--o{ checkin_logs : "slot_participant_id"
+  plus_one_invitations ||--o| slot_participants : "plus_one_invitation_id"
+
+  messages ||--o| messages : "reply_to_message_id"

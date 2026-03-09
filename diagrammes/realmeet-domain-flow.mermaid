@@ -1,0 +1,171 @@
+---
+title: RealMeet — Domain Flow
+---
+
+flowchart TB
+
+  %% ============================================================
+  %% STYLES
+  %% ============================================================
+  classDef auth fill:#6366F1,stroke:#4F46E5,color:#fff,stroke-width:2px
+  classDef profile fill:#8B5CF6,stroke:#7C3AED,color:#fff,stroke-width:2px
+  classDef activities fill:#F59E0B,stroke:#D97706,color:#000,stroke-width:2px
+  classDef groups fill:#10B981,stroke:#059669,color:#fff,stroke-width:2px
+  classDef payment fill:#EF4444,stroke:#DC2626,color:#fff,stroke-width:2px
+  classDef plusone fill:#EC4899,stroke:#DB2777,color:#fff,stroke-width:2px
+  classDef checkin fill:#14B8A6,stroke:#0D9488,color:#fff,stroke-width:2px
+  classDef messaging fill:#3B82F6,stroke:#2563EB,color:#fff,stroke-width:2px
+  classDef social fill:#A855F7,stroke:#9333EA,color:#fff,stroke-width:2px
+  classDef notif fill:#F97316,stroke:#EA580C,color:#fff,stroke-width:2px
+  classDef business fill:#64748B,stroke:#475569,color:#fff,stroke-width:2px
+  classDef feat fill:#1E293B,stroke:#334155,color:#CBD5E1,stroke-width:1px
+  classDef wip fill:#422006,stroke:#92400E,color:#FBBF24,stroke-width:1px,stroke-dasharray:5 3
+  classDef planned fill:#1E293B,stroke:#475569,color:#94A3B8,stroke-width:1px,stroke-dasharray:3 3
+
+  %% ============================================================
+  %% 🔐 AUTHENTIFICATION
+  %% ============================================================
+  AUTH[🔐 Authentification]:::auth
+  AUTH --- AUTH_F1[✅ Inscription utilisateur]:::feat
+  AUTH --- AUTH_F2[✅ Inscription entreprise]:::feat
+  AUTH --- AUTH_F3[✅ Login email / password]:::feat
+  AUTH --- AUTH_F4[🔜 OAuth · Apple · Google]:::planned
+  AUTH --- AUTH_F5[✅ Gestion session Supabase]:::feat
+  AUTH --- AUTH_F6[✅ Profil obligatoire post-signup]:::feat
+
+  %% ============================================================
+  %% 👤 PROFIL
+  %% ============================================================
+  PROFILE[👤 Profil]:::profile
+  PROFILE --- PROF_F1[✅ Édition profil · nom · bio · avatar]:::feat
+  PROFILE --- PROF_F2[✅ Centres d'intérêt]:::feat
+  PROFILE --- PROF_F3[✅ Username unique]:::feat
+  PROFILE --- PROF_F4[✅ Ville / Localisation]:::feat
+  PROFILE --- PROF_F5[✅ Type de compte · user / business]:::feat
+  PROFILE --- PROF_F6[✅ Push token · expo_push_token]:::feat
+
+  %% ============================================================
+  %% 🎯 ACTIVITÉS
+  %% ============================================================
+  ACTIVITIES[🎯 Activités]:::activities
+  ACTIVITIES --- ACT_F1[✅ Création d'activité · host]:::feat
+  ACTIVITIES --- ACT_F2[✅ Catégories & filtres]:::feat
+  ACTIVITIES --- ACT_F3[✅ Créneaux · activity_slots]:::feat
+  ACTIVITIES --- ACT_F4[✅ Inscription à un créneau]:::feat
+  ACTIVITIES --- ACT_F5[✅ Désinscription · soft delete]:::feat
+  ACTIVITIES --- ACT_F6[✅ Carte MapLibre · browse]:::feat
+  ACTIVITIES --- ACT_F7[✅ Annulation par l'hôte]:::feat
+  ACTIVITIES --- ACT_F8[✅ Capacité max par créneau]:::feat
+
+  %% ============================================================
+  %% 👥 FORMATION DE GROUPES
+  %% ============================================================
+  GROUPS[👥 Formation de Groupes]:::groups
+  GROUPS --- GRP_F1[✅ form_groups_v3 · affinité intérêts]:::feat
+  GROUPS --- GRP_F2[✅ pg_cron toutes les 15 min]:::feat
+  GROUPS --- GRP_F3[✅ slot_groups + slot_group_members]:::feat
+  GROUPS --- GRP_F4[✅ Conversation auto par groupe]:::feat
+  GROUPS --- GRP_F5[✅ Message système de bienvenue]:::feat
+  GROUPS --- GRP_F6[✅ Gestion timezone Paris / UTC]:::feat
+
+  %% ============================================================
+  %% 💳 PAIEMENT
+  %% ============================================================
+  PAYMENT[💳 Paiement]:::payment
+  PAYMENT --- PAY_F1[✅ Flow multi-étapes · méthode → carte → confirmation]:::feat
+  PAYMENT --- PAY_F2[✅ Preview carte bancaire]:::feat
+  PAYMENT --- PAY_F3[🔧 Intégration Stripe]:::wip
+  PAYMENT --- PAY_F4[✅ Bypass dev temporaire]:::feat
+  PAYMENT --- PAY_F5[✅ Paiement duo · host_pays / guest_pays]:::feat
+  PAYMENT --- PAY_F6[✅ Réservation 10 min pour duo]:::feat
+
+  %% ============================================================
+  %% 🤝 INVITATION +1
+  %% ============================================================
+  PLUSONE[🤝 Invitation +1]:::plusone
+  PLUSONE --- PLUS_F1[✅ Création token sécurisé]:::feat
+  PLUSONE --- PLUS_F2[✅ Lien realmeet.fr/invite/token]:::feat
+  PLUSONE --- PLUS_F3[✅ Deep link → app]:::feat
+  PLUSONE --- PLUS_F4[✅ Validation & preview invitation]:::feat
+  PLUSONE --- PLUS_F5[✅ Acceptation + inscription auto]:::feat
+  PLUSONE --- PLUS_F6[✅ Expiration 10 min / 24h]:::feat
+  PLUSONE --- PLUS_F7[✅ Share natif système]:::feat
+
+  %% ============================================================
+  %% 📱 CHECK-IN QR
+  %% ============================================================
+  CHECKIN[📱 Check-in QR]:::checkin
+  CHECKIN --- CHK_F1[✅ QR Code JWT par participant]:::feat
+  CHECKIN --- CHK_F2[✅ Interface staff · checkin.realmeet.fr]:::feat
+  CHECKIN --- CHK_F3[✅ Scan → Verify → Validate · 2 étapes]:::feat
+  CHECKIN --- CHK_F4[✅ Validation manuelle · fallback]:::feat
+  CHECKIN --- CHK_F5[✅ Fenêtre horaire check-in]:::feat
+  CHECKIN --- CHK_F6[✅ Nonce anti-replay]:::feat
+  CHECKIN --- CHK_F7[✅ Logs d'audit · checkin_logs]:::feat
+  CHECKIN --- CHK_F8[✅ Supabase Realtime updates]:::feat
+
+  %% ============================================================
+  %% 💬 MESSAGERIE
+  %% ============================================================
+  MESSAGING[💬 Messagerie]:::messaging
+  MESSAGING --- MSG_F1[✅ Chat privé · 1:1 amis]:::feat
+  MESSAGING --- MSG_F2[✅ Chat de groupe · activité]:::feat
+  MESSAGING --- MSG_F3[✅ Messages texte / image / vocal]:::feat
+  MESSAGING --- MSG_F4[✅ Reply-to · réponse à un message]:::feat
+  MESSAGING --- MSG_F5[✅ Shadow ban · RLS]:::feat
+  MESSAGING --- MSG_F6[✅ Soft delete conversations]:::feat
+  MESSAGING --- MSG_F7[✅ Mute conversation]:::feat
+  MESSAGING --- MSG_F8[✅ Messages système]:::feat
+  MESSAGING --- MSG_F9[✅ get_my_conversations_v2 · SECURITY DEFINER]:::feat
+
+  %% ============================================================
+  %% 🫂 SOCIAL
+  %% ============================================================
+  SOCIAL[🫂 Social]:::social
+  SOCIAL --- SOC_F1[✅ Demandes d'amitié · friend_requests]:::feat
+  SOCIAL --- SOC_F2[✅ Liste d'amis · friendships bidirectionnel]:::feat
+  SOCIAL --- SOC_F3[✅ Suppression amitié · remove_bidirectional]:::feat
+  SOCIAL --- SOC_F4[✅ Blocage utilisateur · blocked_users]:::feat
+  SOCIAL --- SOC_F5[✅ Signalements · reports]:::feat
+  SOCIAL --- SOC_F6[✅ Personnes rencontrées · met_people]:::feat
+  SOCIAL --- SOC_F7[✅ Masquer rencontre · met_people_hidden]:::feat
+
+  %% ============================================================
+  %% 🔔 NOTIFICATIONS
+  %% ============================================================
+  NOTIF[🔔 Notifications]:::notif
+  NOTIF --- NOT_F1[✅ Expo Push Notifications]:::feat
+  NOTIF --- NOT_F2[✅ Token registration / unregister]:::feat
+  NOTIF --- NOT_F3[✅ Notification annulation activité]:::feat
+  NOTIF --- NOT_F4[🔜 Notification formation groupe]:::planned
+  NOTIF --- NOT_F5[🔜 Notification nouveau message]:::planned
+  NOTIF --- NOT_F6[🔜 Notification demande d'ami]:::planned
+
+  %% ============================================================
+  %% 🏢 ESPACE ENTREPRISE
+  %% ============================================================
+  BUSINESS[🏢 Espace Entreprise]:::business
+  BUSINESS --- BIZ_F1[✅ Dashboard entreprise]:::feat
+  BUSINESS --- BIZ_F2[✅ Restrictions compte business]:::feat
+  BUSINESS --- BIZ_F3[✅ Vue groupes · lecture seule]:::feat
+  BUSINESS --- BIZ_F4[✅ Analytics activités]:::feat
+  BUSINESS --- BIZ_F5[✅ Reviews · 1-5 étoiles]:::feat
+  BUSINESS --- BIZ_F6[✅ Gestion participants]:::feat
+  BUSINESS --- BIZ_F7[✅ Revenue tracking · activity_revenue]:::feat
+
+  %% ============================================================
+  %% CONNEXIONS ENTRE DOMAINES
+  %% ============================================================
+  AUTH ==>|session| PROFILE
+  AUTH ==>|push token| NOTIF
+  PROFILE ==>|intérêts| ACTIVITIES
+  PROFILE ==>|amis| SOCIAL
+  ACTIVITIES ==>|créneaux| GROUPS
+  ACTIVITIES ==>|inscription| PAYMENT
+  ACTIVITIES ==>|présence| CHECKIN
+  ACTIVITIES ==>|inviter +1| PLUSONE
+  PLUSONE ==>|paiement duo| PAYMENT
+  GROUPS ==>|conv. auto| MESSAGING
+  SOCIAL ==>|chat privé| MESSAGING
+  BUSINESS ==>|host| ACTIVITIES
+  BUSINESS ==>|staff| CHECKIN

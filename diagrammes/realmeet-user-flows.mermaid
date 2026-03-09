@@ -1,0 +1,183 @@
+---
+title: "RealMeet — User Flows (Parcours Critiques)"
+---
+
+flowchart TB
+
+  %% ============================================================
+  %% STYLES
+  %% ============================================================
+  classDef user fill:#3B82F6,stroke:#2563EB,color:#fff,stroke-width:2px
+  classDef app fill:#1E293B,stroke:#334155,color:#CBD5E1,stroke-width:1px
+  classDef db fill:#10B981,stroke:#059669,color:#fff,stroke-width:2px
+  classDef server fill:#F59E0B,stroke:#D97706,color:#000,stroke-width:2px
+  classDef check fill:#22C55E,stroke:#16A34A,color:#fff,stroke-width:2px
+  classDef error fill:#EF4444,stroke:#DC2626,color:#fff,stroke-width:2px
+  classDef cron fill:#8B5CF6,stroke:#7C3AED,color:#fff,stroke-width:2px
+  classDef external fill:#EC4899,stroke:#DB2777,color:#fff,stroke-width:2px
+  classDef note fill:#0F172A,stroke:#334155,color:#94A3B8,stroke-width:1px,stroke-dasharray:4 3
+
+  %% ============================================================
+  %% FLOW 1 — INSCRIPTION A UNE ACTIVITE + PAIEMENT
+  %% ============================================================
+  subgraph FLOW1 ["Flow 1 — Inscription activite + Paiement"]
+    direction TB
+
+    F1_START([Browse / Carte]):::user
+    F1_START --> F1_SELECT[Selectionne activite + creneau]:::app
+
+    F1_SELECT --> F1_CHECK{Verifications}:::app
+    F1_CHECK -->|"Creneau a moins de 24h"| F1_BLOCK_J1[Inscription impossible - regle J-1]:::error
+    F1_CHECK -->|"Plus de places"| F1_BLOCK_FULL[Creneau complet]:::error
+    F1_CHECK -->|"Deja inscrit"| F1_BLOCK_DUP[Deja participant]:::error
+    F1_CHECK -->|"Inscriptions fermees"| F1_BLOCK_CLOSED[Groupes deja formes]:::error
+    F1_CHECK -->|OK| F1_PAY_METHOD
+
+    F1_PAY_METHOD["payment/select-method<br/>CB ou Apple Pay"]:::app
+    F1_PAY_METHOD --> F1_PAY_CARD["payment/card-form<br/>Saisie carte + preview"]:::app
+    F1_PAY_CARD --> F1_PAY_CONFIRM["payment/confirmation"]:::app
+
+    F1_PAY_CONFIRM --> F1_INSERT_SP["INSERT slot_participants<br/>status: active"]:::db
+    F1_INSERT_SP --> F1_UPDATE_COUNT["UPDATE activities<br/>participants + 1"]:::db
+
+    F1_UPDATE_COUNT --> F1_CONV_CHECK{"Conversation groupe<br/>existe ?"}:::app
+    F1_CONV_CHECK -->|Oui| F1_JOIN_CONV["INSERT conversation_participants<br/>+ message systeme"]:::db
+    F1_CONV_CHECK -->|Non| F1_CREATE_CONV["INSERT conversations is_group true<br/>+ participants"]:::db
+
+    F1_JOIN_CONV --> F1_TRY_GROUPS
+    F1_CREATE_CONV --> F1_TRY_GROUPS
+    F1_TRY_GROUPS["checkAndFormGroupsIfNeeded"]:::app
+    F1_TRY_GROUPS --> F1_DONE(["Inscription reussie"]):::check
+  end
+
+  %% ============================================================
+  %% FLOW 2 — FORMATION AUTOMATIQUE DE GROUPES
+  %% ============================================================
+  subgraph FLOW2 ["Flow 2 — Formation automatique de groupes"]
+    direction TB
+
+    F2_CRON(["pg_cron toutes les 15 min"]):::cron
+    F2_CRON --> F2_CALL["process_slots_for_grouping_v3"]:::db
+    F2_CALL --> F2_FIND["SELECT slots non formes<br/>dans les 24h - heure Paris"]:::db
+
+    F2_FIND --> F2_LOOP{"Pour chaque creneau eligible"}:::app
+    F2_LOOP --> F2_FORM["form_groups_v3 slot_id"]:::db
+
+    F2_FORM --> F2_COUNT["Compte participants actifs<br/>slot_participants + slot_group_members"]:::db
+    F2_COUNT --> F2_CALC["Calcule nb groupes optimal<br/>Respecte min/max par groupe"]:::app
+    F2_CALC --> F2_DUOS["Place les duos +1 ensemble"]:::app
+    F2_DUOS --> F2_AFFINITY["Affectation par affinite<br/>Score = intersection interests<br/>Best-fit greedy"]:::app
+
+    F2_AFFINITY --> F2_CREATE_GROUPS["INSERT slot_groups<br/>INSERT slot_group_members + scores"]:::db
+    F2_CREATE_GROUPS --> F2_CREATE_CONV["INSERT conversations is_group<br/>INSERT conversation_participants"]:::db
+    F2_CREATE_CONV --> F2_MSG["INSERT message systeme<br/>Votre groupe a ete forme"]:::db
+
+    F2_MSG --> F2_UPDATE["UPDATE activity_slots<br/>groups_formed = true"]:::db
+    F2_UPDATE --> F2_LOG["INSERT group_formation_logs"]:::db
+    F2_LOG --> F2_LOOP
+    F2_LOOP -->|Tous traites| F2_DONE(["Groupes formes"]):::check
+  end
+
+  %% ============================================================
+  %% FLOW 3 — CHECK-IN QR LE JOUR J
+  %% ============================================================
+  subgraph FLOW3 ["Flow 3 — Check-in QR le jour J"]
+    direction TB
+
+    F3_START(["Participant ouvre app"]):::user
+    F3_START --> F3_QR["App genere QR Code JWT<br/>sp - nonce - type ck - exp 5min"]:::app
+
+    F3_QR --> F3_SHOW["Presente QR au staff"]:::user
+    F3_SHOW --> F3_SCAN["Staff scanne<br/>POST /api/checkin/verify"]:::server
+
+    F3_SCAN --> F3_VERIFY{"Verifications serveur"}:::server
+    F3_VERIFY -->|JWT invalide| F3_ERR1["Token invalide ou expire"]:::error
+    F3_VERIFY -->|Mauvais host| F3_ERR2["Non autorise"]:::error
+    F3_VERIFY -->|Nonce mismatch| F3_ERR3["Token obsolete"]:::error
+    F3_VERIFY -->|Hors fenetre| F3_ERR4["Hors creneau -30min / +duree"]:::error
+    F3_VERIFY -->|Deja check-in| F3_ERR5["Deja enregistre"]:::error
+    F3_VERIFY -->|Tout OK| F3_PREVIEW
+
+    F3_PREVIEW["Affiche preview participant<br/>Nom - avatar - activite - creneau"]:::server
+    F3_PREVIEW --> F3_CONFIRM["Staff confirme<br/>POST /api/checkin/validate"]:::server
+
+    F3_CONFIRM --> F3_UPDATE["UPDATE slot_participants<br/>checked_in_at - checked_in_by<br/>checkin_nonce = null"]:::db
+    F3_UPDATE --> F3_LOG["INSERT checkin_logs<br/>action: validate - result: success"]:::db
+    F3_LOG --> F3_DONE(["Participant enregistre"]):::check
+
+    F3_FALLBACK["Fallback : POST /manual-validate<br/>par slot_participant_id<br/>si QR ou camera ne marche pas"]:::note
+  end
+
+  %% ============================================================
+  %% FLOW 4 — INVITATION +1 DUO
+  %% ============================================================
+  subgraph FLOW4 ["Flow 4 — Invitation +1 Duo"]
+    direction TB
+
+    F4_HOST(["Inviteur s inscrit en mode duo"]):::user
+    F4_HOST --> F4_INSERT_HOST["INSERT slot_participants - host"]:::db
+    F4_INSERT_HOST --> F4_CREATE_INV["RPC create_plus_one_invitation<br/>token + expires 10 min"]:::db
+
+    F4_CREATE_INV --> F4_LINK["Genere lien<br/>realmeet.fr/invite/token"]:::app
+    F4_LINK --> F4_SHARE["Share natif systeme<br/>Envoi au guest"]:::app
+
+    F4_SHARE --> F4_GUEST_OPEN(["Invite ouvre le lien"]):::external
+    F4_GUEST_OPEN --> F4_WEB["invite.html sur VPS<br/>Redirect deep link<br/>natively://invite/token"]:::server
+
+    F4_WEB --> F4_APP_OPEN["App s ouvre<br/>/invite/token"]:::app
+
+    F4_APP_OPEN --> F4_AUTH_CHECK{"Connecte ?"}:::app
+    F4_AUTH_CHECK -->|Non| F4_LOGIN["Redirect login<br/>avec redirect_after"]:::app
+    F4_AUTH_CHECK -->|Oui| F4_VALIDATE
+    F4_LOGIN --> F4_VALIDATE
+
+    F4_VALIDATE["RPC validate_plus_one_token<br/>Preview : activite - date - inviteur"]:::db
+    F4_VALIDATE --> F4_EXPIRED{"Token expire ?"}:::app
+    F4_EXPIRED -->|Oui| F4_ERR["Invitation expiree"]:::error
+    F4_EXPIRED -->|Non| F4_PREVIEW
+
+    F4_PREVIEW["Affiche preview invitation"]:::app
+    F4_PREVIEW --> F4_ACCEPT["Guest accepte puis payment flow"]:::app
+
+    F4_ACCEPT --> F4_RPC["RPC accept_plus_one_invitation"]:::db
+    F4_RPC --> F4_INSERT_GUEST["INSERT slot_participants<br/>is_plus_one: true<br/>invited_by: host_id"]:::db
+    F4_INSERT_GUEST --> F4_UPDATE_INV["UPDATE plus_one_invitations<br/>status: accepted"]:::db
+    F4_UPDATE_INV --> F4_DONE(["Rejoint en tant que +1"]):::check
+  end
+
+  %% ============================================================
+  %% FLOW 5 — CYCLE SOCIAL AMI CHAT BLOCK
+  %% ============================================================
+  subgraph FLOW5 ["Flow 5 — Cycle social"]
+    direction TB
+
+    F5_START(["User A voit B dans<br/>Personnes rencontrees"]):::user
+    F5_START --> F5_REQUEST["Envoie demande d ami<br/>INSERT friend_requests pending"]:::db
+
+    F5_REQUEST --> F5_NOTIF["User B recoit notification"]:::user
+    F5_NOTIF --> F5_ACCEPT{"B accepte ?"}:::app
+    F5_ACCEPT -->|Non| F5_REJECT["UPDATE friend_requests<br/>status: rejected"]:::db
+    F5_ACCEPT -->|Oui| F5_CREATE_FRIENDSHIP
+
+    F5_CREATE_FRIENDSHIP["UPDATE friend_requests accepted<br/>INSERT friendships A vers B<br/>INSERT friendships B vers A"]:::db
+    F5_CREATE_FRIENDSHIP --> F5_CREATE_CONV["INSERT conversations is_group: false<br/>INSERT conversation_participants A + B"]:::db
+
+    F5_CREATE_CONV --> F5_CHAT(["Chat prive ouvert"]):::check
+
+    F5_CHAT --> F5_MSG["A envoie message<br/>INSERT messages"]:::db
+    F5_MSG --> F5_RT["Supabase Realtime<br/>Broadcast vers B en temps reel"]:::db
+
+    F5_CHAT --> F5_BLOCK_OPTION{"A bloque B ?"}:::app
+    F5_BLOCK_OPTION -->|Non| F5_CONTINUE["Conversation continue normalement"]:::app
+    F5_BLOCK_OPTION -->|Oui| F5_BLOCK
+
+    F5_BLOCK["INSERT blocked_users<br/>Conversation vers is_hidden"]:::db
+    F5_BLOCK --> F5_SHADOW["Shadow ban actif<br/>B peut envoyer mais A ne voit plus<br/>Filtre par RLS dans get_my_conversations_v2"]:::note
+
+    F5_CHAT --> F5_UNFRIEND_OPTION{"A supprime amitie ?"}:::app
+    F5_UNFRIEND_OPTION -->|Non| F5_KEEP["Amitie maintenue"]:::app
+    F5_UNFRIEND_OPTION -->|Oui| F5_UNFRIEND
+
+    F5_UNFRIEND["RPC remove_bidirectional_friendship<br/>DELETE friendships A vers B + B vers A"]:::db
+    F5_UNFRIEND --> F5_READONLY["Conversation en lecture seule<br/>Pas supprimee - historique preserve"]:::note
+  end

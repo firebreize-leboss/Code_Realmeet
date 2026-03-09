@@ -1,1 +1,104 @@
-Dans app/activity-detail.tsx, modifier l'affichage pour les activités annulées : ÉTAPE 1 — Dans la fonction loadActivity, là où on récupère le slotInfo pour les activités passées (le bloc `if (passedSlotId)`), ajouter is_cancelled dans le select : changer `.select('date, time')` en `.select('date, time, is_cancelled')`. Créer un nouvel état avec useState : `const [isSlotSystemCancelled, setIsSlotSystemCancelled] = useState(false);`. Après avoir récupéré slotInfo, ajouter : `setIsSlotSystemCancelled(slotInfo?.is_cancelled || false);`. ÉTAPE 2 — Modifier le banner "Activité terminée". Actuellement le code est : `{isActivityPast && (<View style={styles.pastActivityBanner}><IconSymbol name="checkmark.circle.fill" size={20} color="#FFFFFF" /><Text style={styles.pastActivityBannerText}>Activité terminée</Text></View>)}`. Remplacer par un conditionnel : si isSlotSystemCancelled est true, afficher le banner avec backgroundColor '#EF4444' (rouge), IconSymbol name "xmark.circle.fill" size 20 color "#FFFFFF", et texte "Activité annulée". Sinon garder le banner actuel "Activité terminée" avec le style existant. ÉTAPE 3 — Masquer la section "Votre avis" quand le slot est annulé. La section review est conditionnée par `{isActivityPast && !isHost && !isBusiness && (...)}`. Ajouter la condition `&& !isSlotSystemCancelled` pour que ça devienne `{isActivityPast && !isHost && !isBusiness && !isSlotSystemCancelled && (...)}`. Ainsi on ne peut pas noter une activité qui a été annulée par le système. Ne pas toucher au reste du fichier.
+# ============================================================
+# TEMPLATE PROMPT — CLAUDE CODE x DIAGRAMMES REALMEET
+# ============================================================
+#
+# USAGE :
+# 1. Copie ce template
+# 2. Remplis les 3 réponses
+# 3. Lance avec :
+#
+#    cat prompt.txt | claude --print --model opus \
+#      --tools default --permission-mode acceptEdits \
+#      --add-dir /home/ubuntu/realmeet/
+#
+# ============================================================
+
+Tu travailles sur RealMeet, une app React Native / Expo / Supabase.
+
+# ============================================================
+# DIAGRAMMES D'ARCHITECTURE — LIS-LES EN PREMIER
+# ============================================================
+
+Avant d'implémenter quoi que ce soit, lis et comprends ces 5 fichiers qui décrivent l'architecture complète du projet :
+
+- DOMAINES & FEATURES : diagrammes/realmeet-domain-flow.mermaid
+- MODELE DE DONNEES : diagrammes/realmeet-erd.mermaid
+- INFRASTRUCTURE : diagrammes/realmeet-infrastructure.mermaid
+- NAVIGATION ECRANS : diagrammes/realmeet-navigation.mermaid
+- PARCOURS UTILISATEUR : diagrammes/realmeet-user-flows.mermaid
+
+Ces diagrammes sont la source de vérité. Tu dois les respecter ET les mettre à jour si ton implémentation change l'architecture.
+
+# ============================================================
+# FEATURE A IMPLEMENTER
+# ============================================================
+
+FEATURE : [Nom de la feature]
+
+1. SCOPE — Quels domaines sont touchés ?
+   → [ex: Notifications + Messagerie]
+
+2. COMPORTEMENT — Que doit-il se passer du point de vue utilisateur ?
+   → [ex: Quand quelqu'un envoie un message dans un groupe, les autres membres reçoivent une notif push]
+
+3. SIMILAIRE A — Quelle feature existante a le même pattern ? (si aucune idée, écris "Aucune")
+   → [ex: Comme la notif d'annulation d'activité]
+
+# ============================================================
+# CONSIGNES D'IMPLEMENTATION
+# ============================================================
+
+PHASE 1 — ANALYSE (ne code rien encore)
+
+- Lis les 5 diagrammes pour comprendre l'architecture actuelle
+- Analyse le point 3 (feature similaire) : retrouve les fichiers concernés, étudie le pattern utilisé (nommage, conventions, structure). Si "Aucune", cherche toi-même dans le code la feature la plus proche de ce qui est demandé
+- Détermine toi-même à partir de l'ERD s'il faut une nouvelle table, de nouvelles colonnes, ou si l'existant suffit
+- Détermine toi-même à partir de l'Infrastructure où placer le code (app, SQL/RPC, Edge Function, check-in server)
+- Résume ton plan en 5 lignes max avant de commencer
+
+PHASE 2 — IMPLEMENTATION
+
+Implémente en respectant ces règles du projet :
+
+- Reproduis le pattern de la feature similaire identifiée en phase 1
+- SECURITY DEFINER : si tu crées une RPC qui bypass le RLS, filtre manuellement les blocked_users et les éléments cachés
+- Soft delete : ne supprime jamais de données, utilise des colonnes status ou deleted_at
+- Dual tables : slot_participants ET slot_group_members doivent toujours être cohérents quand la feature touche les participants
+- Timezone : les dates d'activité sont stockées en heure Paris sans timezone info, le serveur est en UTC — convertis explicitement avec AT TIME ZONE 'Europe/Paris'
+- UUID : utilise expo-crypto randomUUID(), jamais crypto.randomUUID()
+- Pour chaque fichier modifié, vérifie que tout compile avant de passer au suivant
+
+PHASE 3 — MISE A JOUR DES DIAGRAMMES
+
+Après l'implémentation, mets à jour les diagrammes Mermaid impactés :
+
+- domain-flow.mermaid : ajoute la feature dans le bon domaine (passe son status de planned à done, ou ajoute-la si elle n'existait pas). Ajoute de nouvelles connexions entre domaines si nécessaire
+- erd.mermaid : ajoute les nouvelles tables/colonnes et leurs relations si tu en as créé
+- infrastructure.mermaid : mets à jour si tu as ajouté une Edge Function, un nouveau service, ou une nouvelle dépendance externe
+- navigation.mermaid : ajoute les nouveaux écrans/routes si tu en as créé
+- user-flows.mermaid : ajoute ou modifie le flow si la feature introduit un nouveau parcours utilisateur, ou modifie significativement un parcours existant
+
+Ne touche pas aux diagrammes qui ne sont pas impactés.
+
+PHASE 4 — RECAP
+
+Termine par un récapitulatif structuré :
+
+```
+RECAP MODIFICATIONS
+===================
+
+CODE :
+- [fichier] : [ce qui a changé]
+- [fichier] : [ce qui a changé]
+
+SQL :
+- [nouvelle RPC / trigger / table / colonne]
+
+DIAGRAMMES MIS A JOUR :
+- [diagramme] : [ce qui a été ajouté/modifié]
+- [diagramme] : [ce qui a été ajouté/modifié]
+
+DIAGRAMMES NON IMPACTES :
+- [liste]
+```
