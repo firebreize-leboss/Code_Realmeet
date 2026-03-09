@@ -1,0 +1,127 @@
+---
+title: "RealMeet — Infrastructure & Deployment"
+---
+
+flowchart TB
+
+  %% ============================================================
+  %% STYLES
+  %% ============================================================
+  classDef client fill:#3B82F6,stroke:#2563EB,color:#fff,stroke-width:2px
+  classDef supabase fill:#10B981,stroke:#059669,color:#fff,stroke-width:2px
+  classDef vps fill:#F59E0B,stroke:#D97706,color:#000,stroke-width:2px
+  classDef external fill:#8B5CF6,stroke:#7C3AED,color:#fff,stroke-width:2px
+  classDef storage fill:#64748B,stroke:#475569,color:#fff,stroke-width:2px
+  classDef detail fill:#1E293B,stroke:#334155,color:#CBD5E1,stroke-width:1px
+
+  %% ============================================================
+  %% CLIENT — EXPO APP
+  %% ============================================================
+  subgraph CLIENT ["📱 Client — Expo / React Native"]
+    direction TB
+    APP[App RealMeet]:::client
+    APP --- APP_D1[Expo Router v6 · navigation]:::detail
+    APP --- APP_D2[Supabase JS Client · auth + data]:::detail
+    APP --- APP_D3[MapLibre via WebView · carte]:::detail
+    APP --- APP_D4[Expo Notifications · push]:::detail
+    APP --- APP_D5[Expo Image Picker · media]:::detail
+    APP --- APP_D6[react-native-reanimated · animations]:::detail
+    APP --- APP_D7[QR Code SVG · check-in]:::detail
+  end
+
+  %% ============================================================
+  %% SUPABASE — BACKEND PRINCIPAL
+  %% ============================================================
+  subgraph SUPABASE ["☁️ Supabase — Backend as a Service"]
+    direction TB
+
+    subgraph SUPA_AUTH ["🔐 Auth"]
+      AUTH_SVC[Supabase Auth]:::supabase
+      AUTH_SVC --- AUTH_D1[Email / Password]:::detail
+      AUTH_SVC --- AUTH_D2[JWT sessions]:::detail
+      AUTH_SVC --- AUTH_D3[RLS enforcement]:::detail
+    end
+
+    subgraph SUPA_DB ["🗄️ PostgreSQL"]
+      DB[Base de données]:::supabase
+      DB --- DB_D1[20 tables · RLS activé]:::detail
+      DB --- DB_D2[RPC functions · form_groups_v3 etc.]:::detail
+      DB --- DB_D3[SECURITY DEFINER · get_my_conversations_v2]:::detail
+      DB --- DB_D4[pg_cron · groupes toutes les 15 min]:::detail
+      DB --- DB_D5[pg_net · appels HTTP internes]:::detail
+      DB --- DB_D6[Triggers · notify_push · cancellation]:::detail
+    end
+
+    subgraph SUPA_RT ["⚡ Realtime"]
+      REALTIME[Supabase Realtime]:::supabase
+      REALTIME --- RT_D1[Messages en temps réel]:::detail
+      REALTIME --- RT_D2[Check-in live updates]:::detail
+    end
+
+    subgraph SUPA_STORAGE ["📦 Storage"]
+      STORAGE[Supabase Storage]:::supabase
+      STORAGE --- ST_D1[Avatars utilisateurs]:::detail
+      STORAGE --- ST_D2[Images activités]:::detail
+      STORAGE --- ST_D3[Médias messages · photos · vocaux]:::detail
+    end
+
+    subgraph SUPA_EDGE ["⚡ Edge Functions (Deno)"]
+      EDGE[Edge Functions]:::supabase
+      EDGE --- EDGE_D1[send-push · Expo Push API]:::detail
+      EDGE --- EDGE_D2[form-groups-cron · trigger groupes]:::detail
+    end
+  end
+
+  %% ============================================================
+  %% VPS OVH — SERVEUR DÉDIÉ
+  %% ============================================================
+  subgraph VPS ["🖥️ VPS OVH — realmeet.fr"]
+    direction TB
+
+    NGINX[Nginx · reverse proxy + SSL]:::vps
+    NGINX --- NGINX_D1[Let's Encrypt · Certbot]:::detail
+    NGINX --- NGINX_D2[realmeet.fr → page invite]:::detail
+    NGINX --- NGINX_D3[checkin.realmeet.fr → Node server]:::detail
+
+    subgraph CHECKIN_SRV ["📱 Check-in Server"]
+      CHECKIN[Node.js / Express]:::vps
+      CHECKIN --- CHK_D1[JWT verify + validate]:::detail
+      CHK_D1 --- CHK_D2[Rate limiting · helmet · CORS]:::detail
+      CHK_D2 --- CHK_D3[PM2 · process manager]:::detail
+    end
+
+    INVITE_PAGE[invite.html · deep link redirect]:::vps
+    CODE_SERVER[code-server · SSH tunnel only]:::vps
+  end
+
+  %% ============================================================
+  %% SERVICES EXTERNES
+  %% ============================================================
+  subgraph EXTERNAL ["🌐 Services Externes"]
+    STRIPE[Stripe · paiements]:::external
+    EXPO_PUSH[Expo Push Service]:::external
+    PROTOMAPS[Protomaps · tuiles carte]:::external
+  end
+
+  %% ============================================================
+  %% CONNEXIONS
+  %% ============================================================
+  APP ==>|REST API + Auth| AUTH_SVC
+  APP ==>|CRUD + RPC| DB
+  APP ==>|WebSocket| REALTIME
+  APP ==>|Upload / Download| STORAGE
+  APP ==>|Deep link invite| INVITE_PAGE
+  APP -.->|🔜 Paiement| STRIPE
+
+  EDGE ==>|HTTP POST| EXPO_PUSH
+  DB ==>|pg_net → Edge Function| EDGE
+  DB ==>|pg_cron → RPC| DB
+
+  CHECKIN ==>|Supabase service_role| DB
+  NGINX ==>|proxy_pass :3001| CHECKIN
+  NGINX ==>|static| INVITE_PAGE
+
+  APP ==>|MapLibre tiles| PROTOMAPS
+  APP ==>|Scan QR → verify + validate| CHECKIN
+
+  STRIPE -.->|🔜 webhook| EDGE

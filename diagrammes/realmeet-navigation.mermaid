@@ -1,0 +1,170 @@
+---
+title: "RealMeet — Navigation & Screen Map"
+---
+
+flowchart TB
+
+  %% ============================================================
+  %% STYLES
+  %% ============================================================
+  classDef root fill:#EF4444,stroke:#DC2626,color:#fff,stroke-width:2px
+  classDef auth fill:#6366F1,stroke:#4F46E5,color:#fff,stroke-width:2px
+  classDef tab fill:#F59E0B,stroke:#D97706,color:#000,stroke-width:2px
+  classDef biztab fill:#64748B,stroke:#475569,color:#fff,stroke-width:2px
+  classDef screen fill:#1E293B,stroke:#334155,color:#CBD5E1,stroke-width:1px
+  classDef modal fill:#8B5CF6,stroke:#7C3AED,color:#fff,stroke-width:1px
+  classDef flow fill:#10B981,stroke:#059669,color:#fff,stroke-width:2px
+  classDef deep fill:#EC4899,stroke:#DB2777,color:#fff,stroke-width:2px
+
+  %% ============================================================
+  %% ROOT LAYOUT
+  %% ============================================================
+  ROOT["_layout.tsx<br/>Providers: Auth · DataCache · TabIndex · Location · Widget"]:::root
+
+  %% ============================================================
+  %% AUTH FLOW — /auth/*
+  %% ============================================================
+  ROOT --> AUTH_GATE{Authentifié ?}
+  AUTH_GATE -->|Non| AUTH_FLOW
+
+  subgraph AUTH_FLOW ["🔐 /auth — Authentification"]
+    direction TB
+    ACCOUNT_TYPE["/auth/account-type<br/>Choix user / business"]:::auth
+    
+    ACCOUNT_TYPE -->|User| LOGIN["/auth/login<br/>Email + mot de passe"]:::auth
+    ACCOUNT_TYPE -->|Business| LOGIN_BIZ["/auth/login-business"]:::auth
+    
+    LOGIN --> REGISTER["/auth/register<br/>Wizard 7 étapes"]:::auth
+    LOGIN_BIZ --> REGISTER_BIZ["/auth/register-business"]:::auth
+
+    REGISTER --- REG_STEPS["Étapes :<br/>1· Photo & Prénom<br/>2· Date de naissance<br/>3· Contact (email + tel)<br/>4· Ville<br/>5· Intention (amicaux / rencontres / réseau / découverte)<br/>6· Bio<br/>7· Intérêts + Mot de passe"]:::screen
+  end
+
+  %% ============================================================
+  %% TABS — UTILISATEUR STANDARD
+  %% ============================================================
+  AUTH_GATE -->|Oui · user| USER_TABS
+  AUTH_GATE -->|Oui · business| BIZ_TABS
+
+  subgraph USER_TABS ["📱 /(tabs) — Utilisateur · Swipe navigation"]
+    direction LR
+    T1["👤 Profil"]:::tab
+    T2["🔍 Explorer<br/>(default)"]:::tab
+    T3["📂 Catégories"]:::tab
+    T4["📅 Activités"]:::tab
+    T5["💬 Messages"]:::tab
+  end
+
+  %% ============================================================
+  %% TABS — COMPTE ENTREPRISE
+  %% ============================================================
+  subgraph BIZ_TABS ["🏢 /(tabs) — Entreprise · Swipe navigation"]
+    direction LR
+    B1["🏢 Dashboard"]:::biztab
+    B2["👁️ Veille"]:::biztab
+    B3["📂 Catégories"]:::biztab
+    B4["📅 Mes activités"]:::biztab
+    B5["👥 Groupes"]:::biztab
+  end
+
+  %% ============================================================
+  %% ÉCRANS DETAIL — depuis les tabs
+  %% ============================================================
+  subgraph DETAIL_SCREENS ["📄 Écrans Détail (push sur la stack)"]
+    direction TB
+    
+    ACTIVITY_DETAIL["/activity-detail<br/>Détail activité + créneaux + inscription"]:::screen
+    CHAT_DETAIL["/chat-detail<br/>Conversation complète"]:::screen
+    USER_PROFILE["/user-profile<br/>Profil utilisateur"]:::screen
+    BIZ_PROFILE["/business-profile<br/>Profil entreprise"]:::screen
+    BIZ_REVIEWS["/business-reviews<br/>Avis entreprise"]:::screen
+    GROUP_INFO["/group-info<br/>Détails du groupe"]:::screen
+    BIZ_GROUP_VIEW["/business-group-view<br/>Vue groupe (lecture seule)"]:::screen
+    CATEGORY_ACT["/category-activities<br/>Activités par catégorie"]:::screen
+  end
+
+  T2 --> ACTIVITY_DETAIL
+  T3 --> CATEGORY_ACT
+  T4 --> ACTIVITY_DETAIL
+  T5 --> CHAT_DETAIL
+  CHAT_DETAIL --> GROUP_INFO
+  CHAT_DETAIL --> USER_PROFILE
+  ACTIVITY_DETAIL --> USER_PROFILE
+  ACTIVITY_DETAIL --> BIZ_PROFILE
+  BIZ_PROFILE --> BIZ_REVIEWS
+  B5 --> BIZ_GROUP_VIEW
+
+  %% ============================================================
+  %% PAYMENT FLOW — /payment/*
+  %% ============================================================
+  subgraph PAYMENT_FLOW ["💳 /payment — Stack (slide_from_right)"]
+    direction LR
+    PAY_SELECT["/payment/select-method<br/>CB · Apple Pay"]:::flow
+    PAY_CARD["/payment/card-form<br/>Saisie carte + preview"]:::flow
+    PAY_CONFIRM["/payment/confirmation<br/>✅ Succès + inscription DB"]:::flow
+    PAY_SELECT --> PAY_CARD --> PAY_CONFIRM
+  end
+
+  ACTIVITY_DETAIL -->|"Rejoindre"| PAY_SELECT
+
+  %% ============================================================
+  %% PROFIL & SETTINGS
+  %% ============================================================
+  subgraph PROFILE_SCREENS ["⚙️ Profil & Paramètres"]
+    direction TB
+    EDIT_PROFILE["/edit-profile"]:::screen
+    EDIT_BIZ["/edit-business-profile"]:::screen
+    SETTINGS["/settings"]:::screen
+    BLOCKED["/blocked-users"]:::screen
+    MET_PEOPLE["/met-people<br/>Personnes rencontrées"]:::screen
+    MY_ACTIVITIES["/my-activities<br/>Activités créées"]:::screen
+    MY_PARTICIPATED["/my-participated-activities<br/>Historique participations"]:::screen
+    USER_ACTIVITIES["/user-activities<br/>Activités d'un user"]:::screen
+  end
+
+  T1 --> EDIT_PROFILE
+  T1 --> SETTINGS
+  T1 --> MET_PEOPLE
+  T1 --> MY_ACTIVITIES
+  T1 --> MY_PARTICIPATED
+  B1 --> EDIT_BIZ
+  SETTINGS --> BLOCKED
+  USER_PROFILE --> USER_ACTIVITIES
+
+  %% ============================================================
+  %% SOCIAL
+  %% ============================================================
+  subgraph SOCIAL_SCREENS ["🫂 Social"]
+    direction TB
+    ADD_FRIENDS["/add-friends<br/>Recherche utilisateurs"]:::screen
+    FRIEND_REQS["/friend-requests<br/>Demandes reçues / envoyées"]:::screen
+  end
+
+  T5 --> ADD_FRIENDS
+  T5 --> FRIEND_REQS
+
+  %% ============================================================
+  %% ACTIVITÉS HOST
+  %% ============================================================
+  subgraph HOST_SCREENS ["🎯 Gestion Activités (Host)"]
+    direction TB
+    CREATE_ACT["/create-activity"]:::screen
+    EDIT_ACT["/edit-activity"]:::screen
+    MANAGE_ACT["/manage-activity<br/>Participants · annulation"]:::screen
+  end
+
+  T4 --> CREATE_ACT
+  ACTIVITY_DETAIL --> EDIT_ACT
+  ACTIVITY_DETAIL --> MANAGE_ACT
+  B4 --> CREATE_ACT
+
+  %% ============================================================
+  %% DEEP LINK — INVITATION +1
+  %% ============================================================
+  subgraph DEEP_LINK ["🔗 Deep Link"]
+    direction TB
+    INVITE["/invite/[token]<br/>Preview invitation +1"]:::deep
+  end
+
+  INVITE -->|"Pas connecté"| LOGIN
+  INVITE -->|"Accepte"| PAY_SELECT
