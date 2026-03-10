@@ -2,7 +2,7 @@
 // Page de détail d'une activité - Design Too Good To Go
 // Sections verticales pleine largeur, séparateurs fins, typographie Manrope
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -108,6 +108,7 @@ export default function ActivityDetailScreen() {
   const [isSlotCancelled, setIsSlotCancelled] = useState(false);
   const [isSlotSystemCancelled, setIsSlotSystemCancelled] = useState(false);
   const [selectedSlotRemainingPlaces, setSelectedSlotRemainingPlaces] = useState<number | null>(null);
+  const navigationLockRef = useRef<boolean>(false);
 
   useEffect(() => {
     loadActivity();
@@ -526,18 +527,21 @@ export default function ActivityDetailScreen() {
   };
 
   const handleJoinLeave = async () => {
+    if (navigationLockRef.current || joiningInProgress) return;
+
     if (isBusiness) {
       showJoinRestriction();
       return;
     }
 
-    if (!activity || !currentUserId || joiningInProgress) return;
+    if (!activity || !currentUserId) return;
 
     if (!isJoined && !selectedSlot) {
       Alert.alert('Sélectionnez un créneau', 'Veuillez choisir une date et un horaire avant de rejoindre.');
       return;
     }
 
+    navigationLockRef.current = true;
     setJoiningInProgress(true);
 
     try {
@@ -622,6 +626,7 @@ export default function ActivityDetailScreen() {
         });
 
         // Naviguer vers le flow de paiement avec les paramètres nécessaires
+        navigationLockRef.current = true;
         router.push({
           pathname: '/payment/select-method',
           params: {
@@ -641,6 +646,7 @@ export default function ActivityDetailScreen() {
       console.error('Erreur inscription/désinscription:', error);
       Alert.alert('Erreur', error.message || 'Une erreur est survenue.');
     } finally {
+      navigationLockRef.current = false;
       setJoiningInProgress(false);
     }
   };
@@ -1019,8 +1025,10 @@ export default function ActivityDetailScreen() {
                 {/* Bouton "On vient à deux" - visible si pas inscrit, pas discover, >= 2 places */}
                 {!isJoined && !slotDiscoverMode && selectedSlot && selectedSlotRemainingPlaces !== null && selectedSlotRemainingPlaces >= 2 && (
                   <TouchableOpacity
-                    style={styles.duoButton}
+                    style={[styles.duoButton, joiningInProgress && { opacity: 0.5 }]}
+                    disabled={joiningInProgress}
                     onPress={() => {
+                      if (navigationLockRef.current) return;
                       if (!selectedSlot) return;
 
                       // Règle J-1 : bloquer l'inscription si le créneau débute dans moins de 24h
@@ -1034,6 +1042,8 @@ export default function ActivityDetailScreen() {
                         );
                         return;
                       }
+
+                      navigationLockRef.current = true;
 
                       const slotDateFormatted = new Date(selectedSlot.date).toLocaleDateString('fr-FR', {
                         weekday: 'long',
@@ -1055,6 +1065,10 @@ export default function ActivityDetailScreen() {
                           mode: 'duo',
                         },
                       });
+
+                      setTimeout(() => {
+                        navigationLockRef.current = false;
+                      }, 1000);
                     }}
                     activeOpacity={0.8}
                   >
