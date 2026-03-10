@@ -244,14 +244,16 @@ export default function ActivityScreen() {
         console.error('Erreur chargement participations:', partError);
       }
 
-      const activityIds = [...new Set(participations?.map(p => p.activity_id) || [])];
+      const validParticipations = participations || [];
 
-      if (activityIds.length === 0) {
+      if (validParticipations.length === 0) {
         setOngoingActivities([]);
         setPastActivities([]);
         setLoading(false);
         return;
       }
+
+      const activityIds = [...new Set(validParticipations.map(p => p.activity_id))];
 
       const { data: activities, error: actError } = await supabase
         .from('activities')
@@ -262,11 +264,14 @@ export default function ActivityScreen() {
         console.error('Erreur chargement activités:', actError);
       }
 
-      const activitiesWithSlotDates = (await Promise.all(
-        (activities || []).map(async (activity) => {
-          const participation = participations?.find(p => p.activity_id === activity.id);
+      const activitiesMap = new Map((activities || []).map(a => [a.id, a]));
 
-          if (participation?.slot_id) {
+      const activitiesWithSlotDates = (await Promise.all(
+        validParticipations.map(async (participation) => {
+          const activity = activitiesMap.get(participation.activity_id);
+          if (!activity) return null;
+
+          if (participation.slot_id) {
             const { data: slotData } = await supabase
               .from('activity_slots')
               .select('date, time, is_cancelled')
@@ -283,8 +288,8 @@ export default function ActivityScreen() {
               return {
                 ...activity,
                 date_heure: slotDateTime,
-                user_slot_id: participation?.slot_id,
-                isCancelled: slotData?.is_cancelled || false,
+                user_slot_id: participation.slot_id,
+                isCancelled: slotData.is_cancelled || false,
               };
             }
           }
@@ -296,7 +301,7 @@ export default function ActivityScreen() {
           return {
             ...activity,
             date_heure: activityDateTime,
-            user_slot_id: participation?.slot_id,
+            user_slot_id: participation.slot_id,
           };
         })
       )).filter(Boolean) as typeof activities;
@@ -735,7 +740,7 @@ export default function ActivityScreen() {
         <FlatList
           data={activeTab === 'ongoing' ? ongoingActivities : pastActivities}
           renderItem={renderUserActivityItem}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item.user_slot_id || item.id}
           contentContainerStyle={[
             styles.listContent,
             Platform.OS !== 'ios' && styles.listContentWithTabBar,
