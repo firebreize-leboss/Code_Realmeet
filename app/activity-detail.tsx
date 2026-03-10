@@ -109,6 +109,7 @@ export default function ActivityDetailScreen() {
   const [isSlotSystemCancelled, setIsSlotSystemCancelled] = useState(false);
   const [selectedSlotRemainingPlaces, setSelectedSlotRemainingPlaces] = useState<number | null>(null);
   const navigationLockRef = useRef<boolean>(false);
+  const actionLockRef = useRef<boolean>(false);
 
   useEffect(() => {
     loadActivity();
@@ -527,17 +528,28 @@ export default function ActivityDetailScreen() {
   };
 
   const handleJoinLeave = async () => {
-    if (navigationLockRef.current || joiningInProgress) return;
+    if (actionLockRef.current) return;
+    actionLockRef.current = true;
 
-    if (isBusiness) {
-      showJoinRestriction();
+    if (navigationLockRef.current || joiningInProgress) {
+      actionLockRef.current = false;
       return;
     }
 
-    if (!activity || !currentUserId) return;
+    if (isBusiness) {
+      showJoinRestriction();
+      actionLockRef.current = false;
+      return;
+    }
+
+    if (!activity || !currentUserId) {
+      actionLockRef.current = false;
+      return;
+    }
 
     if (!isJoined && !selectedSlot) {
       Alert.alert('Sélectionnez un créneau', 'Veuillez choisir une date et un horaire avant de rejoindre.');
+      actionLockRef.current = false;
       return;
     }
 
@@ -588,9 +600,17 @@ export default function ActivityDetailScreen() {
         setCalendarRefreshTrigger(prev => prev + 1);
 
         Alert.alert('Succès', 'Vous vous êtes désinscrit de cette activité.');
+        navigationLockRef.current = false;
+        setJoiningInProgress(false);
+        actionLockRef.current = false;
       } else {
         // Logique d'inscription - Redirection vers le flow de paiement
-        if (!selectedSlot) return;
+        if (!selectedSlot) {
+          navigationLockRef.current = false;
+          setJoiningInProgress(false);
+          actionLockRef.current = false;
+          return;
+        }
 
         // Règle J-1 : bloquer l'inscription si le créneau débute dans moins de 24h
         const timePart = selectedSlot.time ? selectedSlot.time.slice(0, 5) : '00:00';
@@ -601,6 +621,9 @@ export default function ActivityDetailScreen() {
             'Inscription impossible',
             "L'activité se déroule dans moins de 24h. Vous ne pouvez plus vous inscrire."
           );
+          navigationLockRef.current = false;
+          setJoiningInProgress(false);
+          actionLockRef.current = false;
           return;
         }
 
@@ -609,12 +632,18 @@ export default function ActivityDetailScreen() {
             'Inscriptions fermées',
             'Les inscriptions pour ce créneau sont fermées. Les groupes ont été formés.'
           );
+          navigationLockRef.current = false;
+          setJoiningInProgress(false);
+          actionLockRef.current = false;
           return;
         }
 
         // Vérifier si le slot sélectionné est plein (pas globalement)
         if (selectedSlotRemainingPlaces !== null && selectedSlotRemainingPlaces <= 0) {
           Alert.alert('Complet', 'Ce créneau est complet.');
+          navigationLockRef.current = false;
+          setJoiningInProgress(false);
+          actionLockRef.current = false;
           return;
         }
 
@@ -626,7 +655,6 @@ export default function ActivityDetailScreen() {
         });
 
         // Naviguer vers le flow de paiement avec les paramètres nécessaires
-        navigationLockRef.current = true;
         router.push({
           pathname: '/payment/select-method',
           params: {
@@ -641,13 +669,21 @@ export default function ActivityDetailScreen() {
             current_participants: activity.participants.toString(),
           },
         });
+
+        // Ne pas relâcher les locks dans finally — on les relâche après un délai
+        setTimeout(() => {
+          navigationLockRef.current = false;
+          setJoiningInProgress(false);
+          actionLockRef.current = false;
+        }, 1000);
+        return; // finally va quand même s'exécuter, voir ci-dessous
       }
     } catch (error: any) {
       console.error('Erreur inscription/désinscription:', error);
       Alert.alert('Erreur', error.message || 'Une erreur est survenue.');
-    } finally {
       navigationLockRef.current = false;
       setJoiningInProgress(false);
+      actionLockRef.current = false;
     }
   };
 
