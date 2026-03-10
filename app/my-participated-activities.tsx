@@ -34,6 +34,7 @@ interface Activity {
   slot_date?: string;
   slot_time?: string;
   isPast?: boolean;
+  isCancelled?: boolean;
 }
 
 export default function MyParticipatedActivitiesScreen() {
@@ -87,17 +88,19 @@ export default function MyParticipatedActivitiesScreen() {
           let slotDate: string | null = null;
           let slotTime: string | null = null;
           let isPast = false;
+          let isCancelled = false;
 
           if (participation?.slot_id) {
             const { data: slotData } = await supabase
               .from('activity_slots')
-              .select('date, time, duration')
+              .select('date, time, duration, is_cancelled')
               .eq('id', participation.slot_id)
               .single();
 
             if (slotData) {
               slotDate = slotData.date;
               slotTime = slotData.time;
+              isCancelled = slotData.is_cancelled || false;
               const slotDateTime = new Date(`${slotData.date}T${slotData.time || '00:00'}`);
               const durationMinutes = slotData.duration || 0;
               const slotEndTime = new Date(slotDateTime.getTime() + durationMinutes * 60 * 1000);
@@ -111,6 +114,7 @@ export default function MyParticipatedActivitiesScreen() {
             slot_date: slotDate || activity.date,
             slot_time: slotTime || activity.time_start,
             isPast,
+            isCancelled,
           };
         })
       );
@@ -137,7 +141,7 @@ export default function MyParticipatedActivitiesScreen() {
 
   // Filtrer uniquement les activités terminées (passées)
   const pastActivities = useMemo(() =>
-    allActivities.filter(a => a.isPast).sort((a, b) =>
+    allActivities.filter(a => a.isPast || a.isCancelled).sort((a, b) =>
       new Date(b.slot_date || b.date).getTime() - new Date(a.slot_date || a.date).getTime()
     ), [allActivities]);
 
@@ -221,11 +225,18 @@ export default function MyParticipatedActivitiesScreen() {
             </Text>
           </View>
 
-          {/* Badge Terminé discret */}
-          <View style={styles.terminatedBadge}>
-            <IconSymbol name="checkmark.circle.fill" size={10} color={colors.primaryMuted} />
-            <Text style={styles.terminatedBadgeText}>Terminé</Text>
-          </View>
+          {/* Badge Terminé / Annulé */}
+          {item.isCancelled ? (
+            <View style={[styles.terminatedBadge, { backgroundColor: '#FEE2E2' }]}>
+              <IconSymbol name="xmark.circle.fill" size={10} color="#EF4444" />
+              <Text style={[styles.terminatedBadgeText, { color: '#EF4444' }]}>Annulé</Text>
+            </View>
+          ) : (
+            <View style={styles.terminatedBadge}>
+              <IconSymbol name="checkmark.circle.fill" size={10} color={colors.primaryMuted} />
+              <Text style={styles.terminatedBadgeText}>Terminé</Text>
+            </View>
+          )}
         </View>
 
         {/* Chevron discret */}

@@ -307,10 +307,10 @@ export default function ActivityScreen() {
       activitiesWithSlotDates.forEach(activity => {
         const activityDate = new Date(activity.date_heure);
 
-        if (activityDate >= new Date()) {
-          ongoing.push(activity);
-        } else {
+        if (activity.isCancelled || activityDate < new Date()) {
           past.push(activity);
+        } else {
+          ongoing.push(activity);
         }
       });
 
