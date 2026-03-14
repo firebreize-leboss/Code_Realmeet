@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict vhOdCQMh1B1WHLwKY8wbKspVTJtHx9cvhFgLinBQROpFypQ55O3HRuOMf3UIljX
+\restrict 90qkeOnxuJBvBNE4ma1HaPJPCW6BdEQaB9bgngyfSVXTQ0V6vf6TQ4fI9efPsSf
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.7 (Ubuntu 17.7-0ubuntu0.25.04.1)
@@ -1449,18 +1449,36 @@ $$;
 
 CREATE FUNCTION public.remove_bidirectional_friendship(p_friend_id uuid) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
     AS $$
 DECLARE
   v_user_id uuid := auth.uid();
 BEGIN
-  DELETE FROM friendships 
+  -- 1) Supprimer les deux sens de l'amitié
+  DELETE FROM friendships
   WHERE (user_id = v_user_id AND friend_id = p_friend_id)
      OR (user_id = p_friend_id AND friend_id = v_user_id);
-  
-  -- Optionnel : supprimer aussi la friend_request associée
+
+  -- 2) Supprimer la friend_request associée
   DELETE FROM friend_requests
   WHERE (sender_id = v_user_id AND receiver_id = p_friend_id)
      OR (sender_id = p_friend_id AND receiver_id = v_user_id);
+
+  -- 3) Fermer la conversation privée entre les deux (bypass RLS via sous-requête directe)
+  UPDATE conversations
+  SET is_closed = true,
+      closed_reason = 'not_friends',
+      closed_at = NOW()
+  WHERE id IN (
+    SELECT cp1.conversation_id
+    FROM conversation_participants cp1
+    JOIN conversation_participants cp2 ON cp1.conversation_id = cp2.conversation_id
+    JOIN conversations c ON c.id = cp1.conversation_id
+    WHERE cp1.user_id = v_user_id
+      AND cp2.user_id = p_friend_id
+      AND c.is_group = false
+  )
+  AND is_closed = false;
 END;
 $$;
 
@@ -2473,6 +2491,31 @@ CREATE TABLE public.plus_one_invitations (
     CONSTRAINT plus_one_invitations_payment_mode_check CHECK ((payment_mode = ANY (ARRAY['host_pays'::text, 'guest_pays'::text]))),
     CONSTRAINT plus_one_invitations_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'accepted'::text, 'expired'::text, 'cancelled'::text])))
 );
+
+
+--
+-- Name: public_profiles; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.public_profiles AS
+ SELECT id,
+    username,
+    full_name,
+    avatar_url,
+    bio,
+    city,
+    interests,
+    intention,
+    personality_tags,
+    account_type,
+    business_name,
+    business_category,
+    business_rating,
+    business_review_count,
+    business_verified,
+    business_logo_url,
+    business_cover_url
+   FROM public.profiles;
 
 
 --
@@ -4835,14 +4878,22 @@ CREATE POLICY conversations_insert ON public.conversations FOR INSERT WITH CHECK
 -- Name: conversations conversations_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY conversations_select ON public.conversations FOR SELECT USING (true);
+CREATE POLICY conversations_select ON public.conversations FOR SELECT USING (((EXISTS ( SELECT 1
+   FROM public.conversation_participants cp
+  WHERE ((cp.conversation_id = conversations.id) AND (cp.user_id = auth.uid())))) OR (EXISTS ( SELECT 1
+   FROM public.activities a
+  WHERE (((a.id = conversations.activity_id) OR (EXISTS ( SELECT 1
+           FROM public.activity_slots s
+          WHERE ((s.id = conversations.slot_id) AND (s.activity_id = a.id))))) AND (a.host_id = auth.uid()))))));
 
 
 --
 -- Name: conversations conversations_update; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY conversations_update ON public.conversations FOR UPDATE USING (true);
+CREATE POLICY conversations_update ON public.conversations FOR UPDATE USING ((EXISTS ( SELECT 1
+   FROM public.conversation_participants cp
+  WHERE ((cp.conversation_id = conversations.id) AND (cp.user_id = auth.uid())))));
 
 
 --
@@ -4990,5 +5041,5 @@ ALTER TABLE public.slot_participants ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict vhOdCQMh1B1WHLwKY8wbKspVTJtHx9cvhFgLinBQROpFypQ55O3HRuOMf3UIljX
+\unrestrict 90qkeOnxuJBvBNE4ma1HaPJPCW6BdEQaB9bgngyfSVXTQ0V6vf6TQ4fI9efPsSf
 

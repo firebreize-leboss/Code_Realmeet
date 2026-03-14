@@ -168,7 +168,10 @@ export default function ChatScreen() {
         .select()
         .single();
 
-      if (convError) throw convError;
+      if (convError) {
+        console.error('CONV ERROR:', JSON.stringify(convError));
+        throw convError;
+      }
 
       const participants = [currentUser.user.id, friendId].map(userId => ({
         conversation_id: conversation.id,
@@ -179,7 +182,10 @@ export default function ChatScreen() {
         .from('conversation_participants')
         .insert(participants);
 
-      if (partError) throw partError;
+      if (partError) {
+        console.error('PART ERROR:', JSON.stringify(partError));
+        throw partError;
+      }
 
       setShowFriendsModal(false);
       router.push(`/chat-detail?id=${conversation.id}`);

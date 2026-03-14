@@ -21,6 +21,7 @@ public	_messages
 public	_met_people_hidden
 public	_plus_one_invitations
 public	_profiles
+public	_public_profiles
 public	_reports
 public	_reviews
 public	_slot_group_members
@@ -51,6 +52,7 @@ public	messages
 public	met_people_hidden
 public	plus_one_invitations
 public	profiles
+public	public_profiles
 public	reports
 public	reviews
 public	slot_group_members
@@ -59,4 +61,4 @@ public	slot_groups_backup
 public	slot_participants
 public	v_slots_pending_group_formation
 public	v_slow_queries
-(60 rows)
+(62 rows)
