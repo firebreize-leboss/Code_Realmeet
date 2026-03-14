@@ -1713,18 +1713,36 @@ public|remove_bidirectional_friendship|CREATE OR REPLACE FUNCTION public.remove_
  RETURNS void
  LANGUAGE plpgsql
  SECURITY DEFINER
+ SET search_path TO 'public'
 AS $function$
 DECLARE
   v_user_id uuid := auth.uid();
 BEGIN
-  DELETE FROM friendships 
+  -- 1) Supprimer les deux sens de l'amitié
+  DELETE FROM friendships
   WHERE (user_id = v_user_id AND friend_id = p_friend_id)
      OR (user_id = p_friend_id AND friend_id = v_user_id);
-  
-  -- Optionnel : supprimer aussi la friend_request associée
+
+  -- 2) Supprimer la friend_request associée
   DELETE FROM friend_requests
   WHERE (sender_id = v_user_id AND receiver_id = p_friend_id)
      OR (sender_id = p_friend_id AND receiver_id = v_user_id);
+
+  -- 3) Fermer la conversation privée entre les deux (bypass RLS via sous-requête directe)
+  UPDATE conversations
+  SET is_closed = true,
+      closed_reason = 'not_friends',
+      closed_at = NOW()
+  WHERE id IN (
+    SELECT cp1.conversation_id
+    FROM conversation_participants cp1
+    JOIN conversation_participants cp2 ON cp1.conversation_id = cp2.conversation_id
+    JOIN conversations c ON c.id = cp1.conversation_id
+    WHERE cp1.user_id = v_user_id
+      AND cp2.user_id = p_friend_id
+      AND c.is_group = false
+  )
+  AND is_closed = false;
 END;
 $function$
 

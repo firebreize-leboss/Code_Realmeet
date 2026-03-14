@@ -23,7 +23,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
@@ -141,6 +141,7 @@ export default function ChatDetailScreen() {
   // États pour le signalement
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportTargetMessageId, setReportTargetMessageId] = useState<string | null>(null);
+  const [reportTargetType, setReportTargetType] = useState<'message' | 'profile'>('message');
 
   // État pour la réponse à un message
   const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
@@ -218,173 +219,195 @@ export default function ChatDetailScreen() {
     }
   }, [messagesLoading, messages]);
 
-  // Charger les infos de conversation
-  useEffect(() => {
-    const loadConversationInfo = async () => {
-      try {
-        const { data: userData } = await supabase.auth.getUser();
-        const currentUser = userData?.user;
-        if (!currentUser) return;
+  // Ref pour détecter le retour sur l'écran (vs premier mount)
+  const focusCount = useRef(0);
 
-        if (!conversationId) return;
+  // Fonction extraite pour pouvoir l'appeler depuis useEffect ET useFocusEffect
+  const loadConversationInfo = useCallback(async () => {
+    console.log('[CONV-INFO] starting loadConversationInfo, conversationId:', conversationId);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const currentUser = userData?.user;
+      if (!currentUser) return;
 
-        const { data: convDataRaw } = await supabase
-          .from('conversations')
-          .select('*, name, image_url, is_closed, closed_reason, closed_at, activity_id, slot_id, friend_request_id')
-          .eq('id', conversationId)
+      if (!conversationId) return;
+
+      const { data: convDataRaw, error: convError } = await supabase
+        .from('conversations')
+        .select('*, name, image_url, is_closed, closed_reason, closed_at, activity_id, slot_id, friend_request_id')
+        .eq('id', conversationId)
+        .single();
+      console.log('[CONV-INFO] query result:', JSON.stringify({data: convDataRaw, error: convDataRaw === null ? 'null data' : 'ok'}));
+      console.log('[CONV-INFO] convError:', JSON.stringify(convError));
+
+      const convData = convDataRaw as any;
+      if (!convData) return;
+      console.log('[CONV-INFO] convData:', JSON.stringify({name: convData?.name, is_group: convData?.is_group, slot_id: convData?.slot_id, activity_id: convData?.activity_id}));
+
+      // Vérifier si c'est une conversation avec invitation en attente
+      if (convData.friend_request_id) {
+        const { data: friendRequest } = await supabase
+          .from('friend_requests')
+          .select('id, sender_id, receiver_id, status')
+          .eq('id', convData.friend_request_id)
           .single();
 
-        const convData = convDataRaw as any;
-        if (!convData) return;
+        if (friendRequest && friendRequest.status === 'pending') {
+          const isRecipient = friendRequest.receiver_id === currentUser.id;
 
-        // Vérifier si c'est une conversation avec invitation en attente
-        if (convData.friend_request_id) {
-          const { data: friendRequest } = await supabase
-            .from('friend_requests')
-            .select('id, sender_id, receiver_id, status')
-            .eq('id', convData.friend_request_id)
-            .single();
-
-          if (friendRequest && friendRequest.status === 'pending') {
-            const isRecipient = friendRequest.receiver_id === currentUser.id;
-
-            let senderName = 'Utilisateur';
-            if (isRecipient) {
-              const { data: senderProfile } = await supabase
-                .from('profiles')
-                .select('full_name')
-                .eq('id', friendRequest.sender_id)
-                .single();
-              senderName = senderProfile?.full_name || 'Utilisateur';
-            }
-
-            setPendingInvitation({
-              friendRequestId: friendRequest.id,
-              isRecipient,
-              senderName,
-            });
-          } else {
-            setPendingInvitation(null);
+          let senderName = 'Utilisateur';
+          if (isRecipient) {
+            const { data: senderProfile } = await supabase
+              .from('profiles')
+              .select('full_name')
+              .eq('id', friendRequest.sender_id)
+              .single();
+            senderName = senderProfile?.full_name || 'Utilisateur';
           }
+
+          setPendingInvitation({
+            friendRequestId: friendRequest.id,
+            isRecipient,
+            senderName,
+          });
         } else {
           setPendingInvitation(null);
         }
+      } else {
+        setPendingInvitation(null);
+      }
 
-        const isActivityGroup = convData.is_group === true && (convData.activity_id || convData.slot_id);
-        setIsGroup(isActivityGroup);
+      const isActivityGroup = convData.is_group === true && (convData.activity_id || convData.slot_id);
+      setIsGroup(isActivityGroup);
 
-        const requests: any[] = [];
+      const requests: any[] = [];
 
-        if (convData.slot_id) {
-          requests.push(
-            supabase
-              .from('activity_slots')
-              .select('activity_id, date, time, duration')
-              .eq('id', convData.slot_id)
-              .single()
-          );
+      if (convData.slot_id) {
+        requests.push(
+          supabase
+            .from('activity_slots')
+            .select('activity_id, date, time, duration')
+            .eq('id', convData.slot_id)
+            .single()
+        );
+      }
+
+      if (!convData.name) {
+        requests.push(
+          supabase
+            .from('conversation_participants')
+            .select(`user_id, is_muted, profiles (full_name, avatar_url)`)
+            .eq('conversation_id', conversationId)
+        );
+      }
+
+      const results = requests.length > 0 ? await Promise.all(requests) : [];
+      console.log('[CONV-INFO] results count:', results.length, 'requests count:', requests.length);
+      console.log('[loadConversationInfo]', convData.name, convData.is_group, convData.slot_id, convData.activity_id, requests.length, JSON.stringify(results.map(r => ({data: r.data, error: r.error}))));
+
+      if (convData.slot_id && results[0]?.data) {
+        const slotData = results[0].data;
+
+        if (slotData?.activity_id) {
+          setActivityId(slotData.activity_id);
         }
 
-        if (!convData.name) {
-          requests.push(
-            supabase
-              .from('conversation_participants')
-              .select(`user_id, is_muted, profiles (full_name, avatar_url)`)
-              .eq('conversation_id', conversationId)
-          );
+        if (slotData && !convData.is_closed) {
+          const slotDateTime = new Date(`${slotData.date}T${slotData.time || '00:00'}`);
+          const slotDuration = slotData.duration || 60;
+          const slotEndTime = new Date(slotDateTime.getTime() + slotDuration * 60000);
+          const now = new Date();
+
+          if (now > slotEndTime) {
+            await supabase
+              .from('conversations')
+              .update({
+                is_closed: true,
+                closed_reason: 'Le créneau de cette activité est terminé',
+                closed_at: new Date().toISOString(),
+              })
+              .eq('id', conversationId);
+
+            convData.is_closed = true;
+            convData.closed_reason = 'Le créneau de cette activité est terminé';
+            convData.closed_at = new Date().toISOString();
+          }
         }
+      } else if (convData.activity_id) {
+        setActivityId(convData.activity_id);
+      }
 
-        const results = requests.length > 0 ? await Promise.all(requests) : [];
+      setConversationStatus({
+        isClosed: convData.is_closed || false,
+        closedReason: convData.closed_reason,
+        closedAt: convData.closed_at,
+      });
 
-        if (convData.slot_id && results[0]?.data) {
-          const slotData = results[0].data;
+      if (convData.name) {
+        setConvName(convData.name);
+        setConvImage(convData.image_url || '');
+      } else {
+        const participantsIndex = convData.slot_id ? 1 : 0;
+        console.log('[loadConversationInfo] else branch', participantsIndex, results[participantsIndex]?.data);
+        const participants = results[participantsIndex]?.data;
 
-          if (slotData?.activity_id) {
-            setActivityId(slotData.activity_id);
+        if (participants) {
+          const myParticipant = participants.find((p: any) => p.user_id === currentUser.id);
+          if (myParticipant) {
+            setIsMuted(myParticipant.is_muted || false);
           }
 
-          if (slotData && !convData.is_closed) {
-            const slotDateTime = new Date(`${slotData.date}T${slotData.time || '00:00'}`);
-            const slotDuration = slotData.duration || 60;
-            const slotEndTime = new Date(slotDateTime.getTime() + slotDuration * 60000);
-            const now = new Date();
+          const otherParticipant = participants.find((p: any) => p.user_id !== currentUser.id);
 
-            if (now > slotEndTime) {
-              await supabase
-                .from('conversations')
-                .update({
-                  is_closed: true,
-                  closed_reason: 'Le créneau de cette activité est terminé',
-                  closed_at: new Date().toISOString(),
-                })
-                .eq('id', conversationId);
+          if (otherParticipant) {
+            setOtherUserId(otherParticipant.user_id);
+            const profile = (otherParticipant as any).profiles;
+            setConvName(profile?.full_name || 'Utilisateur');
+            setConvImage(profile?.avatar_url || '');
 
-              convData.is_closed = true;
-              convData.closed_reason = 'Le créneau de cette activité est terminé';
-              convData.closed_at = new Date().toISOString();
-            }
-          }
-        } else if (convData.activity_id) {
-          setActivityId(convData.activity_id);
-        }
+            const blocked = await blockService.isUserBlocked(otherParticipant.user_id);
+            setIsBlocked(blocked);
 
-        setConversationStatus({
-          isClosed: convData.is_closed || false,
-          closedReason: convData.closed_reason,
-          closedAt: convData.closed_at,
-        });
+            // Vérifier si les deux utilisateurs sont encore amis (conv privée uniquement)
+            if (convData.is_group === false) {
+              const { data: friendshipData } = await supabase
+                .from('friendships')
+                .select('id')
+                .eq('user_id', currentUser.id)
+                .eq('friend_id', otherParticipant.user_id)
+                .maybeSingle();
 
-        if (convData.name) {
-          setConvName(convData.name);
-          setConvImage(convData.image_url || '');
-        } else {
-          const participantsIndex = convData.slot_id ? 1 : 0;
-          const participants = results[participantsIndex]?.data;
-
-          if (participants) {
-            const myParticipant = participants.find((p: any) => p.user_id === currentUser.id);
-            if (myParticipant) {
-              setIsMuted(myParticipant.is_muted || false);
-            }
-
-            const otherParticipant = participants.find((p: any) => p.user_id !== currentUser.id);
-
-            if (otherParticipant) {
-              setOtherUserId(otherParticipant.user_id);
-              const profile = (otherParticipant as any).profiles;
-              setConvName(profile?.full_name || 'Utilisateur');
-              setConvImage(profile?.avatar_url || '');
-
-              const blocked = await blockService.isUserBlocked(otherParticipant.user_id);
-              setIsBlocked(blocked);
-
-              // Vérifier si les deux utilisateurs sont encore amis (conv privée uniquement)
-              if (convData.is_group === false) {
-                const { data: friendshipData } = await supabase
-                  .from('friendships')
-                  .select('id')
-                  .eq('user_id', currentUser.id)
-                  .eq('friend_id', otherParticipant.user_id)
-                  .maybeSingle();
-
-                if (!friendshipData && convData.is_closed) {
-                  setConversationStatus({
-                    isClosed: true,
-                    closedReason: 'not_friends',
-                    closedAt: convData.closed_at,
-                  });
-                }
+              if (!friendshipData && convData.is_closed) {
+                setConversationStatus({
+                  isClosed: true,
+                  closedReason: 'not_friends',
+                  closedAt: convData.closed_at,
+                });
               }
             }
           }
         }
-      } catch (error) {
-        console.error('Erreur loading conversation info:', error);
       }
-    };
-
-    loadConversationInfo();
+    } catch (error) {
+      console.error('[CONV-INFO] Error:', error, error?.message);
+    }
   }, [conversationId]);
+
+  // Charger les infos de conversation au premier mount
+  useEffect(() => {
+    loadConversationInfo();
+  }, [loadConversationInfo]);
+
+  // Re-charger les infos quand l'écran reprend le focus (retour du profil utilisateur, etc.)
+  useFocusEffect(
+    useCallback(() => {
+      focusCount.current += 1;
+      // Ne pas recharger au premier focus (le useEffect ci-dessus s'en charge)
+      if (focusCount.current > 1) {
+        loadConversationInfo();
+      }
+    }, [loadConversationInfo])
+  );
 
 
   useEffect(() => {
@@ -574,6 +597,7 @@ export default function ChatDetailScreen() {
     if (!selectedMessage) return;
     setShowMessageActions(false);
     setReportTargetMessageId(selectedMessage.id);
+    setReportTargetType('message');
     setSelectedMessage(null);
     setTimeout(() => setShowReportModal(true), 300);
   };
@@ -581,9 +605,8 @@ export default function ChatDetailScreen() {
   const handleReportUser = () => {
     setShowOptionsModal(false);
     if (otherUserId) {
-      setTimeout(() => {
-        router.push(`/user-profile?id=${otherUserId}`);
-      }, 300);
+      setReportTargetType('profile');
+      setTimeout(() => setShowReportModal(true), 300);
     }
   };
 
@@ -1310,15 +1333,17 @@ export default function ChatDetailScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* Modal Signalement de message */}
+      {/* Modal Signalement */}
       <ReportModal
         visible={showReportModal}
         onClose={() => {
           setShowReportModal(false);
           setReportTargetMessageId(null);
+          setReportTargetType('message');
         }}
-        targetType="message"
-        targetId={reportTargetMessageId || ''}
+        targetType={reportTargetType}
+        targetId={reportTargetType === 'profile' ? (otherUserId || '') : (reportTargetMessageId || '')}
+        targetName={reportTargetType === 'profile' ? convName : undefined}
       />
 
       {/* Modal Visionneuse d'image fullscreen (Instagram-style) */}

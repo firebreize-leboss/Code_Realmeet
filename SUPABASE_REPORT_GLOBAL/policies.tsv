@@ -28,8 +28,16 @@ public	conversation_participants	participants_insert	PERMISSIVE	{public}	INSERT	
 public	conversation_participants	participants_select	PERMISSIVE	{public}	SELECT	true	
 public	conversation_participants	participants_update	PERMISSIVE	{public}	UPDATE	(user_id = auth.uid())	
 public	conversations	conversations_insert	PERMISSIVE	{public}	INSERT		true
-public	conversations	conversations_select	PERMISSIVE	{public}	SELECT	true	
-public	conversations	conversations_update	PERMISSIVE	{public}	UPDATE	true	
+public	conversations	conversations_select	PERMISSIVE	{public}	SELECT	((EXISTS ( SELECT 1
+   FROM conversation_participants cp
+  WHERE ((cp.conversation_id = conversations.id) AND (cp.user_id = auth.uid())))) OR (EXISTS ( SELECT 1
+   FROM activities a
+  WHERE (((a.id = conversations.activity_id) OR (EXISTS ( SELECT 1
+           FROM activity_slots s
+          WHERE ((s.id = conversations.slot_id) AND (s.activity_id = a.id))))) AND (a.host_id = auth.uid())))))	
+public	conversations	conversations_update	PERMISSIVE	{public}	UPDATE	(EXISTS ( SELECT 1
+   FROM conversation_participants cp
+  WHERE ((cp.conversation_id = conversations.id) AND (cp.user_id = auth.uid()))))	
 public	friend_requests	Users can create friend requests	PERMISSIVE	{public}	INSERT		(auth.uid() = sender_id)
 public	friend_requests	Users can delete their own friend requests	PERMISSIVE	{public}	DELETE	((auth.uid() = sender_id) OR (auth.uid() = receiver_id))	
 public	friend_requests	Users can update their received friend requests	PERMISSIVE	{public}	UPDATE	(auth.uid() = receiver_id)	

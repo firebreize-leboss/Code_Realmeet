@@ -204,6 +204,23 @@ profiles	intention	text	YES
 profiles	personality_tags	ARRAY	YES
 profiles	expo_push_token	text	YES
 profiles	notifications_enabled	boolean	YES
+public_profiles	id	uuid	YES
+public_profiles	username	text	YES
+public_profiles	full_name	text	YES
+public_profiles	avatar_url	text	YES
+public_profiles	bio	text	YES
+public_profiles	city	text	YES
+public_profiles	interests	ARRAY	YES
+public_profiles	intention	text	YES
+public_profiles	personality_tags	ARRAY	YES
+public_profiles	account_type	character varying	YES
+public_profiles	business_name	character varying	YES
+public_profiles	business_category	character varying	YES
+public_profiles	business_rating	numeric	YES
+public_profiles	business_review_count	integer	YES
+public_profiles	business_verified	boolean	YES
+public_profiles	business_logo_url	text	YES
+public_profiles	business_cover_url	text	YES
 reports	id	uuid	NO
 reports	reported_by	uuid	NO
 reports	target_type	text	NO
@@ -269,4 +286,4 @@ v_slow_queries	total_exec_time	double precision	YES
 v_slow_queries	mean_exec_time	double precision	YES
 v_slow_queries	max_exec_time	double precision	YES
 v_slow_queries	rows	bigint	YES
-(270 rows)
+(287 rows)
