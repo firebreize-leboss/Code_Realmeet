@@ -2,7 +2,7 @@
 // Category activities page - Premium Clean Design
 // White/Gray with Orange accent only
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -53,6 +53,8 @@ export default function CategoryActivitiesScreen() {
     Manrope_600SemiBold,
     Manrope_700Bold,
   });
+
+  const hasAnimated = useRef(false);
 
   const categoryName = decodeURIComponent(category as string);
   const categoryInfo = PREDEFINED_CATEGORIES.find(cat => cat.name === categoryName);
@@ -215,8 +217,9 @@ export default function CategoryActivitiesScreen() {
                 {filteredActivities.map((activity, index) => (
                   <Animated.View
                     key={activity.id}
-                    entering={FadeInDown.delay(index * 60).springify()}
+                    entering={hasAnimated.current ? undefined : FadeInDown.delay(index * 60).springify()}
                     style={styles.cardWrapper}
+                    onLayout={index === 0 ? () => { hasAnimated.current = true; } : undefined}
                   >
                     <ActivityCard
                       activity={mapActivityForCard(activity)}

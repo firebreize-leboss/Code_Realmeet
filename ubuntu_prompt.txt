@@ -1,1 +1,75 @@
-Quand on clique sur report depuis une discussion, ca nous redirige sur la page du profil où il faut que cliquer sur report pour avoir la page report. Fais en sorte que depuis une discussion quand on clique sur signaler cet utilisateur, ca ouvre le "signalerce profil" directement
+Deux corrections à apporter suite aux modifications récentes.
+
+---
+
+## CORRECTION 1 — components/button.tsx : réverter le scale press
+
+Le scale press ajouté via Reanimated cause un bug visuel critique : le bouton devient quasi blanc/transparent au maintien appuyé, en particulier sur les variantes `outline` et `ghost`.
+
+**Action** : dans `components/button.tsx`, supprime entièrement les ajouts Reanimated récents :
+- Supprime l'import de `useSharedValue`, `useAnimatedStyle`, `withSpring` si ils ont été ajoutés pour ce fichier
+- Supprime le `useSharedValue(1)` et le `useAnimatedStyle` de scale
+- Supprime les `onPressIn`/`onPressOut` qui modifient la shared value de scale
+- Supprime le `Animated.View` wrapper qui a été ajouté autour du contenu du Pressable
+- Supprime l'import des `motion` tokens si il n'est utilisé que pour ça dans ce fichier
+
+**Résultat attendu** : le `Pressable` doit être exactement comme avant ces modifications, c'est-à-dire :
+```tsx
+<Pressable
+  onPress={onPress}
+  disabled={disabled || loading}
+  style={({ pressed }) => [
+    getVariantStyle(),
+    {
+      height: sizeStyles[size].height,
+      paddingHorizontal: sizeStyles[size].padding,
+      borderRadius: sizeStyles[size].borderRadius,
+      opacity: disabled ? 0.6 : pressed ? 0.8 : 1,
+    },
+    style,
+  ]}
+  android_ripple={{ color: colors.primary + '30', borderless: false }}
+>
+  {loading ? (
+    <ActivityIndicator color={getTextColor()} />
+  ) : (
+    <Text ...>{children}</Text>
+  )}
+</Pressable>
+```
+
+Lis le fichier entier avant de modifier pour t'assurer de ne rien casser d'autre.
+
+---
+
+## CORRECTION 2 — Supprimer tous les appels Haptics ajoutés récemment
+
+L'utilisateur ne veut aucune vibration. Supprime tous les appels `Haptics` qui ont été ajoutés dans le cadre des modifications récentes dans ces fichiers :
+
+### components/FloatingTabBar.tsx
+- Supprime l'import `expo-haptics` s'il a été ajouté
+- Supprime l'appel `Haptics.impactAsync(...)` dans `handleTabPress`
+- Ne touche à rien d'autre (spring de l'indicateur et scale press des tabs doivent rester)
+
+### components/ActivityCard.tsx
+- Supprime l'import `expo-haptics` s'il a été ajouté
+- Supprime l'appel `Haptics.impactAsync(...)` dans `handleLikeWithBounce`
+- Le bounce visuel du like (scale 1.08 → 1.0) doit rester, uniquement la vibration disparaît
+
+### app/(tabs)/activity.tsx
+- Supprime les appels `Haptics.notificationAsync(...)` dans `handlePublishActivity` et `handleUnpublishActivity`
+- Supprime l'import `expo-haptics` si il n'était pas présent avant ces modifications
+
+### app/activity-detail.tsx
+- Supprime tous les appels `Haptics` ajoutés sur le bouton Rejoindre, Se désinscrire, et les erreurs associées
+- Supprime l'import `expo-haptics` si il n'était pas présent avant ces modifications
+
+### app/chat-detail.tsx
+- Supprime l'appel `Haptics` ajouté après l'envoi de message
+- Supprime l'import `expo-haptics` si il n'était pas présent avant ces modifications (il se peut qu'il existait déjà avant pour d'autres usages — dans ce cas garder l'import mais supprimer uniquement les nouveaux appels ajoutés)
+
+---
+
+## RÈGLE GÉNÉRALE
+
+Pour chaque fichier : lis le fichier complet, identifie précisément ce qui a été ajouté récemment, supprime uniquement ces ajouts. Ne touche à aucune autre logique.

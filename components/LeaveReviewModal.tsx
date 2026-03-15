@@ -1,5 +1,5 @@
 // components/LeaveReviewModal.tsx
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Animated,
 } from 'react-native';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
@@ -36,6 +37,21 @@ export default function LeaveReviewModal({
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Entry animation for inner content
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(16)).current;
+
+  useEffect(() => {
+    if (visible) {
+      fadeAnim.setValue(0);
+      slideAnim.setValue(16);
+      Animated.parallel([
+        Animated.timing(fadeAnim, { toValue: 1, duration: 320, useNativeDriver: true }),
+        Animated.spring(slideAnim, { toValue: 0, tension: 50, friction: 8, useNativeDriver: true }),
+      ]).start();
+    }
+  }, [visible]);
 
   const handleSubmit = async () => {
     if (rating === 0) {
@@ -116,6 +132,7 @@ export default function LeaveReviewModal({
           </View>
 
           <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+            <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
             <Text style={styles.activityTitle} numberOfLines={2}>
               {activityTitle}
             </Text>
@@ -183,6 +200,7 @@ export default function LeaveReviewModal({
             </TouchableOpacity>
 
             <View style={{ height: 40 }} />
+            </Animated.View>
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
