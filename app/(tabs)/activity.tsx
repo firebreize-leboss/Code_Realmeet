@@ -1,5 +1,5 @@
 // app/(tabs)/activity.tsx
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   RefreshControl,
   FlatList,
 } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useTabIndex } from '@/contexts/TabIndexContext';
@@ -54,14 +55,22 @@ export default function ActivityScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const isBusiness = profile?.account_type === 'business';
+  const hasAnimated = useRef(false);
 
   useFocusEffect(
     useCallback(() => {
-      if (isBusiness) {
-        loadBusinessActivities();
-      } else {
-        loadUserActivities();
-      }
+      const load = async () => {
+        if (isBusiness) {
+          await loadBusinessActivities();
+        } else {
+          await loadUserActivities();
+        }
+        // Mark as animated after first load so FadeInDown only plays once
+        if (!hasAnimated.current) {
+          setTimeout(() => { hasAnimated.current = true; }, 600);
+        }
+      };
+      load();
     }, [isBusiness])
   );
 
@@ -427,6 +436,9 @@ export default function ActivityScreen() {
     const isPast = activeTab === 'past';
 
     return (
+      <Animated.View
+        entering={hasAnimated.current ? undefined : FadeInDown.delay(index * 80).springify()}
+      >
       <TouchableOpacity
         style={[styles.activityCard, isPast && styles.activityCardPast]}
         onPress={() => router.push(
@@ -487,14 +499,18 @@ export default function ActivityScreen() {
 
         <IconSymbol name="chevron.right" size={18} color={colors.textMuted} />
       </TouchableOpacity>
+      </Animated.View>
     );
   };
 
   // Activity card for business view
-  const renderBusinessActivityItem = ({ item }: { item: Activity }) => {
+  const renderBusinessActivityItem = ({ item, index }: { item: Activity; index: number }) => {
     const isLive = item.isPublished && item.hasLiveSlots;
 
     return (
+      <Animated.View
+        entering={hasAnimated.current ? undefined : FadeInDown.delay((index ?? 0) * 80).springify()}
+      >
       <TouchableOpacity
         style={styles.activityCard}
         onPress={() => router.push(`/manage-activity?id=${item.id}`)}
@@ -577,6 +593,7 @@ export default function ActivityScreen() {
         </View>
         <IconSymbol name="chevron.right" size={18} color={colors.textMuted} />
       </TouchableOpacity>
+      </Animated.View>
     );
   };
 

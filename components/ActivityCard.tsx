@@ -8,12 +8,19 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  Pressable,
   Image,
   Dimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Calendar, MapPin, Users, Heart } from 'lucide-react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from 'react-native-reanimated';
 import { colors, borderRadius, spacing, shadows, typography } from '@/styles/commonStyles';
+import { motion } from '@/styles/motionTokens';
 
 import { useBusinessRestrictions } from '@/hooks/useBusinessRestrictions';
 import { PREDEFINED_CATEGORIES } from '@/constants/categories';
@@ -69,6 +76,25 @@ export default function ActivityCard({
 }: ActivityCardProps) {
   const router = useRouter();
   const { isBusiness, canViewCompetitors } = useBusinessRestrictions();
+
+  // Card scale press animation
+  const cardScale = useSharedValue(1);
+  const cardAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: withSpring(cardScale.value, motion.spring.snappy) }],
+  }));
+
+  // Like bounce animation
+  const likeScale = useSharedValue(1);
+  const likeAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: likeScale.value }],
+  }));
+
+  const handleLikeWithBounce = () => {
+    likeScale.value = withSpring(motion.scale.pop, motion.spring.bouncy, () => {
+      likeScale.value = withSpring(motion.scale.normal, motion.spring.smooth);
+    });
+    onLikePress?.();
+  };
 
   const handlePress = () => {
     router.push(`/activity-detail?id=${activity.id}`);
@@ -144,11 +170,12 @@ export default function ActivityCard({
       : `${activity.participants}/${activity.max_participants} participants`;
 
     return (
-      <TouchableOpacity
-        style={styles.browseItem}
+      <Pressable
+        onPressIn={() => { cardScale.value = motion.scale.press; }}
+        onPressOut={() => { cardScale.value = motion.scale.normal; }}
         onPress={handlePress}
-        activeOpacity={0.92}
       >
+        <Animated.View style={[styles.browseItem, cardAnimStyle]}>
         {/* ── Image pleine largeur avec coins arrondis ── */}
         <View style={styles.browseImageWrap}>
           <Image
@@ -167,14 +194,16 @@ export default function ActivityCard({
           {onLikePress && (
             <TouchableOpacity
               style={styles.browseLikeButton}
-              onPress={onLikePress}
-              activeOpacity={0.8}
+              onPress={handleLikeWithBounce}
+              activeOpacity={1}
             >
-              <Heart
-                size={18}
-                color={isLiked ? ACCENT_ORANGE : '#FFFFFF'}
-                fill={isLiked ? ACCENT_ORANGE : 'transparent'}
-              />
+              <Animated.View style={likeAnimStyle}>
+                <Heart
+                  size={18}
+                  color={isLiked ? ACCENT_ORANGE : '#FFFFFF'}
+                  fill={isLiked ? ACCENT_ORANGE : 'transparent'}
+                />
+              </Animated.View>
             </TouchableOpacity>
           )}
         </View>
@@ -247,7 +276,8 @@ export default function ActivityCard({
             </Text>
           </View>
         </View>
-      </TouchableOpacity>
+        </Animated.View>
+      </Pressable>
     );
   }
 
@@ -257,11 +287,12 @@ export default function ActivityCard({
   // =============================================
   if (variant === 'compact') {
     return (
-      <TouchableOpacity
-        style={styles.compactCard}
+      <Pressable
+        onPressIn={() => { cardScale.value = motion.scale.press; }}
+        onPressOut={() => { cardScale.value = motion.scale.normal; }}
         onPress={handlePress}
-        activeOpacity={0.9}
       >
+        <Animated.View style={[styles.compactCard, cardAnimStyle]}>
         {/* Zone image avec overlay uniforme */}
         <View style={styles.compactImageContainer}>
           <Image
@@ -292,14 +323,16 @@ export default function ActivityCard({
           {onLikePress && (
             <TouchableOpacity
               style={styles.compactLikeButton}
-              onPress={onLikePress}
-              activeOpacity={0.8}
+              onPress={handleLikeWithBounce}
+              activeOpacity={1}
             >
-              <Heart
-                size={16}
-                color={isLiked ? colors.error : TEXT_TERTIARY}
-                fill={isLiked ? colors.error : 'transparent'}
-              />
+              <Animated.View style={likeAnimStyle}>
+                <Heart
+                  size={16}
+                  color={isLiked ? colors.error : TEXT_TERTIARY}
+                  fill={isLiked ? colors.error : 'transparent'}
+                />
+              </Animated.View>
             </TouchableOpacity>
           )}
 
@@ -380,7 +413,8 @@ export default function ActivityCard({
             </View>
           </View>
         </View>
-      </TouchableOpacity>
+        </Animated.View>
+      </Pressable>
     );
   }
 
@@ -389,11 +423,12 @@ export default function ActivityCard({
   // =============================================
   if (variant === 'list') {
     return (
-      <TouchableOpacity
-        style={styles.listCard}
+      <Pressable
+        onPressIn={() => { cardScale.value = motion.scale.press; }}
+        onPressOut={() => { cardScale.value = motion.scale.normal; }}
         onPress={handlePress}
-        activeOpacity={0.9}
       >
+        <Animated.View style={[styles.listCard, cardAnimStyle]}>
         {/* Image full background */}
         <Image
           source={{ uri: activity.image_url || 'https://via.placeholder.com/400' }}
@@ -412,14 +447,16 @@ export default function ActivityCard({
         {onLikePress && (
           <TouchableOpacity
             style={styles.listLikeButton}
-            onPress={onLikePress}
-            activeOpacity={0.8}
+            onPress={handleLikeWithBounce}
+            activeOpacity={1}
           >
-            <Heart
-              size={18}
-              color={isLiked ? colors.error : TEXT_SECONDARY}
-              fill={isLiked ? colors.error : 'transparent'}
-            />
+            <Animated.View style={likeAnimStyle}>
+              <Heart
+                size={18}
+                color={isLiked ? colors.error : TEXT_SECONDARY}
+                fill={isLiked ? colors.error : 'transparent'}
+              />
+            </Animated.View>
           </TouchableOpacity>
         )}
 
@@ -461,7 +498,8 @@ export default function ActivityCard({
             <Text style={styles.listFullBadgeText}>Complet</Text>
           </View>
         )}
-      </TouchableOpacity>
+        </Animated.View>
+      </Pressable>
     );
   }
 
@@ -469,11 +507,12 @@ export default function ActivityCard({
   // VARIANT: FULL - Design Premium Feed
   // =============================================
   return (
-    <TouchableOpacity
-      style={styles.fullCard}
+    <Pressable
+      onPressIn={() => { cardScale.value = motion.scale.press; }}
+      onPressOut={() => { cardScale.value = motion.scale.normal; }}
       onPress={handlePress}
-      activeOpacity={0.9}
     >
+      <Animated.View style={[styles.fullCard, cardAnimStyle]}>
       {/* Image avec overlay uniforme */}
       <View style={styles.fullImageContainer}>
         <Image
@@ -495,14 +534,16 @@ export default function ActivityCard({
         {onLikePress && (
           <TouchableOpacity
             style={styles.fullLikeButton}
-            onPress={onLikePress}
-            activeOpacity={0.8}
+            onPress={handleLikeWithBounce}
+            activeOpacity={1}
           >
-            <Heart
-              size={18}
-              color={isLiked ? colors.error : TEXT_SECONDARY}
-              fill={isLiked ? colors.error : 'transparent'}
-            />
+            <Animated.View style={likeAnimStyle}>
+              <Heart
+                size={18}
+                color={isLiked ? colors.error : TEXT_SECONDARY}
+                fill={isLiked ? colors.error : 'transparent'}
+              />
+            </Animated.View>
           </TouchableOpacity>
         )}
 
@@ -552,7 +593,8 @@ export default function ActivityCard({
           </View>
         </View>
       </View>
-    </TouchableOpacity>
+      </Animated.View>
+    </Pressable>
   );
 }
 

@@ -130,10 +130,7 @@ export const Button: React.FC<ButtonProps> = ({
         },
         style,
       ]}
-      android_ripple={{
-        color: colors.primary + '30',
-        borderless: false,
-      }}
+      android_ripple={{ color: colors.primary + '30', borderless: false }}
     >
       {loading ? (
         <ActivityIndicator color={getTextColor()} />

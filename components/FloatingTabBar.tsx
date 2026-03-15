@@ -2,7 +2,7 @@ import React from 'react';
 import {
   View,
   Text,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   Platform,
   Dimensions,
@@ -16,11 +16,11 @@ import { useTheme } from '@react-navigation/native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
-  withTiming,
+  withSpring,
   interpolate,
-  Easing,
 } from 'react-native-reanimated';
 import { colors, borderRadius, spacing, shadows } from '@/styles/commonStyles';
+import { motion } from '@/styles/motionTokens';
 
 // Constante exportée pour la hauteur de la tab bar (utilisée par d'autres composants pour le positionnement)
 export const FLOATING_TAB_BAR_HEIGHT = 60;
@@ -40,6 +40,62 @@ interface FloatingTabBarProps {
   bottomMargin?: number;
   currentIndex?: number;
   onTabPress?: (index: number) => void;
+}
+
+// Individual tab item with its own scale animation
+function TabItem({
+  tab,
+  index,
+  isActive,
+  onPress,
+}: {
+  tab: TabBarItem;
+  index: number;
+  isActive: boolean;
+  onPress: () => void;
+}) {
+  const scaleAnim = useSharedValue(1);
+
+  const animatedTabStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: withSpring(scaleAnim.value, motion.spring.snappy) }],
+  }));
+
+  return (
+    <Pressable
+      style={styles.tab}
+      onPressIn={() => { scaleAnim.value = motion.scale.press; }}
+      onPressOut={() => { scaleAnim.value = motion.scale.normal; }}
+      onPress={onPress}
+    >
+      <Animated.View style={[styles.tabContent, animatedTabStyle]}>
+        {Platform.OS !== 'ios' && tab.androidIcon ? (
+          <MaterialIcons
+            name={tab.androidIcon}
+            size={22}
+            color={isActive ? colors.primary : colors.textTertiary}
+          />
+        ) : (
+          <IconSymbol
+            name={tab.icon}
+            size={22}
+            color={isActive ? colors.primary : colors.textTertiary}
+          />
+        )}
+        <Text
+          style={[
+            styles.tabLabel,
+            { color: colors.textTertiary },
+            isActive && {
+              color: colors.primary,
+              fontWeight: '600'
+            },
+          ]}
+        >
+          {tab.label}
+        </Text>
+      </Animated.View>
+    </Pressable>
+  );
 }
 
 export default function FloatingTabBar({
@@ -93,7 +149,7 @@ export default function FloatingTabBar({
 
   React.useEffect(() => {
     if (activeTabIndex >= 0) {
-      animatedValue.value = activeTabIndex;
+      animatedValue.value = withSpring(activeTabIndex, motion.spring.smooth);
     }
   }, [activeTabIndex, animatedValue]);
 
@@ -177,46 +233,15 @@ export default function FloatingTabBar({
           <View style={dynamicStyles.background} />
           <Animated.View style={[dynamicStyles.indicator, indicatorStyle]} />
           <View style={styles.tabsContainer}>
-            {tabs.map((tab, index) => {
-              const isActive = activeTabIndex === index;
-
-              return (
-                <TouchableOpacity
-                  key={tab.name}
-                  style={styles.tab}
-                  onPress={() => handleTabPress(index, tab.route)}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.tabContent}>
-                    {Platform.OS !== 'ios' && tab.androidIcon ? (
-                      <MaterialIcons
-                        name={tab.androidIcon}
-                        size={22}
-                        color={isActive ? colors.primary : colors.textTertiary}
-                      />
-                    ) : (
-                      <IconSymbol
-                        name={tab.icon}
-                        size={22}
-                        color={isActive ? colors.primary : colors.textTertiary}
-                      />
-                    )}
-                    <Text
-                      style={[
-                        styles.tabLabel,
-                        { color: colors.textTertiary },
-                        isActive && {
-                          color: colors.primary,
-                          fontWeight: '600'
-                        },
-                      ]}
-                    >
-                      {tab.label}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
+            {tabs.map((tab, index) => (
+              <TabItem
+                key={tab.name}
+                tab={tab}
+                index={index}
+                isActive={activeTabIndex === index}
+                onPress={() => handleTabPress(index, tab.route)}
+              />
+            ))}
           </View>
         </BlurView>
       </View>
