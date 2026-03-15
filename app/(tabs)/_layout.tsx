@@ -14,6 +14,7 @@ import { colors } from '@/styles/commonStyles';
 import { useLocation } from '@/contexts/LocationContext';
 import { useCancellationCheck } from '@/hooks/useCancellationCheck';
 import { useActivityCancellationListener } from '@/hooks/useActivityCancellationListener';
+import { notificationService } from '@/lib/notifications';
 
 // Import des écrans
 import ProfileScreen from './profile';
@@ -285,6 +286,13 @@ function TabLayoutContent() {
     prevTabIndexRef.current = index;
     setCurrentTabIndex(index);
   }, []);
+
+  // Enregistrement push notifications quand l'utilisateur est authentifié
+  useEffect(() => {
+    if (user) {
+      notificationService.registerForPushNotifications();
+    }
+  }, [user]);
 
   // Vérifier les créneaux annulés non vus
   useCancellationCheck();

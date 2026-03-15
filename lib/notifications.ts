@@ -93,7 +93,7 @@ class NotificationService {
         }
         break;
       case 'friend_request':
-        router.push('/(tabs)/inbox');
+        router.push('/friend-requests');
         break;
       case 'activity':
         if (data.activityId) {

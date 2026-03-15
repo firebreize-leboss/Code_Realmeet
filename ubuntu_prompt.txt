@@ -1,73 +1,144 @@
-## TÂCHE — components/button.tsx : remplacer l'opacity press par un scale press
+## Contexte
 
-### Contexte du bug
-Sur Android, les variantes `outline` et `ghost` ont un `backgroundColor: "transparent"`. 
-L'effet press actuel utilise `opacity: pressed ? 0.8 : 1` ce qui rend le contenu 
-semi-transparent sur le fond blanc → le bouton "disparaît" visuellement.
+L'app Natively utilise Supabase hébergé (cloud). Deux fonctions SQL utilisent
+`current_setting('app.settings.supabase_url')` et `current_setting('app.settings.service_role_key')`
+pour appeler l'Edge Function `send-push` via pg_net.
 
-On veut un effet de zoom subtil (scale down) au press, comme un vrai bouton physique.
+Problème : sur Supabase cloud, `ALTER DATABASE ... SET "app.settings.xxx"` est interdit
+(erreur 42501 permission denied). Il faut migrer vers Supabase Vault.
 
-### Ce qu'il faut faire
+## Prérequis (à faire MANUELLEMENT dans le SQL Editor Supabase AVANT de lancer ce prompt)
 
-1. Lis le fichier `components/button.tsx` en entier avant toute modification.
-
-2. Ajoute les imports Reanimated nécessaires :
-   - `Animated, useSharedValue, useAnimatedStyle, withSpring` depuis `react-native-reanimated`
-   - `motion` depuis `@/styles/motionTokens`
-
-3. Remplace le `<Pressable>` par un `<Animated.View>` wrappant un `<Pressable>` :
-   - Crée un `useSharedValue(1)` pour le scale
-   - Crée un `useAnimatedStyle` qui retourne `{ transform: [{ scale: withSpring(scaleValue.value, motion.spring.snappy) }] }`
-   - Le `<Animated.View>` reçoit le style animé
-   - Le `<Pressable>` utilise `onPressIn` pour setter `scale.value = motion.scale.press` (0.97)
-   - Le `<Pressable>` utilise `onPressOut` pour setter `scale.value = motion.scale.normal` (1)
-
-4. IMPORTANT — Supprime le `opacity: pressed ? 0.8 : 1` de la ligne style du Pressable.
-   Garde uniquement `opacity: disabled ? 0.6 : 1` (l'opacity ne sert plus que pour le disabled).
-
-5. Garde `android_ripple` tel quel.
-
-6. Le `style` prop externe doit rester sur le Pressable (pas sur l'Animated.View wrapper).
-
-### Pattern de référence (déjà utilisé dans le projet)
-
-Regarde comment c'est fait dans `components/ActivityCard.tsx` et `components/FloatingTabBar.tsx` :
-ils utilisent exactement ce pattern Animated.View + Pressable + onPressIn/onPressOut + motion tokens.
-
-### Structure résultante attendue
-```tsx
-const scale = useSharedValue(1);
-const animatedStyle = useAnimatedStyle(() => ({
-  transform: [{ scale: withSpring(scale.value, motion.spring.snappy) }],
-}));
-
-return (
-  <Animated.View style={animatedStyle}>
-    <Pressable
-      onPress={onPress}
-      onPressIn={() => { scale.value = motion.scale.press; }}
-      onPressOut={() => { scale.value = motion.scale.normal; }}
-      disabled={disabled || loading}
-      style={[
-        getVariantStyle(),
-        {
-          height: sizeStyles[size].height,
-          paddingHorizontal: sizeStyles[size].padding,
-          borderRadius: sizeStyles[size].borderRadius,
-          opacity: disabled ? 0.6 : 1,
-        },
-        style,
-      ]}
-      android_ripple={{ color: colors.primary + '30', borderless: false }}
-    >
-      {/* contenu inchangé */}
-    </Pressable>
-  </Animated.View>
-);
+L'utilisateur doit d'abord créer les secrets Vault dans le SQL Editor du dashboard Supabase :
+```sql
+-- Remplacer par les vraies valeurs
+SELECT vault.create_secret('https://VOTRE_REF.supabase.co', 'supabase_url');
+SELECT vault.create_secret('VOTRE_SERVICE_ROLE_KEY', 'service_role_key');
 ```
 
-### Ce qu'il ne faut PAS faire
-- Ne PAS garder `opacity: pressed ? 0.8 : 1` — c'est la source du bug
-- Ne PAS ajouter de Haptics
-- Ne PAS toucher au reste du fichier (styles, variants, getTextColor, etc.)
-- Ne PAS utiliser le `({ pressed })` callback de style du Pressable pour autre chose que le style statique
+Vérifier que ça a marché :
+```sql
+SELECT name, decrypted_secret FROM vault.decrypted_secrets WHERE name IN ('supabase_url', 'service_role_key');
+```
+
+## Tâche
+
+Créer un fichier de migration Supabase qui met à jour les 2 fonctions SQL
+qui utilisent `current_setting('app.settings...')` pour qu'elles lisent
+depuis `vault.decrypted_secrets` à la place.
+
+### Fichier à créer : `supabase/migrations/YYYYMMDDHHMMSS_vault_push_secrets.sql`
+
+(Utiliser un timestamp réaliste pour le nom, ex: 20260315120000)
+
+### Fonction 1 : `notify_push`
+
+Version actuelle :
+```sql
+CREATE OR REPLACE FUNCTION public.notify_push(p_user_id uuid, p_title text, p_body text, p_data jsonb DEFAULT '{}'::jsonb)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  v_token text;
+  v_enabled boolean;
+BEGIN
+  SELECT expo_push_token, notifications_enabled
+  INTO v_token, v_enabled
+  FROM public.profiles
+  WHERE id = p_user_id;
+
+  IF v_token IS NULL OR v_enabled = false THEN
+    RETURN;
+  END IF;
+
+  PERFORM net.http_post(
+    url := current_setting('app.settings.supabase_url') || '/functions/v1/send-push',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key')
+    ),
+    body := jsonb_build_object(
+      'user_id', p_user_id,
+      'title', p_title,
+      'body', p_body,
+      'data', p_data
+    )
+  );
+END;
+$$;
+```
+
+Nouvelle version attendue :
+- Déclarer `v_supabase_url text` et `v_service_key text`
+- Les lire depuis `vault.decrypted_secrets` via :
+  `SELECT decrypted_secret INTO v_supabase_url FROM vault.decrypted_secrets WHERE name = 'supabase_url';`
+  `SELECT decrypted_secret INTO v_service_key FROM vault.decrypted_secrets WHERE name = 'service_role_key';`
+- Remplacer `current_setting(...)` par ces variables dans le `net.http_post`
+- Garder tout le reste identique (SECURITY DEFINER, logique de vérification token, etc.)
+
+### Fonction 2 : `notify_participants_on_cancel`
+
+Version actuelle :
+```sql
+CREATE OR REPLACE FUNCTION public.notify_participants_on_cancel() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+  v_participant RECORD;
+  v_activity_name TEXT;
+  v_request_id BIGINT;
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    v_activity_name := OLD.nom;
+  ELSE
+    v_activity_name := NEW.nom;
+  END IF;
+
+  FOR v_participant IN
+    SELECT DISTINCT sp.user_id
+    FROM slot_participants sp
+    JOIN activity_slots asl ON asl.id = sp.slot_id
+    WHERE asl.activity_id = COALESCE(OLD.id, NEW.id)
+      AND sp.status = 'confirmed'
+  LOOP
+    SELECT net.http_post(
+      url := current_setting('app.settings.supabase_url', true) || '/functions/v1/send-push',
+      headers := jsonb_build_object(
+        'Content-Type', 'application/json',
+        'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key', true)
+      ),
+      body := jsonb_build_object(
+        'user_id', v_participant.user_id,
+        'title', '😔 Activité annulée',
+        'body', v_activity_name || ' a été annulée par l''organisateur.',
+        'data', jsonb_build_object(
+          'type', 'activity_cancelled',
+          'activityId', COALESCE(OLD.id, NEW.id)::text
+        )
+      )
+    ) INTO v_request_id;
+  END LOOP;
+
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  ELSE
+    RETURN NEW;
+  END IF;
+END;
+$$;
+```
+
+Nouvelle version attendue :
+- Ajouter `v_supabase_url text` et `v_service_key text` dans les DECLARE
+- Les lire depuis Vault au début du BEGIN (avant la boucle FOR)
+- Remplacer `current_setting('app.settings.supabase_url', true)` par `v_supabase_url`
+- Remplacer `current_setting('app.settings.service_role_key', true)` par `v_service_key`
+- Garder tout le reste identique
+
+## Contraintes
+
+- Le fichier de migration doit contenir les deux `CREATE OR REPLACE FUNCTION` 
+- Ne PAS toucher aux triggers existants (ils appellent déjà ces fonctions)
+- Ne PAS toucher à l'Edge Function `send-push`
+- Ne PAS toucher au code applicatif (lib/notifications.ts, etc.)
+- Ne PAS créer les secrets Vault dans la migration (c'est fait manuellement, car les valeurs sont sensibles)
+- Ajouter un commentaire en haut de la migration expliquant le changement
+- Garder SECURITY DEFINER sur les deux fonctions (nécessaire pour accéder à vault.decrypted_secrets)
