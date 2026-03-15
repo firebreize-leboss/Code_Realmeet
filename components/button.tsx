@@ -8,7 +8,9 @@ import {
   ViewStyle,
   Platform,
 } from "react-native";
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from "react-native-reanimated";
 import { colors, borderRadius, spacing, typography, shadows } from "@/styles/commonStyles";
+import { motion } from "@/styles/motionTokens";
 
 type ButtonVariant = "filled" | "outline" | "ghost" | "secondary";
 type ButtonSize = "sm" | "md" | "lg";
@@ -116,41 +118,50 @@ export const Button: React.FC<ButtonProps> = ({
     }
   };
 
+  const scale = useSharedValue(1);
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: withSpring(scale.value, motion.spring.snappy) }],
+  }));
+
   return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled || loading}
-      style={({ pressed }) => [
-        getVariantStyle(),
-        {
-          height: sizeStyles[size].height,
-          paddingHorizontal: sizeStyles[size].padding,
-          borderRadius: sizeStyles[size].borderRadius,
-          opacity: disabled ? 0.6 : pressed ? 0.8 : 1,
-        },
-        style,
-      ]}
-      android_ripple={{ color: colors.primary + '30', borderless: false }}
-    >
-      {loading ? (
-        <ActivityIndicator color={getTextColor()} />
-      ) : (
-        <Text
-          style={StyleSheet.flatten([
-            {
-              fontSize: sizeStyles[size].fontSize,
-              color: getTextColor(),
-              textAlign: "center",
-              marginBottom: 0,
-              fontWeight: typography.semibold,
-            },
-            textStyle,
-          ])}
-        >
-          {children}
-        </Text>
-      )}
-    </Pressable>
+    <Animated.View style={animatedStyle}>
+      <Pressable
+        onPress={onPress}
+        onPressIn={() => { scale.value = motion.scale.press; }}
+        onPressOut={() => { scale.value = motion.scale.normal; }}
+        disabled={disabled || loading}
+        style={[
+          getVariantStyle(),
+          {
+            height: sizeStyles[size].height,
+            paddingHorizontal: sizeStyles[size].padding,
+            borderRadius: sizeStyles[size].borderRadius,
+            opacity: disabled ? 0.6 : 1,
+          },
+          style,
+        ]}
+        android_ripple={{ color: colors.primary + '30', borderless: false }}
+      >
+        {loading ? (
+          <ActivityIndicator color={getTextColor()} />
+        ) : (
+          <Text
+            style={StyleSheet.flatten([
+              {
+                fontSize: sizeStyles[size].fontSize,
+                color: getTextColor(),
+                textAlign: "center",
+                marginBottom: 0,
+                fontWeight: typography.semibold,
+              },
+              textStyle,
+            ])}
+          >
+            {children}
+          </Text>
+        )}
+      </Pressable>
+    </Animated.View>
   );
 };
 
