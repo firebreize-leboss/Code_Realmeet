@@ -9,6 +9,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Pressable,
   Image,
   ActivityIndicator,
   Alert,
@@ -16,6 +17,11 @@ import {
   Modal,
   Platform,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -29,6 +35,7 @@ import { CheckinQRSection } from '@/components/CheckinQRSection';
 import InvitePlusOneModal from '@/components/InvitePlusOneModal';
 import { invitationService } from '@/services/invitation.service';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
+import { motion } from '@/styles/motionTokens';
 import { getParisDate } from '@/utils/timezone';
 import { useFonts, Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold } from '@expo-google-fonts/manrope';
 
@@ -110,6 +117,16 @@ export default function ActivityDetailScreen() {
   const [selectedSlotRemainingPlaces, setSelectedSlotRemainingPlaces] = useState<number | null>(null);
   const navigationLockRef = useRef<boolean>(false);
   const actionLockRef = useRef<boolean>(false);
+
+  const joinScale = useSharedValue(1);
+  const joinAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: withSpring(joinScale.value, motion.spring.snappy) }],
+  }));
+
+  const duoScale = useSharedValue(1);
+  const duoAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: withSpring(duoScale.value, motion.spring.snappy) }],
+  }));
 
   useEffect(() => {
     loadActivity();
@@ -1060,82 +1077,89 @@ export default function ActivityDetailScreen() {
               <View style={styles.footerButtons}>
                 {/* Bouton "On vient à deux" - visible si pas inscrit, pas discover, >= 2 places */}
                 {!isJoined && !slotDiscoverMode && selectedSlot && selectedSlotRemainingPlaces !== null && selectedSlotRemainingPlaces >= 2 && (
-                  <TouchableOpacity
-                    style={[styles.duoButton, joiningInProgress && { opacity: 0.5 }]}
-                    disabled={joiningInProgress}
-                    onPress={() => {
-                      if (navigationLockRef.current) return;
-                      if (!selectedSlot) return;
+                  <Animated.View style={duoAnimStyle}>
+                    <Pressable
+                      style={[styles.duoButton, joiningInProgress && { opacity: 0.5 }]}
+                      disabled={joiningInProgress}
+                      onPressIn={() => { duoScale.value = motion.scale.press; }}
+                      onPressOut={() => { duoScale.value = motion.scale.normal; }}
+                      onPress={() => {
+                        if (navigationLockRef.current) return;
+                        if (!selectedSlot) return;
 
-                      // Règle J-1 : bloquer l'inscription si le créneau débute dans moins de 24h
-                      const timePart = selectedSlot.time ? selectedSlot.time.slice(0, 5) : '00:00';
-                      const slotStart = getParisDate(selectedSlot.date, timePart);
-                      const in24hMs = Date.now() + 24 * 60 * 60 * 1000;
-                      if (slotStart.getTime() <= in24hMs) {
-                        Alert.alert(
-                          'Inscription impossible',
-                          "L'activité se déroule dans moins de 24h. Vous ne pouvez plus vous inscrire."
-                        );
-                        return;
-                      }
+                        // Règle J-1 : bloquer l'inscription si le créneau débute dans moins de 24h
+                        const timePart = selectedSlot.time ? selectedSlot.time.slice(0, 5) : '00:00';
+                        const slotStart = getParisDate(selectedSlot.date, timePart);
+                        const in24hMs = Date.now() + 24 * 60 * 60 * 1000;
+                        if (slotStart.getTime() <= in24hMs) {
+                          Alert.alert(
+                            'Inscription impossible',
+                            "L'activité se déroule dans moins de 24h. Vous ne pouvez plus vous inscrire."
+                          );
+                          return;
+                        }
 
-                      navigationLockRef.current = true;
+                        navigationLockRef.current = true;
 
-                      const slotDateFormatted = new Date(selectedSlot.date).toLocaleDateString('fr-FR', {
-                        weekday: 'long',
-                        day: 'numeric',
-                        month: 'long',
-                      });
-                      router.push({
-                        pathname: '/payment/select-method',
-                        params: {
-                          activity_id: activity.id,
-                          slot_id: selectedSlot.id,
-                          activity_name: activity.title,
-                          slot_date: slotDateFormatted,
-                          slot_time: selectedSlot.time,
-                          price: activity.price,
-                          host_id: activity.host.id,
-                          max_participants: activity.capacity.toString(),
-                          current_participants: activity.participants.toString(),
-                          mode: 'duo',
-                        },
-                      });
+                        const slotDateFormatted = new Date(selectedSlot.date).toLocaleDateString('fr-FR', {
+                          weekday: 'long',
+                          day: 'numeric',
+                          month: 'long',
+                        });
+                        router.push({
+                          pathname: '/payment/select-method',
+                          params: {
+                            activity_id: activity.id,
+                            slot_id: selectedSlot.id,
+                            activity_name: activity.title,
+                            slot_date: slotDateFormatted,
+                            slot_time: selectedSlot.time,
+                            price: activity.price,
+                            host_id: activity.host.id,
+                            max_participants: activity.capacity.toString(),
+                            current_participants: activity.participants.toString(),
+                            mode: 'duo',
+                          },
+                        });
 
-                      setTimeout(() => {
-                        navigationLockRef.current = false;
-                      }, 1000);
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <IconSymbol name="person.2.fill" size={16} color={colors.primary} />
-                    <Text style={styles.duoButtonText}>On vient à deux</Text>
-                  </TouchableOpacity>
+                        setTimeout(() => {
+                          navigationLockRef.current = false;
+                        }, 1000);
+                      }}
+                    >
+                      <IconSymbol name="person.2.fill" size={16} color={colors.primary} />
+                      <Text style={styles.duoButtonText}>On vient à deux</Text>
+                    </Pressable>
+                  </Animated.View>
                 )}
-                <TouchableOpacity
-                  style={[
-                    styles.actionButton,
-                    isJoined && styles.actionButtonLeave,
-                    !isJoined && !selectedSlot && styles.actionButtonDisabled,
-                    isFull && !isJoined && styles.actionButtonDisabled,
-                  ]}
-                  onPress={handleJoinLeave}
-                  disabled={(!isJoined && !selectedSlot) || (isFull && !isJoined) || joiningInProgress}
-                >
-                  {joiningInProgress ? (
-                    <ActivityIndicator size="small" color={isJoined ? colors.textSecondary : '#FFFFFF'} />
-                  ) : (
-                    <Text style={[styles.actionButtonText, isJoined && styles.actionButtonTextLeave]}>
-                      {isFull && !isJoined
-                        ? 'Complet'
-                        : isJoined
-                        ? 'Se désinscrire'
-                        : !selectedSlot
-                        ? 'Choisir un créneau'
-                        : 'Rejoindre'}
-                    </Text>
-                  )}
-                </TouchableOpacity>
+                <Animated.View style={joinAnimStyle}>
+                  <Pressable
+                    style={[
+                      styles.actionButton,
+                      isJoined && styles.actionButtonLeave,
+                      !isJoined && !selectedSlot && styles.actionButtonDisabled,
+                      isFull && !isJoined && styles.actionButtonDisabled,
+                    ]}
+                    onPress={handleJoinLeave}
+                    onPressIn={() => { joinScale.value = motion.scale.press; }}
+                    onPressOut={() => { joinScale.value = motion.scale.normal; }}
+                    disabled={(!isJoined && !selectedSlot) || (isFull && !isJoined) || joiningInProgress}
+                  >
+                    {joiningInProgress ? (
+                      <ActivityIndicator size="small" color={isJoined ? colors.textSecondary : '#FFFFFF'} />
+                    ) : (
+                      <Text style={[styles.actionButtonText, isJoined && styles.actionButtonTextLeave]}>
+                        {isFull && !isJoined
+                          ? 'Complet'
+                          : isJoined
+                          ? 'Se désinscrire'
+                          : !selectedSlot
+                          ? 'Choisir un créneau'
+                          : 'Rejoindre'}
+                      </Text>
+                    )}
+                  </Pressable>
+                </Animated.View>
               </View>
             </>
           )}
