@@ -1,75 +1,73 @@
-Deux corrections à apporter suite aux modifications récentes.
+## TÂCHE — components/button.tsx : remplacer l'opacity press par un scale press
 
----
+### Contexte du bug
+Sur Android, les variantes `outline` et `ghost` ont un `backgroundColor: "transparent"`. 
+L'effet press actuel utilise `opacity: pressed ? 0.8 : 1` ce qui rend le contenu 
+semi-transparent sur le fond blanc → le bouton "disparaît" visuellement.
 
-## CORRECTION 1 — components/button.tsx : réverter le scale press
+On veut un effet de zoom subtil (scale down) au press, comme un vrai bouton physique.
 
-Le scale press ajouté via Reanimated cause un bug visuel critique : le bouton devient quasi blanc/transparent au maintien appuyé, en particulier sur les variantes `outline` et `ghost`.
+### Ce qu'il faut faire
 
-**Action** : dans `components/button.tsx`, supprime entièrement les ajouts Reanimated récents :
-- Supprime l'import de `useSharedValue`, `useAnimatedStyle`, `withSpring` si ils ont été ajoutés pour ce fichier
-- Supprime le `useSharedValue(1)` et le `useAnimatedStyle` de scale
-- Supprime les `onPressIn`/`onPressOut` qui modifient la shared value de scale
-- Supprime le `Animated.View` wrapper qui a été ajouté autour du contenu du Pressable
-- Supprime l'import des `motion` tokens si il n'est utilisé que pour ça dans ce fichier
+1. Lis le fichier `components/button.tsx` en entier avant toute modification.
 
-**Résultat attendu** : le `Pressable` doit être exactement comme avant ces modifications, c'est-à-dire :
+2. Ajoute les imports Reanimated nécessaires :
+   - `Animated, useSharedValue, useAnimatedStyle, withSpring` depuis `react-native-reanimated`
+   - `motion` depuis `@/styles/motionTokens`
+
+3. Remplace le `<Pressable>` par un `<Animated.View>` wrappant un `<Pressable>` :
+   - Crée un `useSharedValue(1)` pour le scale
+   - Crée un `useAnimatedStyle` qui retourne `{ transform: [{ scale: withSpring(scaleValue.value, motion.spring.snappy) }] }`
+   - Le `<Animated.View>` reçoit le style animé
+   - Le `<Pressable>` utilise `onPressIn` pour setter `scale.value = motion.scale.press` (0.97)
+   - Le `<Pressable>` utilise `onPressOut` pour setter `scale.value = motion.scale.normal` (1)
+
+4. IMPORTANT — Supprime le `opacity: pressed ? 0.8 : 1` de la ligne style du Pressable.
+   Garde uniquement `opacity: disabled ? 0.6 : 1` (l'opacity ne sert plus que pour le disabled).
+
+5. Garde `android_ripple` tel quel.
+
+6. Le `style` prop externe doit rester sur le Pressable (pas sur l'Animated.View wrapper).
+
+### Pattern de référence (déjà utilisé dans le projet)
+
+Regarde comment c'est fait dans `components/ActivityCard.tsx` et `components/FloatingTabBar.tsx` :
+ils utilisent exactement ce pattern Animated.View + Pressable + onPressIn/onPressOut + motion tokens.
+
+### Structure résultante attendue
 ```tsx
-<Pressable
-  onPress={onPress}
-  disabled={disabled || loading}
-  style={({ pressed }) => [
-    getVariantStyle(),
-    {
-      height: sizeStyles[size].height,
-      paddingHorizontal: sizeStyles[size].padding,
-      borderRadius: sizeStyles[size].borderRadius,
-      opacity: disabled ? 0.6 : pressed ? 0.8 : 1,
-    },
-    style,
-  ]}
-  android_ripple={{ color: colors.primary + '30', borderless: false }}
->
-  {loading ? (
-    <ActivityIndicator color={getTextColor()} />
-  ) : (
-    <Text ...>{children}</Text>
-  )}
-</Pressable>
+const scale = useSharedValue(1);
+const animatedStyle = useAnimatedStyle(() => ({
+  transform: [{ scale: withSpring(scale.value, motion.spring.snappy) }],
+}));
+
+return (
+  <Animated.View style={animatedStyle}>
+    <Pressable
+      onPress={onPress}
+      onPressIn={() => { scale.value = motion.scale.press; }}
+      onPressOut={() => { scale.value = motion.scale.normal; }}
+      disabled={disabled || loading}
+      style={[
+        getVariantStyle(),
+        {
+          height: sizeStyles[size].height,
+          paddingHorizontal: sizeStyles[size].padding,
+          borderRadius: sizeStyles[size].borderRadius,
+          opacity: disabled ? 0.6 : 1,
+        },
+        style,
+      ]}
+      android_ripple={{ color: colors.primary + '30', borderless: false }}
+    >
+      {/* contenu inchangé */}
+    </Pressable>
+  </Animated.View>
+);
 ```
 
-Lis le fichier entier avant de modifier pour t'assurer de ne rien casser d'autre.
-
----
-
-## CORRECTION 2 — Supprimer tous les appels Haptics ajoutés récemment
-
-L'utilisateur ne veut aucune vibration. Supprime tous les appels `Haptics` qui ont été ajoutés dans le cadre des modifications récentes dans ces fichiers :
-
-### components/FloatingTabBar.tsx
-- Supprime l'import `expo-haptics` s'il a été ajouté
-- Supprime l'appel `Haptics.impactAsync(...)` dans `handleTabPress`
-- Ne touche à rien d'autre (spring de l'indicateur et scale press des tabs doivent rester)
-
-### components/ActivityCard.tsx
-- Supprime l'import `expo-haptics` s'il a été ajouté
-- Supprime l'appel `Haptics.impactAsync(...)` dans `handleLikeWithBounce`
-- Le bounce visuel du like (scale 1.08 → 1.0) doit rester, uniquement la vibration disparaît
-
-### app/(tabs)/activity.tsx
-- Supprime les appels `Haptics.notificationAsync(...)` dans `handlePublishActivity` et `handleUnpublishActivity`
-- Supprime l'import `expo-haptics` si il n'était pas présent avant ces modifications
-
-### app/activity-detail.tsx
-- Supprime tous les appels `Haptics` ajoutés sur le bouton Rejoindre, Se désinscrire, et les erreurs associées
-- Supprime l'import `expo-haptics` si il n'était pas présent avant ces modifications
-
-### app/chat-detail.tsx
-- Supprime l'appel `Haptics` ajouté après l'envoi de message
-- Supprime l'import `expo-haptics` si il n'était pas présent avant ces modifications (il se peut qu'il existait déjà avant pour d'autres usages — dans ce cas garder l'import mais supprimer uniquement les nouveaux appels ajoutés)
-
----
-
-## RÈGLE GÉNÉRALE
-
-Pour chaque fichier : lis le fichier complet, identifie précisément ce qui a été ajouté récemment, supprime uniquement ces ajouts. Ne touche à aucune autre logique.
+### Ce qu'il ne faut PAS faire
+- Ne PAS garder `opacity: pressed ? 0.8 : 1` — c'est la source du bug
+- Ne PAS ajouter de Haptics
+- Ne PAS toucher au reste du fichier (styles, variants, getTextColor, etc.)
+- Ne PAS utiliser le `({ pressed })` callback de style du Pressable pour autre chose que le style statique
