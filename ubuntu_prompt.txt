@@ -1,144 +1,22 @@
-## Contexte
+Dans app/activity-detail.tsx, dans la fonction loadActivity, il y a un bug : la boucle qui cherche une participation active sur un slot futur ne vérifie pas si le slot est annulé (is_cancelled). Du coup si l'utilisateur a une participation active sur un slot annulé ET un slot non-annulé, le code peut tomber sur le slot annulé en premier, faire break, puis reset isJoined à false sans jamais vérifier le slot valide.
 
-L'app Natively utilise Supabase hébergé (cloud). Deux fonctions SQL utilisent
-`current_setting('app.settings.supabase_url')` et `current_setting('app.settings.service_role_key')`
-pour appeler l'Edge Function `send-push` via pg_net.
+Fix : dans la requête Supabase qui récupère les participations actives, ajoute un JOIN avec activity_slots pour exclure les slots annulés dès la requête. Remplace :
 
-Problème : sur Supabase cloud, `ALTER DATABASE ... SET "app.settings.xxx"` est interdit
-(erreur 42501 permission denied). Il faut migrer vers Supabase Vault.
+const { data: participations } = await supabase
+    .from('slot_participants')
+    .select('id, slot_id')
+    .eq('activity_id', activityId)
+    .eq('user_id', userId)
+    .eq('status', 'active');
 
-## Prérequis (à faire MANUELLEMENT dans le SQL Editor Supabase AVANT de lancer ce prompt)
+Par :
 
-L'utilisateur doit d'abord créer les secrets Vault dans le SQL Editor du dashboard Supabase :
-```sql
--- Remplacer par les vraies valeurs
-SELECT vault.create_secret('https://VOTRE_REF.supabase.co', 'supabase_url');
-SELECT vault.create_secret('VOTRE_SERVICE_ROLE_KEY', 'service_role_key');
-```
+const { data: participations } = await supabase
+    .from('slot_participants')
+    .select('id, slot_id, activity_slots!inner(date, time, is_cancelled)')
+    .eq('activity_id', activityId)
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .eq('activity_slots.is_cancelled', false);
 
-Vérifier que ça a marché :
-```sql
-SELECT name, decrypted_secret FROM vault.decrypted_secrets WHERE name IN ('supabase_url', 'service_role_key');
-```
-
-## Tâche
-
-Créer un fichier de migration Supabase qui met à jour les 2 fonctions SQL
-qui utilisent `current_setting('app.settings...')` pour qu'elles lisent
-depuis `vault.decrypted_secrets` à la place.
-
-### Fichier à créer : `supabase/migrations/YYYYMMDDHHMMSS_vault_push_secrets.sql`
-
-(Utiliser un timestamp réaliste pour le nom, ex: 20260315120000)
-
-### Fonction 1 : `notify_push`
-
-Version actuelle :
-```sql
-CREATE OR REPLACE FUNCTION public.notify_push(p_user_id uuid, p_title text, p_body text, p_data jsonb DEFAULT '{}'::jsonb)
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE
-  v_token text;
-  v_enabled boolean;
-BEGIN
-  SELECT expo_push_token, notifications_enabled
-  INTO v_token, v_enabled
-  FROM public.profiles
-  WHERE id = p_user_id;
-
-  IF v_token IS NULL OR v_enabled = false THEN
-    RETURN;
-  END IF;
-
-  PERFORM net.http_post(
-    url := current_setting('app.settings.supabase_url') || '/functions/v1/send-push',
-    headers := jsonb_build_object(
-      'Content-Type', 'application/json',
-      'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key')
-    ),
-    body := jsonb_build_object(
-      'user_id', p_user_id,
-      'title', p_title,
-      'body', p_body,
-      'data', p_data
-    )
-  );
-END;
-$$;
-```
-
-Nouvelle version attendue :
-- Déclarer `v_supabase_url text` et `v_service_key text`
-- Les lire depuis `vault.decrypted_secrets` via :
-  `SELECT decrypted_secret INTO v_supabase_url FROM vault.decrypted_secrets WHERE name = 'supabase_url';`
-  `SELECT decrypted_secret INTO v_service_key FROM vault.decrypted_secrets WHERE name = 'service_role_key';`
-- Remplacer `current_setting(...)` par ces variables dans le `net.http_post`
-- Garder tout le reste identique (SECURITY DEFINER, logique de vérification token, etc.)
-
-### Fonction 2 : `notify_participants_on_cancel`
-
-Version actuelle :
-```sql
-CREATE OR REPLACE FUNCTION public.notify_participants_on_cancel() RETURNS trigger
-LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE
-  v_participant RECORD;
-  v_activity_name TEXT;
-  v_request_id BIGINT;
-BEGIN
-  IF TG_OP = 'DELETE' THEN
-    v_activity_name := OLD.nom;
-  ELSE
-    v_activity_name := NEW.nom;
-  END IF;
-
-  FOR v_participant IN
-    SELECT DISTINCT sp.user_id
-    FROM slot_participants sp
-    JOIN activity_slots asl ON asl.id = sp.slot_id
-    WHERE asl.activity_id = COALESCE(OLD.id, NEW.id)
-      AND sp.status = 'confirmed'
-  LOOP
-    SELECT net.http_post(
-      url := current_setting('app.settings.supabase_url', true) || '/functions/v1/send-push',
-      headers := jsonb_build_object(
-        'Content-Type', 'application/json',
-        'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key', true)
-      ),
-      body := jsonb_build_object(
-        'user_id', v_participant.user_id,
-        'title', '😔 Activité annulée',
-        'body', v_activity_name || ' a été annulée par l''organisateur.',
-        'data', jsonb_build_object(
-          'type', 'activity_cancelled',
-          'activityId', COALESCE(OLD.id, NEW.id)::text
-        )
-      )
-    ) INTO v_request_id;
-  END LOOP;
-
-  IF TG_OP = 'DELETE' THEN
-    RETURN OLD;
-  ELSE
-    RETURN NEW;
-  END IF;
-END;
-$$;
-```
-
-Nouvelle version attendue :
-- Ajouter `v_supabase_url text` et `v_service_key text` dans les DECLARE
-- Les lire depuis Vault au début du BEGIN (avant la boucle FOR)
-- Remplacer `current_setting('app.settings.supabase_url', true)` par `v_supabase_url`
-- Remplacer `current_setting('app.settings.service_role_key', true)` par `v_service_key`
-- Garder tout le reste identique
-
-## Contraintes
-
-- Le fichier de migration doit contenir les deux `CREATE OR REPLACE FUNCTION` 
-- Ne PAS toucher aux triggers existants (ils appellent déjà ces fonctions)
-- Ne PAS toucher à l'Edge Function `send-push`
-- Ne PAS toucher au code applicatif (lib/notifications.ts, etc.)
-- Ne PAS créer les secrets Vault dans la migration (c'est fait manuellement, car les valeurs sont sensibles)
-- Ajouter un commentaire en haut de la migration expliquant le changement
-- Garder SECURITY DEFINER sur les deux fonctions (nécessaire pour accéder à vault.decrypted_secrets)
+Et adapte la boucle en dessous pour utiliser activity_slots.date et activity_slots.time depuis le JOIN au lieu de refaire une requête séparée pour chaque slot.

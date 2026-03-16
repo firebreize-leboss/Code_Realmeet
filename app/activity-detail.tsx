@@ -211,27 +211,23 @@ export default function ActivityDetailScreen() {
         }
 
         if (userId && !isBusiness) {
-          // Chercher une participation active sur un slot FUTUR
+          // Chercher une participation active sur un slot FUTUR non annulé
           const { data: participations } = await supabase
             .from('slot_participants')
-            .select('id, slot_id')
+            .select('id, slot_id, activity_slots!inner(date, time, is_cancelled)')
             .eq('activity_id', activityId)
             .eq('user_id', userId)
-            .eq('status', 'active');
+            .eq('status', 'active')
+            .eq('activity_slots.is_cancelled', false);
 
           // Parmi les participations actives, trouver celle sur un slot futur
           let activeParticipation: { id: string; slot_id: string } | null = null;
           if (participations && participations.length > 0) {
             for (const p of participations) {
               if (p.slot_id) {
-                const { data: slotCheck } = await supabase
-                  .from('activity_slots')
-                  .select('date, time')
-                  .eq('id', p.slot_id)
-                  .single();
-
-                if (slotCheck) {
-                  const slotDateTime = new Date(`${slotCheck.date}T${slotCheck.time || '00:00'}`);
+                const slotInfo = (p as any).activity_slots;
+                if (slotInfo) {
+                  const slotDateTime = new Date(`${slotInfo.date}T${slotInfo.time || '00:00'}`);
                   if (slotDateTime >= new Date()) {
                     activeParticipation = p;
                     break;

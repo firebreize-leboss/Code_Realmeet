@@ -30,9 +30,26 @@ import { DataCacheProvider } from "@/contexts/DataCacheContext";
 import { TabIndexProvider } from "@/contexts/TabIndexContext";
 import { LocationProvider } from "@/contexts/LocationContext";
 import { notificationService } from "@/lib/notifications";
+import { useAuth } from "@/contexts/AuthContext";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
+
+/**
+ * Enregistre les push notifications quand l'utilisateur est authentifié.
+ * Doit être rendu à l'intérieur de AuthProvider.
+ */
+function NotificationRegistration() {
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (user) {
+      notificationService.registerForPushNotifications();
+    }
+  }, [user]);
+
+  return null;
+}
 
 export const unstable_settings = {
   initialRouteName: "(tabs)",
@@ -114,6 +131,7 @@ export default function RootLayout() {
       <StatusBar style="dark" animated />
       <SafeAreaProvider>
         <AuthProvider>
+          <NotificationRegistration />
           <TabIndexProvider>
           <DataCacheProvider>
           <LocationProvider>

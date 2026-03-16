@@ -1,5 +1,5 @@
 // app/user-profile.tsx
-// Page de profil d'un autre utilisateur avec intention, personality_tags et signalement
+// Page de profil d'un autre utilisateur — Prototype 3 "Bandeau éditorial"
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -15,6 +15,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -26,6 +27,8 @@ import { blockService } from '@/services/block.service';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDataCache } from '@/contexts/DataCacheContext';
 import { UserIntention, getIntentionInfo } from '@/lib/database.types';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useFonts, Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold } from '@expo-google-fonts/manrope';
 
 interface UserProfile {
   id: string;
@@ -59,11 +62,15 @@ export default function UserProfileScreen() {
   const [showInvitationModal, setShowInvitationModal] = useState(false);
   const [invitationMessage, setInvitationMessage] = useState('');
 
+  const [fontsLoaded] = useFonts({
+    Manrope_400Regular,
+    Manrope_500Medium,
+    Manrope_600SemiBold,
+    Manrope_700Bold,
+  });
+
   // Vérifier si l'utilisateur actuel est une entreprise
   const isCurrentUserBusiness = currentUserProfile?.account_type === 'business';
-
-  // Récupérer les infos de l'intention
-  const intentionInfo = profile?.intention ? getIntentionInfo(profile.intention) : null;
 
   useEffect(() => {
     loadProfile();
@@ -463,9 +470,10 @@ export default function UserProfileScreen() {
     );
   };
 
-  if (loading) {
+  if (loading || !fontsLoaded) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar barStyle="light-content" />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
@@ -476,10 +484,11 @@ export default function UserProfileScreen() {
   if (!profile) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar barStyle="dark-content" />
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>Profil introuvable</Text>
           <TouchableOpacity style={styles.backButtonLarge} onPress={() => router.back()}>
-            <Text style={styles.backButtonText}>Retour</Text>
+            <Text style={styles.backButtonLargeText}>Retour</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -487,142 +496,177 @@ export default function UserProfileScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <IconSymbol name="chevron.left" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <View style={{ flex: 1 }} />
-        <TouchableOpacity onPress={() => setShowOptionsModal(true)} style={styles.optionsButton}>
-          <IconSymbol name="ellipsis" size={24} color={colors.text} />
-        </TouchableOpacity>
-      </View>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
 
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
-        {/* Profile Header */}
-        <View style={styles.profileHeader}>
-          <Image
-            source={{ uri: profile.avatar_url || 'https://via.placeholder.com/120' }}
-            style={styles.avatar}
-          />
-          <Text style={styles.name}>{profile.full_name}</Text>
-          {profile.city && (
-            <View style={styles.locationRow}>
-              <IconSymbol name="location.fill" size={16} color={colors.textSecondary} />
-              <Text style={styles.city}>{profile.city}</Text>
+        {/* 1. Bandeau gradient orange */}
+        <LinearGradient
+          colors={['#F2994A', '#F5C47A']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.gradientBanner}
+        >
+          <SafeAreaView edges={['top']} style={styles.headerSafeArea}>
+            <View style={styles.header}>
+              <TouchableOpacity
+                style={styles.headerButton}
+                onPress={() => router.back()}
+              >
+                <IconSymbol name="chevron.left" size={20} color="#FFFFFF" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.headerButton}
+                onPress={() => setShowOptionsModal(true)}
+              >
+                <IconSymbol name="ellipsis" size={20} color="#FFFFFF" />
+              </TouchableOpacity>
             </View>
-          )}
-          {profile.is_friend && (
-            <View style={styles.friendBadge}>
-              <IconSymbol name="checkmark" size={14} color={colors.primary} />
-              <Text style={styles.friendBadgeText}>Ami</Text>
-            </View>
-          )}
+          </SafeAreaView>
+        </LinearGradient>
+
+        {/* 2. Avatar chevauchant */}
+        <View style={styles.avatarWrapper}>
+          <View style={styles.avatarBorder}>
+            <Image
+              source={{ uri: profile.avatar_url || 'https://via.placeholder.com/100' }}
+              style={styles.avatar}
+            />
+          </View>
         </View>
 
-        {/* Intention */}
-        {intentionInfo && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Recherche</Text>
-            <View style={[styles.intentionCard, { borderColor: intentionInfo.color }]}>
-              <View style={[styles.intentionIcon, { backgroundColor: intentionInfo.color + '20' }]}>
-                <IconSymbol name={intentionInfo.icon as any} size={22} color={intentionInfo.color} />
+        {/* 3. Nom + Localisation + Badge ami */}
+        <View style={styles.identitySection}>
+          <Text style={styles.name}>{profile.full_name}</Text>
+          <View style={styles.locationFriendRow}>
+            {profile.city && (
+              <View style={styles.locationRow}>
+                <IconSymbol name="location.fill" size={13} color={colors.textTertiary} />
+                <Text style={styles.cityText}>{profile.city}</Text>
               </View>
-              <Text style={[styles.intentionText, { color: intentionInfo.color }]}>
-                {intentionInfo.label}
-              </Text>
+            )}
+            {profile.is_friend && (
+              <>
+                {profile.city && <Text style={styles.dotSeparator}>·</Text>}
+                <View style={styles.friendBadge}>
+                  <IconSymbol name="checkmark" size={11} color="#166534" />
+                  <Text style={styles.friendBadgeText}>Ami</Text>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+
+        {/* 4. Stats rapides */}
+        <View style={styles.statsRow}>
+          <View style={styles.statBlock}>
+            <Text style={styles.statValue}>{profile.activities_joined}</Text>
+            <Text style={styles.statLabel}>Rejointes</Text>
+          </View>
+          <View style={styles.statBlock}>
+            <Text style={styles.statValue}>{profile.activities_hosted}</Text>
+            <Text style={styles.statLabel}>Organisées</Text>
+          </View>
+        </View>
+
+        {/* 5. Bio (style citation) */}
+        {profile.bio ? (
+          <View style={styles.section}>
+            <View style={styles.bioQuote}>
+              <Text style={styles.bioText}>{profile.bio}</Text>
             </View>
           </View>
-        )}
+        ) : null}
 
-        {/* Bio */}
-        {profile.bio && (
+        {/* 6. Personnalité */}
+        {profile.personality_tags.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>À propos</Text>
-            <View style={styles.card}>
-              <Text style={styles.bio}>{profile.bio}</Text>
-            </View>
-          </View>
-        )}
-
-        {/* Centres d'intérêt */}
-        {profile.interests.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Centres d'intérêt</Text>
-            <View style={styles.interestsContainer}>
-              {profile.interests.map((interest, index) => (
-                <View key={index} style={styles.interestBadge}>
-                  <Text style={styles.interestText}>{interest}</Text>
+            <Text style={styles.sectionTitle}>Personnalité</Text>
+            <View style={styles.tagsContainer}>
+              {profile.personality_tags.map((tag, index) => (
+                <View key={index} style={styles.personalityTag}>
+                  <Text style={styles.personalityTagText}>{tag}</Text>
                 </View>
               ))}
             </View>
           </View>
         )}
 
-        {/* Statistiques */}
+        {/* 7. Centres d'intérêt */}
+        {profile.interests.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Centres d'intérêt</Text>
+            <View style={styles.tagsContainer}>
+              {profile.interests.map((interest, index) => (
+                <View key={index} style={styles.interestTag}>
+                  <Text style={styles.interestTagText}>{interest}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* 8. Voir ses activités */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Activités</Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.activitiesCard}
             onPress={() => router.push(`/user-activities?id=${profile.id}&name=${encodeURIComponent(profile.full_name)}`)}
             activeOpacity={0.7}
           >
-            <View style={styles.activitiesCardContent}>
-              <IconSymbol name="figure.run" size={24} color={colors.primary} />
-              <View style={styles.activitiesCardText}>
-                <Text style={styles.activitiesCardValue}>{profile.activities_joined}</Text>
-                <Text style={styles.activitiesCardLabel}>Activités rejointes</Text>
+            <View style={styles.activitiesCardLeft}>
+              <IconSymbol name="calendar" size={20} color="#F2994A" />
+              <View>
+                <Text style={styles.activitiesCardTitle}>Voir ses activités</Text>
+                <Text style={styles.activitiesCardSub}>
+                  {profile.activities_joined} rejointes, {profile.activities_hosted} organisées
+                </Text>
               </View>
             </View>
-            <IconSymbol name="chevron.right" size={20} color={colors.textSecondary} />
+            <IconSymbol name="chevron.right" size={16} color={colors.textTertiary} />
           </TouchableOpacity>
         </View>
-
-        {/* Boutons d'action - seulement pour les utilisateurs, pas les entreprises */}
-        {!isCurrentUserBusiness && (
-          <View style={styles.actionButtons}>
-            {isBlocked ? (
-              <TouchableOpacity style={styles.unblockButton} onPress={handleUnblockUser}>
-                <IconSymbol name="hand.raised.slash" size={20} color={colors.text} />
-                <Text style={styles.unblockButtonText}>Débloquer</Text>
-              </TouchableOpacity>
-            ) : profile.is_friend ? (
-              /* Si ami : afficher le bouton Message */
-              <TouchableOpacity style={styles.messageButton} onPress={handleStartConversation}>
-                <IconSymbol name="message.fill" size={20} color={colors.background} />
-                <Text style={styles.messageButtonText}>Message</Text>
-              </TouchableOpacity>
-            ) : profile.request_sent ? (
-              /* Si demande envoyée : afficher le badge */
-              <View style={styles.pendingBadge}>
-                <IconSymbol name="clock" size={16} color={colors.textSecondary} />
-                <Text style={styles.pendingText}>Invitation envoyée</Text>
-              </View>
-            ) : (
-              /* Si non-ami : afficher le bouton Ajouter qui ouvre la modal d'invitation */
-              <TouchableOpacity
-                style={styles.invitationButton}
-                onPress={handleOpenInvitationModal}
-                disabled={sendingRequest}
-              >
-                {sendingRequest ? (
-                  <ActivityIndicator size="small" color={colors.background} />
-                ) : (
-                  <>
-                    <IconSymbol name="person.badge.plus" size={20} color={colors.background} />
-                    <Text style={styles.invitationButtonText}>Ajouter</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
       </ScrollView>
+
+      {/* 9. Barre d'action fixe en bas */}
+      {!isCurrentUserBusiness && (
+        <View style={styles.bottomBar}>
+          {isBlocked ? (
+            <TouchableOpacity style={styles.bottomButtonSecondary} onPress={handleUnblockUser}>
+              <IconSymbol name="hand.raised.slash" size={18} color={colors.text} />
+              <Text style={styles.bottomButtonSecondaryText}>Débloquer</Text>
+            </TouchableOpacity>
+          ) : profile.is_friend ? (
+            <TouchableOpacity style={styles.bottomButtonPrimary} onPress={handleStartConversation}>
+              <IconSymbol name="message.fill" size={18} color="#FFFFFF" />
+              <Text style={styles.bottomButtonPrimaryText}>Message</Text>
+            </TouchableOpacity>
+          ) : profile.request_sent ? (
+            <View style={styles.bottomPendingBadge}>
+              <IconSymbol name="clock" size={16} color={colors.textTertiary} />
+              <Text style={styles.bottomPendingText}>Invitation envoyée</Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.bottomButtonPrimary}
+              onPress={handleOpenInvitationModal}
+              disabled={sendingRequest}
+            >
+              {sendingRequest ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <IconSymbol name="person.badge.plus" size={18} color="#FFFFFF" />
+                  <Text style={styles.bottomButtonPrimaryText}>Ajouter</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
 
       {/* Modal Options */}
       <Modal
@@ -639,7 +683,6 @@ export default function UserProfileScreen() {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Options</Text>
 
-            {/* Option Retirer de ses amis - seulement si c'est un ami */}
             {profile.is_friend && (
               <TouchableOpacity
                 style={styles.modalOption}
@@ -653,7 +696,6 @@ export default function UserProfileScreen() {
               </TouchableOpacity>
             )}
 
-            {/* Option Signaler */}
             <TouchableOpacity style={styles.modalOption} onPress={handleReportUser}>
               <IconSymbol name="flag.fill" size={20} color={colors.error} />
               <Text style={[styles.modalOptionText, { color: colors.error }]}>
@@ -661,7 +703,6 @@ export default function UserProfileScreen() {
               </Text>
             </TouchableOpacity>
 
-            {/* Option Bloquer */}
             {!isBlocked && (
               <TouchableOpacity style={styles.modalOption} onPress={handleBlockUser}>
                 <IconSymbol name="hand.raised.fill" size={20} color={colors.textSecondary} />
@@ -669,7 +710,6 @@ export default function UserProfileScreen() {
               </TouchableOpacity>
             )}
 
-            {/* Option Débloquer */}
             {isBlocked && (
               <TouchableOpacity style={styles.modalOption} onPress={handleUnblockUser}>
                 <IconSymbol name="hand.raised.slash" size={20} color={colors.primary} />
@@ -677,7 +717,6 @@ export default function UserProfileScreen() {
               </TouchableOpacity>
             )}
 
-            {/* Bouton Annuler */}
             <TouchableOpacity
               style={[styles.modalOption, styles.cancelOption]}
               onPress={() => setShowOptionsModal(false)}
@@ -736,7 +775,7 @@ export default function UserProfileScreen() {
             <TextInput
               style={styles.invitationInput}
               placeholder="Bonjour ! J'aimerais faire votre connaissance..."
-              placeholderTextColor={colors.textSecondary}
+              placeholderTextColor={colors.textMuted}
               value={invitationMessage}
               onChangeText={setInvitationMessage}
               multiline
@@ -759,7 +798,7 @@ export default function UserProfileScreen() {
               disabled={!invitationMessage.trim() || sendingRequest}
             >
               {sendingRequest ? (
-                <ActivityIndicator size="small" color={colors.background} />
+                <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
                 <Text style={styles.invitationSendButtonText}>Envoyer l'invitation</Text>
               )}
@@ -767,7 +806,7 @@ export default function UserProfileScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -789,6 +828,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 18,
+    fontFamily: 'Manrope_600SemiBold',
     color: colors.text,
   },
   backButtonLarge: {
@@ -797,212 +837,274 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
   },
-  backButtonText: {
-    color: colors.background,
-    fontWeight: '600',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  backButton: {
-    padding: 8,
-  },
-  optionsButton: {
-    padding: 8,
+  backButtonLargeText: {
+    color: '#FFFFFF',
+    fontFamily: 'Manrope_600SemiBold',
+    fontSize: 15,
   },
   scrollView: {
     flex: 1,
   },
   contentContainer: {
-    paddingBottom: 40,
+    paddingBottom: 100,
   },
-  profileHeader: {
+
+  // 1. Bandeau gradient
+  gradientBanner: {
+    height: 180,
+  },
+  headerSafeArea: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 24,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+  headerButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // 2. Avatar chevauchant
+  avatarWrapper: {
+    alignItems: 'center',
+    marginTop: -56,
+  },
+  avatarBorder: {
+    width: 108,
+    height: 108,
+    borderRadius: 54,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   avatar: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: colors.card,
-    marginBottom: 16,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+  },
+
+  // 3. Identité
+  identitySection: {
+    alignItems: 'center',
+    paddingTop: 12,
+    paddingHorizontal: 20,
+    marginBottom: 20,
   },
   name: {
     fontSize: 24,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     color: colors.text,
-    marginBottom: 8,
+    marginBottom: 6,
+  },
+  locationFriendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 6,
   },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
   },
-  city: {
-    fontSize: 15,
+  cityText: {
+    fontSize: 13,
+    fontFamily: 'Manrope_400Regular',
     color: colors.textSecondary,
+  },
+  dotSeparator: {
+    fontSize: 13,
+    color: colors.textTertiary,
   },
   friendBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: colors.primary + '20',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginTop: 12,
+    gap: 4,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
   friendBadgeText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.primary,
+    fontSize: 12,
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#166534',
   },
+
+  // 4. Stats rapides
+  statsRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    gap: 12,
+    marginBottom: 24,
+  },
+  statBlock: {
+    flex: 1,
+    backgroundColor: '#FFF7ED',
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 22,
+    fontFamily: 'Manrope_700Bold',
+    color: '#F2994A',
+  },
+  statLabel: {
+    fontSize: 11,
+    fontFamily: 'Manrope_500Medium',
+    color: '#993C1D',
+    marginTop: 2,
+  },
+
+  // 5. Bio citation
   section: {
     paddingHorizontal: 20,
     marginBottom: 24,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 12,
+  bioQuote: {
+    paddingLeft: 14,
+    borderLeftWidth: 3,
+    borderLeftColor: '#F2994A',
   },
-  intentionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    padding: 16,
-    borderRadius: 16,
-    gap: 14,
-    borderWidth: 1,
-  },
-  intentionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  intentionText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 16,
-  },
-  bio: {
-    fontSize: 15,
-    color: colors.text,
+  bioText: {
+    fontSize: 14,
+    fontFamily: 'Manrope_400Regular',
+    fontStyle: 'italic',
     lineHeight: 22,
+    color: colors.textSecondary,
   },
-  interestsContainer: {
+
+  // 6 & 7. Sections tags
+  sectionTitle: {
+    fontSize: 13,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.text,
+    marginBottom: 10,
+  },
+  tagsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
   },
-  interestBadge: {
-    backgroundColor: colors.card,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+  personalityTag: {
+    backgroundColor: '#8B5CF620',
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#8B5CF640',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
   },
-  interestText: {
-    fontSize: 14,
+  personalityTagText: {
+    fontSize: 13,
+    fontFamily: 'Manrope_500Medium',
+    color: '#8B5CF6',
+  },
+  interestTag: {
+    backgroundColor: '#F5F5F7',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  interestTagText: {
+    fontSize: 13,
+    fontFamily: 'Manrope_500Medium',
     color: colors.text,
   },
-  statsContainer: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  statLabel: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginTop: 4,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    gap: 12,
-  },
-  messageButton: {
-    flex: 1,
+
+  // 8. Voir ses activités
+  activitiesCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primary,
-    padding: 14,
+    justifyContent: 'space-between',
+    backgroundColor: colors.inputBackground,
     borderRadius: 12,
-    gap: 8,
-  },
-  messageButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.background,
-  },
-  addFriendButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.card,
-    padding: 14,
-    borderRadius: 12,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-  addFriendButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.primary,
-  },
-  unblockButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.card,
-    padding: 14,
-    borderRadius: 12,
-    gap: 8,
-  },
-  unblockButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  pendingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: colors.card,
-    borderRadius: 12,
+    paddingHorizontal: 16,
   },
-  pendingText: {
+  activitiesCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  activitiesCardTitle: {
     fontSize: 14,
-    color: colors.textSecondary,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.text,
   },
+  activitiesCardSub: {
+    fontSize: 12,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textTertiary,
+    marginTop: 2,
+  },
+
+  // 9. Barre d'action fixe
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: colors.card,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 20,
+  },
+  bottomButtonPrimary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F2994A',
+    borderRadius: 14,
+    padding: 14,
+    gap: 8,
+  },
+  bottomButtonPrimaryText: {
+    fontSize: 16,
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#FFFFFF',
+  },
+  bottomButtonSecondary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.inputBackground,
+    borderRadius: 14,
+    padding: 14,
+    gap: 8,
+  },
+  bottomButtonSecondaryText: {
+    fontSize: 16,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.text,
+  },
+  bottomPendingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.inputBackground,
+    borderRadius: 14,
+    padding: 14,
+    gap: 8,
+  },
+  bottomPendingText: {
+    fontSize: 15,
+    fontFamily: 'Manrope_500Medium',
+    color: colors.textTertiary,
+  },
+
+  // Modals
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -1016,35 +1118,10 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     color: colors.text,
     textAlign: 'center',
     marginBottom: 20,
-  },
-  activitiesCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 16,
-  },
-  activitiesCardContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  activitiesCardText: {
-    gap: 2,
-  },
-  activitiesCardValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  activitiesCardLabel: {
-    fontSize: 14,
-    color: colors.textSecondary,
   },
   modalOption: {
     flexDirection: 'row',
@@ -1057,6 +1134,7 @@ const styles = StyleSheet.create({
   },
   modalOptionText: {
     fontSize: 16,
+    fontFamily: 'Manrope_500Medium',
     color: colors.text,
   },
   cancelOption: {
@@ -1066,26 +1144,12 @@ const styles = StyleSheet.create({
   },
   cancelText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: colors.textSecondary,
+    textAlign: 'center',
   },
-  // Styles pour le bouton d'invitation
-  invitationButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primary,
-    padding: 14,
-    borderRadius: 12,
-    gap: 8,
-  },
-  invitationButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.background,
-  },
-  // Styles pour la modal d'invitation
+
+  // Modal invitation
   invitationModalOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
@@ -1109,7 +1173,7 @@ const styles = StyleSheet.create({
   },
   invitationModalTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     color: colors.text,
   },
   invitationRecipient: {
@@ -1129,11 +1193,12 @@ const styles = StyleSheet.create({
   },
   invitationRecipientName: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: colors.text,
   },
   invitationHint: {
     fontSize: 14,
+    fontFamily: 'Manrope_400Regular',
     color: colors.textSecondary,
     marginBottom: 16,
     lineHeight: 20,
@@ -1143,6 +1208,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     fontSize: 15,
+    fontFamily: 'Manrope_400Regular',
     color: colors.text,
     minHeight: 120,
     borderWidth: 1,
@@ -1155,11 +1221,12 @@ const styles = StyleSheet.create({
   },
   invitationCharCountText: {
     fontSize: 12,
-    color: colors.textSecondary,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textTertiary,
   },
   invitationSendButton: {
     backgroundColor: colors.primary,
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 16,
     alignItems: 'center',
   },
@@ -1168,7 +1235,7 @@ const styles = StyleSheet.create({
   },
   invitationSendButtonText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: colors.background,
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#FFFFFF',
   },
 });
