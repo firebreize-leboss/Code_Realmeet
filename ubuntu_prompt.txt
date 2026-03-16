@@ -1,22 +1,29 @@
-Dans app/activity-detail.tsx, dans la fonction loadActivity, il y a un bug : la boucle qui cherche une participation active sur un slot futur ne vérifie pas si le slot est annulé (is_cancelled). Du coup si l'utilisateur a une participation active sur un slot annulé ET un slot non-annulé, le code peut tomber sur le slot annulé en premier, faire break, puis reset isJoined à false sans jamais vérifier le slot valide.
+Problème 3 : Supprimer la section "Personnalité" du profil utilisateur
+Fichier : app/user-profile.tsx
+La section "Personnalité" (personality_tags) ne doit plus apparaître sur le profil d'un autre utilisateur. Cette feature a été retirée côté utilisateur, il n'y a plus de personality_tags à afficher.
+Actuellement dans le render, il y a ce bloc (section 6) :
+tsx{/* 6. Personnalité */}
+{profile.personality_tags.length > 0 && (
+  <View style={styles.section}>
+    <Text style={styles.sectionTitle}>Personnalité</Text>
+    <View style={styles.tagsContainer}>
+      {profile.personality_tags.map((tag, index) => (
+        <View key={index} style={styles.personalityTag}>
+          <Text style={styles.personalityTagText}>{tag}</Text>
+        </View>
+      ))}
+    </View>
+  </View>
+)}
+Ce qu'il faut faire :
 
-Fix : dans la requête Supabase qui récupère les participations actives, ajoute un JOIN avec activity_slots pour exclure les slots annulés dès la requête. Remplace :
+Supprimer tout le bloc JSX de la section "Personnalité" (section 6 ci-dessus).
+Supprimer personality_tags de l'interface UserProfile (le champ personality_tags: string[]).
+Supprimer personality_tags de la query Supabase dans loadProfile() — actuellement dans le .select('full_name, avatar_url, bio, city, interests, intention, personality_tags, account_type').
+Supprimer les styles associés qui ne servent plus : personalityTag, personalityTagText (vérifier qu'ils ne sont pas partagés avec d'autres sections).
+Renuméroter les commentaires des sections si nécessaire (la section 7 "Centres d'intérêt" devient 6, etc.).
 
-const { data: participations } = await supabase
-    .from('slot_participants')
-    .select('id, slot_id')
-    .eq('activity_id', activityId)
-    .eq('user_id', userId)
-    .eq('status', 'active');
+Résultat attendu
 
-Par :
-
-const { data: participations } = await supabase
-    .from('slot_participants')
-    .select('id, slot_id, activity_slots!inner(date, time, is_cancelled)')
-    .eq('activity_id', activityId)
-    .eq('user_id', userId)
-    .eq('status', 'active')
-    .eq('activity_slots.is_cancelled', false);
-
-Et adapte la boucle en dessous pour utiliser activity_slots.date et activity_slots.time depuis le JOIN au lieu de refaire une requête séparée pour chaque slot.
+La section "Personnalité" n'apparaît plus du tout sur le profil d'un autre utilisateur.
+Pas d'erreur TypeScript liée à un champ manquant.

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { authService } from '@/services/auth.service';
 import { userService } from '@/services/user.service';
+import { notificationService } from '@/lib/notifications';
 import { User } from '@supabase/supabase-js';
 import { Database } from '@/lib/supabase';
 
@@ -32,6 +33,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (session?.user) {
           setUser(session.user);
           await loadProfile(session.user.id);
+          if (event === 'SIGNED_IN') {
+            // Enregistrer le push token pour le nouveau compte (claim_push_token gère le transfert)
+            notificationService.registerForPushNotifications();
+          }
         } else {
           console.log('[AUTH_DEBUG] No session -> clearing user & profile');
           setUser(null);

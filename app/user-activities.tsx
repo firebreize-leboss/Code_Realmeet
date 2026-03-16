@@ -24,6 +24,9 @@ interface Activity {
   date: string;
   ville: string;
   categorie: string;
+  slot_id?: string;
+  slot_date?: string;
+  slot_time?: string;
 }
 
 export default function UserActivitiesScreen() {
@@ -41,10 +44,10 @@ export default function UserActivitiesScreen() {
       setLoading(true);
       const userId = id as string;
 
-      // Récupérer les participations de l'utilisateur
+      // Récupérer les participations avec le slot_id
       const { data: participations, error: partError } = await supabase
         .from('slot_participants')
-        .select('activity_id, activity_slots(date)')
+        .select('activity_id, slot_id')
         .eq('user_id', userId)
         .in('status', ['active', 'completed']);
 
@@ -62,12 +65,51 @@ export default function UserActivitiesScreen() {
       const { data: activitiesData, error: actError } = await supabase
         .from('activities')
         .select('id, nom, image_url, date, ville, categorie')
-        .in('id', activityIds)
-        .order('date', { ascending: false });
+        .in('id', activityIds);
 
       if (actError) throw actError;
 
-      setActivities(activitiesData || []);
+      const activitiesMap = new Map((activitiesData || []).map(a => [a.id, a]));
+
+      // Pour chaque participation, récupérer les infos du slot
+      const activitiesWithSlots = await Promise.all(
+        participations.map(async (participation) => {
+          const activity = activitiesMap.get(participation.activity_id);
+          if (!activity) return null;
+
+          let slotDate: string | null = null;
+          let slotTime: string | null = null;
+
+          if (participation.slot_id) {
+            const { data: slotData } = await supabase
+              .from('activity_slots')
+              .select('date, time')
+              .eq('id', participation.slot_id)
+              .single();
+
+            if (slotData) {
+              slotDate = slotData.date;
+              slotTime = slotData.time;
+            }
+          }
+
+          return {
+            ...activity,
+            slot_id: participation.slot_id,
+            slot_date: slotDate || activity.date,
+            slot_time: slotTime || undefined,
+          } as Activity;
+        })
+      );
+
+      // Filtrer les null et trier par date du slot (plus récent en premier)
+      const filtered = activitiesWithSlots
+        .filter((a): a is Activity => a !== null)
+        .sort((a, b) =>
+          new Date(b.slot_date || b.date).getTime() - new Date(a.slot_date || a.date).getTime()
+        );
+
+      setActivities(filtered);
     } catch (error) {
       console.error('Erreur chargement activités:', error);
     } finally {
@@ -97,7 +139,7 @@ export default function UserActivitiesScreen() {
         <Text style={styles.activityName} numberOfLines={2}>{item.nom}</Text>
         <View style={styles.activityMeta}>
           <IconSymbol name="calendar" size={14} color={colors.textSecondary} />
-          <Text style={styles.metaText}>{formatDate(item.date)}</Text>
+          <Text style={styles.metaText}>{formatDate(item.slot_date || item.date)}</Text>
         </View>
         <View style={styles.activityMeta}>
           <IconSymbol name="location.fill" size={14} color={colors.textSecondary} />
@@ -129,7 +171,7 @@ export default function UserActivitiesScreen() {
         <FlatList
           data={activities}
           renderItem={renderActivity}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => `${item.id}-${item.slot_id || 'no-slot'}`}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
         />

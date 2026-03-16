@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { Alert } from 'react-native';
+import { notificationService } from '@/lib/notifications';
 
 export interface RegisterData {
   email: string;
@@ -93,6 +94,9 @@ class AuthService {
    */
   async logoutUser() {
     try {
+      // Nettoyer le push token de l'ancien compte avant la déconnexion
+      await notificationService.unregisterPushNotifications();
+
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
 
