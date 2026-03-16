@@ -168,20 +168,10 @@ class NotificationService {
    */
   private async saveTokenToDatabase(token: string): Promise<void> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          expo_push_token: token,
-          notifications_enabled: true,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', user.id);
+      const { error } = await supabase.rpc('claim_push_token', { p_token: token });
 
       if (error) throw error;
-      console.log('✅ Push token saved to database');
+      console.log('✅ Push token claimed and saved to database');
     } catch (error) {
       console.error('❌ Error saving push token:', error);
     }

@@ -1,5 +1,5 @@
 // app/group-info.tsx
-// Page d'informations du groupe (style Instagram)
+// Page d'informations du groupe — Design "Hero Banner"
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -11,12 +11,15 @@ import {
   Image,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useFonts, Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold } from '@expo-google-fonts/manrope';
 
 interface GroupMember {
   id: string;
@@ -37,6 +40,14 @@ interface GroupInfo {
 export default function GroupInfoScreen() {
   const router = useRouter();
   const { id: conversationId } = useLocalSearchParams();
+  const insets = useSafeAreaInsets();
+
+  const [fontsLoaded] = useFonts({
+    Manrope_400Regular,
+    Manrope_500Medium,
+    Manrope_600SemiBold,
+    Manrope_700Bold,
+  });
 
   const [groupInfo, setGroupInfo] = useState<GroupInfo | null>(null);
   const [members, setMembers] = useState<GroupMember[]>([]);
@@ -120,7 +131,7 @@ export default function GroupInfoScreen() {
 
     Alert.alert(
       'Quitter le groupe',
-      groupInfo.activityId 
+      groupInfo.activityId
         ? 'En quittant ce groupe, vous serez également désinscrit de l\'activité. Continuer ?'
         : 'Êtes-vous sûr de vouloir quitter ce groupe ?',
       [
@@ -236,9 +247,9 @@ export default function GroupInfoScreen() {
     }
   };
 
-  if (loading) {
+  if (loading || !fontsLoaded) {
     return (
-      <SafeAreaView style={commonStyles.container}>
+      <SafeAreaView style={commonStyles.container} edges={['top']}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
@@ -248,247 +259,316 @@ export default function GroupInfoScreen() {
 
   if (!groupInfo) {
     return (
-      <SafeAreaView style={commonStyles.container}>
+      <SafeAreaView style={commonStyles.container} edges={['top']}>
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>Groupe non trouvé</Text>
           <TouchableOpacity style={styles.backButtonError} onPress={() => router.back()}>
-            <Text style={styles.backButtonText}>Retour</Text>
+            <Text style={styles.backButtonErrorText}>Retour</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
   }
 
+  const hasImage = groupInfo.image && groupInfo.image.length > 0;
+
   return (
-    <SafeAreaView style={commonStyles.container} edges={['top']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <IconSymbol name="chevron.left" size={24} color={colors.text} />
-        </TouchableOpacity>
-      </View>
+    <View style={styles.screen}>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false} bounces={true}>
+        {/* Hero Banner */}
+        <View style={styles.heroBanner}>
+          {hasImage ? (
+            <Image source={{ uri: groupInfo.image }} style={styles.heroImage} />
+          ) : (
+            <LinearGradient
+              colors={['#F2994A', '#F5C47A']}
+              style={styles.heroImage}
+            />
+          )}
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Section profil du groupe */}
-        <View style={styles.profileSection}>
-          <Image source={{ uri: groupInfo.image }} style={styles.groupImage} />
-          <Text style={styles.groupName}>{groupInfo.name}</Text>
-          <Text style={styles.memberCount}>
-            {groupInfo.memberCount} {groupInfo.memberCount > 1 ? 'membres' : 'membre'}
-          </Text>
-        </View>
+          {/* Gradient overlay */}
+          <LinearGradient
+            colors={['rgba(0,0,0,0.15)', 'transparent', 'rgba(0,0,0,0.6)']}
+            locations={[0, 0.4, 1]}
+            style={styles.heroOverlay}
+          />
 
-        {/* Bouton voir l'activité */}
-        {groupInfo.activityId && (
+          {/* Bouton retour */}
           <TouchableOpacity
-            style={styles.viewActivityButton}
-            onPress={handleViewActivity}
+            style={[styles.backButton, { top: insets.top + 10 }]}
+            onPress={() => router.back()}
+            activeOpacity={0.7}
           >
-            <IconSymbol name="calendar" size={20} color={colors.background} />
-            <Text style={styles.viewActivityButtonText}>Voir les détails de l'activité</Text>
+            <IconSymbol name="chevron.left" size={20} color="#FFFFFF" />
           </TouchableOpacity>
-        )}
 
-        {/* Bouton voir l'activité (si groupe d'activité) */}
-        {groupInfo.activityId && (
-          <TouchableOpacity style={styles.activityButton} onPress={handleViewActivity}>
-            <View style={styles.activityButtonContent}>
-              <IconSymbol name="calendar" size={22} color={colors.primary} />
-              <Text style={styles.activityButtonText}>Voir l'activité</Text>
+          {/* Infos en bas du hero */}
+          <View style={styles.heroContent}>
+            <Text style={styles.heroGroupName}>{groupInfo.name}</Text>
+            <View style={styles.heroMemberRow}>
+              <IconSymbol name="person.2.fill" size={14} color="rgba(255,255,255,0.85)" />
+              <Text style={styles.heroMemberCount}>
+                {groupInfo.memberCount} {groupInfo.memberCount > 1 ? 'membres' : 'membre'}
+              </Text>
             </View>
-            <IconSymbol name="chevron.right" size={20} color={colors.textSecondary} />
-          </TouchableOpacity>
-        )}
-
-        {/* Section membres */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Membres</Text>
-          <View style={styles.membersList}>
-            {members.map((member) => (
-              <TouchableOpacity
-                key={member.id}
-                style={styles.memberItem}
-                onPress={() => handleMemberPress(member)}
-                disabled={member.isCurrentUser}
-                activeOpacity={0.7}
-              >
-                <Image
-                  source={{ uri: member.avatar || 'https://via.placeholder.com/50' }}
-                  style={styles.memberAvatar}
-                />
-                <View style={styles.memberInfo}>
-                  <Text style={styles.memberName}>
-                    {member.name}
-                    {member.isCurrentUser && ' (vous)'}
-                  </Text>
-                </View>
-                {!member.isCurrentUser && (
-                  <IconSymbol name="chevron.right" size={18} color={colors.textSecondary} />
-                )}
-              </TouchableOpacity>
-            ))}
           </View>
         </View>
 
-        {/* Section actions */}
-        <View style={styles.section}>
+        {/* Contenu sous le hero */}
+        <View style={styles.content}>
+          {/* Card lien vers l'activité */}
+          {groupInfo.activityId && (
+            <TouchableOpacity
+              style={styles.activityCard}
+              onPress={handleViewActivity}
+              activeOpacity={0.7}
+            >
+              <View style={styles.activityIconContainer}>
+                <IconSymbol name="calendar" size={22} color="#FFFFFF" />
+              </View>
+              <View style={styles.activityCardInfo}>
+                <Text style={styles.activityCardTitle} numberOfLines={1}>
+                  Voir l'activité
+                </Text>
+                <Text style={styles.activityCardSubtitle}>
+                  Consulter les détails
+                </Text>
+              </View>
+              <IconSymbol name="chevron.right" size={16} color={colors.textTertiary} />
+            </TouchableOpacity>
+          )}
+
+          {/* Section Membres */}
+          <View style={styles.membersSection}>
+            <Text style={styles.sectionLabel}>MEMBRES</Text>
+            <View style={styles.membersList}>
+              {members.map((member, index) => (
+                <React.Fragment key={member.id}>
+                  <TouchableOpacity
+                    style={styles.memberItem}
+                    onPress={() => handleMemberPress(member)}
+                    disabled={member.isCurrentUser}
+                    activeOpacity={0.6}
+                  >
+                    <Image
+                      source={{ uri: member.avatar || undefined }}
+                      style={styles.memberAvatar}
+                    />
+                    <View style={styles.memberInfo}>
+                      <Text style={styles.memberName}>
+                        {member.name}
+                        {member.isCurrentUser && (
+                          <Text style={styles.memberYou}> (vous)</Text>
+                        )}
+                      </Text>
+                    </View>
+                    {!member.isCurrentUser && (
+                      <IconSymbol name="chevron.right" size={16} color={colors.textMuted} />
+                    )}
+                  </TouchableOpacity>
+                  {index < members.length - 1 && (
+                    <View style={styles.memberSeparator} />
+                  )}
+                </React.Fragment>
+              ))}
+            </View>
+          </View>
+
+          {/* Bouton quitter le groupe */}
           <TouchableOpacity
             style={styles.leaveButton}
             onPress={handleLeaveGroup}
             disabled={leaving}
+            activeOpacity={0.6}
           >
             {leaving ? (
-              <ActivityIndicator size="small" color="#FF3B30" />
+              <ActivityIndicator size="small" color={colors.error} />
             ) : (
               <>
-                <IconSymbol name="arrow.right.square" size={22} color="#FF3B30" />
+                <IconSymbol name="arrow.right.square" size={20} color={colors.error} />
                 <Text style={styles.leaveButtonText}>
                   {groupInfo.activityId ? 'Quitter le groupe et l\'activité' : 'Quitter le groupe'}
                 </Text>
               </>
             )}
           </TouchableOpacity>
-        </View>
 
-        <View style={styles.bottomSpacer} />
+          <View style={styles.bottomSpacer} />
+        </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
+const HERO_HEIGHT = 220;
+
 const styles = StyleSheet.create({
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  backButton: {
-    padding: 8,
+  screen: {
+    flex: 1,
+    backgroundColor: colors.background,
   },
   scrollView: {
     flex: 1,
   },
-  profileSection: {
+
+  // Hero Banner
+  heroBanner: {
+    height: HERO_HEIGHT,
+    position: 'relative',
+  },
+  heroImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  heroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  backButton: {
+    position: 'absolute',
+    left: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
-    paddingVertical: 32,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    justifyContent: 'center',
   },
-  groupImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: colors.border,
-    marginBottom: 16,
+  heroContent: {
+    position: 'absolute',
+    bottom: 16,
+    left: 16,
+    right: 16,
   },
-  groupName: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.text,
-    textAlign: 'center',
+  heroGroupName: {
+    fontSize: 22,
+    fontFamily: 'Manrope_700Bold',
+    color: '#FFFFFF',
     marginBottom: 4,
   },
-  memberCount: {
-    fontSize: 15,
-    color: colors.textSecondary,
-  },
-  activityButton: {
+  heroMemberRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: colors.card,
-    marginHorizontal: 16,
-    marginTop: 20,
-    borderRadius: 12,
+    gap: 6,
   },
-  activityButtonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  activityButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.primary,
-  },
-  section: {
-    paddingHorizontal: 16,
-    paddingTop: 24,
-  },
-  sectionTitle: {
+  heroMemberCount: {
     fontSize: 14,
-    fontWeight: '600',
-    color: colors.textSecondary,
+    fontFamily: 'Manrope_400Regular',
+    color: 'rgba(255,255,255,0.85)',
+  },
+
+  // Contenu principal
+  content: {
+    paddingHorizontal: 16,
+    paddingTop: 20,
+  },
+
+  // Card activité
+  activityCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF7ED',
+    borderRadius: 14,
+    padding: 14,
+    paddingHorizontal: 16,
+    marginBottom: 24,
+  },
+  activityIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activityCardInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  activityCardTitle: {
+    fontSize: 14,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.text,
+  },
+  activityCardSubtitle: {
+    fontSize: 12,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textTertiary,
+    marginTop: 2,
+  },
+
+  // Section membres
+  membersSection: {
+    marginBottom: 24,
+  },
+  sectionLabel: {
+    fontSize: 12,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.textTertiary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 12,
-    paddingHorizontal: 4,
+    marginBottom: 10,
+    marginLeft: 4,
   },
   membersList: {
     backgroundColor: colors.card,
-    borderRadius: 12,
+    borderRadius: 14,
+    borderWidth: 0.5,
+    borderColor: colors.borderSubtle,
     overflow: 'hidden',
   },
   memberItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
   memberAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: colors.border,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.borderLight,
   },
   memberInfo: {
     flex: 1,
     marginLeft: 14,
   },
   memberName: {
-    fontSize: 16,
-    fontWeight: '500',
+    fontSize: 15,
+    fontFamily: 'Manrope_500Medium',
     color: colors.text,
   },
+  memberYou: {
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textTertiary,
+  },
+  memberSeparator: {
+    height: 0.5,
+    backgroundColor: colors.borderSubtle,
+    marginLeft: 72,
+  },
+
+  // Bouton quitter
   leaveButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    backgroundColor: colors.card,
-    paddingVertical: 16,
-    borderRadius: 12,
+    backgroundColor: colors.inputBackground,
+    borderRadius: 14,
+    padding: 14,
   },
   leaveButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FF3B30',
+    fontSize: 15,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.error,
   },
+
   bottomSpacer: {
     height: 40,
   },
-  viewActivityButton: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  justifyContent: 'center',
-  backgroundColor: colors.primary,
-  paddingVertical: 14,
-  paddingHorizontal: 24,
-  borderRadius: 12,
-  marginTop: 16,
-  gap: 10,
-},
-viewActivityButtonText: {
-  color: colors.background,
-  fontSize: 16,
-  fontWeight: '600',
-},
+
+  // États loading/erreur
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -501,6 +581,7 @@ viewActivityButtonText: {
   },
   errorText: {
     fontSize: 16,
+    fontFamily: 'Manrope_500Medium',
     color: colors.textSecondary,
     marginBottom: 16,
   },
@@ -510,9 +591,9 @@ viewActivityButtonText: {
     paddingVertical: 12,
     borderRadius: 8,
   },
-  backButtonText: {
-    color: colors.background,
+  backButtonErrorText: {
+    color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
   },
 });

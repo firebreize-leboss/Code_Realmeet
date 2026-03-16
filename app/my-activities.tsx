@@ -89,9 +89,7 @@ export default function MyActivitiesScreen() {
           onPress: async () => {
             try {
               const { error } = await supabase
-                .from('activities')
-                .delete()
-                .eq('id', activityId);
+                .rpc('delete_activity_with_notification', { p_activity_id: activityId });
 
               if (error) throw error;
 
