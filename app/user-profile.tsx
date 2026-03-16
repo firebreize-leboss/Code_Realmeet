@@ -38,11 +38,9 @@ interface UserProfile {
   city?: string;
   interests: string[];
   intention: UserIntention;
-  personality_tags: string[];
   is_friend: boolean;
   request_sent: boolean;
   activities_joined: number;
-  activities_hosted: number;
   account_type: 'user' | 'business';
 }
 
@@ -99,7 +97,7 @@ export default function UserProfileScreen() {
       // Récupérer le profil utilisateur complet
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
-        .select('full_name, avatar_url, bio, city, interests, intention, personality_tags, account_type')
+        .select('full_name, avatar_url, bio, city, interests, intention, account_type')
         .eq('id', targetId)
         .single();
 
@@ -117,12 +115,6 @@ export default function UserProfileScreen() {
         .select('*', { count: 'exact', head: true })
         .eq('user_id', targetId)
         .in('status', ['active', 'completed']);
-
-      // Compter les activités organisées
-      const { count: hostedCount } = await supabase
-        .from('activities')
-        .select('*', { count: 'exact', head: true })
-        .eq('host_id', targetId);
 
       // Vérifier si déjà amis (seulement si l'utilisateur actuel n'est pas une entreprise)
       let isFriend = false;
@@ -158,11 +150,9 @@ export default function UserProfileScreen() {
         city: profileData.city || undefined,
         interests: profileData.interests || [],
         intention: profileData.intention || null,
-        personality_tags: profileData.personality_tags || [],
         is_friend: isFriend,
         request_sent: alreadyRequested,
         activities_joined: joinedCount ?? 0,
-        activities_hosted: hostedCount ?? 0,
         account_type: profileData.account_type,
       };
 
@@ -565,11 +555,7 @@ export default function UserProfileScreen() {
         <View style={styles.statsRow}>
           <View style={styles.statBlock}>
             <Text style={styles.statValue}>{profile.activities_joined}</Text>
-            <Text style={styles.statLabel}>Rejointes</Text>
-          </View>
-          <View style={styles.statBlock}>
-            <Text style={styles.statValue}>{profile.activities_hosted}</Text>
-            <Text style={styles.statLabel}>Organisées</Text>
+            <Text style={styles.statLabel}>Activités rejointes</Text>
           </View>
         </View>
 
@@ -582,21 +568,7 @@ export default function UserProfileScreen() {
           </View>
         ) : null}
 
-        {/* 6. Personnalité */}
-        {profile.personality_tags.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Personnalité</Text>
-            <View style={styles.tagsContainer}>
-              {profile.personality_tags.map((tag, index) => (
-                <View key={index} style={styles.personalityTag}>
-                  <Text style={styles.personalityTagText}>{tag}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {/* 7. Centres d'intérêt */}
+        {/* 6. Centres d'intérêt */}
         {profile.interests.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Centres d'intérêt</Text>
@@ -610,7 +582,7 @@ export default function UserProfileScreen() {
           </View>
         )}
 
-        {/* 8. Voir ses activités */}
+        {/* 7. Voir ses activités */}
         <View style={styles.section}>
           <TouchableOpacity
             style={styles.activitiesCard}
@@ -622,7 +594,7 @@ export default function UserProfileScreen() {
               <View>
                 <Text style={styles.activitiesCardTitle}>Voir ses activités</Text>
                 <Text style={styles.activitiesCardSub}>
-                  {profile.activities_joined} rejointes, {profile.activities_hosted} organisées
+                  {profile.activities_joined} activités rejointes
                 </Text>
               </View>
             </View>
@@ -631,7 +603,7 @@ export default function UserProfileScreen() {
         </View>
       </ScrollView>
 
-      {/* 9. Barre d'action fixe en bas */}
+      {/* 8. Barre d'action fixe en bas */}
       {!isCurrentUserBusiness && (
         <View style={styles.bottomBar}>
           {isBlocked ? (
@@ -942,16 +914,15 @@ const styles = StyleSheet.create({
 
   // 4. Stats rapides
   statsRow: {
-    flexDirection: 'row',
     paddingHorizontal: 20,
-    gap: 12,
     marginBottom: 24,
+    alignItems: 'center',
   },
   statBlock: {
-    flex: 1,
     backgroundColor: '#FFF7ED',
     borderRadius: 12,
-    padding: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 32,
     alignItems: 'center',
   },
   statValue: {
@@ -984,7 +955,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
 
-  // 6 & 7. Sections tags
+  // 6. Sections tags
   sectionTitle: {
     fontSize: 13,
     fontFamily: 'Manrope_600SemiBold',
@@ -995,19 +966,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-  },
-  personalityTag: {
-    backgroundColor: '#8B5CF620',
-    borderWidth: 1,
-    borderColor: '#8B5CF640',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  personalityTagText: {
-    fontSize: 13,
-    fontFamily: 'Manrope_500Medium',
-    color: '#8B5CF6',
   },
   interestTag: {
     backgroundColor: '#F5F5F7',
@@ -1021,7 +979,7 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
 
-  // 8. Voir ses activités
+  // 7. Voir ses activités
   activitiesCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1048,7 +1006,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // 9. Barre d'action fixe
+  // 8. Barre d'action fixe
   bottomBar: {
     position: 'absolute',
     bottom: 0,
