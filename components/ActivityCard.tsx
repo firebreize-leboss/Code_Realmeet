@@ -126,7 +126,7 @@ export default function ActivityCard({
 
   const formatPrice = (prix: number | undefined) => {
     if (prix === undefined || prix === 0) return 'Gratuit';
-    return `${prix}€`;
+    return `${prix}€ · sur place`;
   };
 
   const spotsLeft = activity.max_participants - activity.participants;
@@ -731,14 +731,13 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
     lineHeight: 20,
   },
-  // 2. Prix - orange affirmé (priorité 2) - Visible sans agressivité
+  // 2. Prix - discret (priorité 2)
   compactPrice: {
-    fontSize: 15,
-    fontWeight: '700',
-    fontFamily: 'Manrope_700Bold',
-    color: colors.primary,
+    fontSize: 13,
+    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
+    color: TEXT_TERTIARY,
     marginBottom: 10,
-    opacity: 0.88,
   },
   // 3. Dates - badges discrets (priorité 3)
   compactDatesContainer: {
@@ -915,11 +914,10 @@ const styles = StyleSheet.create({
     color: TEXT_TERTIARY,
   },
   listPrice: {
-    fontSize: 15,
-    fontWeight: '700',
-    fontFamily: 'Manrope_700Bold',
-    color: colors.primary,
-    opacity: 0.88,
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
+    color: TEXT_TERTIARY,
   },
   listFullBadge: {
     position: 'absolute',
@@ -1044,14 +1042,13 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
     lineHeight: 21,
   },
-  // 2. Prix - priorité 2 - Visible sans agressivité
+  // 2. Prix - discret
   fullPrice: {
-    fontSize: 16,
-    fontWeight: '700',
-    fontFamily: 'Manrope_700Bold',
-    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
+    color: TEXT_TERTIARY,
     marginBottom: 12,
-    opacity: 0.88,
   },
   // 3. Métadonnées - priorité 3
   fullMeta: {
@@ -1235,12 +1232,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Manrope_600SemiBold',
   },
 
-  // Prix – orange, sans encadrement, à droite
+  // Prix – discret, à droite
   browsePrice: {
-    fontSize: 16,
-    fontWeight: '700',
-    fontFamily: 'Manrope_700Bold',
-    color: ACCENT_ORANGE,
+    fontSize: 13,
+    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
+    color: TEXT_TERTIARY,
     lineHeight: 20,
   },
 });

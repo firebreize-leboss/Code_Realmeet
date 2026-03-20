@@ -1067,8 +1067,9 @@ export default function ActivityDetailScreen() {
           ) : (
             <>
               <View style={styles.footerInfo}>
+                <Text style={styles.footerPriceIndicative}>Prix indicatif</Text>
                 <Text style={styles.footerPrice}>{activity.price}</Text>
-                <Text style={styles.footerLabel}>par personne</Text>
+                <Text style={styles.footerLabel}>à régler sur place</Text>
               </View>
               <View style={styles.footerButtons}>
                 {/* Bouton "On vient à deux" - visible si pas inscrit, pas discover, >= 2 places */}
@@ -1658,10 +1659,15 @@ const styles = StyleSheet.create({
   footerInfo: {
     flex: 1,
   },
+  footerPriceIndicative: {
+    fontSize: 12,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textMuted,
+  },
   footerPrice: {
-    fontSize: typography.xl,
-    fontFamily: 'Manrope_700Bold',
-    color: colors.text,
+    fontSize: 14,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.textSecondary,
   },
   footerLabel: {
     fontSize: typography.sm,

@@ -83,7 +83,7 @@ export default function SelectMethodScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <ChevronLeft size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Paiement</Text>
+        <Text style={styles.headerTitle}>Confirmer l'inscription</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -99,10 +99,20 @@ export default function SelectMethodScreen() {
             {slotDate} à {slotTime}
           </Text>
           <View style={styles.recapPriceContainer}>
-            <Text style={styles.recapPriceLabel}>Total à payer</Text>
-            <Text style={styles.recapPrice}>{formattedPrice}</Text>
+            <Text style={styles.recapPriceLabel}>Empreinte bancaire</Text>
+            <Text style={styles.recapPrice}>5,00 €</Text>
           </View>
         </View>
+
+        {/* Bloc informatif empreinte */}
+        <View style={styles.infoBlock}>
+          <Text style={styles.infoBlockText}>
+            💡 Cette empreinte ne sera débitée que si vous ne vous présentez pas à l'activité. Le paiement de l'activité se fera sur place.
+          </Text>
+        </View>
+        <Text style={styles.indicativePriceText}>
+          Prix indicatif de l'activité : {formattedPrice} (à régler sur place)
+        </Text>
 
         {/* Section choix du moyen de paiement */}
         <View style={styles.section}>
@@ -240,6 +250,26 @@ const styles = StyleSheet.create({
     fontSize: typography.xl,
     fontFamily: 'Manrope_700Bold',
     color: colors.primary,
+  },
+
+  // Info block
+  infoBlock: {
+    backgroundColor: '#F5F5F7',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: spacing.md,
+  },
+  infoBlockText: {
+    fontSize: 13,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textSecondary,
+    lineHeight: 20,
+  },
+  indicativePriceText: {
+    fontSize: 12,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textMuted,
+    marginBottom: spacing.xxl,
   },
 
   // Section

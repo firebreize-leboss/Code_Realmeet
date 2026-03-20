@@ -162,7 +162,7 @@ export default function CardFormScreen() {
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
             <ChevronLeft size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Carte bancaire</Text>
+          <Text style={styles.headerTitle}>Empreinte bancaire</Text>
           <View style={styles.headerSpacer} />
         </View>
 
@@ -174,8 +174,8 @@ export default function CardFormScreen() {
         >
           {/* Montant */}
           <View style={styles.amountContainer}>
-            <Text style={styles.amountLabel}>Montant à payer</Text>
-            <Text style={styles.amountValue}>{formattedPrice}</Text>
+            <Text style={styles.amountLabelTop}>Empreinte bancaire</Text>
+            <Text style={styles.amountValue}>5,00 €</Text>
           </View>
 
           {/* Preview de la carte */}
@@ -325,12 +325,13 @@ export default function CardFormScreen() {
                 end={{ x: 1, y: 0 }}
                 style={styles.payButtonGradient}
               >
-                <Text style={styles.payButtonText}>Payer {formattedPrice}</Text>
+                <Text style={styles.payButtonText}>Confirmer l'empreinte de 5,00 €</Text>
               </LinearGradient>
             ) : (
-              <Text style={styles.payButtonTextDisabled}>Payer {formattedPrice}</Text>
+              <Text style={styles.payButtonTextDisabled}>Confirmer l'empreinte de 5,00 €</Text>
             )}
           </TouchableOpacity>
+          <Text style={styles.noChargeText}>Aucun montant ne sera débité si vous participez.</Text>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -391,6 +392,12 @@ const styles = StyleSheet.create({
     fontSize: typography.sm,
     fontFamily: 'Manrope_500Medium',
     color: colors.textTertiary,
+    marginBottom: spacing.xs,
+  },
+  amountLabelTop: {
+    fontSize: 12,
+    fontFamily: 'Manrope_500Medium',
+    color: colors.textSecondary,
     marginBottom: spacing.xs,
   },
   amountValue: {
@@ -545,5 +552,12 @@ const styles = StyleSheet.create({
     fontSize: typography.base,
     fontFamily: 'Manrope_600SemiBold',
     color: colors.textMuted,
+  },
+  noChargeText: {
+    fontSize: 11,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: 8,
   },
 });

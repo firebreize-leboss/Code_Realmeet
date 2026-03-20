@@ -34,7 +34,7 @@ export function CheckinQRSection({
   const [groupsFormed, setGroupsFormed] = useState<boolean | null>(null);
   const [checkedIn, setCheckedIn] = useState(false);
   const [checkedInAt, setCheckedInAt] = useState<string | null>(null);
-  const [showQRFallback, setShowQRFallback] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -109,7 +109,7 @@ export function CheckinQRSection({
   const getStatus = (): ValidationStatus => {
     if (loading) return 'loading';
     if (errorMessage) return 'error';
-    if (checkedIn && !showQRFallback) return 'success';
+    if (checkedIn) return 'success';
     if (!groupsFormed) return 'waiting';
     return 'qr';
   };
@@ -170,13 +170,6 @@ export function CheckinQRSection({
             </Text>
           ) : null}
 
-          <TouchableOpacity
-            style={styles.ghostButton}
-            onPress={() => setShowQRFallback(true)}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.ghostButtonText}>Réessayer</Text>
-          </TouchableOpacity>
         </LinearGradient>
       </Animated.View>
     );
@@ -329,23 +322,6 @@ const styles = StyleSheet.create({
     color: '#AEAEB2',
     textAlign: 'center',
     marginTop: 10,
-  },
-
-  // Ghost button (success retry)
-  ghostButton: {
-    marginTop: 20,
-    paddingHorizontal: 28,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: 'rgba(242, 153, 74, 0.4)',
-    backgroundColor: 'transparent',
-  },
-  ghostButtonText: {
-    color: '#F2994A',
-    fontWeight: '600',
-    fontSize: 14,
-    textAlign: 'center',
   },
 
   // Filled button (error retry)
