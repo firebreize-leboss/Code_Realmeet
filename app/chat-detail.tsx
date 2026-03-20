@@ -466,6 +466,7 @@ export default function ChatDetailScreen() {
         .eq('id', conversationId);
 
       setPendingInvitation(null);
+      setConversationStatus({ isClosed: false, closedReason: null, closedAt: null });
       await refreshFriends();
       Alert.alert('Succès', 'Invitation acceptée ! Vous pouvez maintenant discuter.');
     } catch (error: any) {

@@ -26,7 +26,6 @@ import { supabase, removeFriend } from '@/lib/supabase';
 import { blockService } from '@/services/block.service';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDataCache } from '@/contexts/DataCacheContext';
-import { UserIntention, getIntentionInfo } from '@/lib/database.types';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFonts, Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold } from '@expo-google-fonts/manrope';
 
@@ -37,7 +36,6 @@ interface UserProfile {
   bio?: string;
   city?: string;
   interests: string[];
-  intention: UserIntention;
   is_friend: boolean;
   request_sent: boolean;
   activities_joined: number;
@@ -97,7 +95,7 @@ export default function UserProfileScreen() {
       // Récupérer le profil utilisateur complet
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
-        .select('full_name, avatar_url, bio, city, interests, intention, account_type')
+        .select('full_name, avatar_url, bio, city, interests, account_type')
         .eq('id', targetId)
         .single();
 
@@ -149,7 +147,6 @@ export default function UserProfileScreen() {
         bio: profileData.bio || undefined,
         city: profileData.city || undefined,
         interests: profileData.interests || [],
-        intention: profileData.intention || null,
         is_friend: isFriend,
         request_sent: alreadyRequested,
         activities_joined: joinedCount ?? 0,

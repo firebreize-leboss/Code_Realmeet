@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useSignup, TOTAL_STEPS } from '@/contexts/SignupContext';
-import { getIntentionLabel } from '@/lib/database.types';
 import { colors, spacing, typography, borderRadius, shadows } from '@/styles/commonStyles';
 
 interface StepReviewProps {
@@ -138,28 +137,12 @@ export function StepReview({ onEditStep }: StepReviewProps) {
             {renderEditButton(3)}
           </View>
 
-          {/* Intention */}
-          <View style={styles.detailRow}>
-            <View style={styles.detailLeft}>
-              <View style={styles.detailIcon}>
-                <IconSymbol name="heart.fill" size={16} color={colors.textTertiary} />
-              </View>
-              <View>
-                <Text style={styles.detailLabel}>Je recherche</Text>
-                <Text style={styles.detailValue}>
-                  {getIntentionLabel(formData.intention)}
-                </Text>
-              </View>
-            </View>
-            {renderEditButton(5)}
-          </View>
-
           {/* Intérêts */}
           {formData.interests.length > 0 && (
             <View style={styles.interestsSection}>
               <View style={styles.detailHeader}>
                 <Text style={styles.detailLabel}>Centres d'intérêt</Text>
-                {renderEditButton(7)}
+                {renderEditButton(6)}
               </View>
               <View style={styles.interestsTags}>
                 {formData.interests.map((interest) => (

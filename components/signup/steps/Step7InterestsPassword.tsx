@@ -29,7 +29,7 @@ const MAX_INTERESTS = 5;
 
 export function Step7InterestsPassword() {
   const { formData, updateFormData, getStepErrors } = useSignup();
-  const errors = getStepErrors(7);
+  const errors = getStepErrors(6);
   const [searchQuery, setSearchQuery] = useState('');
 
   const toggleInterest = (interest: string) => {

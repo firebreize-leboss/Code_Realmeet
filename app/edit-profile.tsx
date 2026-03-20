@@ -1,5 +1,5 @@
 // app/edit-profile.tsx
-// Écran d'édition de profil avec intention
+// Écran d'édition de profil
 // Design premium unifié avec le reste de l'app
 
 import React, { useState, useEffect } from 'react';
@@ -19,12 +19,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { InterestSelector } from '@/components/InterestSelector';
-import { IntentionSelector } from '@/components/IntentionSelector';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { userService } from '@/services/user.service';
 import { storageService } from '@/services/storage.service';
-import { UserIntention } from '@/lib/database.types';
 import { CityAutocomplete } from '@/components/CityAutocomplete';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 
@@ -38,7 +36,6 @@ export default function EditProfileScreen() {
   const [city, setCity] = useState('');
   const [phone, setPhone] = useState('');
   const [interests, setInterests] = useState<string[]>([]);
-  const [intention, setIntention] = useState<UserIntention>(null);
 
   const [profileImage, setProfileImage] = useState<string | null>(null);
 
@@ -49,7 +46,6 @@ export default function EditProfileScreen() {
       setCity(profile.city || '');
       setPhone(profile.phone || '');
       setInterests(profile.interests || []);
-      setIntention(profile.intention || null);
 
       setProfileImage(profile.avatar_url);
     }
@@ -84,7 +80,6 @@ export default function EditProfileScreen() {
         city: city.trim() || null,
         phone: phone.trim() || null,
         interests: interests.length > 0 ? interests : null,
-        intention: intention,
 
         avatar_url: avatarUrl,
       });
@@ -201,15 +196,6 @@ export default function EditProfileScreen() {
                 keyboardType="phone-pad"
               />
             </View>
-          </View>
-
-          {/* INTENTION */}
-          <View style={styles.fieldSection}>
-            <Text style={styles.label}>Je recherche sur RealMeet</Text>
-            <IntentionSelector
-              selectedIntention={intention}
-              onIntentionChange={setIntention}
-            />
           </View>
 
           {/* INTERESTS */}

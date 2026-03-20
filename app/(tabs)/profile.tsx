@@ -22,7 +22,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { PersonalityTagsBadges } from '@/components/PersonalityTagsBadges';
 import { colors, commonStyles } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
-import { getIntentionInfo } from '@/lib/database.types';
+import { loadUserParticipatedActivities } from '@/utils/pastActivities';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFonts, Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold } from '@expo-google-fonts/manrope';
 
@@ -130,49 +130,16 @@ export default function ProfileScreen() {
   const loadUserStats = async (userId: string) => {
     setLoadingStats(true);
     try {
-      const { data, error } = await supabase.rpc('get_user_profile_stats', {
-        p_user_id: userId
-      } as any) as { data: any; error: any };
+      // Use the same shared logic as activity.tsx tab "Passées"
+      const { past } = await loadUserParticipatedActivities(userId);
+      setActivitiesJoined(past.length);
 
-      if (error) {
-        console.error('RPC get_user_profile_stats error:', error);
-        // Fallback: compter uniquement les activités PASSÉES (slot terminé)
-        const now = new Date();
-        const todayStr = now.toISOString().split('T')[0];
-        const nowTime = now.toTimeString().slice(0, 5);
+      const { count: hosted } = await supabase
+        .from('activities')
+        .select('*', { count: 'exact', head: true })
+        .eq('host_id', userId);
 
-        // Récupérer les participations de l'utilisateur
-        const { data: participations } = await supabase
-          .from('slot_participants')
-          .select('slot_id')
-          .eq('user_id', userId)
-          .in('status', ['active', 'completed']);
-
-        let pastActivitiesCount = 0;
-        if (participations && participations.length > 0) {
-          const slotIds = participations.map(p => p.slot_id);
-
-          // Compter les slots passés
-          const { count } = await supabase
-            .from('activity_slots')
-            .select('*', { count: 'exact', head: true })
-            .in('id', slotIds)
-            .or(`date.lt.${todayStr},and(date.eq.${todayStr},time.lt.${nowTime})`);
-
-          pastActivitiesCount = count || 0;
-        }
-
-        const { count: hosted } = await supabase
-          .from('activities')
-          .select('*', { count: 'exact', head: true })
-          .eq('host_id', userId);
-
-        setActivitiesJoined(pastActivitiesCount);
-        setActivitiesHosted(hosted || 0);
-      } else if (data && data.length > 0) {
-        setActivitiesJoined(data[0].activities_joined || 0);
-        setActivitiesHosted(data[0].activities_hosted || 0);
-      }
+      setActivitiesHosted(hosted || 0);
     } catch (error) {
       console.error('Error loading user stats:', error);
     } finally {
@@ -388,8 +355,6 @@ export default function ProfileScreen() {
   }
 
   // Render user profile (Clean peach gradient design)
-  const intentionInfo = profile.intention ? getIntentionInfo(profile.intention) : null;
-
   return (
     <LinearGradient
       colors={['#FFFFFF', '#FFFFFF', '#FFFBF7', colors.primaryLight]}
@@ -466,14 +431,6 @@ export default function ProfileScreen() {
                 <Text style={styles.userStatLabel}>Activités</Text>
               </View>
 
-              <View style={styles.userStatSeparator} />
-
-              {intentionInfo && (
-                <View style={styles.userIntentionItem}>
-                  <IconSymbol name={intentionInfo.icon as any} size={18} color={colors.primary} />
-                  <Text style={styles.userIntentionLabel}>{intentionInfo.label}</Text>
-                </View>
-              )}
             </TouchableOpacity>
           )}
 
