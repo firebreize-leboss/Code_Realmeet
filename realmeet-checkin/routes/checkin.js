@@ -467,6 +467,7 @@ router.get('/today-slots', partnerAuth, async (req, res) => {
       .eq('activities.host_id', partnerId)
       .gte('date', today)
       .lte('date', tomorrow)
+      .order('date', { ascending: true })
       .order('time', { ascending: true });
 
     if (!slots || slots.length === 0) {
@@ -474,18 +475,14 @@ router.get('/today-slots', partnerAuth, async (req, res) => {
     }
 
     const enriched = await Promise.all(slots.map(async (slot) => {
-      const { count: totalParticipants } = await supabase
+      const { data: participants } = await supabase
         .from('slot_participants')
-        .select('*', { count: 'exact', head: true })
+        .select('id, checked_in_at')
         .eq('slot_id', slot.id)
         .eq('status', 'active');
 
-      const { count: checkedInCount } = await supabase
-        .from('slot_participants')
-        .select('*', { count: 'exact', head: true })
-        .eq('slot_id', slot.id)
-        .eq('status', 'active')
-        .not('checked_in_at', 'is', null);
+      const total = participants?.length || 0;
+      const checkedIn = participants?.filter(p => p.checked_in_at).length || 0;
 
       return {
         id: slot.id,
@@ -499,8 +496,8 @@ router.get('/today-slots', partnerAuth, async (req, res) => {
           address: slot.activities.adresse
         },
         stats: {
-          total: totalParticipants || 0,
-          checkedIn: checkedInCount || 0,
+          total,
+          checkedIn,
           max: slot.max_participants
         }
       };

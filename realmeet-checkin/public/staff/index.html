@@ -242,7 +242,7 @@
   <!-- Empty state -->
   <div class="empty" id="empty-state" style="display:none">
     <div class="empty-icon">📅</div>
-    <p>Aucun créneau aujourd'hui</p>
+    <p>Aucun créneau dans les 48h</p>
   </div>
 
   <!-- Result overlay -->
@@ -304,15 +304,20 @@ async function loadTodaySlots() {
     return;
   }
 
-  bar.innerHTML = slots.map(s => `
+  bar.innerHTML = slots.map(s => {
+    const dateObj = new Date(s.date + 'T00:00:00');
+    const dayLabel = dateObj.toLocaleDateString('fr-FR', { day:'numeric', month:'short' });
+    return `
     <div class="slot-chip" data-id="${s.id}">
-      <span class="slot-chip-time">${s.time?.substring(0,5)}</span>
+      <span class="slot-chip-time">${s.time?.substring(0,5)} — ${dayLabel}</span>
       <span class="slot-chip-name">${s.activity.name}</span>
       <span class="slot-chip-stats">
-        <span class="done">${s.stats.checkedIn}</span> / ${s.stats.total} inscrits
+        📋 ${s.stats.total} inscrit${s.stats.total > 1 ? 's' : ''}<br>
+        <span class="done">✅ ${s.stats.checkedIn} enregistré${s.stats.checkedIn > 1 ? 's' : ''}</span>
       </span>
     </div>
-  `).join('');
+  `;
+  }).join('');
 
   // Ajouter les event listeners pour chaque slot chip
   document.querySelectorAll('.slot-chip').forEach(chip => {

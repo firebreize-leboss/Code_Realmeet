@@ -1,126 +1,30 @@
-# Prompt Claude Code — Refonte paiement → Empreinte bancaire 5€
+# Prompt Claude Code — Clarifier l'affichage des stats sur les chips de créneaux
 
 ## Contexte
 
-L'application RealMeet change de modèle de paiement. On passe d'un **paiement en ligne** à un système d'**empreinte bancaire de 5€** (caution anti no-show). Le paiement réel de l'activité se fait **sur place**, en main propre. L'empreinte de 5€ n'est débitée **que si la personne ne se présente pas**.
+Dans le fichier `/home/ubuntu/code_realmeet/realmeet-checkin/public/staff/index.html`, les chips de créneaux affichent actuellement une ligne de stats ambiguë : `0 / 1 inscrits` (qui signifie 0 checked-in sur 1 inscrit, mais les utilisateurs confondent avec 0 inscrits sur 1 place).
 
-Le prix affiché sur les activités devient **indicatif** et doit être visuellement **moins proéminent** qu'actuellement.
+## Modification à faire
 
----
+Dans la fonction `loadTodaySlots()`, remplacer la ligne de stats dans chaque chip par **deux lignes distinctes** :
 
-## Fichiers à modifier
+Actuellement :
+```html
+<span class="slot-chip-stats">
+  <span class="done">${s.stats.checkedIn}</span> / ${s.stats.total} inscrits
+</span>
+```
 
-### 1. `app/payment/select-method.tsx`
+Remplacer par :
+```html
+<span class="slot-chip-stats">
+  📋 ${s.stats.total} inscrit${s.stats.total > 1 ? 's' : ''}<br>
+  <span class="done">✅ ${s.stats.checkedIn} enregistré${s.stats.checkedIn > 1 ? 's' : ''}</span>
+</span>
+```
 
-**Récapitulatif de l'activité (section `recapCard`) :**
-- Remplacer le label `"Total à payer"` → `"Empreinte bancaire"`
-- Remplacer le montant dynamique par **`"5,00 €"`** (montant fixe, ne dépend plus du prix de l'activité)
-- Ajouter un bloc informatif **sous** le récap avec le texte suivant (dans une View avec fond gris clair `#F5F5F7`, border-radius 12, padding 16) :
-  - Icône info (💡 ou `info.circle` via lucide/IconSymbol)
-  - Texte : **"Cette empreinte ne sera débitée que si vous ne vous présentez pas à l'activité. Le paiement de l'activité se fera sur place."**
-  - Style : fontSize 13, color `colors.textSecondary`, fontFamily Manrope_400Regular
-- Sous ce bloc, afficher le prix de l'activité en petit : `"Prix indicatif de l'activité : {price} (à régler sur place)"` — fontSize 12, color `colors.textMuted`
+## Fichier à modifier
 
-**Header :**
-- Remplacer le titre `"Paiement"` → `"Confirmer l'inscription"`
+`/home/ubuntu/code_realmeet/realmeet-checkin/public/staff/index.html`
 
-### 2. `app/payment/card-form.tsx`
-
-**Preview carte et montant :**
-- Remplacer l'affichage du prix dynamique `formattedPrice` par **`"5,00 €"`** partout où il apparaît
-- Ajouter un label au-dessus du montant : `"Empreinte bancaire"` (fontSize 12, color textSecondary)
-
-**Bouton de validation :**
-- Remplacer le texte du bouton (actuellement le prix ou "Payer") → **`"Confirmer l'empreinte de 5,00 €"`**
-- Ajouter sous le bouton un petit texte : `"Aucun montant ne sera débité si vous participez."` — fontSize 11, color textMuted, textAlign center, marginTop 8
-
-**Header :**
-- Remplacer `"Paiement"` → `"Empreinte bancaire"`
-
-### 3. `app/payment/confirmation.tsx`
-
-**Message de succès :**
-- Remplacer `"Paiement réussi !"` → **`"Inscription confirmée !"`**
-- Remplacer le sous-titre par : `"Votre empreinte bancaire de 5€ a été enregistrée."`
-- Ajouter un encart informatif (même style que select-method, fond gris clair) avec :
-  - `"💳 Empreinte de 5€ enregistrée — ne sera débitée qu'en cas d'absence"`
-  - `"💰 Le paiement de l'activité ({price}) se fera sur place"`
-- Conserver le reste (boutons "Voir mes activités", logique duo, etc.) tel quel
-
-**Alerte de succès (Alert.alert) :**
-- Remplacer `'Inscription réussie !'` message body → `"Votre empreinte a été enregistrée. Pensez à régler sur place le jour de l'activité."`
-
-### 4. `app/activity-detail.tsx`
-
-**Footer (barre d'inscription en bas) :**
-- Actuellement le footer affiche le prix en gros (`footerPrice`) + "par personne" en dessous
-- Nouveau design du footer :
-  - Prix en **plus petit** : fontSize 14 (au lieu de ~20-22), color `colors.textSecondary` (au lieu de noir/primary)
-  - Remplacer le label `"par personne"` → **`"à régler sur place"`**
-  - Le bouton "Rejoindre" reste identique
-
-**Section prix dans les détails (si présente) :**
-- Ajouter le label `"Prix indicatif"` avant le montant
-- Ajouter en dessous : `"À régler directement sur place"` en petit (fontSize 12, textMuted)
-
-### 5. `components/ActivityCard.tsx`
-
-**Toutes les variantes (compact, browse, list, full) :**
-
-Pour chaque variante qui affiche le prix :
-- **Réduire la taille** du prix : passer de la taille actuelle à fontSize 13 (compact/browse) ou 14 (list/full)
-- **Couleur plus discrète** : utiliser `colors.textTertiary` (#8E8E93) au lieu de `colors.primaryMuted` (#D4A574)
-- **Ajouter le suffixe** `" · sur place"` après le montant (même style, même ligne)
-- Si le prix est "Gratuit", ne pas ajouter "sur place"
-
-Concrètement dans les styles :
-- `compactPrice` : fontSize 13, color TEXT_TERTIARY
-- `browsePrice` : fontSize 13, color TEXT_TERTIARY  
-- `listPrice` (ou équivalent) : fontSize 14, color TEXT_TERTIARY
-- Dans la fonction `formatPrice` : quand le prix > 0, retourner `"{montant} · sur place"` au lieu de juste le montant
-
-### 6. `app/laser-quest-detail.tsx`
-
-**Section prix :**
-- Remplacer le label `"Tarif par personne"` → `"Tarif indicatif par personne"`
-- Ajouter sous le prix : `"À régler sur place"` (fontSize 12, color textMuted)
-
-**Footer :**
-- Même logique que activity-detail : prix plus petit, label `"à régler sur place"`
-
----
-
-## Règles importantes
-
-1. **Le montant de l'empreinte est TOUJOURS 5,00 €**, quel que soit le prix de l'activité. Il est hardcodé, pas dynamique.
-2. **Ne pas toucher** à la logique d'inscription en base de données (slot_participants, update du compteur, etc.)
-3. **Ne pas toucher** au flow de navigation (select-method → card-form → confirmation)
-4. **Ne pas toucher** au formulaire de carte bancaire lui-même (les champs restent les mêmes)
-5. **Ne pas toucher** au système duo/+1
-6. Le paramètre `price` continue d'être passé entre les écrans pour l'affichage indicatif, mais il n'est plus utilisé comme montant à payer
-7. Garder la cohérence du design system existant (colors, typography, spacing de `@/styles/commonStyles`)
-8. Toutes les polices utilisées doivent être de la famille Manrope (déjà importée partout)
-
----
-
-## Résumé des changements de wording
-
-| Avant | Après |
-|-------|-------|
-| "Paiement" (header) | "Confirmer l'inscription" / "Empreinte bancaire" |
-| "Total à payer : {prix}" | "Empreinte bancaire : 5,00 €" |
-| Bouton "Payer {prix}" | "Confirmer l'empreinte de 5,00 €" |
-| "Paiement réussi !" | "Inscription confirmée !" |
-| Prix affiché en gros | Prix plus petit + "à régler sur place" |
-| "par personne" | "à régler sur place" |
-| "{prix}" sur les cartes | "{prix} · sur place" |
-
----
-
-## Pas de modifications nécessaires
-
-- `app/create-activity.tsx` — le champ prix en création ne change pas
-- Base de données / Supabase — aucune migration nécessaire
-- Services / hooks — pas de changement
-- Logique de groupes / conversations — pas de changement
-- Check-in QR — pas de changement
+C'est la seule modification à faire. Ne touche à rien d'autre.

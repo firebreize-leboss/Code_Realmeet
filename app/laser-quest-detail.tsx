@@ -220,7 +220,10 @@ export default function LaserQuestDetailScreen() {
           {/* Section Prix */}
           {activity.price !== 'Gratuit' && (
             <View style={styles.priceSection}>
-              <Text style={styles.priceLabel}>Tarif par personne</Text>
+              <View>
+                <Text style={styles.priceLabel}>Tarif indicatif par personne</Text>
+                <Text style={styles.priceOnSite}>À régler sur place</Text>
+              </View>
               <Text style={styles.priceValue}>{activity.price}</Text>
             </View>
           )}
@@ -335,7 +338,7 @@ export default function LaserQuestDetailScreen() {
       <View style={styles.footer}>
         <View style={styles.footerInfo}>
           <Text style={styles.footerPrice}>{activity.price}</Text>
-          <Text style={styles.footerPriceLabel}>par personne</Text>
+          <Text style={styles.footerPriceLabel}>à régler sur place</Text>
         </View>
         <TouchableOpacity
           style={[
@@ -478,6 +481,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.primary,
   },
+  priceOnSite: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
   detailsCard: {
     backgroundColor: colors.card,
     borderRadius: 12,
@@ -596,9 +604,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   footerPrice: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textSecondary,
   },
   footerPriceLabel: {
     fontSize: 13,

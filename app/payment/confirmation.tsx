@@ -34,6 +34,7 @@ export default function ConfirmationScreen() {
   const mode = typeof params.mode === 'string' ? params.mode : '';
   const isPlusOne = params.is_plus_one === 'true';
   const invitationToken = typeof params.invitation_token === 'string' ? params.invitation_token : '';
+  const price = typeof params.price === 'string' ? params.price : '0€';
 
   const [fontsLoaded] = useFonts({
     Manrope_400Regular,
@@ -326,7 +327,7 @@ export default function ConfirmationScreen() {
       } else {
         Alert.alert(
           'Inscription réussie !',
-          'Vous avez rejoint l\'activité ! Un groupe se créera 24 h avant le début de l\'activité.'
+          'Votre empreinte a été enregistrée. Pensez à régler sur place le jour de l\'activité.'
         );
       }
     } catch (error: any) {
@@ -381,13 +382,21 @@ export default function ConfirmationScreen() {
         </Animated.View>
 
         {/* Texte de confirmation */}
-        <Text style={styles.successTitle}>Paiement réussi !</Text>
+        <Text style={styles.successTitle}>Inscription confirmée !</Text>
         <Text style={styles.successSubtitle}>
           {plusOneAccepted
             ? 'Tu as rejoint en tant que +1 !'
-            : <>Vous êtes inscrit à{'\n'}<Text style={styles.activityNameHighlight}>{activityName}</Text></>
+            : 'Votre empreinte bancaire de 5€ a été enregistrée.'
           }
         </Text>
+
+        {/* Encart informatif empreinte */}
+        {!plusOneAccepted && (
+          <View style={styles.confirmInfoBlock}>
+            <Text style={styles.confirmInfoText}>💳 Empreinte de 5€ enregistrée — ne sera débitée qu'en cas d'absence</Text>
+            <Text style={styles.confirmInfoText}>💰 Le paiement de l'activité ({price}) se fera sur place</Text>
+          </View>
+        )}
 
         {/* Boutons d'action */}
         <View style={styles.actionsContainer}>
@@ -534,6 +543,22 @@ const styles = StyleSheet.create({
   activityNameHighlight: {
     fontFamily: 'Manrope_600SemiBold',
     color: colors.text,
+  },
+
+  // Confirm info block
+  confirmInfoBlock: {
+    backgroundColor: '#F5F5F7',
+    borderRadius: 12,
+    padding: 16,
+    width: '100%',
+    marginBottom: spacing.xxl,
+    gap: spacing.sm,
+  },
+  confirmInfoText: {
+    fontSize: 13,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textSecondary,
+    lineHeight: 20,
   },
 
   // Actions
