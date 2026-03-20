@@ -21,7 +21,6 @@ import {
   Step2BirthDate,
   Step3Contact,
   Step4City,
-  Step5Intention,
   Step6Bio,
   Step7InterestsPassword,
   StepReview,
@@ -163,7 +162,6 @@ function SignupWizardContent() {
         avatar_url: avatarUrl,
         bio: formData.bio || null,
         interests: formData.interests.length > 0 ? formData.interests : null,
-        intention: formData.intention,
       });
 
       // Afficher l'écran de succès
@@ -201,10 +199,8 @@ function SignupWizardContent() {
       case 4:
         return <Step4City />;
       case 5:
-        return <Step5Intention />;
-      case 6:
         return <Step6Bio />;
-      case 7:
+      case 6:
         return <Step7InterestsPassword />;
       default:
         return <Step1PhotoName />;
@@ -243,8 +239,8 @@ function SignupWizardContent() {
       primaryLabel: isLastStep ? 'Vérifier mes informations' : 'Continuer',
       onPrimary: handleNext,
       primaryDisabled: !isValid,
-      secondaryLabel: currentStep === 6 ? 'Passer cette étape' : undefined,
-      onSecondary: currentStep === 6 ? handleNext : undefined,
+      secondaryLabel: currentStep === 5 ? 'Passer cette étape' : undefined,
+      onSecondary: currentStep === 5 ? handleNext : undefined,
     };
   };
 

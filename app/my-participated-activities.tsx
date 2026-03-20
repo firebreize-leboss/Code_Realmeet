@@ -3,7 +3,7 @@
 // Design premium: fond blanc/gris clair, cartes épurées
 // Palette: Blanc, Gris, Noir/Charcoal, Orange désaturé (accent uniquement)
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -20,22 +20,8 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
+import { loadUserParticipatedActivities, PastActivity } from '@/utils/pastActivities';
 import { useFonts, Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold } from '@expo-google-fonts/manrope';
-
-interface Activity {
-  id: string;
-  nom: string;
-  image_url: string;
-  date: string;
-  time_start?: string;
-  ville: string;
-  categorie: string;
-  slot_id?: string;
-  slot_date?: string;
-  slot_time?: string;
-  isPast?: boolean;
-  isCancelled?: boolean;
-}
 
 export default function MyParticipatedActivitiesScreen() {
   const router = useRouter();
@@ -45,7 +31,7 @@ export default function MyParticipatedActivitiesScreen() {
     Manrope_600SemiBold,
     Manrope_700Bold,
   });
-  const [allActivities, setAllActivities] = useState<Activity[]>([]);
+  const [pastActivitiesList, setPastActivitiesList] = useState<PastActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -56,70 +42,9 @@ export default function MyParticipatedActivitiesScreen() {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData?.user) return;
 
-      const { data: participations, error: partError } = await supabase
-        .from('slot_participants')
-        .select('activity_id, slot_id')
-        .eq('user_id', userData.user.id)
-        .in('status', ['active', 'completed']);
-
-      if (partError) throw partError;
-
-      if (!participations || participations.length === 0) {
-        setAllActivities([]);
-        setLoading(false);
-        return;
-      }
-
-      const activityIds = [...new Set(participations.map(p => p.activity_id))];
-
-      const { data: activitiesData, error: actError } = await supabase
-        .from('activities')
-        .select('id, nom, image_url, date, time_start, ville, categorie')
-        .in('id', activityIds)
-        .order('date', { ascending: false });
-
-      if (actError) throw actError;
-
-      // Pour chaque activité, récupérer les infos du slot et déterminer si passée
-      const now = new Date();
-      const activitiesWithSlotInfo = await Promise.all(
-        (activitiesData || []).map(async (activity) => {
-          const participation = participations.find(p => p.activity_id === activity.id);
-          let slotDate: string | null = null;
-          let slotTime: string | null = null;
-          let isPast = false;
-          let isCancelled = false;
-
-          if (participation?.slot_id) {
-            const { data: slotData } = await supabase
-              .from('activity_slots')
-              .select('date, time, duration, is_cancelled')
-              .eq('id', participation.slot_id)
-              .single();
-
-            if (slotData) {
-              slotDate = slotData.date;
-              slotTime = slotData.time;
-              isCancelled = slotData.is_cancelled || false;
-              const slotDateTime = new Date(`${slotData.date}T${slotData.time || '00:00'}`);
-              const durationMinutes = slotData.duration || 0;
-              const slotEndTime = new Date(slotDateTime.getTime() + durationMinutes * 60 * 1000);
-              isPast = slotEndTime < now;
-            }
-          }
-
-          return {
-            ...activity,
-            slot_id: participation?.slot_id,
-            slot_date: slotDate || activity.date,
-            slot_time: slotTime || activity.time_start,
-            isPast,
-            isCancelled,
-          };
-        })
-      );
-
-      setAllActivities(activitiesWithSlotInfo);
+      // Use the same shared logic as activity.tsx tab "Passées"
+      const { past } = await loadUserParticipatedActivities(userData.user.id);
+      setPastActivitiesList(past);
     } catch (error) {
       console.error('Erreur chargement activités:', error);
     } finally {
@@ -138,12 +63,6 @@ export default function MyParticipatedActivitiesScreen() {
     await loadActivities();
     setRefreshing(false);
   };
-
-  // Filtrer uniquement les activités terminées (passées)
-  const pastActivities = useMemo(() =>
-    allActivities.filter(a => a.isPast || a.isCancelled).sort((a, b) =>
-      new Date(b.slot_date || b.date).getTime() - new Date(a.slot_date || a.date).getTime()
-    ), [allActivities]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -169,7 +88,7 @@ export default function MyParticipatedActivitiesScreen() {
     return timeString.substring(0, 5);
   };
 
-  const renderActivity = ({ item }: { item: Activity }) => {
+  const renderActivity = ({ item }: { item: PastActivity }) => {
     return (
       <TouchableOpacity
         style={styles.activityCard}
@@ -316,12 +235,12 @@ export default function MyParticipatedActivitiesScreen() {
 
       {/* Liste des activités terminées */}
       <FlatList
-        data={pastActivities}
+        data={pastActivitiesList}
         renderItem={renderActivity}
         keyExtractor={(item) => `${item.id}-${item.slot_id || 'no-slot'}`}
         contentContainerStyle={[
           styles.listContent,
-          pastActivities.length === 0 && styles.listContentEmpty,
+          pastActivitiesList.length === 0 && styles.listContentEmpty,
         ]}
         showsVerticalScrollIndicator={false}
         refreshControl={

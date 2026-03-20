@@ -18,12 +18,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { InterestSelector } from '@/components/InterestSelector';
-import { IntentionSelector } from '@/components/IntentionSelector';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { authService } from '@/services/auth.service';
 import { userService } from '@/services/user.service';
 import { storageService } from '@/services/storage.service';
-import { UserIntention } from '@/lib/database.types';
 import { CityAutocomplete } from '@/components/CityAutocomplete';
 import { PhoneInput, PhoneValue, validatePhone, formatFullPhone } from '@/components/PhoneInput';
 
@@ -37,7 +35,6 @@ export default function SignupIndividualScreen() {
   const [city, setCity] = useState('');
   const [bio, setBio] = useState('');
   const [interests, setInterests] = useState<string[]>([]);
-  const [intention, setIntention] = useState<UserIntention>(null);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [profileImage, setProfileImage] = useState<string | null>(null);
@@ -73,11 +70,6 @@ export default function SignupIndividualScreen() {
       return;
     }
     setPhoneError('');
-
-    if (!intention) {
-      Alert.alert('Erreur', 'Veuillez indiquer ce que vous recherchez sur RealMeet');
-      return;
-    }
 
     if (password !== confirmPassword) {
       Alert.alert('Erreur', 'Les mots de passe ne correspondent pas');
@@ -148,7 +140,6 @@ export default function SignupIndividualScreen() {
         avatar_url: avatarUrl,
         bio: bio || null,
         interests: interests.length > 0 ? interests : null,
-        intention: intention,
       });
 
       if (!updateResult.success) {
@@ -317,16 +308,6 @@ export default function SignupIndividualScreen() {
                 onCitySelect={(result) => setCity(result.city)}
                 placeholder="Rechercher une ville..."
                 label="Ville *"
-              />
-            </View>
-
-            {/* Intention */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Je recherche sur RealMeet *</Text>
-              <IntentionSelector
-                selectedIntention={intention}
-                onIntentionChange={setIntention}
-                required
               />
             </View>
 

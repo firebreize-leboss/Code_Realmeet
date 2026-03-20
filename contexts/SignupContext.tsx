@@ -2,7 +2,6 @@
 // Contexte centralisé pour le wizard d'inscription multi-étapes
 
 import React, { createContext, useContext, useState, useCallback } from 'react';
-import { UserIntention } from '@/lib/database.types';
 import { validatePhone, formatFullPhone } from '@/components/PhoneInput';
 
 // Types pour les données du formulaire
@@ -20,11 +19,9 @@ export interface SignupFormData {
   // Étape 4: Ville
   city: string;
   citySelected: boolean;
-  // Étape 5: Intention
-  intention: UserIntention;
-  // Étape 6: Bio
+  // Étape 5: Bio
   bio: string;
-  // Étape 7: Intérêts + Mot de passe
+  // Étape 6: Intérêts + Mot de passe
   interests: string[];
   password: string;
   confirmPassword: string;
@@ -41,7 +38,6 @@ const initialFormData: SignupFormData = {
   phoneCountryCode: '+33',
   city: '',
   citySelected: false,
-  intention: null,
   bio: '',
   interests: [],
   password: '',
@@ -49,7 +45,7 @@ const initialFormData: SignupFormData = {
 };
 
 // Nombre total d'étapes (hors review et success)
-export const TOTAL_STEPS = 7;
+export const TOTAL_STEPS = 6;
 
 // Configuration des étapes
 export const STEP_CONFIG = [
@@ -57,9 +53,8 @@ export const STEP_CONFIG = [
   { id: 2, title: 'Date de naissance', shortTitle: 'Naissance' },
   { id: 3, title: 'Contact', shortTitle: 'Contact' },
   { id: 4, title: 'Ville', shortTitle: 'Ville' },
-  { id: 5, title: 'Ce que je recherche', shortTitle: 'Objectif' },
-  { id: 6, title: 'Bio', shortTitle: 'Bio' },
-  { id: 7, title: 'Intérêts & Sécurité', shortTitle: 'Final' },
+  { id: 5, title: 'Bio', shortTitle: 'Bio' },
+  { id: 6, title: 'Intérêts & Sécurité', shortTitle: 'Final' },
 ] as const;
 
 interface SignupContextType {
@@ -182,17 +177,11 @@ export function SignupProvider({ children }: { children: React.ReactNode }) {
         }
         break;
 
-      case 5: // Intention
-        if (!formData.intention) {
-          errors.intention = 'Veuillez choisir ce que vous recherchez';
-        }
-        break;
-
-      case 6: // Bio (optionnel)
+      case 5: // Bio (optionnel)
         // Bio est optionnelle, pas d'erreur
         break;
 
-      case 7: // Intérêts + Mot de passe
+      case 6: // Intérêts + Mot de passe
         if (!formData.password) {
           errors.password = 'Le mot de passe est requis';
         } else if (formData.password.length < 6) {
