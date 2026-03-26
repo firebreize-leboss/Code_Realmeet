@@ -4,6 +4,9 @@
 import { supabase } from '@/lib/supabase';
 
 class PhoneVerificationService {
+  // Flag pour que AuthContext ignore les events de session pendant la vérification OTP
+  public isVerifyingPhone = false;
+
   /**
    * Envoie un code OTP par SMS au numéro donné.
    * Utilise signInWithOtp de Supabase pour déclencher l'envoi du SMS.
@@ -34,6 +37,8 @@ class PhoneVerificationService {
    */
   async verifyOtp(fullPhoneNumber: string, otpCode: string): Promise<{ success: boolean; error?: string }> {
     try {
+      this.isVerifyingPhone = true;
+
       const { data, error } = await supabase.auth.verifyOtp({
         phone: fullPhoneNumber,
         token: otpCode,
@@ -41,6 +46,7 @@ class PhoneVerificationService {
       });
 
       if (error) {
+        this.isVerifyingPhone = false;
         if (error.message?.includes('expired')) {
           return { success: false, error: 'Le code a expiré, demandez-en un nouveau' };
         }
@@ -56,8 +62,13 @@ class PhoneVerificationService {
         await supabase.auth.signOut();
       }
 
+      // Laisser le temps au listener d'ignorer l'event SIGNED_OUT
+      await new Promise(resolve => setTimeout(resolve, 100));
+      this.isVerifyingPhone = false;
+
       return { success: true };
     } catch (error: any) {
+      this.isVerifyingPhone = false;
       return { success: false, error: error.message || 'Erreur réseau, vérifiez votre connexion' };
     }
   }

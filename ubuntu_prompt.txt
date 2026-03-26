@@ -1,181 +1,131 @@
-# Prompt Claude Code — Vérification SMS MessageBird dans l'inscription RealMeet
+# Fix — Bug de redirection après vérification OTP téléphone
 
-## Contexte
+## Problème
 
-L'app RealMeet est une app React Native (Expo) avec Supabase. L'inscription se fait via un wizard multi-étapes (`app/auth/signup-wizard.tsx`) piloté par `contexts/SignupContext.tsx`. Le téléphone est collecté à l'étape 3 (`components/signup/steps/Step3Contact.tsx`). Le composant `components/PhoneInput.tsx` gère déjà la saisie et validation du numéro.
+Quand l'utilisateur vérifie son numéro de téléphone à l'étape 3 de l'inscription, l'app le redirige vers l'écran de sélection de compte (`/auth/account-type`).
 
-**Objectif** : Ajouter une étape de vérification OTP par SMS via la configuration Supabase Phone (provider MessageBird) APRÈS la saisie du téléphone à l'étape 3, et AVANT de finaliser l'inscription. Le numéro doit être vérifié pour empêcher les faux comptes.
+### Cause racine
 
-## Architecture existante à connaître
+Dans `services/phone-verification.service.ts`, la méthode `verifyOtp()` fait :
+1. `supabase.auth.verifyOtp({ phone, token, type: 'sms' })` → succès → Supabase crée une session temporaire
+2. `supabase.auth.signOut()` → pour nettoyer cette session indésirable
 
-- **Wizard** : 7 étapes → review → submit → success
-- **SignupContext** (`contexts/SignupContext.tsx`) : gère `formData`, `currentStep`, `TOTAL_STEPS = 7`, validation par étape
-- **Step3Contact** (`components/signup/steps/Step3Contact.tsx`) : collecte email + téléphone
-- **PhoneInput** (`components/PhoneInput.tsx`) : composant de saisie téléphone avec `PhoneValue`, `validatePhone()`, `formatFullPhone()`
-- **AuthService** (`services/auth.service.ts`) : `registerUser()` crée le compte Supabase + profil
-- **signup-wizard.tsx** : orchestre les étapes, `handleSubmit()` fait l'inscription finale
-- **Supabase config** (`supabase/config.toml`) : SMS configuré avec section `[auth.sms]` et provider `[auth.sms.twilio]` (à changer pour messagebird)
-- **Numéro de test configuré dans Supabase Dashboard** : `33767989253=000000`
+Le problème : ce `signOut()` déclenche l'event `SIGNED_OUT` dans le listener `onAuthStateChange` de `contexts/AuthContext.tsx`. Ce listener met `user = null` et `profile = null`, ce qui provoque la redirection vers `/auth/account-type` via le guard d'authentification dans `app/(tabs)/_layout.tsx` et `app/index.tsx`.
 
-## Ce qu'il faut implémenter
-
-### 1. Configurer Supabase pour MessageBird
-
-Dans le **Dashboard Supabase** (pas dans le code, juste documenter les étapes) :
-- Aller dans Authentication → Providers → Phone
-- Activer le provider Phone
-- Sélectionner MessageBird comme provider SMS
-- Renseigner l'Access Key MessageBird
-- Mettre `RealMeet` comme Originator
-- Ajouter le numéro de test : `33767989253` avec OTP `000000`
-
-Dans `supabase/config.toml` pour le dev local, ajouter/modifier :
-```toml
-[auth.sms]
-enable_signup = false          # On ne veut PAS le signup par SMS, juste la vérification
-enable_confirmations = false
-template = "Votre code RealMeet : {{ .Code }}"
-max_frequency = "30s"
-
-[auth.sms.test_otp]
-33767989253 = "000000"
-
-[auth.sms.messagebird]
-enabled = true
-originator = "RealMeet"
-access_key = "env(SUPABASE_AUTH_SMS_MESSAGEBIRD_ACCESS_KEY)"
+### Logs confirmant le bug
+```
+[AUTH_DEBUG] onAuthStateChange event: SIGNED_OUT hasSession: false userId: undefined
+[AUTH_DEBUG] No session -> clearing user & profile
+[TAB SYNC] pathname: "/auth/account-type"
 ```
 
-### 2. Créer un service de vérification téléphone
+## Solution
 
-Créer `services/phone-verification.service.ts` :
+Modifier `services/phone-verification.service.ts` pour ne PAS utiliser `signOut()`. À la place, utiliser une approche qui ne déclenche pas le listener d'auth.
+
+### Approche : Flag de bypass dans le service
+
+1. Dans `phone-verification.service.ts` : ajouter un flag statique `isVerifyingPhone` que le `AuthContext` peut consulter pour ignorer les events de session pendant la vérification OTP.
+
+2. Dans `contexts/AuthContext.tsx` : dans le listener `onAuthStateChange`, vérifier ce flag. Si `isVerifyingPhone === true`, ignorer l'event `SIGNED_OUT` (ne pas mettre user/profile à null).
+
+### Implémentation
+
+**Fichier `services/phone-verification.service.ts`** — modifier la classe :
 
 ```typescript
-/**
- * Service de vérification de numéro de téléphone via Supabase OTP SMS (MessageBird)
- * 
- * Flow :
- * 1. sendOtp(phone) → appelle supabase.auth.signInWithOtp({ phone }) 
- *    ATTENTION : on n'utilise PAS ça pour le login, juste pour déclencher l'envoi du SMS.
- *    On utilisera plutôt l'API Supabase phone verify directement.
- * 2. verifyOtp(phone, code) → appelle supabase.auth.verifyOtp({ phone, token, type: 'sms' })
- * 
- * APPROCHE RECOMMANDÉE (plus simple et adaptée au cas "vérification pendant inscription") :
- * - Utiliser l'API Supabase `supabase.auth.signInWithOtp({ phone })` pour envoyer le code
- * - Puis `supabase.auth.verifyOtp({ phone, token, type: 'sms' })` pour vérifier
- * - Si la vérification réussit, on marque le numéro comme vérifié dans le state local
- * - L'inscription finale se fait toujours par email/password via registerUser()
- * - Le numéro vérifié est stocké dans le profil
- * 
- * ALTERNATIVE si signInWithOtp crée un user indésirable :
- * - Appeler directement l'API MessageBird pour envoyer un OTP custom
- * - Vérifier côté client
- * - Mais c'est plus complexe, donc essayer d'abord avec Supabase natif
- */
-
-import { supabase } from '@/lib/supabase';
-
 class PhoneVerificationService {
-  
+  // Flag public pour que AuthContext puisse ignorer le signOut pendant la vérification
+  public isVerifyingPhone = false;
+
   async sendOtp(fullPhoneNumber: string): Promise<{ success: boolean; error?: string }> {
-    // fullPhoneNumber au format international ex: "+33767989253"
-    // Appeler supabase.auth.signInWithOtp({ phone: fullPhoneNumber })
-    // Gérer les erreurs (rate limit, numéro invalide, etc.)
+    // ... inchangé
   }
 
   async verifyOtp(fullPhoneNumber: string, otpCode: string): Promise<{ success: boolean; error?: string }> {
-    // Appeler supabase.auth.verifyOtp({ phone: fullPhoneNumber, token: otpCode, type: 'sms' })
-    // Retourner success si le code est correct
-    // IMPORTANT : si ça crée une session, la détruire car l'user n'est pas encore inscrit
+    try {
+      this.isVerifyingPhone = true; // ← Activer le flag AVANT verifyOtp
+
+      const { data, error } = await supabase.auth.verifyOtp({
+        phone: fullPhoneNumber,
+        token: otpCode,
+        type: 'sms',
+      });
+
+      if (error) {
+        this.isVerifyingPhone = false; // ← Désactiver en cas d'erreur
+        // ... gestion d'erreur existante (expired, invalid, etc.)
+        return { success: false, error: '...' };
+      }
+
+      // Nettoyage : si une session a été créée, la détruire
+      if (data?.session) {
+        await supabase.auth.signOut();
+      }
+
+      // Petit délai pour laisser le temps au listener d'ignorer l'event
+      await new Promise(resolve => setTimeout(resolve, 100));
+      this.isVerifyingPhone = false; // ← Désactiver après le délai
+
+      return { success: true };
+    } catch (error: any) {
+      this.isVerifyingPhone = false;
+      return { success: false, error: error.message || 'Erreur réseau' };
+    }
   }
 }
-
-export const phoneVerificationService = new PhoneVerificationService();
 ```
 
-### 3. Modifier le SignupContext
+**Fichier `contexts/AuthContext.tsx`** — modifier le listener :
 
-Dans `contexts/SignupContext.tsx` :
+```typescript
+import { phoneVerificationService } from '@/services/phone-verification.service';
 
-- Ajouter dans `SignupFormData` :
-  ```typescript
-  phoneVerified: boolean;    // Le numéro a-t-il été vérifié par OTP ?
-  ```
-- Initialiser `phoneVerified: false` dans `initialFormData`
-- **NE PAS** changer `TOTAL_STEPS` (reste 7) — la vérification OTP est une sous-étape de l'étape 3
-- Ajouter une validation : à l'étape 3, si `phoneVerified === false`, l'étape n'est pas valide (le bouton "Continuer" reste grisé tant que le téléphone n'est pas vérifié)
-- Si l'utilisateur modifie son numéro après l'avoir vérifié, remettre `phoneVerified = false`
+// Dans le useEffect avec onAuthStateChange :
+const { data: { subscription } } = authService.onAuthStateChange(
+  async (event, session) => {
+    console.log('[AUTH_DEBUG] onAuthStateChange event:', event, 'hasSession:', !!session);
 
-### 4. Modifier Step3Contact pour intégrer la vérification OTP
+    // IMPORTANT : Ignorer le SIGNED_OUT si on est en train de vérifier un téléphone
+    // (le signOut est déclenché par le nettoyage de la session OTP temporaire)
+    if (event === 'SIGNED_OUT' && phoneVerificationService.isVerifyingPhone) {
+      console.log('[AUTH_DEBUG] Ignoring SIGNED_OUT during phone verification');
+      return;
+    }
 
-Dans `components/signup/steps/Step3Contact.tsx`, ajouter un flow en 2 temps :
+    // Ignorer aussi le SIGNED_IN si c'est la session OTP temporaire
+    if (event === 'SIGNED_IN' && phoneVerificationService.isVerifyingPhone) {
+      console.log('[AUTH_DEBUG] Ignoring SIGNED_IN during phone verification');
+      return;
+    }
 
-**État initial** : L'utilisateur saisit son email et son téléphone normalement.
-
-**Quand le numéro est valide** : Afficher un bouton "Vérifier mon numéro" sous le champ téléphone.
-
-**Au clic sur "Vérifier"** :
-1. Appeler `phoneVerificationService.sendOtp(formattedPhone)`
-2. Afficher un champ de saisie OTP (6 chiffres) avec un design soigné
-3. Afficher un timer de renvoi (30s minimum entre chaque envoi)
-4. Un bouton "Renvoyer le code" grisé pendant le cooldown
-
-**Quand l'utilisateur saisit le code** :
-1. Appeler `phoneVerificationService.verifyOtp(phone, code)`
-2. Si succès : `updateFormData('phoneVerified', true)`, afficher un check vert, masquer le champ OTP
-3. Si échec : afficher l'erreur, permettre de réessayer
-
-**UI du champ OTP** :
-- 6 cases individuelles (comme les apps bancaires)
-- Auto-focus sur la case suivante à chaque chiffre
-- Style cohérent avec le design existant (utiliser `colors`, `spacing`, `typography` de `commonStyles`)
-- Animation subtile au succès (check vert qui apparaît)
-
-**Si l'utilisateur change son numéro après vérification** :
-- Remettre `phoneVerified = false`
-- Masquer le check vert
-- Redemander la vérification
-
-### 5. Modifier la validation dans le wizard
-
-Dans `signup-wizard.tsx`, dans `handleSubmit()` :
-- Vérifier que `formData.phoneVerified === true` avant de soumettre
-- Si non vérifié (ne devrait pas arriver grâce à la validation d'étape), afficher une alerte
-
-### 6. Stocker le statut vérifié dans le profil
-
-Quand l'inscription est finalisée (`handleSubmit` dans `signup-wizard.tsx`) :
-- Le numéro est déjà envoyé au profil via `authService.registerUser()`
-- Ajouter un champ `phone_verified: true` dans la table `profiles` (ou utiliser le champ existant si disponible)
-- S'assurer que le numéro est stocké au format international (`+33767989253`)
-
-### 7. Considérations importantes
-
-- **Ne PAS casser le flow existant** : le wizard doit continuer à fonctionner normalement
-- **Ne PAS créer de nouveau screen/page** : la vérification se fait inline dans Step3Contact
-- **Gérer le cas hors-ligne** : si pas de réseau, afficher un message d'erreur clair
-- **Rate limiting** : respecter le `max_frequency` de 30s entre chaque envoi
-- **Numéro de test** : pour le dev, le numéro `+33767989253` avec le code `000000` doit fonctionner via les test OTP configurés dans Supabase
-- **Nettoyage de session** : si `signInWithOtp` + `verifyOtp` crée une session Supabase temporaire, la détruire (`supabase.auth.signOut()`) car l'utilisateur n'est pas encore inscrit. L'inscription réelle se fait après via `registerUser()` avec email/password.
+    if (session?.user) {
+      setUser(session.user);
+      await loadProfile(session.user.id);
+      if (event === 'SIGNED_IN') {
+        notificationService.registerForPushNotifications();
+      }
+    } else {
+      console.log('[AUTH_DEBUG] No session -> clearing user & profile');
+      setUser(null);
+      setProfile(null);
+    }
+    setLoading(false);
+  }
+);
+```
 
 ## Fichiers à modifier
 
-1. `supabase/config.toml` — config MessageBird
-2. `services/phone-verification.service.ts` — **CRÉER** — service OTP
-3. `contexts/SignupContext.tsx` — ajouter `phoneVerified` au state
-4. `components/signup/steps/Step3Contact.tsx` — ajouter le flow OTP inline
-5. `app/auth/signup-wizard.tsx` — vérification `phoneVerified` avant submit
-6. Éventuellement une migration Supabase pour ajouter `phone_verified` à la table `profiles`
+1. `services/phone-verification.service.ts` — ajouter le flag `isVerifyingPhone`, l'activer/désactiver dans `verifyOtp()`
+2. `contexts/AuthContext.tsx` — importer `phoneVerificationService`, checker le flag dans le listener `onAuthStateChange` pour ignorer les events `SIGNED_OUT` et `SIGNED_IN` pendant la vérification
 
-## Stack technique
+## Test attendu
 
-- React Native / Expo
-- TypeScript
-- Supabase Auth (provider Phone / MessageBird)
-- Animations : `react-native-reanimated`
-- Style : `@/styles/commonStyles` (colors, spacing, typography, borderRadius)
-- Composants existants : `SignupInput`, `PhoneInput`
-
-## Résultat attendu
-
-L'utilisateur arrive à l'étape 3 du wizard → saisit son email et son numéro → clique "Vérifier mon numéro" → reçoit un SMS avec un code (ou utilise le code test `000000` avec le numéro `+33767989253`) → saisit le code → check vert → peut passer à l'étape 4. Sans vérification du numéro, impossible de continuer l'inscription.
+1. Aller à l'étape 3 de l'inscription
+2. Saisir le numéro `0767989253` avec +33
+3. Cliquer "Vérifier mon numéro"
+4. Entrer le code `000000`
+5. ✅ Le badge vert "Numéro vérifié" apparaît
+6. ✅ L'app NE redirige PAS vers `/auth/account-type`
+7. ✅ L'utilisateur peut cliquer "Continuer" vers l'étape 4 (Ville)

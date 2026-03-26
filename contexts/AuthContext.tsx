@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { authService } from '@/services/auth.service';
 import { userService } from '@/services/user.service';
 import { notificationService } from '@/lib/notifications';
+import { phoneVerificationService } from '@/services/phone-verification.service';
 import { User } from '@supabase/supabase-js';
 import { Database } from '@/lib/supabase';
 
@@ -30,6 +31,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = authService.onAuthStateChange(
       async (event, session) => {
         console.log('[AUTH_DEBUG] onAuthStateChange event:', event, 'hasSession:', !!session, 'userId:', session?.user?.id);
+
+        // Ignorer les events pendant la vérification OTP téléphone
+        // (le signOut nettoie la session temporaire créée par verifyOtp)
+        if (phoneVerificationService.isVerifyingPhone && (event === 'SIGNED_OUT' || event === 'SIGNED_IN')) {
+          console.log('[AUTH_DEBUG] Ignoring', event, 'during phone verification');
+          return;
+        }
+
         if (session?.user) {
           setUser(session.user);
           await loadProfile(session.user.id);
