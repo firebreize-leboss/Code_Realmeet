@@ -16,6 +16,7 @@ export interface SignupFormData {
   email: string;
   phone: string;
   phoneCountryCode: string;
+  phoneVerified: boolean;
   // Étape 4: Ville
   city: string;
   citySelected: boolean;
@@ -36,6 +37,7 @@ const initialFormData: SignupFormData = {
   email: '',
   phone: '',
   phoneCountryCode: '+33',
+  phoneVerified: false,
   city: '',
   citySelected: false,
   bio: '',
@@ -166,6 +168,8 @@ export function SignupProvider({ children }: { children: React.ReactNode }) {
         });
         if (phoneError) {
           errors.phone = phoneError;
+        } else if (!formData.phoneVerified) {
+          errors.phoneVerified = 'Le numéro de téléphone doit être vérifié';
         }
         break;
 

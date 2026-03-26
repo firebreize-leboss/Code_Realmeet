@@ -115,6 +115,11 @@ function SignupWizardContent() {
   };
 
   const handleSubmit = async () => {
+    if (!formData.phoneVerified) {
+      Alert.alert('Téléphone non vérifié', 'Veuillez vérifier votre numéro de téléphone avant de créer votre compte.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -138,6 +143,7 @@ function SignupWizardContent() {
         city: formData.city,
         date_of_birth: formData.birthDate,
         phone: formData.phone ? `${formData.phoneCountryCode}${formData.phone.replace(/[\s\-\.\(\)]/g, '').replace(/^0/, '')}` : undefined,
+        phone_verified: formData.phoneVerified,
       });
 
       if (!accountResult.success) {

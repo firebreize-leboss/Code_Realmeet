@@ -11,6 +11,7 @@ export interface RegisterData {
   city?: string;
   date_of_birth?: string;
   phone?: string;
+  phone_verified?: boolean;
 }
 
 export interface LoginData {
@@ -44,6 +45,7 @@ class AuthService {
           city: data.city || null,
           date_of_birth: data.date_of_birth || null,
           phone: data.phone || null,
+          phone_verified: data.phone_verified ?? false,
         });
 
       if (profileError) throw profileError;
