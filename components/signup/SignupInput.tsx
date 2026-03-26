@@ -37,6 +37,11 @@ export function SignupInput({
 
   const isSecure = secureToggle ? !showPassword : secureTextEntry;
 
+  const handleBlur = (e: any) => {
+    setIsFocused(false);
+    textInputProps.onBlur?.(e);
+  };
+
   return (
     <View style={styles.container}>
       {label && (
@@ -65,9 +70,9 @@ export function SignupInput({
           style={styles.input}
           placeholderTextColor={colors.textMuted}
           onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
-          secureTextEntry={isSecure}
           {...textInputProps}
+          onBlur={handleBlur}
+          secureTextEntry={isSecure}
         />
 
         {secureToggle && (

@@ -15,6 +15,7 @@ import { SignupInput } from '../SignupInput';
 import { PhoneInput, formatFullPhone, validatePhone } from '@/components/PhoneInput';
 import { useSignup } from '@/contexts/SignupContext';
 import { phoneVerificationService } from '@/services/phone-verification.service';
+import { supabase } from '@/lib/supabase';
 import { colors, spacing, typography, borderRadius } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 
@@ -31,6 +32,7 @@ export function Step3Contact() {
   const [otpCode, setOtpCode] = useState<string[]>(Array(OTP_LENGTH).fill(''));
   const [otpError, setOtpError] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(0);
+  const [emailTakenError, setEmailTakenError] = useState<string | null>(null);
 
   const inputRefs = useRef<(TextInput | null)[]>([]);
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -54,6 +56,22 @@ export function Step3Contact() {
       });
     }, 1000);
   }, []);
+
+  // Vérifier l'unicité de l'email
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const checkEmailAvailability = useCallback(async () => {
+    if (!formData.email || !emailRegex.test(formData.email)) return;
+
+    const { data, error } = await supabase.rpc('check_contact_availability', {
+      p_email: formData.email,
+    });
+
+    if (!error && data?.email_taken) {
+      setEmailTakenError('Cette adresse email est déjà utilisée');
+    } else {
+      setEmailTakenError(null);
+    }
+  }, [formData.email]);
 
   // Nettoyage du timer
   useEffect(() => {
@@ -83,6 +101,23 @@ export function Step3Contact() {
 
     setOtpStatus('sending');
     setOtpError(null);
+
+    // Vérifier que le numéro n'est pas déjà utilisé
+    const { data: checkData, error: checkError } = await supabase.rpc('check_contact_availability', {
+      p_phone: fullPhone,
+    });
+
+    if (checkError) {
+      setOtpStatus('error');
+      setOtpError('Erreur de vérification, réessayez');
+      return;
+    }
+
+    if (checkData?.phone_taken) {
+      setOtpStatus('error');
+      setOtpError('Ce numéro de téléphone est déjà associé à un compte');
+      return;
+    }
 
     const result = await phoneVerificationService.sendOtp(fullPhone);
 
@@ -165,7 +200,7 @@ export function Step3Contact() {
     }
   };
 
-  const showVerifyButton = phoneIsValid && otpStatus === 'idle';
+  const showVerifyButton = phoneIsValid && otpStatus === 'idle' && !emailTakenError;
   const showOtpInput = otpStatus === 'sent' || otpStatus === 'verifying' || otpStatus === 'error';
   const showVerifiedBadge = otpStatus === 'verified';
 
@@ -181,19 +216,25 @@ export function Step3Contact() {
 
       {/* Champs contact */}
       <View style={styles.form}>
-        <SignupInput
-          label="Adresse email"
-          required
-          icon="envelope"
-          placeholder="votre.email@exemple.com"
-          value={formData.email}
-          onChangeText={(text) => updateFormData('email', text.toLowerCase().trim())}
-          error={errors.email}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          autoComplete="email"
-          autoCorrect={false}
-        />
+        <View>
+          <SignupInput
+            label="Adresse email"
+            required
+            icon="envelope"
+            placeholder="votre.email@exemple.com"
+            value={formData.email}
+            onChangeText={(text) => {
+              updateFormData('email', text.toLowerCase().trim());
+              if (emailTakenError) setEmailTakenError(null);
+            }}
+            error={errors.email || emailTakenError || undefined}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoComplete="email"
+            autoCorrect={false}
+            onBlur={checkEmailAvailability}
+          />
+        </View>
 
         <View>
           <PhoneInput

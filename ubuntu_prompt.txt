@@ -1,131 +1,146 @@
-# Fix — Bug de redirection après vérification OTP téléphone
+# Fix — Vérifier unicité email et téléphone à l'inscription
 
-## Problème
+## Contexte
 
-Quand l'utilisateur vérifie son numéro de téléphone à l'étape 3 de l'inscription, l'app le redirige vers l'écran de sélection de compte (`/auth/account-type`).
+Dans le wizard d'inscription (`app/auth/signup-wizard.tsx`), à l'étape 3 (`components/signup/steps/Step3Contact.tsx`), l'utilisateur saisit son email et son numéro de téléphone. Actuellement, si l'email ou le numéro est déjà utilisé par un autre compte, l'erreur n'apparaît qu'à la fin de l'inscription. Il faut vérifier l'unicité **plus tôt** :
 
-### Cause racine
+- **Email** : vérifier quand l'utilisateur clique "Continuer" à l'étape 3 (ou quand il quitte le champ email)
+- **Téléphone** : vérifier quand l'utilisateur clique "Vérifier mon numéro", **avant** d'envoyer le SMS OTP (pour ne pas gaspiller un crédit MessageBird sur un numéro déjà pris)
 
-Dans `services/phone-verification.service.ts`, la méthode `verifyOtp()` fait :
-1. `supabase.auth.verifyOtp({ phone, token, type: 'sms' })` → succès → Supabase crée une session temporaire
-2. `supabase.auth.signOut()` → pour nettoyer cette session indésirable
+## Ce qu'il faut implémenter
 
-Le problème : ce `signOut()` déclenche l'event `SIGNED_OUT` dans le listener `onAuthStateChange` de `contexts/AuthContext.tsx`. Ce listener met `user = null` et `profile = null`, ce qui provoque la redirection vers `/auth/account-type` via le guard d'authentification dans `app/(tabs)/_layout.tsx` et `app/index.tsx`.
+### 1. Créer une RPC Supabase pour vérifier l'unicité
 
-### Logs confirmant le bug
+Créer une migration SQL avec une fonction RPC `check_contact_availability` :
+
+```sql
+CREATE OR REPLACE FUNCTION public.check_contact_availability(
+  p_email text DEFAULT NULL,
+  p_phone text DEFAULT NULL
+)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  result json;
+  email_taken boolean := false;
+  phone_taken boolean := false;
+BEGIN
+  -- Vérifier l'email dans auth.users
+  IF p_email IS NOT NULL AND p_email != '' THEN
+    SELECT EXISTS(
+      SELECT 1 FROM auth.users WHERE lower(email) = lower(p_email)
+    ) INTO email_taken;
+  END IF;
+
+  -- Vérifier le téléphone dans profiles (format international, ex: +33767989253)
+  IF p_phone IS NOT NULL AND p_phone != '' THEN
+    SELECT EXISTS(
+      SELECT 1 FROM public.profiles WHERE phone = p_phone
+    ) INTO phone_taken;
+  END IF;
+
+  result := json_build_object(
+    'email_taken', email_taken,
+    'phone_taken', phone_taken
+  );
+
+  RETURN result;
+END;
+$$;
 ```
-[AUTH_DEBUG] onAuthStateChange event: SIGNED_OUT hasSession: false userId: undefined
-[AUTH_DEBUG] No session -> clearing user & profile
-[TAB SYNC] pathname: "/auth/account-type"
-```
 
-## Solution
+Cette fonction est `SECURITY DEFINER` car elle accède à `auth.users` qui n'est pas accessible aux utilisateurs anonymes.
 
-Modifier `services/phone-verification.service.ts` pour ne PAS utiliser `signOut()`. À la place, utiliser une approche qui ne déclenche pas le listener d'auth.
+### 2. Modifier Step3Contact.tsx
 
-### Approche : Flag de bypass dans le service
+Dans `components/signup/steps/Step3Contact.tsx`, ajouter deux vérifications :
 
-1. Dans `phone-verification.service.ts` : ajouter un flag statique `isVerifyingPhone` que le `AuthContext` peut consulter pour ignorer les events de session pendant la vérification OTP.
+**A) Vérification du téléphone — dans `handleSendOtp` (avant l'envoi OTP) :**
 
-2. Dans `contexts/AuthContext.tsx` : dans le listener `onAuthStateChange`, vérifier ce flag. Si `isVerifyingPhone === true`, ignorer l'event `SIGNED_OUT` (ne pas mettre user/profile à null).
-
-### Implémentation
-
-**Fichier `services/phone-verification.service.ts`** — modifier la classe :
+Avant d'appeler `phoneVerificationService.sendOtp()`, vérifier que le numéro n'est pas déjà utilisé :
 
 ```typescript
-class PhoneVerificationService {
-  // Flag public pour que AuthContext puisse ignorer le signOut pendant la vérification
-  public isVerifyingPhone = false;
+const handleSendOtp = async () => {
+  if (!phoneIsValid || cooldown > 0) return;
 
-  async sendOtp(fullPhoneNumber: string): Promise<{ success: boolean; error?: string }> {
-    // ... inchangé
+  setOtpStatus('sending');
+  setOtpError(null);
+
+  // Vérifier que le numéro n'est pas déjà utilisé
+  const { data, error } = await supabase.rpc('check_contact_availability', {
+    p_phone: fullPhone,
+  });
+
+  if (error) {
+    setOtpStatus('error');
+    setOtpError('Erreur de vérification, réessayez');
+    return;
   }
 
-  async verifyOtp(fullPhoneNumber: string, otpCode: string): Promise<{ success: boolean; error?: string }> {
-    try {
-      this.isVerifyingPhone = true; // ← Activer le flag AVANT verifyOtp
-
-      const { data, error } = await supabase.auth.verifyOtp({
-        phone: fullPhoneNumber,
-        token: otpCode,
-        type: 'sms',
-      });
-
-      if (error) {
-        this.isVerifyingPhone = false; // ← Désactiver en cas d'erreur
-        // ... gestion d'erreur existante (expired, invalid, etc.)
-        return { success: false, error: '...' };
-      }
-
-      // Nettoyage : si une session a été créée, la détruire
-      if (data?.session) {
-        await supabase.auth.signOut();
-      }
-
-      // Petit délai pour laisser le temps au listener d'ignorer l'event
-      await new Promise(resolve => setTimeout(resolve, 100));
-      this.isVerifyingPhone = false; // ← Désactiver après le délai
-
-      return { success: true };
-    } catch (error: any) {
-      this.isVerifyingPhone = false;
-      return { success: false, error: error.message || 'Erreur réseau' };
-    }
+  if (data?.phone_taken) {
+    setOtpStatus('error');
+    setOtpError('Ce numéro de téléphone est déjà associé à un compte');
+    return;
   }
-}
+
+  // Si le numéro est dispo, envoyer l'OTP
+  const result = await phoneVerificationService.sendOtp(fullPhone);
+  // ... suite existante
+};
 ```
 
-**Fichier `contexts/AuthContext.tsx`** — modifier le listener :
+**B) Vérification de l'email — quand l'utilisateur perd le focus sur le champ email OU quand il clique "Vérifier mon numéro" :**
+
+Ajouter un state `emailError` local et une fonction de vérification :
 
 ```typescript
-import { phoneVerificationService } from '@/services/phone-verification.service';
+const [emailTakenError, setEmailTakenError] = useState<string | null>(null);
 
-// Dans le useEffect avec onAuthStateChange :
-const { data: { subscription } } = authService.onAuthStateChange(
-  async (event, session) => {
-    console.log('[AUTH_DEBUG] onAuthStateChange event:', event, 'hasSession:', !!session);
+const checkEmailAvailability = async () => {
+  if (!formData.email || !emailRegex.test(formData.email)) return;
+  
+  const { data, error } = await supabase.rpc('check_contact_availability', {
+    p_email: formData.email,
+  });
 
-    // IMPORTANT : Ignorer le SIGNED_OUT si on est en train de vérifier un téléphone
-    // (le signOut est déclenché par le nettoyage de la session OTP temporaire)
-    if (event === 'SIGNED_OUT' && phoneVerificationService.isVerifyingPhone) {
-      console.log('[AUTH_DEBUG] Ignoring SIGNED_OUT during phone verification');
-      return;
-    }
-
-    // Ignorer aussi le SIGNED_IN si c'est la session OTP temporaire
-    if (event === 'SIGNED_IN' && phoneVerificationService.isVerifyingPhone) {
-      console.log('[AUTH_DEBUG] Ignoring SIGNED_IN during phone verification');
-      return;
-    }
-
-    if (session?.user) {
-      setUser(session.user);
-      await loadProfile(session.user.id);
-      if (event === 'SIGNED_IN') {
-        notificationService.registerForPushNotifications();
-      }
-    } else {
-      console.log('[AUTH_DEBUG] No session -> clearing user & profile');
-      setUser(null);
-      setProfile(null);
-    }
-    setLoading(false);
+  if (!error && data?.email_taken) {
+    setEmailTakenError('Cette adresse email est déjà utilisée');
+  } else {
+    setEmailTakenError(null);
   }
-);
+};
 ```
+
+- Appeler `checkEmailAvailability()` dans le `onBlur` du champ email
+- Afficher `emailTakenError` sous le champ email (en plus de l'erreur de format existante `errors.email`)
+- Si `emailTakenError` est défini, désactiver le bouton "Vérifier mon numéro" et le bouton "Continuer"
+
+### 3. Importer supabase dans Step3Contact
+
+Ajouter l'import :
+```typescript
+import { supabase } from '@/lib/supabase';
+```
+
+### 4. Mettre à jour la validation dans SignupContext (optionnel mais recommandé)
+
+Dans `contexts/SignupContext.tsx`, la validation de l'étape 3 vérifie déjà le format. La vérification d'unicité est faite côté composant (asynchrone), donc elle ne peut pas être dans `getStepErrors` (qui est synchrone). C'est correct de la garder dans le composant.
+
+## Fichiers à créer
+- `supabase/migrations/YYYYMMDD_check_contact_availability.sql` — la fonction RPC
 
 ## Fichiers à modifier
+- `components/signup/steps/Step3Contact.tsx` — ajouter la vérification email (onBlur) + vérification téléphone (dans handleSendOtp avant l'envoi OTP)
 
-1. `services/phone-verification.service.ts` — ajouter le flag `isVerifyingPhone`, l'activer/désactiver dans `verifyOtp()`
-2. `contexts/AuthContext.tsx` — importer `phoneVerificationService`, checker le flag dans le listener `onAuthStateChange` pour ignorer les events `SIGNED_OUT` et `SIGNED_IN` pendant la vérification
+## Comportement attendu
 
-## Test attendu
+1. L'utilisateur saisit un email déjà utilisé → quand il quitte le champ, le message "Cette adresse email est déjà utilisée" apparaît en rouge sous le champ
+2. L'utilisateur saisit un numéro déjà utilisé → quand il clique "Vérifier mon numéro", le message "Ce numéro de téléphone est déjà associé à un compte" apparaît, et **aucun SMS n'est envoyé**
+3. Si l'email et le numéro sont disponibles, le flow continue normalement (envoi OTP, etc.)
+4. Les messages d'erreur disparaissent quand l'utilisateur modifie le champ concerné
 
-1. Aller à l'étape 3 de l'inscription
-2. Saisir le numéro `0767989253` avec +33
-3. Cliquer "Vérifier mon numéro"
-4. Entrer le code `000000`
-5. ✅ Le badge vert "Numéro vérifié" apparaît
-6. ✅ L'app NE redirige PAS vers `/auth/account-type`
-7. ✅ L'utilisateur peut cliquer "Continuer" vers l'étape 4 (Ville)
+## Migration SQL à appliquer
+
+Après avoir créé le fichier de migration, rappeler à l'utilisateur d'exécuter la fonction SQL dans le Dashboard Supabase → SQL Editor.
