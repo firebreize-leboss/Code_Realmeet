@@ -18,6 +18,7 @@ import Animated, {
   useSharedValue,
   withSpring,
   interpolate,
+  SharedValue,
 } from 'react-native-reanimated';
 import { colors, borderRadius, spacing, shadows } from '@/styles/commonStyles';
 import { motion } from '@/styles/motionTokens';
@@ -40,6 +41,8 @@ interface FloatingTabBarProps {
   bottomMargin?: number;
   currentIndex?: number;
   onTabPress?: (index: number) => void;
+  /** Real-time scroll progress from SwipeableTabView (0 = first tab, 1 = second, etc.) */
+  scrollProgress?: SharedValue<number>;
 }
 
 // Individual tab item with its own scale animation
@@ -105,6 +108,7 @@ export default function FloatingTabBar({
   bottomMargin,
   currentIndex,
   onTabPress,
+  scrollProgress,
 }: FloatingTabBarProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -148,12 +152,17 @@ export default function FloatingTabBar({
   }, [pathname, tabs, currentIndex]);
 
   React.useEffect(() => {
-    if (activeTabIndex >= 0) {
+    // Only use spring animation when there's no real-time scrollProgress (e.g. tab press, programmatic change)
+    if (activeTabIndex >= 0 && !scrollProgress) {
       animatedValue.value = withSpring(activeTabIndex, motion.spring.smooth);
     }
-  }, [activeTabIndex, animatedValue]);
+  }, [activeTabIndex, animatedValue, scrollProgress]);
 
   const handleTabPress = (index: number, route: string) => {
+    // When no scrollProgress, animate via spring; otherwise the ScrollView scroll drives the indicator
+    if (!scrollProgress) {
+      animatedValue.value = withSpring(index, motion.spring.smooth);
+    }
     if (onTabPress) {
       onTabPress(index);
     } else {
@@ -165,11 +174,13 @@ export default function FloatingTabBar({
 
   const indicatorStyle = useAnimatedStyle(() => {
     const tabWidth = (containerWidth - 16) / tabs.length; // Account for container padding (8px on each side)
+    // Use real-time scroll progress when available, otherwise fall back to spring animation
+    const progress = scrollProgress ? scrollProgress.value : animatedValue.value;
     return {
       transform: [
         {
           translateX: interpolate(
-            animatedValue.value,
+            progress,
             [0, tabs.length - 1],
             [0, tabWidth * (tabs.length - 1)]
           ),

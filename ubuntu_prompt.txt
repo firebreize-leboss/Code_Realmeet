@@ -1,146 +1,109 @@
-# Fix — Vérifier unicité email et téléphone à l'inscription
+fais une page pour aide & support.
+Adresse mail à contacter : contact@realmeet.fr
+Et pour le reste, mets des informations basiques. Si il y'a des informations qui te manque précise-le moi à la fin de la génération et je te les donnerai pour que tu complètes.
+Fais une page propre dans la DA du site.
 
-## Contexte
+Fais de même pour les conditions d'utilisations. Pour cette page tu vas te baser sur cette CGU suivante :
+CONDITIONS GÉNÉRALES D’UTILISATION (CGU) – REALMEET
+Éditeur : Alexandre PEMBE – Entrepreneur individuel (micro-entreprise) – Nom commercial : REALMEET
+Siège : Paris, France
+Contact : realmeet.france@gmail.com
+Dernière mise à jour : 02/03/2026
+1. Objet
+Les présentes Conditions Générales d’Utilisation (les « CGU ») régissent l’accès et l’utilisation de l’application mobile REALMEET (l’« Application ») et de ses fonctionnalités.
+REALMEET est une plateforme technique de mise en relation permettant à des utilisateurs majeurs (18+) de réserver des activités sociales proposées et exécutées par des entreprises partenaires (bars, restaurants, loisirs, karting, paintball, etc.) (les « Entreprises Hôtes »). REALMEET n’organise pas matériellement les activités et n’est pas le prestataire des activités proposées.
+2. Définitions
+« Utilisateur » : toute personne physique majeure (18+) utilisant l’Application.
+« Compte » : espace personnel associé à l’Utilisateur.
+« Entreprise Hôte » : entreprise partenaire proposant et réalisant une Activité.
+« Activité » : prestation proposée et réalisée par une Entreprise Hôte.
+« Réservation » : commande d’une Activité effectuée via l’Application.
+« Contenu » : tout contenu (message, avis, note, photo, texte, etc.) publié, transmis ou accessible via l’Application.
+« Services » : fonctionnalités de l’Application (mise en relation, réservation, messagerie, groupes, avis, etc.).
+3. Acceptation des CGU
+L’accès à l’Application et/ou la création d’un Compte implique l’acceptation sans réserve des CGU. L’Utilisateur reconnaît en avoir pris connaissance.
+4. Accès réservé aux majeurs (18+)
+L’Application est strictement réservée aux personnes âgées d’au moins 18 ans. L’Utilisateur renseigne sa date de naissance à l’inscription et garantit l’exactitude des informations fournies.
+En cas de doute ou de fausse déclaration, REALMEET peut demander des vérifications et/ou suspendre ou supprimer le Compte.
+5. Compte – Profil – Sécurité
+5.1 Création du compte
+Pour créer un Compte, l’Utilisateur fournit des informations exactes (nom, prénom, e-mail, date de naissance, etc.) et s’engage à les maintenir à jour.
+5.2 Affichage du profil
+Les profils affichent Prénom + initiale (ex. « Alexandre P. »). L’usurpation d’identité et les faux profils sont interdits.
+5.3 Sécurité du compte
+L’Utilisateur est responsable de la confidentialité de ses accès et de toute activité réalisée via son Compte. En cas de suspicion d’accès non autorisé, l’Utilisateur contacte REALMEET : realmeet.france@gmail.com.
+6. Description des Services – Rôle de REALMEET (intermédiaire technique)
+REALMEET permet notamment :
+de consulter des Activités proposées par des Entreprises Hôtes ;
+d’effectuer des Réservations et paiements en ligne (voir CGV/Conditions de réservation) ;
+d’utiliser une messagerie privée, des discussions de groupe liées aux réservations, et éventuellement des espaces d’échanges associés aux Activités ;
+de publier des avis/notes après une Activité.
+Important : le contrat de prestation relatif à l’Activité est conclu directement entre l’Utilisateur et l’Entreprise Hôte. REALMEET agit comme intermédiaire technique et n’est pas responsable de l’exécution matérielle de l’Activité.
+7. Messagerie / Chat / Groupes
+7.1 Finalité
+Ces fonctionnalités ont pour finalité l’organisation pratique et les échanges sociaux entre Utilisateurs, notamment entre participants à une même Activité.
+7.2 Ouverture des groupes
+Les groupes de discussion liés à une Activité s’ouvrent automatiquement 24 heures avant l’heure de début de l’Activité.
+7.3 Fermeture des groupes
+Les groupes liés à une Activité sont fermés à la fin de l’Activité (heure de fin prévue telle qu’affichée dans l’Application), sous réserve :
+d’une fermeture anticipée en cas d’incident, d’abus ou de modération ;
+et/ou d’adaptations techniques communiquées dans l’Application.
+7.4 Responsabilité des échanges
+Chaque Utilisateur est responsable des Contenus qu’il publie ou transmet. REALMEET n’exerce pas de contrôle général a priori des Contenus, mais peut intervenir par modération conformément à l’article 10 et aux obligations légales.
+7.5 Vie privée – Partage de données
+Il est interdit de diffuser des données personnelles de tiers (coordonnées, photos, informations privées) sans consentement, ainsi que tout Contenu portant atteinte à la vie privée.
+8. Avis et notes
+8.1 Conditions de dépôt
+REALMEET peut réserver le dépôt d’avis/notes aux Utilisateurs ayant effectivement réservé (et/ou participé) à l’Activité.
+8.2 Règles
+Les avis doivent être sincères, pertinents et conformes à la loi. Sont interdits : propos injurieux, diffamatoires, discriminatoires, haineux, mensongers, ou sans lien avec l’Activité.
+8.3 Modération
+REALMEET se réserve le droit de modérer/retirer/déréférencer tout avis non conforme et de sanctionner les abus.
+9. Règles de conduite – Contenus interdits
+Sont notamment interdits :
+harcèlement, menaces, intimidation ;
+incitation à la haine/violence, discriminations ;
+contenus sexuels explicites, exploitation, sollicitation ;
+doxxing, atteintes à la vie privée, diffusion de coordonnées sans consentement ;
+escroqueries, phishing, liens malveillants ;
+usurpation d’identité, faux profils ;
+contenus ou incitations à des activités illégales.
+10. Signalement – Modération – Sanctions (suspension/bannissement)
+10.1 Signalement
+Tout Utilisateur peut signaler un Contenu ou un Compte via les fonctionnalités de signalement et/ou par e-mail : realmeet.france@gmail.com.
+10.2 Mesures
+REALMEET peut prendre toute mesure proportionnée, notamment :
+suppression/masquage/déréférencement de Contenu ;
+limitation de fonctionnalités (messagerie, groupes, avis, réservations) ;
+suspension temporaire ;
+bannissement définitif / suppression du Compte.
+10.3 Mesures d’urgence
+En cas de risque pour la sécurité, REALMEET peut suspendre immédiatement un Compte à titre conservatoire, le temps des vérifications.
+10.4 Conservation de preuves
+REALMEET peut conserver des éléments (logs, métadonnées, contenus signalés) à des fins de sécurité, prévention des abus, gestion des litiges et conformité légale.
+11. Réservations – Renvoi aux CGV
+Les conditions de Réservation, paiement, annulation/remboursement et l’exclusion du droit de rétractation sont détaillées dans les CGV / Conditions de réservation, acceptées lors de chaque Réservation.
+12. Propriété intellectuelle
+L’Application, la marque REALMEET, le logo, les éléments graphiques, le code, la base de données et contenus éditoriaux sont protégés et demeurent la propriété de REALMEET et/ou de ses concédants.
+L’Utilisateur concède à REALMEET une licence non exclusive, mondiale et gratuite d’hébergement, reproduction et représentation de ses Contenus strictement nécessaire au fonctionnement du service (affichage aux destinataires, stockage technique, modération).
+13. Disponibilité – Maintenance
+REALMEET s’efforce d’assurer l’accès à l’Application, sans garantie d’absence d’interruption (maintenance, mises à jour, incidents, dépendances techniques). REALMEET peut suspendre temporairement l’accès pour raisons techniques ou de sécurité.
+14. Responsabilité
+14.1 Plateforme non organisatrice
+REALMEET n’est pas l’organisateur des Activités. L’Entreprise Hôte est seule responsable de l’exécution de l’Activité, de l’accueil, des règles de sécurité sur place et de la conformité de la prestation.
+14.2 Limitation
+Dans les limites autorisées par la loi, la responsabilité de REALMEET est limitée aux dommages directs et au montant effectivement payé par l’Utilisateur pour la Réservation concernée.
+REALMEET n’est pas responsable :
+du comportement des participants ;
+des échanges via messagerie/groupes ;
+de la mauvaise exécution de l’Activité par l’Entreprise Hôte ;
+des dommages indirects (perte de chance, etc.), sous réserve des règles impératives applicables aux consommateurs.
+15. Force majeure
+Aucune Partie ne sera responsable d’un manquement dû à un événement de force majeure au sens de l’article 1218 du Code civil. 
+16. Données personnelles
+Les traitements de données personnelles (dont messagerie, avis, logs, traceurs) sont décrits dans la Politique de confidentialité. L’Utilisateur peut retirer son consentement aux traceurs non nécessaires à tout moment.
+17. Modification des CGU
+REALMEET peut modifier les CGU pour tenir compte d’évolutions légales, techniques ou fonctionnelles. L’Utilisateur sera informé par tout moyen. L’utilisation continue de l’Application après entrée en vigueur vaut acceptation.
+18. Droit applicable – Litiges
+Les CGU sont soumises au droit français. En cas de difficulté, l’Utilisateur peut contacter REALMEET à realmeet.france@gmail.com pour rechercher une solution amiable. À défaut, les juridictions compétentes seront déterminées selon les règles applicables aux consommateurs.
 
-Dans le wizard d'inscription (`app/auth/signup-wizard.tsx`), à l'étape 3 (`components/signup/steps/Step3Contact.tsx`), l'utilisateur saisit son email et son numéro de téléphone. Actuellement, si l'email ou le numéro est déjà utilisé par un autre compte, l'erreur n'apparaît qu'à la fin de l'inscription. Il faut vérifier l'unicité **plus tôt** :
-
-- **Email** : vérifier quand l'utilisateur clique "Continuer" à l'étape 3 (ou quand il quitte le champ email)
-- **Téléphone** : vérifier quand l'utilisateur clique "Vérifier mon numéro", **avant** d'envoyer le SMS OTP (pour ne pas gaspiller un crédit MessageBird sur un numéro déjà pris)
-
-## Ce qu'il faut implémenter
-
-### 1. Créer une RPC Supabase pour vérifier l'unicité
-
-Créer une migration SQL avec une fonction RPC `check_contact_availability` :
-
-```sql
-CREATE OR REPLACE FUNCTION public.check_contact_availability(
-  p_email text DEFAULT NULL,
-  p_phone text DEFAULT NULL
-)
-RETURNS json
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  result json;
-  email_taken boolean := false;
-  phone_taken boolean := false;
-BEGIN
-  -- Vérifier l'email dans auth.users
-  IF p_email IS NOT NULL AND p_email != '' THEN
-    SELECT EXISTS(
-      SELECT 1 FROM auth.users WHERE lower(email) = lower(p_email)
-    ) INTO email_taken;
-  END IF;
-
-  -- Vérifier le téléphone dans profiles (format international, ex: +33767989253)
-  IF p_phone IS NOT NULL AND p_phone != '' THEN
-    SELECT EXISTS(
-      SELECT 1 FROM public.profiles WHERE phone = p_phone
-    ) INTO phone_taken;
-  END IF;
-
-  result := json_build_object(
-    'email_taken', email_taken,
-    'phone_taken', phone_taken
-  );
-
-  RETURN result;
-END;
-$$;
-```
-
-Cette fonction est `SECURITY DEFINER` car elle accède à `auth.users` qui n'est pas accessible aux utilisateurs anonymes.
-
-### 2. Modifier Step3Contact.tsx
-
-Dans `components/signup/steps/Step3Contact.tsx`, ajouter deux vérifications :
-
-**A) Vérification du téléphone — dans `handleSendOtp` (avant l'envoi OTP) :**
-
-Avant d'appeler `phoneVerificationService.sendOtp()`, vérifier que le numéro n'est pas déjà utilisé :
-
-```typescript
-const handleSendOtp = async () => {
-  if (!phoneIsValid || cooldown > 0) return;
-
-  setOtpStatus('sending');
-  setOtpError(null);
-
-  // Vérifier que le numéro n'est pas déjà utilisé
-  const { data, error } = await supabase.rpc('check_contact_availability', {
-    p_phone: fullPhone,
-  });
-
-  if (error) {
-    setOtpStatus('error');
-    setOtpError('Erreur de vérification, réessayez');
-    return;
-  }
-
-  if (data?.phone_taken) {
-    setOtpStatus('error');
-    setOtpError('Ce numéro de téléphone est déjà associé à un compte');
-    return;
-  }
-
-  // Si le numéro est dispo, envoyer l'OTP
-  const result = await phoneVerificationService.sendOtp(fullPhone);
-  // ... suite existante
-};
-```
-
-**B) Vérification de l'email — quand l'utilisateur perd le focus sur le champ email OU quand il clique "Vérifier mon numéro" :**
-
-Ajouter un state `emailError` local et une fonction de vérification :
-
-```typescript
-const [emailTakenError, setEmailTakenError] = useState<string | null>(null);
-
-const checkEmailAvailability = async () => {
-  if (!formData.email || !emailRegex.test(formData.email)) return;
-  
-  const { data, error } = await supabase.rpc('check_contact_availability', {
-    p_email: formData.email,
-  });
-
-  if (!error && data?.email_taken) {
-    setEmailTakenError('Cette adresse email est déjà utilisée');
-  } else {
-    setEmailTakenError(null);
-  }
-};
-```
-
-- Appeler `checkEmailAvailability()` dans le `onBlur` du champ email
-- Afficher `emailTakenError` sous le champ email (en plus de l'erreur de format existante `errors.email`)
-- Si `emailTakenError` est défini, désactiver le bouton "Vérifier mon numéro" et le bouton "Continuer"
-
-### 3. Importer supabase dans Step3Contact
-
-Ajouter l'import :
-```typescript
-import { supabase } from '@/lib/supabase';
-```
-
-### 4. Mettre à jour la validation dans SignupContext (optionnel mais recommandé)
-
-Dans `contexts/SignupContext.tsx`, la validation de l'étape 3 vérifie déjà le format. La vérification d'unicité est faite côté composant (asynchrone), donc elle ne peut pas être dans `getStepErrors` (qui est synchrone). C'est correct de la garder dans le composant.
-
-## Fichiers à créer
-- `supabase/migrations/YYYYMMDD_check_contact_availability.sql` — la fonction RPC
-
-## Fichiers à modifier
-- `components/signup/steps/Step3Contact.tsx` — ajouter la vérification email (onBlur) + vérification téléphone (dans handleSendOtp avant l'envoi OTP)
-
-## Comportement attendu
-
-1. L'utilisateur saisit un email déjà utilisé → quand il quitte le champ, le message "Cette adresse email est déjà utilisée" apparaît en rouge sous le champ
-2. L'utilisateur saisit un numéro déjà utilisé → quand il clique "Vérifier mon numéro", le message "Ce numéro de téléphone est déjà associé à un compte" apparaît, et **aucun SMS n'est envoyé**
-3. Si l'email et le numéro sont disponibles, le flow continue normalement (envoi OTP, etc.)
-4. Les messages d'erreur disparaissent quand l'utilisateur modifie le champ concerné
-
-## Migration SQL à appliquer
-
-Après avoir créé le fichier de migration, rappeler à l'utilisateur d'exécuter la fonction SQL dans le Dashboard Supabase → SQL Editor.

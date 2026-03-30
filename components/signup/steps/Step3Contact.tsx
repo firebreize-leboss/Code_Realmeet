@@ -31,6 +31,7 @@ export function Step3Contact() {
   const [otpStatus, setOtpStatus] = useState<OtpStatus>(formData.phoneVerified ? 'verified' : 'idle');
   const [otpCode, setOtpCode] = useState<string[]>(Array(OTP_LENGTH).fill(''));
   const [otpError, setOtpError] = useState<string | null>(null);
+  const [otpSent, setOtpSent] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const [emailTakenError, setEmailTakenError] = useState<string | null>(null);
 
@@ -92,6 +93,12 @@ export function Step3Contact() {
       setOtpStatus('idle');
       setOtpCode(Array(OTP_LENGTH).fill(''));
       setOtpError(null);
+      setOtpSent(false);
+    }
+    if (changed && !formData.phoneVerified) {
+      setOtpStatus('idle');
+      setOtpError(null);
+      setOtpSent(false);
     }
   }, [formData.phoneCountryCode, formData.phone, formData.phoneVerified]);
 
@@ -123,6 +130,7 @@ export function Step3Contact() {
 
     if (result.success) {
       setOtpStatus('sent');
+      setOtpSent(true);
       setOtpCode(Array(OTP_LENGTH).fill(''));
       startCooldown();
       // Focus la première case OTP
@@ -200,8 +208,8 @@ export function Step3Contact() {
     }
   };
 
-  const showVerifyButton = phoneIsValid && otpStatus === 'idle' && !emailTakenError;
-  const showOtpInput = otpStatus === 'sent' || otpStatus === 'verifying' || otpStatus === 'error';
+  const showVerifyButton = phoneIsValid && (otpStatus === 'idle' || (otpStatus === 'error' && !otpSent)) && !emailTakenError;
+  const showOtpInput = otpSent && (otpStatus === 'sent' || otpStatus === 'verifying' || otpStatus === 'error');
   const showVerifiedBadge = otpStatus === 'verified';
 
   return (
@@ -264,6 +272,13 @@ export function Step3Contact() {
                 <IconSymbol name="paperplane.fill" size={14} color={colors.backgroundAlt} />
                 <Text style={styles.verifyButtonText}>Vérifier mon numéro</Text>
               </TouchableOpacity>
+            </Animated.View>
+          )}
+
+          {/* Erreur pré-envoi (numéro déjà pris) */}
+          {!otpSent && otpError && (
+            <Animated.View entering={FadeIn.duration(200)}>
+              <Text style={styles.otpError}>{otpError}</Text>
             </Animated.View>
           )}
 

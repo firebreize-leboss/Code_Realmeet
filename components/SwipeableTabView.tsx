@@ -9,6 +9,11 @@ import {
   LayoutChangeEvent,
   ScrollView,
 } from 'react-native';
+import Animated, {
+  useAnimatedScrollHandler,
+  runOnJS,
+  SharedValue,
+} from 'react-native-reanimated';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -17,6 +22,8 @@ interface SwipeableTabViewProps {
   currentIndex: number;
   onIndexChange: (index: number) => void;
   enabled?: boolean;
+  /** Shared value updated in real-time with scroll progress (0 = first tab, 1 = second tab, etc.) */
+  scrollProgress?: SharedValue<number>;
 }
 
 export default function SwipeableTabView({
@@ -24,8 +31,9 @@ export default function SwipeableTabView({
   currentIndex,
   onIndexChange,
   enabled = true,
+  scrollProgress,
 }: SwipeableTabViewProps) {
-  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollViewRef = useRef<Animated.ScrollView>(null);
   const currentIndexRef = useRef(currentIndex);
   const isScrollingProgrammatically = useRef(false);
   const isDragging = useRef(false);
@@ -114,11 +122,20 @@ export default function SwipeableTabView({
     isScrollingProgrammatically.current = false;
   }, []);
 
-  // Handler pour tracker la position du scroll (utilisé pour iOS)
-  const onScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const { contentOffset } = event.nativeEvent;
-    lastOffsetX.current = contentOffset.x;
+  // Update lastOffsetX from UI thread (called via runOnJS)
+  const updateLastOffset = useCallback((x: number) => {
+    lastOffsetX.current = x;
   }, []);
+
+  // Animated scroll handler: updates scrollProgress on UI thread + lastOffsetX on JS thread
+  const animatedScrollHandler = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      if (scrollProgress) {
+        scrollProgress.value = event.contentOffset.x / SCREEN_WIDTH;
+      }
+      runOnJS(updateLastOffset)(event.contentOffset.x);
+    },
+  });
 
   // Handler pour la fin du drag (avant momentum)
   const onScrollEndDrag = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -175,7 +192,7 @@ export default function SwipeableTabView({
 
   return (
     <View style={styles.container} onLayout={onLayout}>
-      <ScrollView
+      <Animated.ScrollView
         ref={scrollViewRef}
         horizontal
         pagingEnabled
@@ -183,7 +200,7 @@ export default function SwipeableTabView({
         scrollEnabled={enabled}
         bounces={Platform.OS === 'ios'}
         decelerationRate="fast"
-        onScroll={onScroll}
+        onScroll={animatedScrollHandler}
         onMomentumScrollEnd={onMomentumScrollEnd}
         onScrollBeginDrag={onScrollBeginDrag}
         onScrollEndDrag={onScrollEndDrag}
@@ -199,7 +216,7 @@ export default function SwipeableTabView({
         keyboardShouldPersistTaps="handled"
       >
         {renderedTabs}
-      </ScrollView>
+      </Animated.ScrollView>
     </View>
   );
 }

@@ -6,6 +6,7 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { View, ActivityIndicator, BackHandler } from 'react-native';
 import { useRouter, usePathname, useLocalSearchParams } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSharedValue } from 'react-native-reanimated';
 import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
 import SwipeableTabView from '@/components/SwipeableTabView';
 import { useAuth } from '@/contexts/AuthContext';
@@ -144,6 +145,8 @@ function isDetailRoute(pathname: string): boolean {
     '/transparent-modal',
     '/user-activities',
     '/auth',
+    '/help-support',
+    '/terms-of-use',
   ];
   return detailPrefixes.some(prefix => pathname.startsWith(prefix));
 }
@@ -160,6 +163,7 @@ function TabLayoutContent() {
 
   const { currentTabIndex, setCurrentTabIndex } = useTabIndex();
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const scrollProgress = useSharedValue(currentTabIndex);
 
   // Navigation source tracking — reset synchronously in the pathname effect
   const navigationSourceRef = useRef<'swipe' | 'tabbar' | null>(null);
@@ -315,6 +319,7 @@ function TabLayoutContent() {
         currentIndex={currentTabIndex}
         onIndexChange={handleIndexChange}
         enabled={isSwipeEnabled}
+        scrollProgress={scrollProgress}
       >
         {tabScreens}
       </SwipeableTabView>
@@ -323,6 +328,7 @@ function TabLayoutContent() {
         containerWidth={380}
         currentIndex={currentTabIndex}
         onTabPress={handleTabPress}
+        scrollProgress={scrollProgress}
       />
     </View>
   );

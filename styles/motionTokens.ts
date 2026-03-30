@@ -12,7 +12,7 @@ export const motion = {
     // Spring "snappy" pour press/release
     snappy: { damping: 15, stiffness: 300 },
     // Spring "smooth" pour indicateur tab bar
-    smooth: { damping: 20, stiffness: 200 },
+    smooth: { damping: 28, stiffness: 400 },
     // Spring "bouncy" pour succès/like
     bouncy: { damping: 10, stiffness: 250 },
   },

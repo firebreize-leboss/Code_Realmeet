@@ -324,19 +324,19 @@ export default function SettingsScreen() {
               <SettingItem
                 icon="info.circle.fill"
                 title="Aide & Support"
-                onPress={() => console.log('Help')}
+                onPress={() => router.push('/help-support')}
               />
               <View style={styles.separator} />
               <SettingItem
                 icon="doc.text.fill"
                 title="Conditions d'utilisation"
-                onPress={() => console.log('Terms')}
+                onPress={() => router.push('/terms-of-use')}
               />
               <View style={styles.separator} />
               <SettingItem
                 icon="shield.fill"
                 title="Politique de confidentialité"
-                onPress={() => console.log('Privacy Policy')}
+                onPress={() => router.push('/privacy-policy')}
               />
             </View>
           </View>
