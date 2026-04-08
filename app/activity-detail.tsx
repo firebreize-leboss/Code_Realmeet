@@ -571,35 +571,33 @@ export default function ActivityDetailScreen() {
 
     try {
       if (isJoined) {
-        // Logique de désinscription — marquer comme 'cancelled' au lieu de supprimer
-
-        const { data: currentParticipation, error: selectError } = await supabase
-          .from('slot_participants')
-          .select('slot_id')
-          .eq('activity_id', activity.id)
-          .eq('user_id', currentUserId)
-          .eq('status', 'active')
-          .maybeSingle();
-
-        if (currentParticipation?.slot_id) {
-          const { data: cancelData, error: cancelError } = await supabase
-            .from('slot_participants')
-            .update({ status: 'cancelled' })
-            .eq('activity_id', activity.id)
-            .eq('user_id', currentUserId)
-            .eq('status', 'active')
-            .select();
-
-          await handleLeaveSlotGroup(currentParticipation.slot_id);
+        // Logique de désinscription via RPC
+        const currentSlotId = joinedSlotId || selectedSlot?.id;
+        if (!currentSlotId) {
+          navigationLockRef.current = false;
+          setJoiningInProgress(false);
+          actionLockRef.current = false;
+          return;
         }
 
-        const newCount = Math.max(0, activity.participants - 1);
-        const { data: updateCountData, error: updateCountError } = await supabase
-          .from('activities')
-          .update({ participants: newCount })
-          .eq('id', activity.id)
-          .select();
+        const { data: cancelResult, error: cancelError } = await supabase.rpc('cancel_slot_participation', {
+          p_slot_id: currentSlotId,
+          p_activity_id: activity.id,
+        });
 
+        if (cancelError) throw cancelError;
+
+        if (!cancelResult.success) {
+          Alert.alert('Erreur', cancelResult.error || 'Impossible de se désinscrire.');
+          navigationLockRef.current = false;
+          setJoiningInProgress(false);
+          actionLockRef.current = false;
+          return;
+        }
+
+        await handleLeaveSlotGroup(currentSlotId);
+
+        const newCount = Math.max(0, activity.participants - 1);
         setIsJoined(false);
         setJoinedSlotId(undefined);
         setSlotParticipantId(undefined);
@@ -612,7 +610,11 @@ export default function ActivityDetailScreen() {
 
         setCalendarRefreshTrigger(prev => prev + 1);
 
-        Alert.alert('Succès', 'Vous vous êtes désinscrit de cette activité.');
+        if (cancelResult.late_cancel) {
+          Alert.alert('Désinscription', 'Vous êtes désinscrit. Note : l\'annulation a eu lieu moins de 24h avant l\'activité.');
+        } else {
+          Alert.alert('Succès', 'Vous vous êtes désinscrit de cette activité.');
+        }
         navigationLockRef.current = false;
         setJoiningInProgress(false);
         actionLockRef.current = false;
@@ -667,9 +669,9 @@ export default function ActivityDetailScreen() {
           month: 'long',
         });
 
-        // Naviguer vers le flow de paiement avec les paramètres nécessaires
+        // Naviguer vers l'écran de confirmation d'inscription
         router.push({
-          pathname: '/payment/select-method',
+          pathname: '/confirm-join',
           params: {
             activity_id: activity.id,
             slot_id: selectedSlot.id,
@@ -677,9 +679,6 @@ export default function ActivityDetailScreen() {
             slot_date: slotDateFormatted,
             slot_time: selectedSlot.time,
             price: activity.price,
-            host_id: activity.host.id,
-            max_participants: activity.capacity.toString(),
-            current_participants: activity.participants.toString(),
           },
         });
 
@@ -1104,7 +1103,7 @@ export default function ActivityDetailScreen() {
                           month: 'long',
                         });
                         router.push({
-                          pathname: '/payment/select-method',
+                          pathname: '/confirm-join',
                           params: {
                             activity_id: activity.id,
                             slot_id: selectedSlot.id,
@@ -1112,9 +1111,6 @@ export default function ActivityDetailScreen() {
                             slot_date: slotDateFormatted,
                             slot_time: selectedSlot.time,
                             price: activity.price,
-                            host_id: activity.host.id,
-                            max_participants: activity.capacity.toString(),
-                            current_participants: activity.participants.toString(),
                             mode: 'duo',
                           },
                         });

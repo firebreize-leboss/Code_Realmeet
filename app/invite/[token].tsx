@@ -110,7 +110,7 @@ export default function InviteTokenScreen() {
     const priceStr = invitation.price ? `${invitation.price}€` : 'Gratuit';
 
     router.push({
-      pathname: '/payment/select-method',
+      pathname: '/confirm-join',
       params: {
         activity_id: invitation.activityId,
         slot_id: invitation.slotId,
@@ -118,7 +118,6 @@ export default function InviteTokenScreen() {
         slot_date: slotDateFormatted,
         slot_time: invitation.slotTime || '',
         price: priceStr,
-        host_id: '',
         is_plus_one: 'true',
         invitation_token: tokenString,
       },
@@ -330,14 +329,6 @@ export default function InviteTokenScreen() {
             </View>
           )}
         </View>
-
-        {/* Payment Info */}
-        {invitation?.paymentMode === 'host_pays' && (
-          <View style={styles.freeBox}>
-            <IconSymbol name="gift.fill" size={20} color={colors.success} />
-            <Text style={styles.freeText}>Gratuit pour toi !</Text>
-          </View>
-        )}
 
         {/* Expiration countdown temps réel */}
         <View style={styles.expirationBox}>

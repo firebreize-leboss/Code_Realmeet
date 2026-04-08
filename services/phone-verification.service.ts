@@ -37,6 +37,18 @@ class PhoneVerificationService {
    */
   async verifyOtp(fullPhoneNumber: string, otpCode: string): Promise<{ success: boolean; error?: string }> {
     try {
+      // Vérifier si le numéro est banni avant de valider l'OTP
+      const { data: banCheck, error: banError } = await supabase.rpc('check_phone_banned', {
+        p_phone: fullPhoneNumber,
+      });
+
+      if (!banError && banCheck?.banned) {
+        return {
+          success: false,
+          error: 'Ce numéro de téléphone est suspendu suite à des absences répétées.',
+        };
+      }
+
       this.isVerifyingPhone = true;
 
       const { data, error } = await supabase.auth.verifyOtp({

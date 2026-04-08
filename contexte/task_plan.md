@@ -84,5 +84,5 @@ Préparer RealMeet pour le lancement en production. 6 chantiers parallèles à f
 - (aucune pour l'instant)
 
 ## Status
-**Phase actuelle** : Planification terminée, prêt à démarrer Phase 1 ou Phase 4
+**Phase actuelle** : Planification terminée, prêt à démarrer Phase 0
 **Ordre recommandé** : Phase 4 (rapide, bloquant) → Phase 1 (fondamental) → Phase 2 (validation) → Phase 3 (polish) → Phase 5 (administratif)

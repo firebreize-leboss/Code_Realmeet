@@ -1,5 +1,5 @@
-// app/payment/confirmation.tsx
-// Page de confirmation de paiement avec bouton dev pour inscription réelle
+// app/confirm-join.tsx
+// Écran de confirmation d'inscription à une activité (remplace le flow payment)
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -11,10 +11,11 @@ import {
   Alert,
   ActivityIndicator,
   Share,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Check, Calendar, AlertTriangle, Users, Copy, Share2, Clock } from 'lucide-react-native';
+import { Check, Calendar, AlertTriangle, Users, Copy, Share2, Clock, Info, XCircle } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Clipboard from 'expo-clipboard';
 import { supabase } from '@/lib/supabase';
@@ -22,7 +23,7 @@ import { invitationService } from '@/services/invitation.service';
 import { colors, typography, spacing, borderRadius, shadows } from '@/styles/commonStyles';
 import { useFonts, Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold } from '@expo-google-fonts/manrope';
 
-export default function ConfirmationScreen() {
+export default function ConfirmJoinScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
@@ -30,11 +31,12 @@ export default function ConfirmationScreen() {
   const activityId = typeof params.activity_id === 'string' ? params.activity_id : '';
   const slotId = typeof params.slot_id === 'string' ? params.slot_id : '';
   const activityName = typeof params.activity_name === 'string' ? params.activity_name : '';
-  const hostId = typeof params.host_id === 'string' ? params.host_id : '';
+  const slotDate = typeof params.slot_date === 'string' ? params.slot_date : '';
+  const slotTime = typeof params.slot_time === 'string' ? params.slot_time : '';
+  const price = typeof params.price === 'string' ? params.price : '0€';
   const mode = typeof params.mode === 'string' ? params.mode : '';
   const isPlusOne = params.is_plus_one === 'true';
   const invitationToken = typeof params.invitation_token === 'string' ? params.invitation_token : '';
-  const price = typeof params.price === 'string' ? params.price : '0€';
 
   const [fontsLoaded] = useFonts({
     Manrope_400Regular,
@@ -54,29 +56,6 @@ export default function ConfirmationScreen() {
   const [duoCountdown, setDuoCountdown] = useState<string>('');
   const [duoExpired, setDuoExpired] = useState(false);
   const [copied, setCopied] = useState(false);
-
-  // Plus one acceptance state
-  const [plusOneAccepted, setPlusOneAccepted] = useState(false);
-
-  useEffect(() => {
-    // Animation d'apparition du checkmark
-    Animated.sequence([
-      Animated.delay(200),
-      Animated.parallel([
-        Animated.spring(checkmarkScale, {
-          toValue: 1,
-          friction: 4,
-          tension: 100,
-          useNativeDriver: true,
-        }),
-        Animated.timing(checkmarkOpacity, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]),
-    ]).start();
-  }, []);
 
   // Countdown timer for duo mode
   useEffect(() => {
@@ -103,6 +82,25 @@ export default function ConfirmationScreen() {
     return () => clearInterval(interval);
   }, [duoExpiresAt]);
 
+  const animateSuccess = () => {
+    Animated.sequence([
+      Animated.delay(200),
+      Animated.parallel([
+        Animated.spring(checkmarkScale, {
+          toValue: 1,
+          friction: 4,
+          tension: 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(checkmarkOpacity, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start();
+  };
+
   // Fonction pour envoyer un message système dans le groupe
   const sendSystemMessage = async (conversationId: string, content: string) => {
     try {
@@ -121,11 +119,7 @@ export default function ConfirmationScreen() {
   };
 
   // Fonction pour gérer l'ajout au groupe du créneau
-  const handleSlotGroup = async (
-    slotIdParam: string,
-    activityTitle: string,
-    slotDate: string
-  ) => {
+  const handleSlotGroup = async (slotIdParam: string) => {
     try {
       const { data: existingConv } = await supabase
         .from('conversations')
@@ -169,11 +163,10 @@ export default function ConfirmationScreen() {
     }
   };
 
-  // LOGIQUE D'INSCRIPTION RÉELLE (copiée depuis activity-detail.tsx)
-  const handleDevInscription = async () => {
+  const handleConfirm = async () => {
     if (isInscribing || inscriptionDone) return;
 
-    // Mode +1 : accepter l'invitation au lieu de l'inscription classique
+    // Mode +1 : accepter l'invitation
     if (isPlusOne && invitationToken) {
       setIsInscribing(true);
       try {
@@ -184,7 +177,7 @@ export default function ConfirmationScreen() {
           return;
         }
         setInscriptionDone(true);
-        setPlusOneAccepted(true);
+        animateSuccess();
         Alert.alert('Bienvenue !', 'Tu as rejoint en tant que +1 !');
       } catch (error: any) {
         console.error('Erreur acceptation +1:', error);
@@ -195,105 +188,35 @@ export default function ConfirmationScreen() {
       return;
     }
 
+    // Mode normal : appeler la RPC join_activity_slot
     setIsInscribing(true);
-
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData?.user) {
-        Alert.alert('Erreur', 'Utilisateur non connecté.');
-        setIsInscribing(false);
-        return;
-      }
-
-      const currentUserId = userData.user.id;
-
-      // Récupérer les infos de l'activité
-      const { data: activityData, error: activityError } = await supabase
-        .from('activities')
-        .select('participants, max_participants, nom, titre, image_url')
-        .eq('id', activityId)
-        .single();
-
-      if (activityError || !activityData) {
-        Alert.alert('Erreur', 'Activité introuvable.');
-        setIsInscribing(false);
-        return;
-      }
-
-      // Récupérer les infos du slot
-      const { data: slotData, error: slotError } = await supabase
-        .from('activity_slots')
-        .select('date, time')
-        .eq('id', slotId)
-        .single();
-
-      if (slotError || !slotData) {
-        Alert.alert('Erreur', 'Créneau introuvable.');
-        setIsInscribing(false);
-        return;
-      }
-
-      // Vérifier si l'utilisateur est déjà inscrit à ce créneau
-      const { data: existingParticipation } = await supabase
-        .from('slot_participants')
-        .select('id')
-        .eq('slot_id', slotId)
-        .eq('user_id', currentUserId)
-        .eq('status', 'active')
-        .maybeSingle();
-
-      if (existingParticipation) {
-        Alert.alert('Info', 'Vous êtes déjà inscrit à ce créneau.');
-        setInscriptionDone(true);
-        setIsInscribing(false);
-        return;
-      }
-
-      // Vérifier si l'activité est complète
-      const currentParticipants = activityData.participants || 0;
-      const maxParticipants = activityData.max_participants || 0;
-
-      if (maxParticipants > 0 && currentParticipants >= maxParticipants) {
-        Alert.alert('Complet', 'Cette activité est complète.');
-        setIsInscribing(false);
-        return;
-      }
-
-      // Insérer dans slot_participants
-      const { error: insertError } = await supabase
-        .from('slot_participants')
-        .insert({
-          slot_id: slotId,
-          activity_id: activityId,
-          user_id: currentUserId,
-        });
-
-      if (insertError) {
-        if (insertError.code === '23505') {
-          Alert.alert('Info', 'Vous êtes déjà inscrit à ce créneau.');
-          setInscriptionDone(true);
-          setIsInscribing(false);
-          return;
-        }
-        throw insertError;
-      }
-
-      // Mettre à jour le compteur de participants
-      const newCount = currentParticipants + 1;
-      await supabase
-        .from('activities')
-        .update({ participants: newCount })
-        .eq('id', activityId);
-
-      // Gérer le groupe du créneau
-      const activityTitle = activityData.nom || activityData.titre || '';
-      const slotDateFormatted = new Date(slotData.date).toLocaleDateString('fr-FR', {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long',
+      const { data, error } = await supabase.rpc('join_activity_slot', {
+        p_slot_id: slotId,
+        p_activity_id: activityId,
       });
 
-      await handleSlotGroup(slotId, activityTitle, slotDateFormatted);
+      if (error) throw error;
+
+      if (!data.success) {
+        const errorMessages: Record<string, string> = {
+          'NOT_AUTHENTICATED': 'Vous devez être connecté.',
+          'USER_BANNED': 'Votre compte a été suspendu suite à des absences répétées.',
+          'SLOT_NOT_FOUND': 'Créneau introuvable.',
+          'SLOT_CANCELLED': 'Ce créneau a été annulé.',
+          'REGISTRATION_CLOSED': 'Les inscriptions sont fermées pour ce créneau.',
+          'TOO_LATE_TO_JOIN': 'L\'activité commence dans moins de 24h, inscription impossible.',
+          'ALREADY_PARTICIPANT': 'Vous êtes déjà inscrit à ce créneau.',
+          'SLOT_FULL': 'Ce créneau est complet.',
+          'ACTIVITY_FULL': 'Cette activité est complète.',
+        };
+        Alert.alert('Erreur', errorMessages[data.error] || data.error);
+        setIsInscribing(false);
+        return;
+      }
+
+      // Gérer le groupe du créneau
+      await handleSlotGroup(slotId);
 
       // Essayer de former les groupes intelligents si conditions remplies
       try {
@@ -304,6 +227,7 @@ export default function ConfirmationScreen() {
       }
 
       setInscriptionDone(true);
+      animateSuccess();
 
       // Mode duo : créer l'invitation après l'inscription
       if (mode === 'duo') {
@@ -311,7 +235,6 @@ export default function ConfirmationScreen() {
           const invResult = await invitationService.createInvitation(slotId);
           if (invResult.success && invResult.token) {
             setDuoInvitationToken(invResult.token);
-            // L'expiration est NOW + 10 minutes
             const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
             setDuoExpiresAt(expiresAt);
           } else {
@@ -320,15 +243,6 @@ export default function ConfirmationScreen() {
         } catch (err) {
           console.error('Erreur création invitation duo:', err);
         }
-        Alert.alert(
-          'Inscription réussie !',
-          'Partage le lien avec ton ami, il a 10 minutes pour s\'inscrire !'
-        );
-      } else {
-        Alert.alert(
-          'Inscription réussie !',
-          'Votre empreinte a été enregistrée. Pensez à régler sur place le jour de l\'activité.'
-        );
       }
     } catch (error: any) {
       console.error('Erreur inscription:', error);
@@ -356,90 +270,54 @@ export default function ConfirmationScreen() {
   };
 
   const handleViewActivities = () => {
-    // Naviguer vers l'onglet activités
     router.replace('/(tabs)/activity');
   };
 
-  return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <View style={styles.content}>
-        {/* Checkmark animé */}
-        <Animated.View
-          style={[
-            styles.checkmarkContainer,
-            {
-              transform: [{ scale: checkmarkScale }],
-              opacity: checkmarkOpacity,
-            },
-          ]}
-        >
-          <LinearGradient
-            colors={['#34C759', '#30B350']}
-            style={styles.checkmarkCircle}
-          >
-            <Check size={48} color="#FFFFFF" strokeWidth={3} />
-          </LinearGradient>
-        </Animated.View>
+  const formatTime = (time: string) => {
+    if (!time) return '';
+    return time.slice(0, 5);
+  };
 
-        {/* Texte de confirmation */}
-        <Text style={styles.successTitle}>Inscription confirmée !</Text>
-        <Text style={styles.successSubtitle}>
-          {plusOneAccepted
-            ? 'Tu as rejoint en tant que +1 !'
-            : 'Votre empreinte bancaire de 5€ a été enregistrée.'
-          }
-        </Text>
-
-        {/* Encart informatif empreinte */}
-        {!plusOneAccepted && (
-          <View style={styles.confirmInfoBlock}>
-            <Text style={styles.confirmInfoText}>💳 Empreinte de 5€ enregistrée — ne sera débitée qu'en cas d'absence</Text>
-            <Text style={styles.confirmInfoText}>💰 Le paiement de l'activité ({price}) se fera sur place</Text>
-          </View>
-        )}
-
-        {/* Boutons d'action */}
-        <View style={styles.actionsContainer}>
-          {/* Bouton principal */}
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={handleViewActivities}
-            activeOpacity={0.8}
-          >
-            <Calendar size={20} color="#FFFFFF" />
-            <Text style={styles.primaryButtonText}>Voir mes activités</Text>
-          </TouchableOpacity>
-
-          {/* Bouton dev temporaire */}
-          <TouchableOpacity
+  // Vue succès après inscription
+  if (inscriptionDone) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <ScrollView contentContainerStyle={styles.successContent}>
+          {/* Checkmark animé */}
+          <Animated.View
             style={[
-              styles.devButton,
-              inscriptionDone && styles.devButtonDone,
+              styles.checkmarkContainer,
+              {
+                transform: [{ scale: checkmarkScale }],
+                opacity: checkmarkOpacity,
+              },
             ]}
-            onPress={handleDevInscription}
-            disabled={isInscribing || inscriptionDone}
-            activeOpacity={0.8}
           >
-            {isInscribing ? (
-              <ActivityIndicator size="small" color="#F59E0B" />
-            ) : (
-              <>
-                <AlertTriangle size={18} color={inscriptionDone ? colors.success : '#F59E0B'} />
-                <Text style={[
-                  styles.devButtonText,
-                  inscriptionDone && styles.devButtonTextDone,
-                ]}>
-                  {inscriptionDone
-                    ? (plusOneAccepted ? 'Rejoint en +1 ✓' : 'Inscription effectuée ✓')
-                    : (isPlusOne ? 'Rejoindre en +1 (dev)' : 'Simuler l\'inscription (dev)')
-                  }
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
+            <LinearGradient
+              colors={['#34C759', '#30B350']}
+              style={styles.checkmarkCircle}
+            >
+              <Check size={48} color="#FFFFFF" strokeWidth={3} />
+            </LinearGradient>
+          </Animated.View>
 
-          {/* Section Duo - Invite ton ami */}
-          {mode === 'duo' && inscriptionDone && duoInvitationToken && !duoExpired && (
+          <Text style={styles.successTitle}>Inscription confirmée !</Text>
+          <Text style={styles.successSubtitle}>
+            {isPlusOne
+              ? 'Tu as rejoint en tant que +1 !'
+              : `Tu es inscrit(e) pour ${activityName}.`
+            }
+          </Text>
+
+          {/* Info prix sur place */}
+          {!isPlusOne && (
+            <View style={styles.infoBlock}>
+              <Text style={styles.infoText}>Le paiement de l'activité ({price}) se fera sur place</Text>
+            </View>
+          )}
+
+          {/* Section Duo */}
+          {mode === 'duo' && duoInvitationToken && !duoExpired && (
             <View style={styles.duoSection}>
               <View style={styles.duoHeader}>
                 <Users size={20} color={colors.primary} />
@@ -475,8 +353,7 @@ export default function ConfirmationScreen() {
             </View>
           )}
 
-          {/* Duo expired message */}
-          {mode === 'duo' && inscriptionDone && duoExpired && (
+          {mode === 'duo' && duoExpired && (
             <View style={styles.duoExpiredBox}>
               <Clock size={18} color={colors.textSecondary} />
               <Text style={styles.duoExpiredText}>
@@ -485,15 +362,93 @@ export default function ConfirmationScreen() {
             </View>
           )}
 
-          {/* Note explicative */}
-          <View style={styles.devNote}>
-            <Text style={styles.devNoteText}>
-              Le bouton ci-dessus est temporaire.{'\n'}
-              Il permet de déclencher l'inscription réelle{'\n'}
-              en attendant l'intégration de Stripe.
+          {/* Bouton principal */}
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={handleViewActivities}
+            activeOpacity={0.8}
+          >
+            <Calendar size={20} color="#FFFFFF" />
+            <Text style={styles.primaryButtonText}>Voir mes activités</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // Vue de confirmation avant inscription
+  return (
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <ScrollView contentContainerStyle={styles.confirmContent}>
+        {/* Header */}
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Text style={styles.backButtonText}>Retour</Text>
+        </TouchableOpacity>
+
+        <Text style={styles.pageTitle}>Confirmer l'inscription</Text>
+
+        {/* Récap activité */}
+        <View style={styles.recapCard}>
+          <Text style={styles.recapActivityName}>{activityName}</Text>
+          <View style={styles.recapRow}>
+            <Calendar size={16} color={colors.textSecondary} />
+            <Text style={styles.recapText}>{slotDate}</Text>
+          </View>
+          {slotTime && (
+            <View style={styles.recapRow}>
+              <Clock size={16} color={colors.textSecondary} />
+              <Text style={styles.recapText}>{formatTime(slotTime)}</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Prix indicatif */}
+        <View style={styles.priceCard}>
+          <Text style={styles.priceLabel}>Prix estimé</Text>
+          <Text style={styles.priceValue}>{price}</Text>
+          <Text style={styles.priceNote}>A régler sur place le jour J</Text>
+        </View>
+
+        {/* Avertissement no-show */}
+        <View style={styles.warningCard}>
+          <AlertTriangle size={20} color={colors.warning} />
+          <View style={styles.warningTextContainer}>
+            <Text style={styles.warningTitle}>Politique de présence</Text>
+            <Text style={styles.warningText}>
+              2 absences non justifiées (no-show) entraînent la suspension du compte.
+              Pensez à annuler si vous ne pouvez pas venir.
             </Text>
           </View>
         </View>
+
+        {/* Info annulation */}
+        <View style={styles.infoCard}>
+          <Info size={18} color={colors.primary} />
+          <Text style={styles.infoCardText}>
+            Annulation gratuite jusqu'à 24h avant l'activité.
+          </Text>
+        </View>
+      </ScrollView>
+
+      {/* Footer avec bouton */}
+      <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
+        <TouchableOpacity
+          style={[styles.confirmButton, isInscribing && styles.confirmButtonDisabled]}
+          onPress={handleConfirm}
+          disabled={isInscribing}
+          activeOpacity={0.8}
+        >
+          {isInscribing ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <>
+              <Check size={20} color="#FFFFFF" />
+              <Text style={styles.confirmButtonText}>
+                {isPlusOne ? 'Rejoindre en +1' : 'Confirmer l\'inscription'}
+              </Text>
+            </>
+          )}
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -504,14 +459,159 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  content: {
+
+  // Confirm view
+  confirmContent: {
+    padding: spacing.xl,
+    paddingBottom: 120,
+  },
+  backButton: {
+    marginBottom: spacing.lg,
+  },
+  backButtonText: {
+    fontSize: typography.base,
+    fontFamily: 'Manrope_500Medium',
+    color: colors.primary,
+  },
+  pageTitle: {
+    fontSize: typography.xxl,
+    fontFamily: 'Manrope_700Bold',
+    color: colors.text,
+    marginBottom: spacing.xxl,
+  },
+
+  // Recap card
+  recapCard: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.md,
+    padding: spacing.xl,
+    marginBottom: spacing.lg,
+    ...shadows.sm,
+  },
+  recapActivityName: {
+    fontSize: typography.lg,
+    fontFamily: 'Manrope_700Bold',
+    color: colors.text,
+    marginBottom: spacing.md,
+  },
+  recapRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  recapText: {
+    fontSize: typography.base,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textSecondary,
+  },
+
+  // Price card
+  priceCard: {
+    backgroundColor: '#F0F4FF',
+    borderRadius: borderRadius.md,
+    padding: spacing.xl,
+    marginBottom: spacing.lg,
+    alignItems: 'center',
+  },
+  priceLabel: {
+    fontSize: typography.sm,
+    fontFamily: 'Manrope_500Medium',
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+  },
+  priceValue: {
+    fontSize: 32,
+    fontFamily: 'Manrope_700Bold',
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  priceNote: {
+    fontSize: typography.sm,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.primary,
+  },
+
+  // Warning card
+  warningCard: {
+    flexDirection: 'row',
+    backgroundColor: colors.warningLight,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    gap: spacing.md,
+  },
+  warningTextContainer: {
+    flex: 1,
+  },
+  warningTitle: {
+    fontSize: typography.sm,
+    fontFamily: 'Manrope_600SemiBold',
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  warningText: {
+    fontSize: typography.xs,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.textSecondary,
+    lineHeight: 18,
+  },
+
+  // Info card
+  infoCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F4FF',
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  infoCardText: {
+    flex: 1,
+    fontSize: typography.sm,
+    fontFamily: 'Manrope_400Regular',
+    color: colors.text,
+    lineHeight: 20,
+  },
+
+  // Footer
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: colors.background,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    padding: spacing.xl,
+  },
+  confirmButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.lg,
+    borderRadius: borderRadius.md,
+    ...shadows.sm,
+  },
+  confirmButtonDisabled: {
+    opacity: 0.7,
+  },
+  confirmButtonText: {
+    fontSize: typography.base,
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#FFFFFF',
+  },
+
+  // Success view
+  successContent: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: spacing.xxl,
   },
-
-  // Checkmark
   checkmarkContainer: {
     marginBottom: spacing.xxxl,
   },
@@ -523,8 +623,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...shadows.lg,
   },
-
-  // Success text
   successTitle: {
     fontSize: typography.xxl,
     fontFamily: 'Manrope_700Bold',
@@ -538,33 +636,23 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 24,
-    marginBottom: spacing.xxxxl,
-  },
-  activityNameHighlight: {
-    fontFamily: 'Manrope_600SemiBold',
-    color: colors.text,
+    marginBottom: spacing.xxl,
   },
 
-  // Confirm info block
-  confirmInfoBlock: {
+  // Info block
+  infoBlock: {
     backgroundColor: '#F5F5F7',
     borderRadius: 12,
     padding: 16,
     width: '100%',
     marginBottom: spacing.xxl,
-    gap: spacing.sm,
   },
-  confirmInfoText: {
+  infoText: {
     fontSize: 13,
     fontFamily: 'Manrope_400Regular',
     color: colors.textSecondary,
     lineHeight: 20,
-  },
-
-  // Actions
-  actionsContainer: {
-    width: '100%',
-    gap: spacing.lg,
+    textAlign: 'center',
   },
 
   // Primary button
@@ -577,40 +665,13 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.xxl,
     borderRadius: borderRadius.md,
+    width: '100%',
     ...shadows.sm,
   },
   primaryButtonText: {
     fontSize: typography.base,
     fontFamily: 'Manrope_600SemiBold',
     color: '#FFFFFF',
-  },
-
-  // Dev button
-  devButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.md,
-    backgroundColor: 'transparent',
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.xxl,
-    borderRadius: borderRadius.md,
-    borderWidth: 2,
-    borderColor: '#F59E0B',
-    borderStyle: 'dashed',
-  },
-  devButtonDone: {
-    borderColor: colors.success,
-    borderStyle: 'solid',
-    backgroundColor: colors.successLight,
-  },
-  devButtonText: {
-    fontSize: typography.sm,
-    fontFamily: 'Manrope_600SemiBold',
-    color: '#F59E0B',
-  },
-  devButtonTextDone: {
-    color: colors.success,
   },
 
   // Duo section
@@ -621,6 +682,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.primary,
     gap: spacing.md,
+    width: '100%',
+    marginBottom: spacing.xl,
   },
   duoHeader: {
     flexDirection: 'row',
@@ -712,26 +775,12 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.xl,
     borderRadius: borderRadius.md,
+    width: '100%',
+    marginBottom: spacing.xl,
   },
   duoExpiredText: {
     fontSize: typography.sm,
     fontFamily: 'Manrope_500Medium',
     color: colors.textSecondary,
-  },
-
-  // Dev note
-  devNote: {
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.xl,
-    backgroundColor: colors.warningLight,
-    borderRadius: borderRadius.md,
-    marginTop: spacing.sm,
-  },
-  devNoteText: {
-    fontSize: typography.xs,
-    fontFamily: 'Manrope_400Regular',
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 18,
   },
 });

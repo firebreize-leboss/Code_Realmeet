@@ -12,7 +12,6 @@ export interface PlusOneInvitation {
   inviteeId?: string;
   token: string;
   status: 'pending' | 'accepted' | 'expired' | 'cancelled';
-  paymentMode: 'host_pays' | 'guest_pays';
   createdAt: string;
   expiresAt: string;
   acceptedAt?: string;
@@ -31,7 +30,6 @@ export interface InvitationPreview {
   slotTime: string;
   location: string;
   expiresAt: string;
-  paymentMode: string;
 }
 
 // ============================================
@@ -125,7 +123,6 @@ class InvitationService {
           slotTime: inv.slot_time,
           location: inv.location,
           expiresAt: inv.expires_at,
-          paymentMode: inv.payment_mode,
         },
       };
     } catch (error: any) {
@@ -304,7 +301,6 @@ class InvitationService {
           inviteeId: data.invitee_id,
           token: data.token,
           status: data.status,
-          paymentMode: data.payment_mode,
           createdAt: data.created_at,
           expiresAt: data.expires_at,
           acceptedAt: data.accepted_at,

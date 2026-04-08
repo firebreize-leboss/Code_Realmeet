@@ -4,7 +4,13 @@
       "mcp__ide__getDiagnostics",
       "Bash(find:*)",
       "mcp__supabase__execute_sql",
-      "Bash(sudo chmod 644 /home/ubuntu/code_realmeet/.claude/skills/realmeet-diagrams 2>/dev/null || chmod 644 /home/ubuntu/code_realmeet/.claude/skills/realmeet-diagrams)"
+      "Bash(sudo chmod 644 /home/ubuntu/code_realmeet/.claude/skills/realmeet-diagrams 2>/dev/null || chmod 644 /home/ubuntu/code_realmeet/.claude/skills/realmeet-diagrams)",
+      "Bash(grep -r \"checked_in\\\\|penalty\\\\|ban\\\\|no_show\" /home/ubuntu/code_realmeet/supabase /home/ubuntu/code_realmeet/sql /home/ubuntu/code_realmeet/migrations --include=\"*.sql\" 2>/dev/null | head -20)",
+      "mcp__supabase__list_tables",
+      "mcp__supabase__apply_migration",
+      "mcp__supabase__generate_typescript_types",
+      "Bash(chmod 666 /home/ubuntu/code_realmeet/diagrammes/realmeet-user-flows.mermaid /home/ubuntu/code_realmeet/diagrammes/realmeet-domain-flow.mermaid /home/ubuntu/code_realmeet/diagrammes/realmeet-erd.md /home/ubuntu/code_realmeet/diagrammes/domains/business-payment.mermaid /home/ubuntu/code_realmeet/diagrammes/domains/plus-one.mermaid /home/ubuntu/code_realmeet/diagrammes/domains/activities-slots.mermaid 2>/dev/null; sudo chmod 666 /home/ubuntu/code_realmeet/diagrammes/realmeet-user-flows.mermaid /home/ubuntu/code_realmeet/diagrammes/realmeet-domain-flow.mermaid /home/ubuntu/code_realmeet/diagrammes/realmeet-erd.md /home/ubuntu/code_realmeet/diagrammes/domains/business-payment.mermaid /home/ubuntu/code_realmeet/diagrammes/domains/plus-one.mermaid /home/ubuntu/code_realmeet/diagrammes/domains/activities-slots.mermaid 2>/dev/null; echo \"done\")",
+      "mcp__supabase__get_advisors"
     ]
   }
 }

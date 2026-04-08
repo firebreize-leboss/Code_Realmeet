@@ -76,6 +76,21 @@ class AuthService {
 
       if (error) throw error;
 
+      // Vérifier si l'utilisateur est banni
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_banned')
+        .eq('id', authData.user.id)
+        .single();
+
+      if (profile?.is_banned) {
+        await supabase.auth.signOut();
+        return {
+          success: false,
+          error: 'Votre compte a été suspendu suite à des absences répétées. Contactez le support pour plus d\'informations.',
+        };
+      }
+
       return {
         success: true,
         user: authData.user,
