@@ -1,0 +1,166 @@
+---
+name: realmeet-diagrams-sync
+description: Keep RealMeet Mermaid diagrams fully synchronized with the codebase. Use for any feature, bug fix, backend logic change, database change, or flow update.
+---
+
+You are responsible for keeping RealMeet diagrams synchronized with the codebase at all times.
+
+Diagrams are part of the definition of done.
+
+A task affecting logic, flows, states, or data is NOT complete until diagrams are updated.
+
+---
+
+# 📁 Diagram structure
+
+Global map (read-only most of the time):
+- code_realmeet/diagrammes/realmeet-global-map.mermaid
+
+Domain diagrams (main working files):
+- code_realmeet/diagrammes/domains/
+
+You MUST focus on domain diagrams for implementation changes.
+
+---
+
+# 🧠 Before coding
+
+1. Identify which domain(s) are impacted by the task.
+2. ONLY read relevant files inside:
+   code_realmeet/diagrammes/domains/
+3. Do NOT load all diagrams unnecessarily.
+4. Identify impacted nodes / flows / entities.
+5. Reference them in contexte/task_plan.md.
+
+---
+
+# ⚙️ After coding (MANDATORY)
+
+After ANY meaningful change affecting:
+- backend logic
+- database structure
+- feature behavior
+- permissions
+- flows
+- states
+
+You MUST:
+
+## 1. Update domain diagrams
+
+Edit ONLY the relevant files in:
+code_realmeet/diagrammes/domains/
+
+Do NOT suggest changes.
+Do NOT skip updates.
+Directly modify the files.
+
+---
+
+## 2. Apply visual diff markers
+
+Use these statuses:
+
+- added → new node/block
+- updated → modified node/block
+- removed → moved to archive section
+
+### Mermaid classes:
+
+classDef added fill:#d9fdd3,stroke:#1a7f37,stroke-width:2px;
+classDef updated fill:#fff3bf,stroke:#e0a800,stroke-width:2px;
+classDef removed fill:#eeeeee,stroke:#999999,stroke-width:2px,stroke-dasharray: 5 5;
+
+---
+
+## 3. Rules
+
+### Added
+- place in correct flow position
+- apply class `added`
+
+### Updated
+- modify existing node
+- apply class `updated`
+
+### Removed
+- remove from main flow
+- move to section:
+  "Removed in latest version"
+- apply class `removed`
+- keep short explanation if needed
+
+### Cross-domain references
+When a domain diagram references an entity from another domain,
+represent it as a ref node with dashed style:
+classDef ref fill:#f5f5f5,stroke:#aaa,stroke-dasharray:4 4,color:#888;
+Label it as: EntityName\n(ref)
+Do NOT duplicate the full definition.
+
+---
+
+## 4. Diff persistence
+
+- Diff markers represent ONLY the latest change
+- If diagram already had old markers:
+  → clean them before applying new ones
+
+---
+
+# 🌍 Global map update (SECONDARY)
+
+After updating domain diagrams:
+
+1. Check if the change impacts system-level structure
+
+Update the global map ONLY if:
+- a new major entity/domain is introduced
+- a major relationship changes
+- a core table is added or removed
+
+---
+
+## Global update rules
+
+- Keep it CLEAN and readable
+- NO diff markers unless explicitly required
+- Only update the minimal relevant part
+
+Global map is for orientation, not detailed tracking.
+
+---
+
+# 🧾 Changelog (REQUIRED)
+
+Update:
+code_realmeet/diagrammes/CHANGELOG-DIAGRAMS.md
+
+Add entry:
+
+- date
+- feature / fix
+- impacted domain files
+- added nodes
+- updated nodes
+- removed nodes
+
+---
+
+# ⚠️ Strict rules
+
+- Do NOT rewrite entire diagrams
+- Do NOT load unnecessary files
+- Do NOT leave diagrams outdated
+- Do NOT only describe changes → APPLY them
+
+If code changed but diagrams did not → task is incomplete.
+
+---
+
+# 🎯 Goal
+
+Domain diagrams = source of truth for implementation  
+Global diagram = system overview  
+
+Always prioritize:
+PRECISION > COMPLETENESS > MINIMAL CHANGES > READABILITY
