@@ -207,19 +207,8 @@ export default function GroupInfoScreen() {
                 }
               }
 
-              // Vérifier combien de participants restent
-              const { count } = await supabase
-                .from('conversation_participants')
-                .select('*', { count: 'exact', head: true })
-                .eq('conversation_id', groupInfo.id);
-
-              // Si moins de 2 participants, supprimer la conversation
-              if (count !== null && count < 2) {
-                await supabase
-                  .from('conversations')
-                  .delete()
-                  .eq('id', groupInfo.id);
-              }
+              // Note: la conversation est auto-supprimée par le trigger
+              // trg_cleanup_empty_conversation quand elle n'a plus de participants.
 
               // Retourner à la liste des chats
               router.replace('/(tabs)/chat');

@@ -613,78 +613,18 @@ export function useConversations() {
 
   const createConversation = async (participantIds: string[]) => {
     try {
-      const { data: currentUser } = await supabase.auth.getUser();
-
-      if (!currentUser?.user?.id) {
-        throw new Error('User not authenticated');
+      if (participantIds.length !== 1) {
+        throw new Error('Only 1:1 direct conversations are supported client-side');
       }
 
-      // Pour une conversation privée (1 seul autre participant)
-      if (participantIds.length === 1) {
-        const friendId = participantIds[0];
+      const { data, error } = await supabase.rpc('create_direct_conversation', {
+        p_friend_id: participantIds[0],
+      });
 
-        // Vérifier si une conversation privée existe déjà
-        const { data: myParticipations } = await supabase
-          .from('conversation_participants')
-          .select('conversation_id')
-          .eq('user_id', currentUser.user.id);
-
-        if (myParticipations && myParticipations.length > 0) {
-          const myConvIds = myParticipations.map(p => p.conversation_id);
-
-          const { data: friendParticipations } = await supabase
-            .from('conversation_participants')
-            .select('conversation_id')
-            .eq('user_id', friendId)
-            .in('conversation_id', myConvIds);
-
-          if (friendParticipations && friendParticipations.length > 0) {
-            for (const fp of friendParticipations) {
-              const { data: convData } = await supabase
-                .from('conversations')
-                .select('is_group')
-                .eq('id', fp.conversation_id)
-                .single();
-
-              if (convData?.is_group) continue;
-
-              const { count } = await supabase
-                .from('conversation_participants')
-                .select('*', { count: 'exact', head: true })
-                .eq('conversation_id', fp.conversation_id);
-
-              if (count === 2) {
-                return fp.conversation_id;
-              }
-            }
-          }
-        }
-      }
-
-      // Créer une nouvelle conversation privée
-      const { data: conversation, error: convError } = await supabase
-        .from('conversations')
-        .insert({
-          is_group: false,
-        })
-        .select()
-        .single();
-
-      if (convError) throw convError;
-
-      const participants = [currentUser.user.id, ...participantIds].map(odUserId => ({
-        conversation_id: conversation.id,
-        user_id: odUserId,
-      }));
-
-      const { error: partError } = await supabase
-        .from('conversation_participants')
-        .insert(participants);
-
-      if (partError) throw partError;
+      if (error) throw error;
 
       await loadConversations();
-      return conversation.id;
+      return data as string;
     } catch (err) {
       console.error('Error creating conversation:', err);
       throw err;

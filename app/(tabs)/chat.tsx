@@ -244,79 +244,17 @@ export default function ChatScreen() {
 
   const handleCreateConversation = async (friendId: string) => {
     try {
-      const { data: currentUser } = await supabase.auth.getUser();
-      if (!currentUser?.user?.id) throw new Error('User not authenticated');
+      const { data: convId, error: rpcError } = await supabase.rpc('create_direct_conversation', {
+        p_friend_id: friendId,
+      });
 
-      const { data: myParticipations } = await supabase
-        .from('conversation_participants')
-        .select('conversation_id')
-        .eq('user_id', currentUser.user.id);
-
-      if (myParticipations && myParticipations.length > 0) {
-        const myConvIds = myParticipations.map(p => p.conversation_id);
-        const { data: friendParticipations } = await supabase
-          .from('conversation_participants')
-          .select('conversation_id')
-          .eq('user_id', friendId)
-          .in('conversation_id', myConvIds);
-
-        if (friendParticipations && friendParticipations.length > 0) {
-          for (const fp of friendParticipations) {
-            const { data: convData } = await supabase
-              .from('conversations')
-              .select('is_group')
-              .eq('id', fp.conversation_id)
-              .single();
-
-            if (convData?.is_group) continue;
-
-            const { count } = await supabase
-              .from('conversation_participants')
-              .select('*', { count: 'exact', head: true })
-              .eq('conversation_id', fp.conversation_id);
-
-            if (count === 2) {
-              await supabase
-                .from('conversation_participants')
-                .update({ is_hidden: false })
-                .eq('conversation_id', fp.conversation_id)
-                .eq('user_id', currentUser.user.id);
-
-              setShowFriendsModal(false);
-              router.push(`/chat-detail?id=${fp.conversation_id}`);
-              return;
-            }
-          }
-        }
-      }
-
-      const { data: conversation, error: convError } = await supabase
-        .from('conversations')
-        .insert({ is_group: false })
-        .select()
-        .single();
-
-      if (convError) {
-        console.error('CONV ERROR:', JSON.stringify(convError));
-        throw convError;
-      }
-
-      const participants = [currentUser.user.id, friendId].map(userId => ({
-        conversation_id: conversation.id,
-        user_id: userId,
-      }));
-
-      const { error: partError } = await supabase
-        .from('conversation_participants')
-        .insert(participants);
-
-      if (partError) {
-        console.error('PART ERROR:', JSON.stringify(partError));
-        throw partError;
+      if (rpcError) {
+        console.error('CONV RPC ERROR:', JSON.stringify(rpcError));
+        throw rpcError;
       }
 
       setShowFriendsModal(false);
-      router.push(`/chat-detail?id=${conversation.id}`);
+      router.push(`/chat-detail?id=${convId as string}`);
     } catch (error) {
       console.error('Error creating conversation:', error);
     }

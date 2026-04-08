@@ -33,18 +33,19 @@ Préparer RealMeet pour le lancement en production. 6 chantiers parallèles à f
 **Flows impactés** : Tous (smoothness générale)
 **Status** : DONE
 
-### Phase 2: Tests pré-production
-- [ ] Tests du Flow 1 complet (inscription → paiement → conversation groupe)
-- [ ] Tests du Flow 2 (formation de groupes — vérifier pg_cron + form_groups_v3)
-- [ ] Tests du Flow 3 (check-in QR — scan → verify → validate sur checkin.realmeet.fr)
-- [ ] Tests du Flow 4 (invitation +1 — création → lien → deep link → acceptation)
-- [ ] Tests du Flow 5 (social — demande ami → acceptation → chat privé → block)
-- [ ] Tests auth (inscription, login, session refresh, logout)
-- [ ] Tests edge cases (réseau lent, double-tap, back navigation, token expiré)
-- [ ] Vérifier les RLS policies sur toutes les tables
+### Phase 2: Tests pré-production ✅
+- [x] Tests du Flow 1 complet (inscription → paiement → conversation groupe)
+- [x] Tests du Flow 2 (formation de groupes — vérifier pg_cron + form_groups_v3)
+- [x] Tests du Flow 3 (check-in QR — scan → verify → validate sur checkin.realmeet.fr)
+- [x] Tests du Flow 4 (invitation +1 — création → lien → deep link → acceptation)
+- [x] Tests du Flow 5 (social — demande ami → acceptation → chat privé → block)
+- [x] Tests auth (inscription, login, session refresh, logout)
+- [x] Tests edge cases (réseau lent, double-tap, back navigation, token expiré)
+- [x] Vérifier les RLS policies sur toutes les tables — audit complet + hardening (45 fonctions, 3 migrations critiques)
+- [x] Diagrammes synchronisés (groups-chat.mermaid, social.mermaid, CHANGELOG-DIAGRAMS.md créé)
 **Fichiers concernés** : Tous les flows, services/*.service.ts, RPC Supabase
 **Flows impactés** : Flow 1-5
-**Status** : NOT STARTED
+**Status** : DONE ✅
 
 ### Phase 3: Design & Identité visuelle
 - [ ] Définir la DA RealMeet (palette, typographie, spacing, border-radius)
@@ -71,6 +72,7 @@ Préparer RealMeet pour le lancement en production. 6 chantiers parallèles à f
 **Flows impactés** : Flow 4
 **Diagramme** : realmeet-user-flows.mermaid > FLOW4
 **Status** : NOT STARTED
+**Notes** : Faire tout ce qui est possible sans test réel (avec supabase). A la fin, faire une note sur .claude/notes avec ce qui reste à être vérifié manuellement sur expo-go directement.
 
 ### Phase 5: Pages légales & administratives
 - [ ] Vérifier que terms-of-use.tsx est complet et à jour
@@ -82,6 +84,7 @@ Préparer RealMeet pour le lancement en production. 6 chantiers parallèles à f
 **Fichiers concernés** : app/terms-of-use.tsx, app/privacy-policy.tsx, app/about.tsx, app/help-support.tsx
 **Flows impactés** : Aucun flow critique
 **Status** : NOT STARTED
+**Notes** : Si tu vois que des documents sont manquants et pourtant essentiels, fais en part durant la session. Il faut que tout soit en ordre à la fin de cette phase administrativement.
 
 ## Decisions Made
 - (aucune pour l'instant)
@@ -90,5 +93,5 @@ Préparer RealMeet pour le lancement en production. 6 chantiers parallèles à f
 - (aucune pour l'instant)
 
 ## Status
-**Phase actuelle** : Phase 1 terminée ✅ — Prêt pour Phase 2
-**Ordre recommandé** : Phase 4 (rapide, bloquant) → Phase 2 (validation) → Phase 3 (polish) → Phase 5 (administratif)
+**Phase actuelle** : Phase 3 / Phase 4 /Phase 5
+**Ordre recommandé** : Phase 5 (Important) → Phase 4 (Rapide) → Phase 3 (Polish)

@@ -12,6 +12,6 @@ flowchart TD
   C_REF["conversations\n(ref)"]:::ref
 
   FR -->|"si acceptée → amitié"| FS
-  FR -->|"crée chat 1:1"| C_REF
+  FR -->|"crée chat 1:1\nvia RPC create_direct_conversation"| C_REF
 
   classDef ref fill:#f5f5f5,stroke:#aaa,stroke-dasharray:4 4,color:#888

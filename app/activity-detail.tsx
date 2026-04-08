@@ -490,14 +490,8 @@ export default function ActivityDetailScreen() {
           .eq('conversation_id', conv.id)
           .eq('user_id', currentUserId);
 
-        const { count } = await supabase
-          .from('conversation_participants')
-          .select('*', { count: 'exact', head: true })
-          .eq('conversation_id', conv.id);
-
-        if (count !== null && count < 2) {
-          await supabase.from('conversations').delete().eq('id', conv.id);
-        }
+        // Note: la conversation est auto-supprimée par le trigger
+        // trg_cleanup_empty_conversation quand elle n'a plus de participants.
       }
 
       const { data: slotGroups } = await supabase

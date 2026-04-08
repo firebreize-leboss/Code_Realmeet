@@ -9,9 +9,11 @@ flowchart TD
 
   subgraph MSG["💬 Messagerie"]
     direction TB
-    C["conversations\n─────────────\nid · activity_id · slot_id\nfriend_request_id\nis_group · is_closed\nlast_message_at"]
-    CP["conversation_participants\n─────────────\nid · conversation_id · user_id\nlast_read_at · is_muted"]
+    C["conversations\n─────────────\nid · activity_id · slot_id\nfriend_request_id\nis_group · is_closed\nlast_message_at\n🔒 INSERT bloqué côté client\n(via RPC ou service_role)\n🔒 UPDATE: participant only"]:::updated
+    CP["conversation_participants\n─────────────\nid · conversation_id · user_id\nlast_read_at · is_muted · is_hidden\n🔒 INSERT: user_id = auth.uid()"]:::updated
     M["messages\n─────────────\nid · conversation_id · sender_id\ncontent · message_type\nis_admin_message\nreply_to_message_id · deleted_at"]
+    RPC_CDC["RPC create_direct_conversation\n(p_friend_id, p_friend_request_id?)\n─────────────\nSECURITY DEFINER · idempotent\nVérifie amitié + non-blocage\nCrée conv 1:1 + 2 participants"]:::added
+    TRG_CLEAN["trigger trg_cleanup_empty_conversation\n─────────────\nAFTER DELETE on CP\nSupprime conversation\nquand 0 participant restant"]:::added
   end
 
   %% Créneaux (refs externes)
@@ -28,4 +30,12 @@ flowchart TD
   C -->|"messages"| M
   M -->|"reply"| M
 
+  RPC_CDC -->|"INSERT"| C
+  RPC_CDC -->|"INSERT x2"| CP
+  CP -. "DELETE → trigger" .-> TRG_CLEAN
+  TRG_CLEAN -->|"DELETE si vide"| C
+
   classDef ref fill:#f5f5f5,stroke:#aaa,stroke-dasharray:4 4,color:#888
+  classDef added fill:#d9fdd3,stroke:#1a7f37,stroke-width:2px
+  classDef updated fill:#fff3bf,stroke:#e0a800,stroke-width:2px
+  classDef removed fill:#eeeeee,stroke:#999999,stroke-width:2px,stroke-dasharray: 5 5

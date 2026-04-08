@@ -341,37 +341,24 @@ export async function removeFriend(friendId: string) {
 }
 
 /**
- * Crée une nouvelle conversation
+ * Crée une conversation directe 1:1 entre l'utilisateur courant et un ami.
+ * Idempotent : retourne la conversation existante si elle existe déjà.
  */
 export async function createConversation(participantIds: string[]) {
   try {
-    const user = await getCurrentUser();
-    if (!user) throw new Error('No user logged in');
+    if (participantIds.length !== 1) {
+      throw new Error('Only 1:1 direct conversations are supported client-side');
+    }
 
-    // Créer la conversation
-    const { data: conversation, error: convError } = await supabase
-      .from('conversations')
-      .insert({})
-      .select()
-      .single();
+    const { data, error } = await supabase.rpc('create_direct_conversation', {
+      p_friend_id: participantIds[0],
+    });
 
-    if (convError) throw convError;
-
-    // Ajouter les participants
-    const participants = [user.id, ...participantIds].map(userId => ({
-      conversation_id: conversation.id,
-      user_id: userId,
-    }));
-
-    const { error: partError } = await supabase
-      .from('conversation_participants')
-      .insert(participants);
-
-    if (partError) throw partError;
+    if (error) throw error;
 
     return {
       success: true,
-      conversationId: conversation.id,
+      conversationId: data as string,
     };
   } catch (error) {
     console.error('Error creating conversation:', error);

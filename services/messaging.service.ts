@@ -217,50 +217,13 @@ class MessagingService {
 
   async createConversation(friendId: string) {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Non connecté');
+      const { data, error } = await supabase.rpc('create_direct_conversation', {
+        p_friend_id: friendId,
+      });
 
-      // Vérifier si une conversation existe déjà
-      const { data: existingParticipations } = await supabase
-        .from('conversation_participants')
-        .select('conversation_id')
-        .eq('user_id', user.id);
+      if (error) throw error;
 
-      if (existingParticipations) {
-        for (const part of existingParticipations) {
-          const { data: otherPart } = await supabase
-            .from('conversation_participants')
-            .select('user_id')
-            .eq('conversation_id', part.conversation_id)
-            .eq('user_id', friendId)
-            .single();
-
-          if (otherPart) {
-            return { success: true, conversationId: part.conversation_id };
-          }
-        }
-      }
-
-      // Créer nouvelle conversation
-      const { data: conversation, error: convError } = await supabase
-        .from('conversations')
-        .insert({})
-        .select()
-        .single();
-
-      if (convError) throw convError;
-
-      // Ajouter les participants
-      const { error: partError } = await supabase
-        .from('conversation_participants')
-        .insert([
-          { conversation_id: conversation.id, user_id: user.id },
-          { conversation_id: conversation.id, user_id: friendId },
-        ]);
-
-      if (partError) throw partError;
-
-      return { success: true, conversationId: conversation.id };
+      return { success: true, conversationId: data as string };
     } catch (error: any) {
       return { success: false, error: error.message };
     }
