@@ -1,0 +1,17 @@
+flowchart TD
+
+  subgraph SOC["🤝 Social"]
+    direction TB
+    FR["friend_requests\n─────────────\nid · sender_id · receiver_id\nstatus: pending | accepted | rejected"]
+    FS["friendships\n─────────────\nid · user_id · friend_id"]
+    BU["blocked_users\n─────────────\nid · blocker_id · blocked_id"]
+    MPH["met_people_hidden\n─────────────\nuser_id · hidden_user_id\n(clé composite, pas d'id)"]
+  end
+
+  %% Refs externes
+  C_REF["conversations\n(ref)"]:::ref
+
+  FR -->|"si acceptée → amitié"| FS
+  FR -->|"crée chat 1:1"| C_REF
+
+  classDef ref fill:#f5f5f5,stroke:#aaa,stroke-dasharray:4 4,color:#888

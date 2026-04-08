@@ -1,0 +1,13 @@
+flowchart TD
+
+  subgraph CHK["✅ Check-in"]
+    direction TB
+    CL["checkin_logs\n─────────────\nid · slot_participant_id\nperformed_by · action\nresult · ip_address · metadata"]
+  end
+
+  %% Ref externe
+  SP_REF["slot_participants\n(ref)"]:::ref
+
+  SP_REF -->|"audit trail"| CL
+
+  classDef ref fill:#f5f5f5,stroke:#aaa,stroke-dasharray:4 4,color:#888

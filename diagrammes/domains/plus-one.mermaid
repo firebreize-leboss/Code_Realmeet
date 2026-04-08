@@ -1,0 +1,15 @@
+flowchart TD
+
+  subgraph PLUS["➕ Invitation +1"]
+    direction TB
+    POI["plus_one_invitations\n─────────────\nid · slot_id\ninviter_id · invitee_id\ntoken · status\npayment_mode\nexpires_at"]
+  end
+
+  %% Refs externes
+  AS_REF["activity_slots\n(ref)"]:::ref
+  SP_REF["slot_participants\n(ref)"]:::ref
+
+  AS_REF -->|"+1 pour ce créneau"| POI
+  POI -->|"crée place si acceptée"| SP_REF
+
+  classDef ref fill:#f5f5f5,stroke:#aaa,stroke-dasharray:4 4,color:#888

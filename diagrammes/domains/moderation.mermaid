@@ -1,0 +1,13 @@
+flowchart TD
+
+  subgraph MOD["🚨 Modération"]
+    direction TB
+    RP["reports\n─────────────\nid · reported_by\ntarget_type: profile|message|activity\ntarget_id · reason\nstatus: new|reviewing|resolved|dismissed"]
+  end
+
+  %% Ref externe
+  P_REF["profiles\n(ref)"]:::ref
+
+  P_REF -->|"signale"| RP
+
+  classDef ref fill:#f5f5f5,stroke:#aaa,stroke-dasharray:4 4,color:#888

@@ -1,0 +1,31 @@
+flowchart TD
+
+  subgraph GRP["🧩 Groupes"]
+    direction TB
+    SG["slot_groups\n─────────────\nid · slot_id\ngroup_number · group_name\nconversation_id"]
+    SGM["slot_group_members\n─────────────\nid · group_id · user_id\ncompatibility_score 0→1"]
+    GFL["group_formation_logs\n─────────────\nid · slot_id\nstatus: success | error | skipped\ngroups_created · avg_compatibility"]
+  end
+
+  subgraph MSG["💬 Messagerie"]
+    direction TB
+    C["conversations\n─────────────\nid · activity_id · slot_id\nfriend_request_id\nis_group · is_closed\nlast_message_at"]
+    CP["conversation_participants\n─────────────\nid · conversation_id · user_id\nlast_read_at · is_muted"]
+    M["messages\n─────────────\nid · conversation_id · sender_id\ncontent · message_type\nis_admin_message\nreply_to_message_id · deleted_at"]
+  end
+
+  %% Créneaux (refs externes)
+  AS_REF["activity_slots\n(ref)"]:::ref
+  AS_REF -->|"groupes formés"| SG
+  AS_REF -->|"logs formation"| GFL
+
+  %% Groupes
+  SG -->|"membres"| SGM
+  SG -->|"chat auto-créé"| C
+
+  %% Messagerie
+  C -->|"participants"| CP
+  C -->|"messages"| M
+  M -->|"reply"| M
+
+  classDef ref fill:#f5f5f5,stroke:#aaa,stroke-dasharray:4 4,color:#888
