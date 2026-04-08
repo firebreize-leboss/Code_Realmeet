@@ -7,13 +7,13 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  Image,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
   RefreshControl,
   Platform,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -183,8 +183,9 @@ export default function MyActivitiesScreen() {
         activeOpacity={0.7}
       >
         <Image
-          source={{ uri: item.image_url || 'https://via.placeholder.com/150' }}
+          source={item.image_url || require('@/assets/images/placeholder-activity.png')}
           style={styles.activityImage}
+          transition={200}
         />
         
         <View style={[styles.statusBadge, { backgroundColor: status.color + '20' }]}>

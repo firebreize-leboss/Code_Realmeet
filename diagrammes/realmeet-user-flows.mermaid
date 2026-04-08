@@ -18,29 +18,21 @@ flowchart TB
   classDef note fill:#0F172A,stroke:#334155,color:#94A3B8,stroke-width:1px,stroke-dasharray:4 3
 
   %% ============================================================
-  %% FLOW 1 — INSCRIPTION A UNE ACTIVITE + PAIEMENT
+  %% FLOW 1 — INSCRIPTION A UNE ACTIVITE (updated)
   %% ============================================================
-  subgraph FLOW1 ["Flow 1 — Inscription activite + Paiement"]
+  subgraph FLOW1 ["Flow 1 — Inscription activite"]
     direction TB
 
     F1_START([Browse / Carte]):::user
     F1_START --> F1_SELECT[Selectionne activite + creneau]:::app
 
-    F1_SELECT --> F1_CHECK{Verifications}:::app
-    F1_CHECK -->|"Creneau a moins de 24h"| F1_BLOCK_J1[Inscription impossible - regle J-1]:::error
-    F1_CHECK -->|"Plus de places"| F1_BLOCK_FULL[Creneau complet]:::error
-    F1_CHECK -->|"Deja inscrit"| F1_BLOCK_DUP[Deja participant]:::error
-    F1_CHECK -->|"Inscriptions fermees"| F1_BLOCK_CLOSED[Groupes deja formes]:::error
-    F1_CHECK -->|OK| F1_PAY_METHOD
+    F1_SELECT --> F1_CONFIRM["confirm-join<br/>Recap + prix indicatif<br/>+ regles no-show"]:::app
 
-    F1_PAY_METHOD["payment/select-method<br/>CB ou Apple Pay"]:::app
-    F1_PAY_METHOD --> F1_PAY_CARD["payment/card-form<br/>Saisie carte + preview"]:::app
-    F1_PAY_CARD --> F1_PAY_CONFIRM["payment/confirmation"]:::app
+    F1_CONFIRM --> F1_RPC["RPC join_activity_slot<br/>Verifie ban / J-1 / capacite"]:::db
+    F1_RPC -->|"Erreur"| F1_BLOCK[Inscription refusee<br/>ban / J-1 / complet / fermee]:::error
+    F1_RPC -->|"OK"| F1_INSERT_SP["INSERT slot_participants<br/>status: active<br/>UPDATE activities participants + 1"]:::db
 
-    F1_PAY_CONFIRM --> F1_INSERT_SP["INSERT slot_participants<br/>status: active"]:::db
-    F1_INSERT_SP --> F1_UPDATE_COUNT["UPDATE activities<br/>participants + 1"]:::db
-
-    F1_UPDATE_COUNT --> F1_CONV_CHECK{"Conversation groupe<br/>existe ?"}:::app
+    F1_INSERT_SP --> F1_CONV_CHECK{"Conversation groupe<br/>existe ?"}:::app
     F1_CONV_CHECK -->|Oui| F1_JOIN_CONV["INSERT conversation_participants<br/>+ message systeme"]:::db
     F1_CONV_CHECK -->|Non| F1_CREATE_CONV["INSERT conversations is_group true<br/>+ participants"]:::db
 
@@ -137,7 +129,7 @@ flowchart TB
     F4_EXPIRED -->|Non| F4_PREVIEW
 
     F4_PREVIEW["Affiche preview invitation"]:::app
-    F4_PREVIEW --> F4_ACCEPT["Guest accepte puis payment flow"]:::app
+    F4_PREVIEW --> F4_ACCEPT["Guest accepte via confirm-join"]:::app
 
     F4_ACCEPT --> F4_RPC["RPC accept_plus_one_invitation"]:::db
     F4_RPC --> F4_INSERT_GUEST["INSERT slot_participants<br/>is_plus_one: true<br/>invited_by: host_id"]:::db
@@ -180,4 +172,29 @@ flowchart TB
 
     F5_UNFRIEND["RPC remove_bidirectional_friendship<br/>DELETE friendships A vers B + B vers A"]:::db
     F5_UNFRIEND --> F5_READONLY["Conversation en lecture seule<br/>Pas supprimee - historique preserve"]:::note
+  end
+
+  %% ============================================================
+  %% FLOW 6 — DETECTION NO-SHOW + PENALITES (added)
+  %% ============================================================
+  subgraph FLOW6 ["Flow 6 — Detection no-show + penalites"]
+    direction TB
+
+    F6_CRON(["pg_cron toutes les heures"]):::cron
+    F6_CRON --> F6_CALL["RPC detect_no_shows"]:::db
+
+    F6_CALL --> F6_FIND["SELECT slot_participants<br/>status active + checked_in_at NULL<br/>slot termine depuis 1h+<br/>pas de penalty existante"]:::db
+
+    F6_FIND --> F6_LOOP{"Pour chaque no-show"}:::app
+    F6_LOOP --> F6_PENALTY["INSERT user_penalties<br/>type: no_show"]:::db
+    F6_PENALTY --> F6_INC["UPDATE profiles<br/>penalty_count + 1"]:::db
+
+    F6_INC --> F6_BAN_CHECK{"penalty_count >= 2 ?"}:::app
+    F6_BAN_CHECK -->|Non| F6_COMPLETE["UPDATE slot_participants<br/>status: completed"]:::db
+    F6_BAN_CHECK -->|Oui| F6_BAN["UPDATE profiles is_banned = true<br/>INSERT banned_phones"]:::db
+    F6_BAN --> F6_COMPLETE
+
+    F6_COMPLETE --> F6_LOOP
+    F6_LOOP -->|Tous traites| F6_ALSO["Aussi : marque les checked-in<br/>comme completed"]:::db
+    F6_ALSO --> F6_DONE(["No-shows traites"]):::check
   end

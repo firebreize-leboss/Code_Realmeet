@@ -7,7 +7,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Image,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
@@ -17,6 +16,7 @@ import {
   Platform,
   StatusBar,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -520,8 +520,9 @@ export default function UserProfileScreen() {
         <View style={styles.avatarWrapper}>
           <View style={styles.avatarBorder}>
             <Image
-              source={{ uri: profile.avatar_url || 'https://via.placeholder.com/100' }}
+              source={{ uri: profile.avatar_url || '' }}
               style={styles.avatar}
+              transition={200}
             />
           </View>
         </View>
@@ -731,8 +732,9 @@ export default function UserProfileScreen() {
 
             <View style={styles.invitationRecipient}>
               <Image
-                source={{ uri: profile.avatar_url || 'https://via.placeholder.com/40' }}
+                source={{ uri: profile.avatar_url || '' }}
                 style={styles.invitationRecipientAvatar}
+                transition={200}
               />
               <Text style={styles.invitationRecipientName}>{profile.full_name}</Text>
             </View>

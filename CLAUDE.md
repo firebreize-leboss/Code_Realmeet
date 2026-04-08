@@ -8,7 +8,6 @@ Application mobile de rencontres sociales par activités. Les utilisateurs s'ins
 - **Backend** : Supabase (PostgreSQL, Auth, Realtime, Storage, Edge Functions)
 - **Serveur check-in** : Node.js / Express sur VPS OVH (checkin.realmeet.fr)
 - **Carte** : MapLibre via WebView + Protomaps
-- **Paiement** : Stripe (en cours d'intégration)
 - **Notifications** : Expo Push Notifications
 - **Animations** : react-native-reanimated
 
@@ -84,8 +83,8 @@ Les modifications doivent :
 
 ## Architecture des 5 flows critiques
 
-### Flow 1 — Inscription activité + Paiement
-`browse → activity-detail → payment/select-method → card-form → confirmation → INSERT slot_participants → conversation groupe`
+### Flow 1 — Inscription activité
+`browse → activity-detail → confirm-join → RPC join_activity_slot → INSERT slot_participants → conversation groupe`
 
 ### Flow 2 — Formation automatique de groupes
 `pg_cron (15min) → process_slots_for_grouping_v3 → form_groups_v3 → slot_groups + slot_group_members → conversation auto + message système`
@@ -109,6 +108,10 @@ Les modifications doivent :
 | `validate_plus_one_token` | plus_one_invitations, activities, activity_slots | Valider et prévisualiser une invitation |
 | `accept_plus_one_invitation` | slot_participants, plus_one_invitations | Accepter une invitation +1 |
 | `process_slots_for_grouping_v3` | activity_slots | Identifier les créneaux éligibles au grouping |
+| `join_activity_slot` | slot_participants, activities, profiles | Inscription à un créneau (vérifie ban, J-1, capacité) |
+| `cancel_slot_participation` | slot_participants, activities | Annulation de participation (soft delete + late_cancel) |
+| `detect_no_shows` | slot_participants, user_penalties, profiles, banned_phones | Détection no-shows + pénalités + bannissement |
+| `check_phone_banned` | banned_phones | Vérifie si un numéro est banni |
 
 ## Serveur check-in (realmeet-checkin/)
 
@@ -119,6 +122,16 @@ Serveur Node.js/Express déployé sur VPS OVH derrière Nginx + SSL.
 - Sécurité : rate limiting, helmet, CORS, nonce anti-replay
 - Process manager : PM2
 
+## Au début de chaque session de travail :
+1. Lis `contexte/task_plan.md` pour savoir où on en est
+2. Lis `contexte/findings.md` pour récupérer les découvertes précédentes
+3. Lis le diagramme pertinent dans `diagrammes/`
+4. Commence à travailler
+
+## Pendant le travail :
+- Note toute découverte importante dans `contexte/findings.md`
+- Mets à jour les checkboxes dans `contexte/task_plan.md` après chaque tâche terminée
+
 ## Fin de session
 
 Avant de terminer une session de travail :
@@ -126,3 +139,6 @@ Avant de terminer une session de travail :
 2. Si un flow ou une feature a changé de statut, propose la mise à jour du diagramme `domain-flow`
 3. Liste les fichiers modifiés et les éventuels impacts sur d'autres parties du code
 4. Si le code est modifié mais que les diagrammes ne sont pas mis à jour, la tâche est considérée comme incomplète.
+5. Mets à jour `contexte/progress.md` avec un résumé de ce qui a été fait
+6. Mets à jour `contexte/task_plan.md` (statuts des phases)
+7. Si un flow ou feature a changé, propose la mise à jour du diagramme `domain-flow`

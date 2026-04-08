@@ -12,7 +12,7 @@ flowchart TD
   %% ─── AUTH & PROFIL ────────────────────────────────────────────
   subgraph AUTH["👤 Auth & Profil"]
     direction TB
-    P["profiles\n─────────────\nid · username · full_name\naccount_type · intention\ninterests · personality_tags\nexpo_push_token"]
+    P["profiles\n─────────────\nid · username · full_name\naccount_type · intention\ninterests · personality_tags\nexpo_push_token\npenalty_count · is_banned"]
   end
 
   %% ─── ACTIVITÉS & CRÉNEAUX ──────────────────────────────────────
@@ -20,7 +20,7 @@ flowchart TD
     direction TB
     A["activities\n─────────────\nid · host_id\ncategorie · prix\nstatus: active | cancelled"]
     AS["activity_slots\n─────────────\nid · activity_id\ndate · time\nmax_participants\ngroups_formed · is_locked\nregistration_closed"]
-    SP["slot_participants\n─────────────\nid · slot_id · user_id\nstatus: active | cancelled\nchecked_in_at · is_plus_one"]
+    SP["slot_participants\n─────────────\nid · slot_id · user_id\nstatus: active | cancelled | completed\nchecked_in_at · cancelled_at\nis_plus_one"]
     AP["activity_participants\n─────────────\nid · activity_id · user_id\n(dénormalisation historique)"]
   end
 
@@ -52,7 +52,7 @@ flowchart TD
   %% ─── INVITATION +1 ──────────────────────────────────────────────
   subgraph PLUS["➕ Invitation +1"]
     direction TB
-    POI["plus_one_invitations\n─────────────\nid · slot_id\ninviter_id · invitee_id\ntoken · status\npayment_mode\nexpires_at"]
+    POI["plus_one_invitations\n─────────────\nid · slot_id\ninviter_id · invitee_id\ntoken · status\nexpires_at"]
   end
 
   %% ─── CHECK-IN ───────────────────────────────────────────────────
@@ -62,11 +62,17 @@ flowchart TD
   end
 
   %% ─── BUSINESS ───────────────────────────────────────────────────
-  subgraph BIZ["🏢 Business & Paiement"]
+  subgraph BIZ["🏢 Business"]
     direction TB
     BS["business_stats\n─────────────\nid · business_id · date\nviews · total_participants\ntotal_revenue"]
-    AR["activity_revenue\n─────────────\nid · activity_id\nbusiness_id · participant_id\namount · payment_status"]
     RV["reviews\n─────────────\nid · activity_id · reviewer_id\nrating 1-5 · comment"]
+  end
+
+  %% ─── PENALITES ────────────────────────────────────────────────
+  subgraph PEN["⚠️ Penalites"]
+    direction TB
+    UP["user_penalties\n─────────────\nid · user_id\nslot_participant_id\npenalty_type: no_show\ncreated_at"]
+    BP["banned_phones\n─────────────\nid · phone\nbanned_at · reason"]
   end
 
   %% ─── MODÉRATION ─────────────────────────────────────────────────
@@ -87,14 +93,13 @@ flowchart TD
   P -->|"demande amitié"| FR
   P -->|"bloque"| BU
   P -->|"stats business"| BS
-  P -->|"revenus business"| AR
   P -->|"rédige"| RV
   P -->|"signale"| RP
+  P -->|"penalites"| UP
 
   %% Activités → créneaux
   A -->|"a des créneaux"| AS
   A -->|"historique participants"| AP
-  A -->|"revenus"| AR
   A -->|"avis"| RV
 
   %% Créneaux → participants / groupes
@@ -107,8 +112,9 @@ flowchart TD
   SG -->|"membres"| SGM
   SG -->|"chat auto-créé"| C
 
-  %% Participants → check-in
+  %% Participants → check-in / pénalités
   SP -->|"audit trail"| CL
+  SP -->|"no-show detecte"| UP
 
   %% +1 → participant
   POI -->|"crée place si acceptée"| SP
@@ -152,7 +158,7 @@ flowchart TD
 |-------|---------|---------|
 | `activities` | `status` | `active`, `cancelled` |
 | `activity_slots` | `is_locked`, `is_cancelled`, `registration_closed`, `groups_formed` | booleans |
-| `slot_participants` | `status` | `active`, `cancelled` |
+| `slot_participants` | `status` | `active`, `cancelled`, `completed` |
 | `plus_one_invitations` | `status` | `pending`, `accepted`, `expired`, `cancelled` |
 | `messages` | `message_type` | `text`, `image`, `voice`, `system` |
 | `friend_requests` | `status` | `pending`, `accepted`, `rejected` |

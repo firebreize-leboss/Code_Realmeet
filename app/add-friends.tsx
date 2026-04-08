@@ -9,11 +9,11 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  Image,
   FlatList,
   ActivityIndicator,
   Platform,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -185,8 +185,9 @@ export default function AddFriendsScreen() {
       activeOpacity={0.7}
     >
       <Image
-        source={{ uri: item.avatar_url || 'https://via.placeholder.com/52' }}
+        source={{ uri: item.avatar_url || '' }}
         style={styles.userAvatar}
+        transition={200}
       />
       <View style={styles.userInfo}>
         <Text style={styles.userName}>{item.full_name}</Text>

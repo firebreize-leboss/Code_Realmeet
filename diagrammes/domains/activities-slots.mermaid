@@ -4,7 +4,7 @@ flowchart TD
     direction TB
     A["activities\n─────────────\nid · host_id\ncategorie · prix\nstatus: active | cancelled"]
     AS["activity_slots\n─────────────\nid · activity_id\ndate · time\nmax_participants\ngroups_formed · is_locked\nregistration_closed"]
-    SP["slot_participants\n─────────────\nid · slot_id · user_id\nstatus: active | cancelled\nchecked_in_at · is_plus_one"]
+    SP["slot_participants\n─────────────\nid · slot_id · user_id\nstatus: active | cancelled | completed\nchecked_in_at · cancelled_at\nis_plus_one"]
     AP["activity_participants\n─────────────\nid · activity_id · user_id\n(dénormalisation historique)"]
   end
 

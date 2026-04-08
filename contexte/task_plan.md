@@ -5,27 +5,33 @@ Préparer RealMeet pour le lancement en production. 6 chantiers parallèles à f
 
 ## Phases
 
-### Phase 0 : retirer le système de paiement
+### Phase 0 : retirer le système de paiement ✅
 
-- [ ] on va rentrer dans un système où les gens ne paient pas à l'avance
-- [ ] les gens vont juste avoir un ordre de prix que ça coutera.
-- [ ] pas de stripe
-- [ ] Ce sera basé sur du show / no-show : système de QR CODE pour justifier de la présence
-- [ ] Si la personne ne vient pas 2 fois (2 pénalités), alors il est banni (compte associé au numéro de téléphone)
-- [ ] Si la personne annule 24h avant : c'est ok et pas de pénalité.
+- [x] on va rentrer dans un système où les gens ne paient pas à l'avance
+- [x] les gens vont juste avoir un ordre de prix que ça coutera.
+- [x] pas de stripe
+- [x] Ce sera basé sur du show / no-show : système de QR CODE pour justifier de la présence
+- [x] Si la personne ne vient pas 2 fois (2 pénalités), alors il est banni (compte associé au numéro de téléphone)
+- [x] Si la personne annule 24h avant : c'est ok et pas de pénalité.
+- [x] Diagrammes synchronisés (user-flows, domain-flow, ERD, domaines)
+- [x] CLAUDE.md mis à jour (Flow 1 + nouvelles RPCs)
 
-### Phase 1: Performance & Smoothness
-- [ ] Auditer les re-renders inutiles (React DevTools profiler)
-- [ ] Optimiser les FlatList (windowSize, maxToRenderPerBatch, removeClippedSubviews)
-- [ ] Vérifier le lazy loading des images (cache + placeholder)
-- [ ] Profiler les requêtes Supabase lentes (RPC, joins N+1 restants)
-- [ ] Tester la fluidité des transitions entre écrans (Expo Router)
-- [ ] Optimiser le chargement initial (splash → premier écran interactif)
-- [ ] Vérifier les performances de la carte MapLibre (tuiles, markers clustering)
-- [ ] S'assurer que DataCacheContext ne trigger pas de renders en cascade
-**Fichiers concernés** : contexts/DataCacheContext.tsx, app/(tabs)/*.tsx, composants avec FlatList
+### Phase 1: Performance & Smoothness ✅
+- [x] A1: Memoize DataCacheContext provider value (useMemo sur contextValue)
+- [x] A2: Remplacer JSON.stringify par shallow comparison dans browse.tsx
+- [x] A3: Stabiliser la subscription Realtime (ref pour blockedUserIds)
+- [x] A4: React.memo sur ActivityCard avec comparateur custom
+- [x] A5: Extraire ChatItem au scope module + React.memo
+- [x] A6: Convertir browse.tsx de .map() à FlatList virtualisée
+- [x] A7: Props de perf sur tous les FlatList (activity, blocked-users, met-people, friend-requests, business-group-view)
+- [x] B1: Migration expo-image sur 24 fichiers + placeholder local + suppression via.placeholder.com
+- [x] B2: Convertir chat.tsx conversations en FlatList (all/friends filters)
+- [x] B3: Debounce 500ms du postMessage location vers WebView
+- [x] C1: Clustering des marqueurs MapLibre avec supercluster
+- [x] C2: React.memo sur FloatingTabBar TabItem + useCallback handleTabPress + useMemo tabPressHandlers
+**Fichiers concernés** : contexts/DataCacheContext.tsx, app/(tabs)/*.tsx, components/*.tsx, 24 fichiers pour expo-image
 **Flows impactés** : Tous (smoothness générale)
-**Status** : NOT STARTED
+**Status** : DONE
 
 ### Phase 2: Tests pré-production
 - [ ] Tests du Flow 1 complet (inscription → paiement → conversation groupe)
@@ -84,5 +90,5 @@ Préparer RealMeet pour le lancement en production. 6 chantiers parallèles à f
 - (aucune pour l'instant)
 
 ## Status
-**Phase actuelle** : Planification terminée, prêt à démarrer Phase 0
-**Ordre recommandé** : Phase 4 (rapide, bloquant) → Phase 1 (fondamental) → Phase 2 (validation) → Phase 3 (polish) → Phase 5 (administratif)
+**Phase actuelle** : Phase 1 terminée ✅ — Prêt pour Phase 2
+**Ordre recommandé** : Phase 4 (rapide, bloquant) → Phase 2 (validation) → Phase 3 (polish) → Phase 5 (administratif)

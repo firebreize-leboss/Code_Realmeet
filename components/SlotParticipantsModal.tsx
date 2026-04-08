@@ -8,10 +8,10 @@ import {
   StyleSheet,
   Modal,
   TouchableOpacity,
-  Image,
   FlatList,
   ActivityIndicator,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
@@ -129,8 +129,9 @@ export default function SlotParticipantsModal({
       activeOpacity={0.7}
     >
       <Image
-        source={{ uri: item.avatar || 'https://via.placeholder.com/48' }}
+        source={{ uri: item.avatar || '' }}
         style={styles.participantAvatar}
+        transition={200}
       />
       <View style={styles.participantInfo}>
         <Text style={styles.participantName}>{item.name}</Text>

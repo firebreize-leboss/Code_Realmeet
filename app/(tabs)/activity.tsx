@@ -5,13 +5,13 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Image,
   Platform,
   ActivityIndicator,
   Alert,
   RefreshControl,
   FlatList,
 } from 'react-native';
+import { Image } from 'expo-image';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -449,7 +449,8 @@ export default function ActivityScreen() {
         activeOpacity={0.7}
       >
         <Image
-          source={{ uri: item.image_url || 'https://via.placeholder.com/80' }}
+          source={item.image_url || require('@/assets/images/placeholder-activity.png')}
+          transition={200}
           style={[styles.activityImage, isPast && styles.activityImagePast]}
         />
         <View style={styles.activityContent}>
@@ -517,7 +518,8 @@ export default function ActivityScreen() {
         activeOpacity={0.7}
       >
         <Image
-          source={{ uri: item.image_url || 'https://via.placeholder.com/80' }}
+          source={item.image_url || require('@/assets/images/placeholder-activity.png')}
+          transition={200}
           style={styles.activityImage}
         />
         <View style={styles.activityContent}>
@@ -702,6 +704,10 @@ export default function ActivityScreen() {
               Platform.OS !== 'ios' && styles.listContentWithTabBar,
             ]}
             showsVerticalScrollIndicator={false}
+            initialNumToRender={10}
+            maxToRenderPerBatch={10}
+            windowSize={5}
+            removeClippedSubviews={Platform.OS !== 'web'}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
             }
@@ -763,6 +769,10 @@ export default function ActivityScreen() {
             Platform.OS !== 'ios' && styles.listContentWithTabBar,
           ]}
           showsVerticalScrollIndicator={false}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          removeClippedSubviews={Platform.OS !== 'web'}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
           }

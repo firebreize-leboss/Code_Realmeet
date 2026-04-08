@@ -8,10 +8,11 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  Image,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from 'expo-router';
@@ -79,8 +80,9 @@ export default function BlockedUsersScreen() {
   const renderItem = ({ item }: { item: BlockedUser }) => (
     <View style={styles.userItem}>
       <Image
-        source={{ uri: item.profile?.avatar_url || 'https://via.placeholder.com/50' }}
+        source={{ uri: item.profile?.avatar_url || '' }}
         style={styles.avatar}
+        transition={200}
       />
       <View style={styles.userInfo}>
         <Text style={styles.userName}>
@@ -137,6 +139,10 @@ export default function BlockedUsersScreen() {
             blockedUsers.length === 0 && styles.listContentEmpty,
           ]}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          removeClippedSubviews={Platform.OS !== 'web'}
         />
       )}
     </SafeAreaView>

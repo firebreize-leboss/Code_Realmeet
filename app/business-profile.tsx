@@ -7,13 +7,13 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Image,
   TouchableOpacity,
   ActivityIndicator,
   Dimensions,
   Linking,
   FlatList,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -191,8 +191,9 @@ export default function BusinessPublicProfileScreen() {
       activeOpacity={0.8}
     >
       <Image
-        source={{ uri: item.image_url || 'https://via.placeholder.com/160' }}
+        source={item.image_url || require('@/assets/images/placeholder-activity.png')}
         style={styles.activityImage}
+        transition={200}
       />
       <LinearGradient
         colors={['transparent', 'rgba(0,0,0,0.8)']}
@@ -254,8 +255,9 @@ export default function BusinessPublicProfileScreen() {
         {/* Cover Image */}
         <View style={styles.coverContainer}>
           <Image
-            source={{ uri: business.business_cover_url || 'https://via.placeholder.com/400x180' }}
+            source={business.business_cover_url || require('@/assets/images/placeholder-activity.png')}
             style={styles.coverImage}
+            transition={200}
           />
           <LinearGradient
             colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(0,0,0,0.5)']}
@@ -272,8 +274,9 @@ export default function BusinessPublicProfileScreen() {
         <View style={styles.profileSection}>
           <View style={styles.logoContainer}>
             <Image
-              source={{ uri: business.business_logo_url || 'https://via.placeholder.com/100' }}
+              source={{ uri: business.business_logo_url || '' }}
               style={styles.logo}
+              transition={200}
             />
             {business.business_verified && (
               <View style={styles.verifiedBadge}>

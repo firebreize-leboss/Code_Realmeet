@@ -5,7 +5,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Image,
+  FlatList,
   TouchableOpacity,
   Platform,
   TextInput,
@@ -13,6 +13,7 @@ import {
   RefreshControl,
   Modal,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -142,19 +143,43 @@ export default function BrowseScreen() {
     const newValue = Object.fromEntries(
       Object.entries(cache.slotDataByActivity).map(([id, data]) => [id, data.latestDate])
     );
-    // Comparaison profonde pour éviter les re-renders inutiles sur iOS
-    if (JSON.stringify(newValue) === JSON.stringify(lastLatestSlotDateByActivity.current)) {
-      return lastLatestSlotDateByActivity.current;
+    // Shallow comparison by key to avoid O(n) JSON.stringify
+    const prev = lastLatestSlotDateByActivity.current;
+    const newKeys = Object.keys(newValue);
+    const prevKeys = Object.keys(prev);
+    if (newKeys.length === prevKeys.length && newKeys.every(k => newValue[k] === prev[k])) {
+      return prev;
     }
     lastLatestSlotDateByActivity.current = newValue;
     return newValue;
   }, [cache.slotDataByActivity]);
-  const slotCountByActivity = useMemo(() => Object.fromEntries(
-    Object.entries(cache.slotDataByActivity).map(([id, data]) => [id, data.slotCount])
-  ), [cache.slotDataByActivity]);
-  const remainingPlacesByActivity = useMemo(() => Object.fromEntries(
-    Object.entries(cache.slotDataByActivity).map(([id, data]) => [id, data.remainingPlaces])
-  ), [cache.slotDataByActivity]);
+  const lastSlotCountRef = useRef<Record<string, number>>({});
+  const slotCountByActivity = useMemo(() => {
+    const newValue = Object.fromEntries(
+      Object.entries(cache.slotDataByActivity).map(([id, data]) => [id, data.slotCount])
+    );
+    const prev = lastSlotCountRef.current;
+    const newKeys = Object.keys(newValue);
+    if (newKeys.length === Object.keys(prev).length && newKeys.every(k => newValue[k] === prev[k])) {
+      return prev;
+    }
+    lastSlotCountRef.current = newValue;
+    return newValue;
+  }, [cache.slotDataByActivity]);
+  const lastRemainingPlacesRef = useRef<Record<string, number>>({});
+  const locationDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const remainingPlacesByActivity = useMemo(() => {
+    const newValue = Object.fromEntries(
+      Object.entries(cache.slotDataByActivity).map(([id, data]) => [id, data.remainingPlaces])
+    );
+    const prev = lastRemainingPlacesRef.current;
+    const newKeys = Object.keys(newValue);
+    if (newKeys.length === Object.keys(prev).length && newKeys.every(k => newValue[k] === prev[k])) {
+      return prev;
+    }
+    lastRemainingPlacesRef.current = newValue;
+    return newValue;
+  }, [cache.slotDataByActivity]);
   const loading = cacheLoading;
 
   // États pour les filtres
@@ -174,14 +199,24 @@ export default function BrowseScreen() {
   }, [filters]);
 
 
-  // Mettre à jour le marker utilisateur quand la localisation change
+  // Mettre à jour le marker utilisateur quand la localisation change (debounced 500ms)
   useEffect(() => {
     if (userLocation && webViewRef.current && viewMode === 'maps') {
-      webViewRef.current.postMessage(JSON.stringify({
-        type: 'updateUserLocation',
-        userLocation,
-      }));
+      if (locationDebounceTimer.current) {
+        clearTimeout(locationDebounceTimer.current);
+      }
+      locationDebounceTimer.current = setTimeout(() => {
+        webViewRef.current?.postMessage(JSON.stringify({
+          type: 'updateUserLocation',
+          userLocation,
+        }));
+      }, 500);
     }
+    return () => {
+      if (locationDebounceTimer.current) {
+        clearTimeout(locationDebounceTimer.current);
+      }
+    };
   }, [userLocation, viewMode]);
 
   useEffect(() => {
@@ -433,6 +468,7 @@ export default function BrowseScreen() {
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script src="https://unpkg.com/supercluster@8.0.1/dist/supercluster.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body, html { height: 100%; overflow: hidden; }
@@ -454,14 +490,23 @@ export default function BrowseScreen() {
       border: 3px solid white; border-radius: 50%;
       box-shadow: 0 0 0 5px rgba(72, 72, 74, 0.2);
     }
+    .cluster-marker {
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 50%; cursor: pointer;
+      background: #F2994A; border: 3px solid white;
+      box-shadow: 0 2px 8px rgba(242, 153, 74, 0.4);
+      color: white; font-weight: 700; font-size: 13px;
+      font-family: -apple-system, sans-serif;
+    }
     .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right { display: none; }
   </style>
 </head>
 <body>
   <div id="map"></div>
   <script>
-    let selectedMarkerId = null, markers = {}, userMarker = null, map;
-    
+    let selectedMarkerId = null, markers = {}, clusterMarkers = {}, userMarker = null, map;
+    let clusterIndex = null, activitiesData = [];
+
     map = new maplibregl.Map({
       container: 'map',
       style: 'https://api.protomaps.com/styles/v2/light.json?key=${PROTOMAPS_KEY}',
@@ -475,6 +520,86 @@ export default function BrowseScreen() {
         window.ReactNativeWebView.postMessage(JSON.stringify({ type, ...data }));
       }
     }
+
+    function clearMarkers() {
+      Object.values(markers).forEach(m => m.remove());
+      Object.values(clusterMarkers).forEach(m => m.remove());
+      markers = {};
+      clusterMarkers = {};
+    }
+
+    function renderClusters() {
+      if (!clusterIndex || !map) return;
+      const bounds = map.getBounds();
+      const zoom = Math.round(map.getZoom());
+      const clusters = clusterIndex.getClusters(
+        [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()],
+        zoom
+      );
+
+      // Track which markers/clusters to keep
+      const activeSingles = new Set();
+      const activeClusters = new Set();
+
+      clusters.forEach(feature => {
+        const [lng, lat] = feature.geometry.coordinates;
+        const props = feature.properties;
+
+        if (props.cluster) {
+          // Cluster marker
+          const clusterId = props.cluster_id;
+          activeClusters.add(clusterId);
+          if (clusterMarkers[clusterId]) return; // already rendered
+
+          const count = props.point_count;
+          const size = count < 10 ? 36 : count < 50 ? 44 : 52;
+          const el = document.createElement('div');
+          el.className = 'cluster-marker';
+          el.style.width = size + 'px';
+          el.style.height = size + 'px';
+          el.textContent = count;
+          el.onclick = () => {
+            const expansionZoom = Math.min(clusterIndex.getClusterExpansionZoom(clusterId), 18);
+            map.flyTo({ center: [lng, lat], zoom: expansionZoom, duration: 500 });
+          };
+          clusterMarkers[clusterId] = new maplibregl.Marker({ element: el, anchor: 'center' })
+            .setLngLat([lng, lat])
+            .addTo(map);
+        } else {
+          // Individual activity marker
+          const a = props;
+          activeSingles.add(a.id);
+          if (markers[a.id]) return; // already rendered
+
+          const el = document.createElement('div');
+          el.className = 'custom-marker' + (selectedMarkerId === a.id ? ' selected' : '');
+          el.id = 'marker-' + a.id;
+          el.onclick = () => {
+            if (selectedMarkerId) {
+              const prev = document.getElementById('marker-' + selectedMarkerId);
+              if (prev) prev.classList.remove('selected');
+            }
+            el.classList.add('selected');
+            selectedMarkerId = a.id;
+            sendMessage('markerClicked', { activity: a });
+          };
+          markers[a.id] = new maplibregl.Marker({ element: el, anchor: 'center' })
+            .setLngLat([lng, lat])
+            .addTo(map);
+        }
+      });
+
+      // Remove markers no longer in view
+      Object.keys(markers).forEach(id => {
+        if (!activeSingles.has(id)) { markers[id].remove(); delete markers[id]; }
+      });
+      Object.keys(clusterMarkers).forEach(id => {
+        const numId = Number(id);
+        if (!activeClusters.has(numId)) { clusterMarkers[id].remove(); delete clusterMarkers[id]; }
+      });
+    }
+
+    map.on('moveend', renderClusters);
 
     function handleMessage(event) {
       try {
@@ -491,26 +616,17 @@ export default function BrowseScreen() {
 
         if (data.type === 'loadActivities') {
           const activities = data.activities || [];
-          Object.values(markers).forEach(m => m.remove());
-          markers = {};
+          activitiesData = activities;
+          clearMarkers();
 
-          activities.forEach(a => {
-            const el = document.createElement('div');
-            el.className = 'custom-marker';
-            el.id = 'marker-' + a.id;
-            el.onclick = () => {
-              if (selectedMarkerId) {
-                const prev = document.getElementById('marker-' + selectedMarkerId);
-                if (prev) prev.classList.remove('selected');
-              }
-              el.classList.add('selected');
-              selectedMarkerId = a.id;
-              sendMessage('markerClicked', { activity: a });
-            };
-            markers[a.id] = new maplibregl.Marker({ element: el, anchor: 'center' })
-              .setLngLat([a.longitude, a.latitude])
-              .addTo(map);
-          });
+          // Build supercluster index
+          const points = activities.map(a => ({
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [a.longitude, a.latitude] },
+            properties: a
+          }));
+          clusterIndex = new Supercluster({ radius: 60, maxZoom: 16 });
+          clusterIndex.load(points);
 
           if (data.userLocation) {
             if (userMarker) userMarker.remove();
@@ -528,6 +644,8 @@ export default function BrowseScreen() {
               map.setCenter([activities[0].longitude, activities[0].latitude]);
             }
           }
+
+          renderClusters();
         } else if (data.type === 'deselectMarker' && selectedMarkerId) {
           const m = document.getElementById('marker-' + selectedMarkerId);
           if (m) m.classList.remove('selected');
@@ -557,7 +675,7 @@ export default function BrowseScreen() {
 </html>`, []);
 
   // Transformer l'activité pour le composant ActivityCard
-  const mapActivityForCard = (activity: Activity) => {
+  const mapActivityForCard = useCallback((activity: Activity) => {
     const slotData = cache.slotDataByActivity[activity.id];
     // Calculer le total des places de tous les créneaux
     const totalMaxPlaces = slotData?.totalMaxPlaces || activity.max_participants;
@@ -571,7 +689,30 @@ export default function BrowseScreen() {
       participants: totalParticipants,
       max_participants: totalMaxPlaces,
     };
-  };
+  }, [cache.slotDataByActivity]);
+
+  // Pre-compute mapped activities for FlatList
+  const mappedActivities = useMemo(
+    () => filteredActivities.map(mapActivityForCard),
+    [filteredActivities, mapActivityForCard]
+  );
+
+  const renderActivityItem = useCallback(({ item, index }: { item: ReturnType<typeof mapActivityForCard>; index: number }) => (
+    <Animated.View
+      entering={hasAnimated.current ? undefined : FadeInDown.delay(index * 80).springify()}
+      style={styles.cardWrapper}
+    >
+      <ActivityCard
+        activity={item}
+        variant="browse"
+      />
+      {index < mappedActivities.length - 1 && (
+        <View style={styles.browseSeparator} />
+      )}
+    </Animated.View>
+  ), [mappedActivities.length]);
+
+  const keyExtractor = useCallback((item: { id: string }) => item.id, []);
 
   // Fonction pour formater une date courte
   const formatDateShort = (dateStr: string) => {
@@ -618,7 +759,8 @@ export default function BrowseScreen() {
         >
           {/* Image */}
           <Image
-            source={{ uri: selectedActivity.image_url || 'https://via.placeholder.com/400' }}
+            source={selectedActivity.image_url || require('@/assets/images/placeholder-activity.png')}
+            transition={200}
             style={styles.previewImage}
           />
 
@@ -761,39 +903,32 @@ export default function BrowseScreen() {
                 locations={[0, 0.35, 1]}
                 style={StyleSheet.absoluteFill}
               />
-              <ScrollView
+              <FlatList
+                data={mappedActivities}
+                renderItem={renderActivityItem}
+                keyExtractor={keyExtractor}
                 style={{ flex: 1 }}
-                contentContainerStyle={[styles.contentContainer, Platform.OS !== 'ios' && styles.contentContainerWithTabBar]}
+                contentContainerStyle={[
+                  styles.contentContainer,
+                  Platform.OS !== 'ios' && styles.contentContainerWithTabBar,
+                  mappedActivities.length > 0 && styles.gridContainer,
+                ]}
                 showsVerticalScrollIndicator={false}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
-              >
-                {filteredActivities.length > 0 ? (
-                  <View style={styles.gridContainer}>
-                    {filteredActivities.map((activity, index) => (
-                      <Animated.View
-                        key={activity.id}
-                        entering={hasAnimated.current ? undefined : FadeInDown.delay(index * 80).springify()}
-                        style={styles.cardWrapper}
-                      >
-                        <ActivityCard
-                          activity={mapActivityForCard(activity)}
-                          variant="browse"
-                        />
-                        {index < filteredActivities.length - 1 && (
-                          <View style={styles.browseSeparator} />
-                        )}
-                      </Animated.View>
-                    ))}
-                    {!hasAnimated.current && (() => { hasAnimated.current = true; return null; })()}
-                  </View>
-                ) : (
+                initialNumToRender={5}
+                maxToRenderPerBatch={5}
+                windowSize={7}
+                removeClippedSubviews={Platform.OS !== 'web'}
+                onEndReachedThreshold={0.5}
+                onScrollBeginDrag={() => { if (!hasAnimated.current) hasAnimated.current = true; }}
+                ListEmptyComponent={
                   <View style={styles.emptyState}>
                     <IconSymbol name="calendar" size={64} color={colors.primary} />
                     <Text style={styles.emptyText}>Aucune activité trouvée</Text>
                     <Text style={styles.emptySubtext}>{searchQuery ? 'Essayez une autre recherche' : 'Créez la première activité !'}</Text>
                   </View>
-                )}
-              </ScrollView>
+                }
+              />
             </View>
           </>
         ) : (

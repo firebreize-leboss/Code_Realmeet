@@ -7,11 +7,11 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  Image,
   TouchableOpacity,
   ActivityIndicator,
   TextInput,
 } from 'react-native';
+import { Image } from 'expo-image';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -270,8 +270,9 @@ export default function BusinessGroupViewScreen() {
       activeOpacity={0.7}
     >
       <Image
-        source={{ uri: item.avatar || 'https://via.placeholder.com/40' }}
+        source={{ uri: item.avatar || '' }}
         style={styles.participantAvatar}
+        transition={200}
       />
       <Text style={styles.participantName} numberOfLines={1}>{item.name}</Text>
     </TouchableOpacity>
@@ -295,8 +296,9 @@ export default function BusinessGroupViewScreen() {
         ) : (
           <View style={styles.messageRow}>
             <Image
-              source={{ uri: item.senderAvatar || 'https://via.placeholder.com/36' }}
+              source={{ uri: item.senderAvatar || '' }}
               style={styles.messageAvatar}
+              transition={200}
             />
             <View style={[
               styles.messageBubble,
@@ -314,7 +316,7 @@ export default function BusinessGroupViewScreen() {
               </View>
               
               {item.type === 'image' && item.mediaUrl ? (
-                <Image source={{ uri: item.mediaUrl }} style={styles.messageImage} />
+                <Image source={{ uri: item.mediaUrl }} style={styles.messageImage} transition={200} />
               ) : item.type === 'voice' ? (
                 <View style={styles.voiceMessage}>
                   <IconSymbol name="waveform" size={20} color={colors.textSecondary} />
@@ -389,6 +391,10 @@ export default function BusinessGroupViewScreen() {
           messages.length === 0 && styles.emptyContent
         ]}
         showsVerticalScrollIndicator={false}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        removeClippedSubviews={false}
         ListEmptyComponent={
           <View style={styles.emptyMessages}>
             <IconSymbol name="bubble.left.and.bubble.right" size={48} color={colors.textSecondary} />

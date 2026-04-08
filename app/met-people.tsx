@@ -7,12 +7,13 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Image,
   FlatList,
   ActivityIndicator,
   Alert,
   RefreshControl,
+  Platform,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -329,8 +330,9 @@ export default function MetPeopleScreen() {
       activeOpacity={0.7}
     >
       <Image
-        source={{ uri: item.avatar_url || 'https://via.placeholder.com/56' }}
+        source={{ uri: item.avatar_url || '' }}
         style={styles.avatar}
+        transition={200}
       />
       
       <View style={styles.personInfo}>
@@ -441,6 +443,10 @@ export default function MetPeopleScreen() {
           ]}
           ListEmptyComponent={renderEmptyState}
           showsVerticalScrollIndicator={false}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          removeClippedSubviews={Platform.OS !== 'web'}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }

@@ -9,13 +9,13 @@ import {
   FlatList,
   TextInput,
   TouchableOpacity,
-  Image,
   Alert,
   ActivityIndicator,
   Modal,
   Platform,
   Dimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
 import Animated, {
   useAnimatedStyle,
   FadeInDown,
@@ -803,8 +803,9 @@ export default function ChatDetailScreen() {
             activeOpacity={0.7}
           >
             <Image
-              source={{ uri: msg.senderAvatar || 'https://via.placeholder.com/40' }}
+              source={{ uri: msg.senderAvatar || '' }}
               style={styles.messageAvatar}
+              transition={200}
             />
           </TouchableOpacity>
         )}
@@ -840,7 +841,7 @@ export default function ChatDetailScreen() {
             onLongPress={() => handleMessageLongPress(msg)}
             delayLongPress={500}
           >
-            <Image source={{ uri: msg.imageUrl }} style={styles.imageMessagePhoto} />
+            <Image source={{ uri: msg.imageUrl }} style={styles.imageMessagePhoto} transition={200} />
           </TouchableOpacity>
 
           <View style={styles.imageMessageFooter}>
@@ -882,8 +883,9 @@ export default function ChatDetailScreen() {
             activeOpacity={0.7}
           >
             <Image
-              source={{ uri: msg.senderAvatar || 'https://via.placeholder.com/40' }}
+              source={{ uri: msg.senderAvatar || '' }}
               style={styles.messageAvatar}
+              transition={200}
             />
           </TouchableOpacity>
         )}
@@ -942,7 +944,7 @@ export default function ChatDetailScreen() {
               activeOpacity={0.9}
               onPress={() => setFullscreenImageUrl(msg.imageUrl!)}
             >
-              <Image source={{ uri: msg.imageUrl }} style={styles.messageImage} />
+              <Image source={{ uri: msg.imageUrl }} style={styles.messageImage} transition={200} />
             </TouchableOpacity>
           )}
 
@@ -1222,7 +1224,7 @@ export default function ChatDetailScreen() {
             }}
           >
             {convImage ? (
-              <Image source={{ uri: convImage }} style={styles.headerAvatar} />
+              <Image source={{ uri: convImage }} style={styles.headerAvatar} transition={200} />
             ) : (
               <View style={styles.headerAvatarPlaceholder}>
                 <IconSymbol
@@ -1370,7 +1372,8 @@ export default function ChatDetailScreen() {
               <Image
                 source={{ uri: fullscreenImageUrl }}
                 style={styles.fullscreenImage}
-                resizeMode="contain"
+                contentFit="contain"
+                transition={200}
               />
             </TouchableOpacity>
           )}

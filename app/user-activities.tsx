@@ -7,10 +7,10 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  Image,
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -132,8 +132,9 @@ export default function UserActivitiesScreen() {
       activeOpacity={0.7}
     >
       <Image
-        source={{ uri: item.image_url || 'https://via.placeholder.com/80' }}
+        source={item.image_url || require('@/assets/images/placeholder-activity.png')}
         style={styles.activityImage}
+        transition={200}
       />
       <View style={styles.activityInfo}>
         <Text style={styles.activityName} numberOfLines={2}>{item.nom}</Text>

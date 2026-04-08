@@ -10,11 +10,11 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Image,
   Alert,
   ActivityIndicator,
   Platform,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -130,8 +130,9 @@ export default function EditProfileScreen() {
           <View style={styles.avatarSection}>
             <TouchableOpacity onPress={handleImagePick} style={styles.avatarWrapper}>
               <Image
-                source={{ uri: profileImage || 'https://via.placeholder.com/120' }}
+                source={{ uri: profileImage || '' }}
                 style={styles.avatar}
+                transition={200}
               />
               <View style={styles.cameraBadge}>
                 <IconSymbol name="camera.fill" size={16} color="#FFFFFF" />

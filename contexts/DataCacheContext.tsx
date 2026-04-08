@@ -3,7 +3,7 @@
 // Version 2.0 - Patch Performance La Réunion
 // Élimine les patterns N+1 et regroupe les requêtes via RPC
 
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from './AuthContext';
 import { blockService } from '@/services/block.service';
@@ -158,6 +158,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
   const [lastUpdate, setLastUpdate] = useState(0);
   const isInitialLoad = useRef(true);
   const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
+  const blockedUserIdsRef = useRef<Set<string>>(blockedUserIds);
 
   // ============================================
   // CHARGEMENT DES ACTIVITÉS (OPTIMISÉ via RPC)
@@ -722,7 +723,9 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
   const loadBlockedUsers = useCallback(async () => {
     try {
       const users = await blockService.getBlockedUsers();
-      setBlockedUserIds(new Set(users.map(u => u.blockedUserId)));
+      const newSet = new Set(users.map(u => u.blockedUserId));
+      setBlockedUserIds(newSet);
+      blockedUserIdsRef.current = newSet;
     } catch (error) {
       console.error('Error loading blocked users:', error);
     }
@@ -924,7 +927,7 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
         },
         (payload: any) => {
           const newMsg = payload.new;
-          if (blockedUserIds.has(newMsg.sender_id)) return;
+          if (blockedUserIdsRef.current.has(newMsg.sender_id)) return;
           setCache(prev => {
             const convIndex = prev.conversations.findIndex(c => c.id === newMsg.conversation_id);
             if (convIndex === -1) return prev;
@@ -963,28 +966,44 @@ export function DataCacheProvider({ children }: { children: React.ReactNode }) {
       supabase.removeChannel(messagesChannel);
       supabase.removeChannel(blockedChannel);
     };
-  }, [user, blockedUserIds, loadBlockedUsers]);
+  }, [user, loadBlockedUsers]);
+
+  const contextValue = useMemo<DataCacheContextType>(() => ({
+    cache,
+    loading,
+    lastUpdate,
+    loadAllData,
+    refreshActivities,
+    refreshMyActivities,
+    refreshConversations,
+    refreshFriends,
+    refreshBlockedUsers: loadBlockedUsers,
+    updateActivityInCache,
+    addConversationToCache,
+    updateConversationInCache,
+    markConversationAsRead,
+    removeConversationFromCache,
+    toggleMuteConversation,
+  }), [
+    cache,
+    loading,
+    lastUpdate,
+    loadAllData,
+    refreshActivities,
+    refreshMyActivities,
+    refreshConversations,
+    refreshFriends,
+    loadBlockedUsers,
+    updateActivityInCache,
+    addConversationToCache,
+    updateConversationInCache,
+    markConversationAsRead,
+    removeConversationFromCache,
+    toggleMuteConversation,
+  ]);
 
   return (
-    <DataCacheContext.Provider
-      value={{
-        cache,
-        loading,
-        lastUpdate,
-        loadAllData,
-        refreshActivities,
-        refreshMyActivities,
-        refreshConversations,
-        refreshFriends,
-        refreshBlockedUsers: loadBlockedUsers,
-        updateActivityInCache,
-        addConversationToCache,
-        updateConversationInCache,
-        markConversationAsRead,
-        removeConversationFromCache,
-        toggleMuteConversation,
-      }}
-    >
+    <DataCacheContext.Provider value={contextValue}>
       {children}
     </DataCacheContext.Provider>
   );

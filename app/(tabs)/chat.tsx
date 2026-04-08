@@ -6,7 +6,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Image,
   Platform,
   Modal,
   FlatList,
@@ -19,6 +18,7 @@ import {
   LayoutAnimation,
   UIManager,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useTabIndex } from '@/contexts/TabIndexContext';
@@ -75,6 +75,134 @@ interface Conversation {
 }
 
 type ChatFilter = 'all' | 'activities' | 'friends';
+
+// Extracted to module scope to avoid re-creation on each parent render
+const ChatItem = React.memo(function ChatItem({
+  chat,
+  isSelected,
+  onPress,
+  onLongPress,
+}: {
+  chat: Conversation;
+  isSelected: boolean;
+  onPress: (chat: Conversation) => void;
+  onLongPress: (chat: Conversation) => void;
+}) {
+  const hasUnread = chat.unreadCount !== undefined && chat.unreadCount > 0;
+  const scale = useSharedValue(1);
+  const bgOpacity = useSharedValue(0);
+
+  useEffect(() => {
+    if (isSelected) {
+      scale.value = withSpring(0.98, { damping: 15, stiffness: 300 });
+      bgOpacity.value = withTiming(1, { duration: 150 });
+    } else {
+      scale.value = withSpring(1, { damping: 15, stiffness: 300 });
+      bgOpacity.value = withTiming(0, { duration: 150 });
+    }
+  }, [isSelected]);
+
+  const animatedContainerStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const animatedBgStyle = useAnimatedStyle(() => ({
+    opacity: bgOpacity.value,
+  }));
+
+  const handlePress = useCallback(() => {
+    onPress(chat);
+  }, [chat, onPress]);
+
+  const handleLongPress = useCallback(async () => {
+    try {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch (e) {
+      // Haptics might not be available
+    }
+    onLongPress(chat);
+  }, [chat, onLongPress]);
+
+  return (
+    <Animated.View style={animatedContainerStyle}>
+      <Pressable
+        onPress={handlePress}
+        onLongPress={handleLongPress}
+        delayLongPress={300}
+        style={styles.chatItem}
+      >
+        {/* Background de sélection animé */}
+        <Animated.View style={[styles.chatItemSelectedBg, animatedBgStyle]} />
+
+        {/* Indicateur non-lu (point orange) */}
+        {hasUnread && !isSelected && (
+          <View style={styles.unreadDot} />
+        )}
+
+        {/* Avatar */}
+        <Image
+          source={{ uri: chat.image || 'https://ui-avatars.com/api/?name=&background=F2F2F7&color=AEAEB2&size=48' }}
+          style={styles.chatAvatar}
+        />
+
+        {/* Infos conversation */}
+        <View style={styles.chatInfo}>
+          <View style={styles.chatHeader}>
+            <Text
+              style={[
+                styles.chatName,
+                hasUnread && styles.chatNameUnread
+              ]}
+              numberOfLines={1}
+            >
+              {chat.name}
+            </Text>
+            <Text style={[styles.chatTime, hasUnread && styles.chatTimeUnread]}>
+              {chat.lastMessageTime}
+            </Text>
+            {chat.isPastActivity && (
+              <Text style={{
+                fontSize: 10,
+                fontFamily: 'Manrope_500Medium',
+                color: chat.isCancelled ? '#EF4444' : colors.textMuted,
+                marginLeft: 6,
+              }}>
+                {chat.isCancelled ? 'Annulée' : 'Terminée'}
+              </Text>
+            )}
+          </View>
+
+          <View style={styles.chatSubline}>
+            <Text
+              style={[
+                styles.lastMessage,
+                hasUnread && styles.lastMessageUnread
+              ]}
+              numberOfLines={1}
+            >
+              {chat.lastMessage || 'Commencez une conversation...'}
+            </Text>
+
+            {/* Icône de sourdine discrète */}
+            {chat.isMuted && !isSelected && (
+              <IconSymbol name="bell.slash.fill" size={14} color={colors.textMuted} style={styles.muteIcon} />
+            )}
+          </View>
+
+          {/* Contexte léger (activité liée) */}
+          {chat.isActivityGroup && chat.activity_name && (
+            <View style={styles.contextRow}>
+              <IconSymbol name="calendar" size={12} color={colors.textTertiary} />
+              <Text style={styles.contextText} numberOfLines={1}>
+                {chat.activity_name}
+              </Text>
+            </View>
+          )}
+        </View>
+      </Pressable>
+    </Animated.View>
+  );
+});
 
 export default function ChatScreen() {
   const router = useRouter();
@@ -335,132 +463,29 @@ export default function ChatScreen() {
     setSelectedConversation(null);
   };
 
-  // Composant pour un item de conversation
-  const ChatItem = ({ chat }: { chat: Conversation }) => {
-    const isSelected = selectedConversation?.id === chat.id;
-    const hasUnread = chat.unreadCount !== undefined && chat.unreadCount > 0;
-    const scale = useSharedValue(1);
-    const bgOpacity = useSharedValue(0);
+  const handleChatItemPress = useCallback((chat: Conversation) => {
+    if (selectedConversation) {
+      setSelectedConversation(null);
+    } else {
+      markConversationAsRead(chat.id);
+      router.push(`/chat-detail?id=${chat.id}`);
+    }
+  }, [selectedConversation, markConversationAsRead, router]);
 
-    useEffect(() => {
-      if (isSelected) {
-        scale.value = withSpring(0.98, { damping: 15, stiffness: 300 });
-        bgOpacity.value = withTiming(1, { duration: 150 });
-      } else {
-        scale.value = withSpring(1, { damping: 15, stiffness: 300 });
-        bgOpacity.value = withTiming(0, { duration: 150 });
-      }
-    }, [isSelected]);
-
-    const animatedContainerStyle = useAnimatedStyle(() => ({
-      transform: [{ scale: scale.value }],
-    }));
-
-    const animatedBgStyle = useAnimatedStyle(() => ({
-      opacity: bgOpacity.value,
-    }));
-
-    const handlePress = () => {
-      if (selectedConversation) {
-        setSelectedConversation(null);
-      } else {
-        markConversationAsRead(chat.id);
-        router.push(`/chat-detail?id=${chat.id}`);
-      }
-    };
-
-    const handleLongPress = async () => {
-      try {
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      } catch (e) {
-        // Haptics might not be available
-      }
-      setSelectedConversation(chat);
-    };
-
-    return (
-      <Animated.View style={animatedContainerStyle}>
-        <Pressable
-          onPress={handlePress}
-          onLongPress={handleLongPress}
-          delayLongPress={300}
-          style={styles.chatItem}
-        >
-          {/* Background de sélection animé */}
-          <Animated.View style={[styles.chatItemSelectedBg, animatedBgStyle]} />
-
-          {/* Indicateur non-lu (point orange) */}
-          {hasUnread && !isSelected && (
-            <View style={styles.unreadDot} />
-          )}
-
-          {/* Avatar */}
-          <Image
-            source={{ uri: chat.image || 'https://via.placeholder.com/48' }}
-            style={styles.chatAvatar}
-          />
-
-          {/* Infos conversation */}
-          <View style={styles.chatInfo}>
-            <View style={styles.chatHeader}>
-              <Text
-                style={[
-                  styles.chatName,
-                  hasUnread && styles.chatNameUnread
-                ]}
-                numberOfLines={1}
-              >
-                {chat.name}
-              </Text>
-              <Text style={[styles.chatTime, hasUnread && styles.chatTimeUnread]}>
-                {chat.lastMessageTime}
-              </Text>
-              {chat.isPastActivity && (
-                <Text style={{
-                  fontSize: 10,
-                  fontFamily: 'Manrope_500Medium',
-                  color: chat.isCancelled ? '#EF4444' : colors.textMuted,
-                  marginLeft: 6,
-                }}>
-                  {chat.isCancelled ? 'Annulée' : 'Terminée'}
-                </Text>
-              )}
-            </View>
-
-            <View style={styles.chatSubline}>
-              <Text
-                style={[
-                  styles.lastMessage,
-                  hasUnread && styles.lastMessageUnread
-                ]}
-                numberOfLines={1}
-              >
-                {chat.lastMessage || 'Commencez une conversation...'}
-              </Text>
-
-              {/* Icône de sourdine discrète */}
-              {chat.isMuted && !isSelected && (
-                <IconSymbol name="bell.slash.fill" size={14} color={colors.textMuted} style={styles.muteIcon} />
-              )}
-            </View>
-
-            {/* Contexte léger (activité liée) */}
-            {chat.isActivityGroup && chat.activity_name && (
-              <View style={styles.contextRow}>
-                <IconSymbol name="calendar" size={12} color={colors.textTertiary} />
-                <Text style={styles.contextText} numberOfLines={1}>
-                  {chat.activity_name}
-                </Text>
-              </View>
-            )}
-          </View>
-        </Pressable>
-      </Animated.View>
-    );
-  };
+  const handleChatItemLongPress = useCallback((chat: Conversation) => {
+    setSelectedConversation(chat);
+  }, []);
 
   const renderChatItem = (chat: Conversation) => {
-    return <ChatItem key={chat.id} chat={chat} />;
+    return (
+      <ChatItem
+        key={chat.id}
+        chat={chat}
+        isSelected={selectedConversation?.id === chat.id}
+        onPress={handleChatItemPress}
+        onLongPress={handleChatItemLongPress}
+      />
+    );
   };
 
   const renderFriendItem = ({ item }: { item: Friend }) => (
@@ -727,23 +752,24 @@ export default function ChatScreen() {
       </View>
 
       {/* Liste des conversations */}
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[
-          styles.contentContainer,
-          Platform.OS !== 'ios' && styles.contentContainerWithTabBar,
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
-        {convLoading ? (
-          <View style={styles.loadingState}>
-            <ActivityIndicator size="large" color={colors.primary} />
-          </View>
-        ) : activeFilter === 'activities' ? (
-          (() => {
-            const activeActivities = getFilteredConversations().filter(c => !c.isPastActivity);
-            const pastActivities = getFilteredConversations().filter(c => c.isPastActivity);
-            return activeActivities.length > 0 || pastActivities.length > 0 ? (
+      {convLoading ? (
+        <View style={[styles.scrollView, styles.loadingState]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      ) : activeFilter === 'activities' ? (
+        (() => {
+          const filtered = getFilteredConversations();
+          const activeActivities = filtered.filter(c => !c.isPastActivity);
+          const pastActivities = filtered.filter(c => c.isPastActivity);
+          return activeActivities.length > 0 || pastActivities.length > 0 ? (
+            <ScrollView
+              style={styles.scrollView}
+              contentContainerStyle={[
+                styles.contentContainer,
+                Platform.OS !== 'ios' && styles.contentContainerWithTabBar,
+              ]}
+              showsVerticalScrollIndicator={false}
+            >
               <View style={styles.conversationsList}>
                 {activeActivities.length > 0 && (
                   <>
@@ -802,18 +828,35 @@ export default function ChatScreen() {
                   );
                 })()}
               </View>
-            ) : (
+            </ScrollView>
+          ) : (
+            <ScrollView
+              style={styles.scrollView}
+              contentContainerStyle={[styles.contentContainer, Platform.OS !== 'ios' && styles.contentContainerWithTabBar]}
+            >
               <EmptyState />
-            );
-          })()
-        ) : getFilteredConversations().length > 0 ? (
-          <View style={styles.conversationsList}>
-            {getFilteredConversations().map(renderChatItem)}
-          </View>
-        ) : (
-          <EmptyState />
-        )}
-      </ScrollView>
+            </ScrollView>
+          );
+        })()
+      ) : (
+        <FlatList
+          data={getFilteredConversations()}
+          renderItem={({ item }) => renderChatItem(item)}
+          keyExtractor={item => item.id}
+          style={styles.scrollView}
+          contentContainerStyle={[
+            styles.contentContainer,
+            Platform.OS !== 'ios' && styles.contentContainerWithTabBar,
+            getFilteredConversations().length === 0 && { flex: 1 },
+          ]}
+          showsVerticalScrollIndicator={false}
+          initialNumToRender={10}
+          maxToRenderPerBatch={5}
+          windowSize={7}
+          removeClippedSubviews={Platform.OS !== 'web'}
+          ListEmptyComponent={<EmptyState />}
+        />
+      )}
 
       {/* Modal de sélection d'ami */}
       <Modal

@@ -7,11 +7,11 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Image,
   ActivityIndicator,
   Alert,
   ScrollView,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
 import { groupsService } from '@/services/groups.service';
@@ -255,8 +255,9 @@ export default function SlotGroupsView({
                     onPress={() => handleUserPress(member.user_id)}
                   >
                     <Image
-                      source={{ uri: member.avatar_url || 'https://via.placeholder.com/40' }}
+                      source={{ uri: member.avatar_url || '' }}
                       style={styles.memberAvatar}
+                      transition={200}
                     />
                     <Text style={styles.memberName} numberOfLines={1}>
                       {member.full_name}

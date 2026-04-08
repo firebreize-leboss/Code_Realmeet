@@ -7,11 +7,11 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  Image,
   TouchableOpacity,
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -199,8 +199,9 @@ export default function BusinessReviewsScreen() {
           onPress={() => router.push(`/user-profile?id=${item.reviewer_id}`)}
         >
           <Image
-            source={{ uri: item.reviewer_avatar || 'https://via.placeholder.com/40' }}
+            source={{ uri: item.reviewer_avatar || '' }}
             style={styles.reviewerAvatar}
+            transition={200}
           />
           <View>
             <Text style={styles.reviewerName}>{item.reviewer_name}</Text>

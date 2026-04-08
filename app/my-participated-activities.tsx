@@ -9,12 +9,12 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  Image,
   TouchableOpacity,
   ActivityIndicator,
   Platform,
   RefreshControl,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -100,8 +100,9 @@ export default function MyParticipatedActivitiesScreen() {
         {/* Image avec ratio stable 1:1 */}
         <View style={styles.imageContainer}>
           <Image
-            source={{ uri: item.image_url || 'https://via.placeholder.com/80' }}
+            source={item.image_url || require('@/assets/images/placeholder-activity.png')}
             style={styles.activityImage}
+            transition={200}
           />
           {/* Indicateur visuel discret */}
           <View style={styles.pastImageOverlay}>

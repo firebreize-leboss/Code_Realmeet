@@ -8,10 +8,10 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Image,
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
@@ -266,8 +266,9 @@ export default function SlotGroupsDisplay({
             {group.members.map((member) => (
               <View key={member.id} style={styles.memberItem}>
                 <Image
-                  source={{ uri: member.avatar_url || 'https://via.placeholder.com/40' }}
+                  source={{ uri: member.avatar_url || '' }}
                   style={styles.memberAvatar}
+                  transition={200}
                 />
                 <View style={styles.memberInfo}>
                   <Text style={styles.memberName}>{member.full_name}</Text>

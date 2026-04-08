@@ -1,9 +1,8 @@
 flowchart TD
 
-  subgraph BIZ["🏢 Business & Paiement"]
+  subgraph BIZ["🏢 Business"]
     direction TB
     BS["business_stats\n─────────────\nid · business_id · date\nviews · total_participants\ntotal_revenue"]
-    AR["activity_revenue\n─────────────\nid · activity_id\nbusiness_id · participant_id\namount · payment_status"]
     RV["reviews\n─────────────\nid · activity_id · reviewer_id\nrating 1-5 · comment"]
   end
 
@@ -12,9 +11,7 @@ flowchart TD
   A_REF["activities\n(ref)"]:::ref
 
   P_REF -->|"stats business"| BS
-  P_REF -->|"revenus business"| AR
   P_REF -->|"rédige"| RV
-  A_REF -->|"revenus"| AR
   A_REF -->|"avis"| RV
 
   classDef ref fill:#f5f5f5,stroke:#aaa,stroke-dasharray:4 4,color:#888

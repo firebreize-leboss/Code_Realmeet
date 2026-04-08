@@ -9,11 +9,11 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  Image,
   ActivityIndicator,
   RefreshControl,
   Platform,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -202,8 +202,9 @@ export default function BusinessGroupsScreen() {
       activeOpacity={0.7}
     >
       <Image
-        source={{ uri: item.activityImage || 'https://via.placeholder.com/60' }}
+        source={item.activityImage || require('@/assets/images/placeholder-activity.png')}
         style={styles.groupImage}
+        transition={200}
       />
 
       <View style={styles.groupContent}>

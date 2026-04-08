@@ -50,13 +50,13 @@ flowchart TB
   GROUPS --- GRP_F5[Message systeme de bienvenue]:::done
   GROUPS --- GRP_F6[Gestion timezone Paris / UTC]:::done
 
-  PAYMENT[Paiement]:::payment
-  PAYMENT --- PAY_F1[Flow multi-etapes · methode · carte · confirmation]:::done
-  PAYMENT --- PAY_F2["Preview carte bancaire à supprimer"]:::done
-  PAYMENT --- PAY_F3["Integration Stripe A supprimer"]:::wip
-  PAYMENT --- PAY_F4[Bypass dev temporaire]:::done
-  PAYMENT --- PAY_F5["Paiement duo · host_pays / guest_pays A supprimer"]:::done
-  PAYMENT --- PAY_F6[Reservation 10 min pour duo]:::done
+  PENALTY[Penalites no-show]:::payment
+  PENALTY --- PEN_F1[Detection automatique no-show · pg_cron 1h]:::done
+  PENALTY --- PEN_F2[user_penalties · historique penalites]:::done
+  PENALTY --- PEN_F3[Bannissement auto · 2 no-shows]:::done
+  PENALTY --- PEN_F4[banned_phones · blocage par telephone]:::done
+  PENALTY --- PEN_F5[Verification ban a l inscription]:::done
+  PENALTY --- PEN_F6[Verification ban au login]:::done
 
   PLUSONE[Invitation +1]:::plusone
   PLUSONE --- PLUS_F1[Creation token securise]:::done
@@ -112,17 +112,16 @@ flowchart TB
   BUSINESS --- BIZ_F4[Analytics activites]:::done
   BUSINESS --- BIZ_F5[Reviews · 1-5 etoiles]:::done
   BUSINESS --- BIZ_F6[Gestion participants]:::done
-  BUSINESS --- BIZ_F7[Revenue tracking · activity_revenue]:::done
+  BUSINESS --- BIZ_F7[Revenue tracking]:::planned
 
   AUTH ==>|session| PROFILE
   AUTH ==>|push token| NOTIF
   PROFILE ==>|interets| ACTIVITIES
   PROFILE ==>|amis| SOCIAL
   ACTIVITIES ==>|creneaux| GROUPS
-  ACTIVITIES ==>|inscription| PAYMENT
+  ACTIVITIES ==>|presence| PENALTY
   ACTIVITIES ==>|presence| CHECKIN
   ACTIVITIES ==>|inviter +1| PLUSONE
-  PLUSONE ==>|paiement duo| PAYMENT
   GROUPS ==>|conv. auto| MESSAGING
   SOCIAL ==>|chat prive| MESSAGING
   BUSINESS ==>|host| ACTIVITIES

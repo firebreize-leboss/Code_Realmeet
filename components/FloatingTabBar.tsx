@@ -46,7 +46,7 @@ interface FloatingTabBarProps {
 }
 
 // Individual tab item with its own scale animation
-function TabItem({
+const TabItem = React.memo(function TabItem({
   tab,
   index,
   isActive,
@@ -99,7 +99,7 @@ function TabItem({
       </Animated.View>
     </Pressable>
   );
-}
+});
 
 export default function FloatingTabBar({
   tabs = [],
@@ -158,7 +158,7 @@ export default function FloatingTabBar({
     }
   }, [activeTabIndex, animatedValue, scrollProgress]);
 
-  const handleTabPress = (index: number, route: string) => {
+  const handleTabPress = React.useCallback((index: number, route: string) => {
     // When no scrollProgress, animate via spring; otherwise the ScrollView scroll drives the indicator
     if (!scrollProgress) {
       animatedValue.value = withSpring(index, motion.spring.smooth);
@@ -168,7 +168,7 @@ export default function FloatingTabBar({
     } else {
       router.push(route);
     }
-  };
+  }, [scrollProgress, animatedValue, onTabPress, router]);
 
   // Remove unnecessary tabBarStyle animation to prevent flickering
 
@@ -219,6 +219,12 @@ export default function FloatingTabBar({
     },
   };
 
+  // Stable per-tab press handlers so TabItem memo works
+  const tabPressHandlers = React.useMemo(
+    () => tabs.map((tab, index) => () => handleTabPress(index, tab.route)),
+    [tabs, handleTabPress]
+  );
+
   // Calculer le bottom margin de manière stable
   const safeAreaBottom = Math.max(insets.bottom, Platform.OS === 'android' ? 16 : 0);
   const finalBottomMargin = (bottomMargin ?? 0) + safeAreaBottom;
@@ -250,7 +256,7 @@ export default function FloatingTabBar({
                 tab={tab}
                 index={index}
                 isActive={activeTabIndex === index}
-                onPress={() => handleTabPress(index, tab.route)}
+                onPress={tabPressHandlers[index]}
               />
             ))}
           </View>

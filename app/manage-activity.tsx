@@ -8,12 +8,12 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Image,
   ActivityIndicator,
   Alert,
   Dimensions,
   Modal,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -445,7 +445,7 @@ export default function ManageActivityScreen() {
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.heroSection}>
-          <Image source={{ uri: activity.image || 'https://via.placeholder.com/400' }} style={styles.heroImage} />
+          <Image source={activity.image || require('@/assets/images/placeholder-activity.png')} style={styles.heroImage} transition={200} />
           <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} style={styles.heroGradient} />
           <View style={styles.heroContent}>
             <View style={styles.statusBadge}>
@@ -679,8 +679,9 @@ export default function ManageActivityScreen() {
                     onPress={() => handleViewParticipant(participant.userId)}
                   >
                     <Image
-                      source={{ uri: participant.avatar || 'https://via.placeholder.com/50' }}
+                      source={{ uri: participant.avatar || '' }}
                       style={styles.participantAvatar}
+                      transition={200}
                     />
                     <View style={styles.participantInfo}>
                       <Text style={styles.participantName}>{participant.name}</Text>

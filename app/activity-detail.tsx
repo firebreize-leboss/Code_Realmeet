@@ -10,13 +10,13 @@ import {
   ScrollView,
   TouchableOpacity,
   Pressable,
-  Image,
   ActivityIndicator,
   Alert,
   Dimensions,
   Modal,
   Platform,
 } from 'react-native';
+import { Image } from 'expo-image';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -755,7 +755,7 @@ export default function ActivityDetailScreen() {
     <View style={styles.container}>
       {/* Header avec image pleine largeur */}
       <View style={styles.heroContainer}>
-        <Image source={{ uri: activity.image || 'https://via.placeholder.com/400' }} style={styles.heroImage} />
+        <Image source={activity.image || require('@/assets/images/placeholder-activity.png')} style={styles.heroImage} transition={200} />
         {/* Overlay noir 5% */}
         <View style={styles.heroOverlay} />
         {/* Dégradé léger en haut pour lisibilité des boutons */}
@@ -841,8 +841,9 @@ export default function ActivityDetailScreen() {
           <Text style={styles.sectionLabel}>Organisateur</Text>
           <View style={styles.infoRow}>
             <Image
-              source={{ uri: activity.host.avatar || 'https://via.placeholder.com/48' }}
+              source={{ uri: activity.host.avatar || '' }}
               style={styles.hostAvatar}
+              transition={200}
             />
             <View style={styles.infoContent}>
               <View style={styles.hostNameRow}>
@@ -967,8 +968,9 @@ export default function ActivityDetailScreen() {
                         onPress={() => router.push(`/user-profile?id=${participant.id}`)}
                       >
                         <Image
-                          source={{ uri: participant.avatar || 'https://via.placeholder.com/44' }}
+                          source={{ uri: participant.avatar || '' }}
                           style={styles.participantAvatar}
+                          transition={200}
                         />
                         <View style={styles.participantInfo}>
                           <View style={styles.participantNameRow}>

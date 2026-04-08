@@ -8,7 +8,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Image,
   TouchableOpacity,
   ActivityIndicator,
   Platform,
@@ -16,6 +15,7 @@ import {
   Dimensions,
   TextInput,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -378,8 +378,9 @@ export default function ProfileScreen() {
           <View style={styles.userProfileHeader}>
             <View style={styles.userAvatarContainer}>
               <Image
-                source={{ uri: profile.avatar_url || 'https://via.placeholder.com/100' }}
+                source={{ uri: profile.avatar_url || '' }}
                 style={styles.userAvatar}
+                transition={200}
               />
               <TouchableOpacity
                 style={styles.userEditBadge}
@@ -544,8 +545,9 @@ function BusinessProfileView({
           {/* Business Profile Section */}
           <View style={styles.bizProfileSection}>
             <Image
-              source={{ uri: profile.business_logo_url || profile.avatar_url || 'https://via.placeholder.com/80' }}
+              source={{ uri: profile.business_logo_url || profile.avatar_url || '' }}
               style={styles.bizLogo}
+              transition={200}
             />
             <Text style={styles.bizName}>
               {profile.business_name || profile.full_name}

@@ -9,9 +9,9 @@ import {
   StyleSheet,
   TouchableOpacity,
   Pressable,
-  Image,
   Dimensions,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Calendar, MapPin, Users, Heart } from 'lucide-react-native';
 import Animated, {
@@ -27,6 +27,7 @@ import { PREDEFINED_CATEGORIES } from '@/constants/categories';
 import { IconSymbol } from '@/components/IconSymbol';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const PLACEHOLDER_IMAGE = require('@/assets/images/placeholder-activity.png');
 
 // Design tokens - Orange uniquement comme accent
 const ACCENT_ORANGE = colors.primary; // #F2994A
@@ -66,7 +67,7 @@ interface ActivityCardProps {
   isLiked?: boolean;
 }
 
-export default function ActivityCard({
+function ActivityCardInner({
   activity,
   variant = 'full',
   showHost = true,
@@ -179,7 +180,8 @@ export default function ActivityCard({
         {/* ── Image pleine largeur avec coins arrondis ── */}
         <View style={styles.browseImageWrap}>
           <Image
-            source={{ uri: activity.image_url || 'https://via.placeholder.com/400' }}
+            source={activity.image_url || PLACEHOLDER_IMAGE}
+            transition={200}
             style={styles.browseImage}
           />
 
@@ -296,7 +298,8 @@ export default function ActivityCard({
         {/* Zone image avec overlay uniforme */}
         <View style={styles.compactImageContainer}>
           <Image
-            source={{ uri: activity.image_url || 'https://via.placeholder.com/400' }}
+            source={activity.image_url || PLACEHOLDER_IMAGE}
+            transition={200}
             style={styles.compactImage}
           />
 
@@ -431,7 +434,8 @@ export default function ActivityCard({
         <Animated.View style={[styles.listCard, cardAnimStyle]}>
         {/* Image full background */}
         <Image
-          source={{ uri: activity.image_url || 'https://via.placeholder.com/400' }}
+          source={activity.image_url || PLACEHOLDER_IMAGE}
+            transition={200}
           style={styles.listImage}
         />
 
@@ -516,7 +520,8 @@ export default function ActivityCard({
       {/* Image avec overlay uniforme */}
       <View style={styles.fullImageContainer}>
         <Image
-          source={{ uri: activity.image_url || 'https://via.placeholder.com/400' }}
+          source={activity.image_url || PLACEHOLDER_IMAGE}
+            transition={200}
           style={styles.fullImage}
         />
 
@@ -597,6 +602,20 @@ export default function ActivityCard({
     </Pressable>
   );
 }
+
+const ActivityCard = React.memo(ActivityCardInner, (prev, next) => {
+  return (
+    prev.activity.id === next.activity.id &&
+    prev.activity.participants === next.activity.participants &&
+    prev.activity.max_participants === next.activity.max_participants &&
+    prev.activity.image_url === next.activity.image_url &&
+    prev.variant === next.variant &&
+    prev.isLiked === next.isLiked &&
+    prev.onLikePress === next.onLikePress
+  );
+});
+
+export default ActivityCard;
 
 // =====================================================
 // STYLES PREMIUM - Design calme, cohérent, orange accent
