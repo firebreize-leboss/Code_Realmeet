@@ -31,17 +31,38 @@ realmeet-checkin/       # Serveur check-in Node.js (déployé sur VPS)
 sql/                    # Scripts SQL manuels
 ```
 
-## Diagrammes — Lire AVANT de coder
+## Diagrammes — Source de vérité (OBLIGATOIRE)
 
-Les diagrammes dans `diagrammes/` sont la source de vérité du projet. Avant toute modification significative, lis le diagramme pertinent.
+Les diagrammes dans `diagrammes/` sont la source de vérité du projet.
+
+Toute modification impactant :
+- un flow utilisateur
+- une logique backend
+- une structure de données
+- une feature
+- un état métier
+
+DOIT être répercutée dans les diagrammes.
+
+Une tâche n'est PAS terminée tant que les diagrammes ne sont pas synchronisés.
+
+Les diagrammes de travail sont situés dans :
+`diagrammes/domains/`
+
+Le fichier global :
+`realmeet-global-map.mermaid`
+est une vue d'ensemble et doit rester propre (pas de diff visuel sauf changement majeur).
+
+Les modifications doivent :
+- être appliquées directement dans les fichiers (pas seulement proposées)
+- utiliser les conventions de diff visuel (added / updated / removed)
+- rester localisées au domaine concerné
 
 | Fichier | Contenu | Quand le lire |
 |---------|---------|---------------|
-| `realmeet-user-flows.mermaid` | 5 parcours critiques (inscription, groupes, check-in, +1, social) | Avant de toucher à un flow utilisateur |
+| `realmeet-user-flows.mermaid` | des parcours critiques (inscription, groupes, check-in, +1, social, ...) | Avant de toucher à un flow utilisateur |
 | `realmeet-domain-flow.mermaid` | Carte des domaines + statut de chaque feature (✅/🔧/🔜) | Pour savoir ce qui est fait et ce qui reste |
 | `realmeet-erd.md` | ERD macro + mini ERDs par feature + règles data. Pour le schéma complet, utiliser MCP Supabase. | Avant toute migration ou nouvelle RPC |
-| `realmeet-navigation.mermaid` | Screen map + routing Expo Router | Avant d'ajouter un écran |
-| `realmeet-infrastructure.mermaid` | Architecture technique (Supabase, VPS, services externes) | Pour comprendre les connexions entre services |
 
 ## Conventions de code
 
@@ -108,3 +129,4 @@ Avant de terminer une session de travail :
 1. Mets à jour `task_plan.md` avec les phases terminées
 2. Si un flow ou une feature a changé de statut, propose la mise à jour du diagramme `domain-flow`
 3. Liste les fichiers modifiés et les éventuels impacts sur d'autres parties du code
+4. Si le code est modifié mais que les diagrammes ne sont pas mis à jour, la tâche est considérée comme incomplète.
