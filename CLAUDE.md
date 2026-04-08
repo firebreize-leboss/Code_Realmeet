@@ -49,10 +49,6 @@ Une tâche n'est PAS terminée tant que les diagrammes ne sont pas synchronisés
 Les diagrammes de travail sont situés dans :
 `diagrammes/domains/`
 
-Le fichier global :
-`realmeet-global-map.mermaid`
-est une vue d'ensemble et doit rester propre (pas de diff visuel sauf changement majeur).
-
 Les modifications doivent :
 - être appliquées directement dans les fichiers (pas seulement proposées)
 - utiliser les conventions de diff visuel (added / updated / removed)

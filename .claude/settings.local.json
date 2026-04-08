@@ -3,7 +3,8 @@
     "allow": [
       "mcp__ide__getDiagnostics",
       "Bash(find:*)",
-      "mcp__supabase__execute_sql"
+      "mcp__supabase__execute_sql",
+      "Bash(sudo chmod 644 /home/ubuntu/code_realmeet/.claude/skills/realmeet-diagrams 2>/dev/null || chmod 644 /home/ubuntu/code_realmeet/.claude/skills/realmeet-diagrams)"
     ]
   }
 }
