@@ -1,12 +1,18 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   ActivityIndicator,
   StyleSheet,
   TouchableOpacity,
-  Animated,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
+import { motion } from '@/styles/motionTokens';
 import { LinearGradient } from 'expo-linear-gradient';
 import QRCode from 'react-native-qrcode-svg';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -24,8 +30,12 @@ export function CheckinQRCode({ slotParticipantId, activityName, slotDate, slotT
   const [countdown, setCountdown] = useState('');
 
   // Animation values
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.92)).current;
+  const fadeAnim = useSharedValue(0);
+  const scaleAnim = useSharedValue(0.92);
+  const entranceAnimStyle = useAnimatedStyle(() => ({
+    opacity: fadeAnim.value,
+    transform: [{ scale: scaleAnim.value }],
+  }));
 
   useEffect(() => {
     generateQR(slotParticipantId);
@@ -34,21 +44,10 @@ export function CheckinQRCode({ slotParticipantId, activityName, slotDate, slotT
   // Entrance animation
   useEffect(() => {
     if (!loading) {
-      fadeAnim.setValue(0);
-      scaleAnim.setValue(0.92);
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          friction: 8,
-          tension: 40,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      fadeAnim.value = 0;
+      scaleAnim.value = 0.92;
+      fadeAnim.value = withTiming(1, { duration: motion.duration.slow });
+      scaleAnim.value = withSpring(1, motion.spring.gentle);
     }
   }, [loading, error, qr]);
 
@@ -78,7 +77,7 @@ export function CheckinQRCode({ slotParticipantId, activityName, slotDate, slotT
   );
 
   if (error) return (
-    <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: scaleAnim }] }}>
+    <Animated.View style={entranceAnimStyle}>
       <LinearGradient
         colors={['#FFF4E5', '#FFE2C7']}
         start={{ x: 0, y: 0 }}
@@ -104,7 +103,7 @@ export function CheckinQRCode({ slotParticipantId, activityName, slotDate, slotT
   if (!qr) return null;
 
   return (
-    <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: scaleAnim }] }}>
+    <Animated.View style={entranceAnimStyle}>
       <View style={s.container}>
         <Text style={s.title}>Mon billet d'entrée</Text>
         {activityName && <Text style={s.activityName}>{activityName}</Text>}

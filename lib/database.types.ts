@@ -41,6 +41,7 @@ export type Database = {
           prix: number | null
           prix_devise: string | null
           regles: string[] | null
+          requires_checkin: boolean
           status: string | null
           time_end: string | null
           time_start: string | null
@@ -71,6 +72,7 @@ export type Database = {
           prix?: number | null
           prix_devise?: string | null
           regles?: string[] | null
+          requires_checkin?: boolean
           status?: string | null
           time_end?: string | null
           time_start?: string | null
@@ -101,6 +103,7 @@ export type Database = {
           prix?: number | null
           prix_devise?: string | null
           regles?: string[] | null
+          requires_checkin?: boolean
           status?: string | null
           time_end?: string | null
           time_start?: string | null

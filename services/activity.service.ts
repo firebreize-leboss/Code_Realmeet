@@ -22,6 +22,7 @@ export interface CreateActivityData {
   regles?: string[];
   dates_supplementaires?: string;
   status?: 'active' | 'draft';
+  requires_checkin?: boolean;
 }
 
 class ActivityService {
@@ -62,6 +63,7 @@ class ActivityService {
           dates_supplementaires: activityData.dates_supplementaires,
           host_type: 'Particulier',
           status: activityData.status || 'active',
+          requires_checkin: activityData.requires_checkin ?? false,
         })
         .select()
         .single();

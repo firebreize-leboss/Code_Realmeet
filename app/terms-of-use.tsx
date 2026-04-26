@@ -74,7 +74,7 @@ export default function TermsOfUseScreen() {
             <TouchableOpacity onPress={() => Linking.openURL('mailto:contact@realmeet.fr')}>
               <Text style={styles.emailLink}>Contact : contact@realmeet.fr</Text>
             </TouchableOpacity>
-            <Text style={styles.legalInfoDate}>Dernière mise à jour : 02/03/2026</Text>
+            <Text style={styles.legalInfoDate}>Dernière mise à jour : 08/04/2026</Text>
           </View>
         </View>
 
@@ -142,8 +142,8 @@ export default function TermsOfUseScreen() {
         <Section title="6. Description des Services">
           <Text style={styles.bodyText}>REALMEET permet notamment :</Text>
           <Bullet text="de consulter des Activités proposées par des Entreprises Hôtes ;" />
-          <Bullet text="d'effectuer des Réservations et paiements en ligne ;" />
-          <Bullet text="d'utiliser une messagerie privée, des discussions de groupe liées aux réservations, et des espaces d'échanges associés aux Activités ;" />
+          <Bullet text="de s'inscrire à des créneaux d'Activités ;" />
+          <Bullet text="d'utiliser une messagerie privée, des discussions de groupe liées aux inscriptions, et des espaces d'échanges associés aux Activités ;" />
           <Bullet text="de publier des avis/notes après une Activité." />
           <View style={styles.importantBox}>
             <Text style={styles.importantText}>
@@ -243,11 +243,28 @@ export default function TermsOfUseScreen() {
           </SubSection>
         </Section>
 
-        {/* 11. Réservations */}
-        <Section title="11. Réservations – Renvoi aux CGV">
-          <Text style={styles.bodyText}>
-            Les conditions de Réservation, paiement, annulation/remboursement et l'exclusion du droit de rétractation sont détaillées dans les CGV / Conditions de réservation, acceptées lors de chaque Réservation.
-          </Text>
+        {/* 11. Inscriptions et présence */}
+        <Section title="11. Inscriptions – Présence – Pénalités">
+          <SubSection title="11.1 Inscription gratuite">
+            <Text style={styles.bodyText}>
+              L'inscription aux Activités via l'Application est gratuite. Le paiement de l'Activité (consommations, entrées, etc.) s'effectue directement auprès de l'Entreprise Hôte, sur place, le jour de l'Activité.
+            </Text>
+          </SubSection>
+          <SubSection title="11.2 Confirmation de présence (Check-in)">
+            <Text style={styles.bodyText}>
+              Le jour de l'Activité, l'Utilisateur doit confirmer sa présence en présentant un QR code généré par l'Application. Ce QR code est scanné par le personnel de l'Entreprise Hôte.
+            </Text>
+          </SubSection>
+          <SubSection title="11.3 Annulation">
+            <Text style={styles.bodyText}>
+              L'Utilisateur peut annuler sa participation à une Activité sans pénalité jusqu'à 24 heures avant l'heure de début du créneau. Toute annulation effectuée moins de 24 heures avant l'Activité est considérée comme une annulation tardive et peut entraîner une pénalité.
+            </Text>
+          </SubSection>
+          <SubSection title="11.4 Absence (No-Show) et pénalités">
+            <Text style={styles.bodyText}>
+              L'absence non justifiée à une Activité (no-show) entraîne une pénalité comptabilisée sur le Compte de l'Utilisateur. Après deux (2) pénalités, le Compte est définitivement banni. Le bannissement est lié au numéro de téléphone associé au Compte.
+            </Text>
+          </SubSection>
         </Section>
 
         {/* 12. Propriété intellectuelle */}
@@ -276,7 +293,7 @@ export default function TermsOfUseScreen() {
           </SubSection>
           <SubSection title="14.2 Limitation">
             <Text style={styles.bodyText}>
-              Dans les limites autorisées par la loi, la responsabilité de REALMEET est limitée aux dommages directs et au montant effectivement payé par l'Utilisateur pour la Réservation concernée.
+              Dans les limites autorisées par la loi, la responsabilité de REALMEET est limitée aux dommages directs résultant d'un manquement prouvé à ses obligations en tant qu'intermédiaire technique.
             </Text>
             <Text style={[styles.bodyText, { marginTop: 8 }]}>REALMEET n'est pas responsable :</Text>
             <Bullet text="du comportement des participants ;" />

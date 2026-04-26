@@ -31,6 +31,7 @@ import { TabIndexProvider } from "@/contexts/TabIndexContext";
 import { LocationProvider } from "@/contexts/LocationContext";
 import { notificationService } from "@/lib/notifications";
 import { useAuth } from "@/contexts/AuthContext";
+import { colors as designColors } from "@/styles/commonStyles";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -99,30 +100,30 @@ export default function RootLayout() {
     return null;
   }
 
-  // Modern 2025 Light Theme - Vibrant & Friendly
+  // RealMeet Light Theme — aligné sur la DA canonique (styles/commonStyles.ts)
   const CustomDefaultTheme: Theme = {
     ...DefaultTheme,
     dark: false,
     colors: {
-      primary: "rgb(255, 107, 157)", // Vibrant coral-pink (#FF6B9D)
-      background: "rgb(250, 250, 250)", // Very light gray (#FAFAFA)
-      card: "rgb(255, 255, 255)", // Pure white for cards
-      text: "rgb(26, 26, 26)", // Very dark gray/almost black (#1A1A1A)
-      border: "rgb(224, 224, 224)", // Light border (#E0E0E0)
-      notification: "rgb(239, 83, 80)", // Modern red (#EF5350)
+      primary: designColors.primary,        // Orange premium #F2994A
+      background: designColors.background,  // #FAFAFA
+      card: designColors.card,              // #FFFFFF
+      text: designColors.text,              // #1C1C1E
+      border: designColors.borderLight,     // #E5E5EA
+      notification: designColors.error,     // #FF3B30
     },
   };
 
-  // Keep dark theme as fallback (but we're focusing on light mode)
+  // Dark theme conservé en fallback — light reste le mode focus
   const CustomDarkTheme: Theme = {
     ...DarkTheme,
     colors: {
-      primary: "rgb(255, 107, 157)", // Same coral-pink for consistency
-      background: "rgb(250, 250, 250)", // Light theme background
-      card: "rgb(255, 255, 255)", // Light theme cards
-      text: "rgb(26, 26, 26)", // Dark text for light mode
-      border: "rgb(224, 224, 224)", // Light borders
-      notification: "rgb(239, 83, 80)", // Modern red
+      primary: designColors.primary,
+      background: designColors.background,
+      card: designColors.card,
+      text: designColors.text,
+      border: designColors.borderLight,
+      notification: designColors.error,
     },
   };
 

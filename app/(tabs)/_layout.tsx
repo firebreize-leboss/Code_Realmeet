@@ -9,6 +9,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useSharedValue } from 'react-native-reanimated';
 import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
 import SwipeableTabView from '@/components/SwipeableTabView';
+import { RealMeetAlertModal } from '@/components/RealMeetAlertModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTabIndex } from '@/contexts/TabIndexContext';
 import { colors } from '@/styles/commonStyles';
@@ -20,12 +21,11 @@ import { notificationService } from '@/lib/notifications';
 // Import des écrans
 import ProfileScreen from './profile';
 import BrowseScreen from './browse';
-import CategoryScreen from './category';
 import ActivityScreen from './activity';
 import ChatScreen from './chat';
 import BusinessGroupsScreen from './business-groups';
 
-// Tabs pour les utilisateurs standard (5 tabs)
+// Tabs pour les utilisateurs standard (4 tabs)
 const userTabs: TabBarItem[] = [
   {
     name: 'profile',
@@ -40,13 +40,6 @@ const userTabs: TabBarItem[] = [
     icon: 'square.grid.2x2.fill',
     androidIcon: 'grid-view',
     label: 'Explorer',
-  },
-  {
-    name: 'category',
-    route: '/(tabs)/category',
-    icon: 'list.bullet.rectangle.fill',
-    androidIcon: 'list',
-    label: 'Catégories',
   },
   {
     name: 'activity',
@@ -64,7 +57,7 @@ const userTabs: TabBarItem[] = [
   },
 ];
 
-// Tabs pour les comptes entreprise (5 tabs)
+// Tabs pour les comptes entreprise (4 tabs)
 const businessTabs: TabBarItem[] = [
   {
     name: 'profile',
@@ -79,13 +72,6 @@ const businessTabs: TabBarItem[] = [
     icon: 'eye.fill',
     androidIcon: 'visibility',
     label: 'Veille',
-  },
-  {
-    name: 'category',
-    route: '/(tabs)/category',
-    icon: 'list.bullet.rectangle.fill',
-    androidIcon: 'list',
-    label: 'Catégories',
   },
   {
     name: 'activity',
@@ -235,7 +221,6 @@ function TabLayoutContent() {
       return [
         <ProfileScreen key="profile" />,
         <BrowseScreen key="browse" />,
-        <CategoryScreen key="category" />,
         <ActivityScreen key="activity" />,
         <BusinessGroupsScreen key="business-groups" />,
       ];
@@ -243,7 +228,6 @@ function TabLayoutContent() {
     return [
       <ProfileScreen key="profile" />,
       <BrowseScreen key="browse" />,
-      <CategoryScreen key="category" />,
       <ActivityScreen key="activity" />,
       <ChatScreen key="chat" />,
     ];
@@ -299,10 +283,14 @@ function TabLayoutContent() {
   }, [user]);
 
   // Vérifier les créneaux annulés non vus
-  useCancellationCheck();
+  const { alert: cancellationAlert, dismiss: dismissCancellationAlert } = useCancellationCheck();
 
   // Écouter en temps réel les annulations d'activités
-  useActivityCancellationListener();
+  const {
+    alert: activityCancellationAlert,
+    dismiss: dismissActivityCancellationAlert,
+    viewDetails: viewCancelledActivityDetails,
+  } = useActivityCancellationListener();
 
   // Écran de chargement pendant la vérification du type de compte ou redirection
   if (loading || isRedirecting || !user) {
@@ -329,6 +317,25 @@ function TabLayoutContent() {
         currentIndex={currentTabIndex}
         onTabPress={handleTabPress}
         scrollProgress={scrollProgress}
+      />
+      <RealMeetAlertModal
+        visible={cancellationAlert.visible}
+        title={cancellationAlert.title}
+        message={cancellationAlert.message}
+        icon="calendar.badge.exclamationmark"
+        iconTint="danger"
+        onClose={dismissCancellationAlert}
+      />
+      <RealMeetAlertModal
+        visible={activityCancellationAlert.visible}
+        title={activityCancellationAlert.title}
+        message={activityCancellationAlert.message}
+        icon="calendar.badge.exclamationmark"
+        iconTint="danger"
+        buttonLabel="Voir les détails"
+        onClose={viewCancelledActivityDetails}
+        secondaryButtonLabel="Fermer"
+        onSecondaryPress={dismissActivityCancellationAlert}
       />
     </View>
   );

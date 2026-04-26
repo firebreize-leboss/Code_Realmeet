@@ -13,7 +13,6 @@ import {
   Platform,
   RefreshControl,
   Dimensions,
-  TextInput,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -96,7 +95,6 @@ export default function ProfileScreen() {
   const [loadingStats, setLoadingStats] = useState(true);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<'7d' | '30d' | '90d'>('30d');
-  const [devInviteCode, setDevInviteCode] = useState('');
 
   const loadProfile = async () => {
     try {
@@ -416,70 +414,44 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Stats & Intention Row */}
+          {/* Stats — inline épuré */}
           {loadingStats ? (
-            <View style={styles.userStatsIntentionRow}>
-              <ActivityIndicator size="small" color={colors.primary} />
-            </View>
+            <ActivityIndicator size="small" color={colors.primary} style={{ marginBottom: 18 }} />
           ) : (
             <TouchableOpacity
-              style={styles.userStatsIntentionRow}
+              style={styles.userStatsInlineRow}
               onPress={() => router.push('/my-participated-activities')}
-              activeOpacity={0.7}
+              activeOpacity={0.6}
             >
-              <View style={styles.userStatItem}>
-                <Text style={styles.userStatValue}>{activitiesJoined}</Text>
-                <Text style={styles.userStatLabel}>Activités</Text>
-              </View>
-
+              <Text style={styles.userStatsInlineValue}>{activitiesJoined}</Text>
+              <Text style={styles.userStatsInlineLabel}>
+                {activitiesJoined > 1 ? 'Activités faites' : 'Activité faite'}
+              </Text>
+              <IconSymbol name="chevron.right" size={13} color="#9CA3AF" />
             </TouchableOpacity>
           )}
 
-          {/* Bio Card */}
+          {/* Bio — texte épuré sans carte */}
           {profile.bio && (
-            <View style={styles.userBioCard}>
-              <Text style={styles.userBioTitle}>Ma Bio</Text>
+            <View style={styles.userBioBlock}>
+              <Text style={styles.userBioLabel}>Bio</Text>
               <Text style={styles.userBioText}>{profile.bio}</Text>
             </View>
           )}
 
           {/* Intérêts */}
           {profile.interests && profile.interests.length > 0 && (
-            <View style={styles.userInterestsContainer}>
-              {profile.interests.map((interest, index) => (
-                <View key={index} style={styles.userInterestTag}>
-                  <Text style={styles.userInterestText}>{interest}</Text>
-                </View>
-              ))}
+            <View style={styles.userInterestsBlock}>
+              <Text style={styles.userBioLabel}>Centres d'intérêt</Text>
+              <View style={styles.userInterestsContainer}>
+                {profile.interests.map((interest, index) => (
+                  <View key={index} style={styles.userInterestTag}>
+                    <Text style={styles.userInterestText}>{interest}</Text>
+                  </View>
+                ))}
+              </View>
             </View>
           )}
-
-          {/* ===== DEV: Tester invitation — À SUPPRIMER ===== */}
-          <View style={styles.devInviteContainer}>
-            <Text style={styles.devInviteLabel}>Dev - Tester un lien invitation</Text>
-            <View style={styles.devInviteRow}>
-              <TextInput
-                style={styles.devInviteInput}
-                placeholder="Code invitation..."
-                placeholderTextColor="#9CA3AF"
-                value={devInviteCode}
-                onChangeText={setDevInviteCode}
-                autoCapitalize="none"
-              />
-              <TouchableOpacity
-                style={styles.devInviteButton}
-                onPress={() => {
-                  if (devInviteCode.trim()) {
-                    router.push(`/invite/${devInviteCode.trim()}`);
-                  }
-                }}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.devInviteButtonText}>Tester</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-          {/* ===== FIN DEV ===== */}
         </View>
       </SafeAreaView>
     </LinearGradient>
@@ -1411,38 +1383,24 @@ const styles = StyleSheet.create({
     fontFamily: 'Manrope_600SemiBold',
     color: '#FFFFFF',
   },
-  userStatsIntentionRow: {
+  userStatsInlineRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    marginBottom: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-    width: '100%',
-    minHeight: 44,
+    gap: 6,
+    marginBottom: 22,
+    marginTop: 2,
   },
-  userStatItem: {
-    alignItems: 'center',
-    paddingHorizontal: 9,
-  },
-  userStatValue: {
-    fontSize: 16,
+  userStatsInlineValue: {
+    fontSize: 15,
     fontWeight: '700',
     fontFamily: 'Manrope_700Bold',
     color: colors.primary,
   },
-  userStatLabel: {
-    fontSize: 11,
+  userStatsInlineLabel: {
+    fontSize: 14,
     fontFamily: 'Manrope_500Medium',
     color: '#6B7280',
-    marginTop: 1,
   },
   userStatSeparator: {
     width: 1,
@@ -1462,29 +1420,26 @@ const styles = StyleSheet.create({
     fontFamily: 'Manrope_500Medium',
     color: colors.primary,
   },
-  userBioCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 8,
-    marginBottom: 14,
+  userBioBlock: {
     width: '100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: colors.primaryDesaturated.replace('0.70', '0.12'),
+    marginBottom: 22,
   },
-  userBioTitle: {
-    fontSize: 14,
+  userInterestsBlock: {
+    width: '100%',
+    marginBottom: 8,
+  },
+  userBioLabel: {
+    fontSize: 11,
     fontWeight: '600',
     fontFamily: 'Manrope_600SemiBold',
-    color: '#1F2937',
-    marginBottom: 10,
+    color: '#9CA3AF',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+    marginLeft: 2,
   },
   userBioText: {
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: 'Manrope_400Regular',
     color: '#4B5563',
     lineHeight: 22,
@@ -1492,8 +1447,7 @@ const styles = StyleSheet.create({
   userInterestsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 6,
+    gap: 8,
   },
   userInterestTag: {
     backgroundColor: colors.primaryLight,
@@ -1538,48 +1492,4 @@ const styles = StyleSheet.create({
     fontFamily: 'Manrope_600SemiBold',
     color: '#FFFFFF',
   },
-
-  // ===== DEV: À SUPPRIMER =====
-  devInviteContainer: {
-    width: '100%',
-    marginTop: 24,
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderStyle: 'dashed',
-    backgroundColor: '#F9FAFB',
-  },
-  devInviteLabel: {
-    fontSize: 11,
-    color: '#9CA3AF',
-    marginBottom: 8,
-  },
-  devInviteRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  devInviteInput: {
-    flex: 1,
-    height: 36,
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    fontSize: 13,
-    color: '#1F2937',
-    backgroundColor: '#FFFFFF',
-  },
-  devInviteButton: {
-    backgroundColor: '#6B7280',
-    paddingHorizontal: 14,
-    borderRadius: 6,
-    justifyContent: 'center',
-  },
-  devInviteButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  // ===== FIN DEV =====
 });

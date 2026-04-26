@@ -19,6 +19,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { colors, spacing, borderRadius, typography, shadows } from '@/styles/commonStyles';
 import { invitationService, InvitationPreview } from '@/services/invitation.service';
 import { supabase } from '@/lib/supabase';
+import { setPendingInviteToken } from '@/lib/pendingInvite';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -57,7 +58,13 @@ export default function InviteTokenScreen() {
       const result = await invitationService.validateToken(tokenString);
 
       if (!result.valid) {
-        setError(result.error || 'Invitation invalide');
+        const errorCode = result.error || '';
+        // Messages d'erreur contextuels
+        const errorMessages: Record<string, string> = {
+          'Vous ne pouvez pas accepter votre propre invitation': 'Tu es l\'initiateur de cette invitation. Partage le lien avec un ami pour qu\'il te rejoigne !',
+          'Vous êtes déjà inscrit à ce créneau': 'Tu es déjà inscrit(e) à cette activité. Rendez-vous le jour J !',
+        };
+        setError(errorMessages[errorCode] || errorCode || 'Invitation invalide');
         setState('error');
         return;
       }
@@ -139,8 +146,15 @@ export default function InviteTokenScreen() {
     );
   };
 
-  const handleLogin = () => {
-    // Stocker le token pour rediriger après connexion
+  const handleLogin = async () => {
+    // Stocker le token en AsyncStorage pour rediriger après connexion
+    try {
+      if (tokenString) {
+        await setPendingInviteToken(tokenString);
+      }
+    } catch (err) {
+      console.error('Erreur stockage pending invite:', err);
+    }
     router.push({
       pathname: '/auth/login',
     });
@@ -214,10 +228,10 @@ export default function InviteTokenScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centerContent}>
-          <View style={[styles.iconCircleLarge, { backgroundColor: colors.errorLight }]}>
-            <IconSymbol name="xmark" size={48} color={colors.error} />
+          <View style={[styles.iconCircleLarge, { backgroundColor: error?.includes('initiateur') || error?.includes('déjà inscrit') ? colors.warningLight : colors.errorLight }]}>
+            <IconSymbol name={error?.includes('initiateur') || error?.includes('déjà inscrit') ? 'exclamationmark.triangle.fill' : 'xmark'} size={48} color={error?.includes('initiateur') || error?.includes('déjà inscrit') ? colors.warning : colors.error} />
           </View>
-          <Text style={styles.errorTitle}>Invitation invalide</Text>
+          <Text style={styles.errorTitle}>{error?.includes('initiateur') ? 'C\'est ton invitation !' : error?.includes('déjà inscrit') ? 'Déjà inscrit(e)' : 'Invitation invalide'}</Text>
           <Text style={styles.errorDescription}>{error}</Text>
           <TouchableOpacity style={styles.primaryButton} onPress={() => router.replace('/(tabs)/browse')}>
             <Text style={styles.primaryButtonText}>Découvrir les activités</Text>

@@ -21,6 +21,7 @@ import { colors } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
 import ReviewsCarousel from '@/components/ReviewsCarousel';
+import FullScreenImageModal from '@/components/FullScreenImageModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const COVER_HEIGHT = 180;
@@ -63,6 +64,7 @@ export default function BusinessPublicProfileScreen() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'activities' | 'info'>('activities');
+  const [showFullScreenLogo, setShowFullScreenLogo] = useState(false);
 
   useEffect(() => {
     loadBusinessProfile();
@@ -207,12 +209,12 @@ export default function BusinessPublicProfileScreen() {
         <View style={styles.activityMeta}>
           {item.next_date && (
             <View style={styles.activityMetaItem}>
-              <IconSymbol name="calendar" size={12} color={colors.text} />
+              <IconSymbol name="calendar" size={12} color="#FFFFFF" />
               <Text style={styles.activityMetaText}>{formatDate(item.next_date)}</Text>
             </View>
           )}
           <View style={styles.activityMetaItem}>
-            <IconSymbol name="person.2.fill" size={12} color={colors.text} />
+            <IconSymbol name="person.2.fill" size={12} color="#FFFFFF" />
             <Text style={styles.activityMetaText}>
               {item.participants}/{item.max_participants}
             </Text>
@@ -272,7 +274,11 @@ export default function BusinessPublicProfileScreen() {
 
         {/* Profile Info */}
         <View style={styles.profileSection}>
-          <View style={styles.logoContainer}>
+          <TouchableOpacity
+            style={styles.logoContainer}
+            onPress={() => business.business_logo_url && setShowFullScreenLogo(true)}
+            activeOpacity={0.8}
+          >
             <Image
               source={{ uri: business.business_logo_url || '' }}
               style={styles.logo}
@@ -283,7 +289,7 @@ export default function BusinessPublicProfileScreen() {
                 <IconSymbol name="checkmark.seal.fill" size={20} color={colors.primary} />
               </View>
             )}
-          </View>
+          </TouchableOpacity>
 
           <Text style={styles.businessName}>{business.business_name}</Text>
           
@@ -459,6 +465,13 @@ export default function BusinessPublicProfileScreen() {
         {/* Bottom Spacing */}
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* Modal photo plein écran */}
+      <FullScreenImageModal
+        visible={showFullScreenLogo}
+        imageUri={business.business_logo_url || ''}
+        onClose={() => setShowFullScreenLogo(false)}
+      />
     </View>
   );
 }
@@ -698,8 +711,12 @@ const styles = StyleSheet.create({
   },
   activityTitle: {
     fontSize: 14,
-    fontWeight: '600',
-    color: colors.text,
+    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(0, 0, 0, 0.35)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   activityMeta: {
     flexDirection: 'row',
@@ -713,7 +730,8 @@ const styles = StyleSheet.create({
   },
   activityMetaText: {
     fontSize: 11,
-    color: colors.text,
+    fontFamily: 'Manrope_500Medium',
+    color: '#FFFFFF',
   },
   activityPrice: {
     position: 'absolute',

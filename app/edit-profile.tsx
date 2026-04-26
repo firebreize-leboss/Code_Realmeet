@@ -45,7 +45,9 @@ export default function EditProfileScreen() {
       setBio(profile.bio || '');
       setCity(profile.city || '');
       setPhone(profile.phone || '');
-      setInterests(profile.interests || []);
+      // Dédupliquer les intérêts au chargement pour éviter les doublons
+      const rawInterests = profile.interests || [];
+      setInterests([...new Set(rawInterests)]);
 
       setProfileImage(profile.avatar_url);
     }

@@ -259,37 +259,10 @@ export default function SettingsScreen() {
               />
               <View style={styles.separator} />
               <SettingItem
-                icon="lock.fill"
-                title="Confidentialité"
-                subtitle="Gérer vos paramètres de confidentialité"
-                onPress={() => console.log('Privacy')}
-              />
-              <View style={styles.separator} />
-              <SettingItem
                 icon="nosign"
                 title="Utilisateurs bloqués"
                 subtitle="Gérer les personnes bloquées"
                 onPress={() => router.push('/blocked-users')}
-              />
-            </View>
-          </View>
-
-          {/* Section Préférences */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>PRÉFÉRENCES</Text>
-            <View style={styles.sectionCard}>
-              <SettingItem
-                icon="location.fill"
-                title="Distance"
-                subtitle="Définir votre rayon de recherche"
-                onPress={() => console.log('Distance')}
-              />
-              <View style={styles.separator} />
-              <SettingItem
-                icon="square.stack.3d.up.fill"
-                title="Catégories"
-                subtitle="Choisir vos centres d'intérêt"
-                onPress={() => console.log('Categories')}
               />
             </View>
           </View>
@@ -328,6 +301,12 @@ export default function SettingsScreen() {
               />
               <View style={styles.separator} />
               <SettingItem
+                icon="heart.fill"
+                title="À propos de REALMEET"
+                onPress={() => router.push('/about')}
+              />
+              <View style={styles.separator} />
+              <SettingItem
                 icon="doc.text.fill"
                 title="Conditions d'utilisation"
                 onPress={() => router.push('/terms-of-use')}
@@ -337,6 +316,12 @@ export default function SettingsScreen() {
                 icon="shield.fill"
                 title="Politique de confidentialité"
                 onPress={() => router.push('/privacy-policy')}
+              />
+              <View style={styles.separator} />
+              <SettingItem
+                icon="building.columns.fill"
+                title="Mentions légales"
+                onPress={() => router.push('/legal-mentions')}
               />
             </View>
           </View>

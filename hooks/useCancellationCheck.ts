@@ -1,8 +1,8 @@
 // hooks/useCancellationCheck.ts
-// Vérifie au lancement si l'utilisateur a des créneaux annulés non vus
+// Vérifie au lancement si l'utilisateur a des créneaux annulés non vus.
+// Retourne un état à afficher dans un modal brandé RealMeet (voir _layout.tsx).
 
-import { useEffect } from 'react';
-import { Alert } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
 interface CancellationItem {
@@ -12,6 +12,12 @@ interface CancellationItem {
   slot_date: string;
   slot_time: string;
   cancelled_reason: string;
+}
+
+export interface CancellationAlertState {
+  visible: boolean;
+  title: string;
+  message: string;
 }
 
 function formatDateLong(dateStr: string): string {
@@ -31,6 +37,13 @@ function formatDateShort(dateStr: string): string {
 }
 
 export function useCancellationCheck() {
+  const [alert, setAlert] = useState<CancellationAlertState>({
+    visible: false,
+    title: '',
+    message: '',
+  });
+  const [pendingIds, setPendingIds] = useState<string[]>([]);
+
   useEffect(() => {
     const check = async () => {
       const { data: userData } = await supabase.auth.getUser();
@@ -40,52 +53,45 @@ export function useCancellationCheck() {
       if (error || !data || data.length === 0) return;
 
       const cancellations = data as CancellationItem[];
-      const ids = cancellations.map(c => c.slot_participant_id);
+      const ids = cancellations.map((c) => c.slot_participant_id);
+      setPendingIds(ids);
 
       if (cancellations.length === 1) {
         const c = cancellations[0];
         const dateFr = formatDateLong(c.slot_date);
-
-        Alert.alert(
-          'Créneau annulé',
-          `Il n'y avait pas assez de participants pour "${c.activity_name}" le ${dateFr}.\n\nVous serez intégralement remboursé.`,
-          [
-            {
-              text: 'Compris',
-              onPress: async () => {
-                try {
-                  await supabase.rpc('mark_cancellations_seen', { p_slot_participant_ids: ids });
-                } catch (err) {
-                  console.error('Failed to mark cancellations as seen:', err);
-                }
-              },
-            },
-          ]
-        );
+        setAlert({
+          visible: true,
+          title: 'Créneau annulé',
+          message: `Il n'y avait pas assez de participants pour « ${c.activity_name} » le ${dateFr}.\n\nVous serez intégralement remboursé.`,
+        });
       } else {
         const lines = cancellations
-          .map(c => `\u2022 ${c.activity_name} (${formatDateShort(c.slot_date)})`)
+          .map((c) => `• ${c.activity_name} (${formatDateShort(c.slot_date)})`)
           .join('\n');
-
-        Alert.alert(
-          `${cancellations.length} créneaux annulés`,
-          `Les créneaux suivants n'avaient pas assez de participants :\n\n${lines}\n\nVous serez intégralement remboursé.`,
-          [
-            {
-              text: 'Compris',
-              onPress: async () => {
-                try {
-                  await supabase.rpc('mark_cancellations_seen', { p_slot_participant_ids: ids });
-                } catch (err) {
-                  console.error('Failed to mark cancellations as seen:', err);
-                }
-              },
-            },
-          ]
-        );
+        setAlert({
+          visible: true,
+          title: `${cancellations.length} créneaux annulés`,
+          message: `Les créneaux suivants n'avaient pas assez de participants :\n\n${lines}\n\nVous serez intégralement remboursé.`,
+        });
       }
     };
 
     check();
   }, []);
+
+  const dismiss = useCallback(async () => {
+    setAlert((prev) => ({ ...prev, visible: false }));
+    if (pendingIds.length > 0) {
+      try {
+        await supabase.rpc('mark_cancellations_seen', {
+          p_slot_participant_ids: pendingIds,
+        });
+      } catch (err) {
+        console.error('Failed to mark cancellations as seen:', err);
+      }
+      setPendingIds([]);
+    }
+  }, [pendingIds]);
+
+  return { alert, dismiss };
 }

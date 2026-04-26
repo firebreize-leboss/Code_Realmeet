@@ -18,6 +18,7 @@ import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { supabase } from '@/lib/supabase';
+import { consumePendingInviteToken } from '@/lib/pendingInvite';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -73,6 +74,17 @@ export default function LoginScreen() {
           ]
         );
         return;
+      }
+
+      // Si un invite +1 est en attente, y rediriger au lieu du profil
+      try {
+        const pendingInviteToken = await consumePendingInviteToken();
+        if (pendingInviteToken) {
+          router.replace(`/invite/${pendingInviteToken}`);
+          return;
+        }
+      } catch (err) {
+        console.error('Erreur restauration pending invite:', err);
       }
 
       console.log('[NAV_DEBUG] login.tsx -> router.replace to /(tabs)/profile — THIS IS THE PROBLEM: should redirect to /(tabs)/browse');

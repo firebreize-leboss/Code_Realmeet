@@ -66,6 +66,7 @@ interface ActivityDetail {
   price: string;
   includes: string[];
   rules: string[];
+  requiresCheckin: boolean;
 }
 
 export default function ActivityDetailScreen() {
@@ -312,6 +313,7 @@ export default function ActivityDetailScreen() {
           price: activityData.prix ? `${activityData.prix}€` : 'Gratuit',
           includes: activityData.inclusions || [],
           rules: activityData.regles || [],
+          requiresCheckin: !!activityData.requires_checkin,
         });
 
         const { data: reviewsData } = await supabase
@@ -812,7 +814,11 @@ export default function ActivityDetailScreen() {
         {/* SECTION: Rating */}
         {activityRating && activityRating.count > 0 && (
           <>
-            <View style={styles.section}>
+            <TouchableOpacity
+              style={styles.section}
+              onPress={() => router.push(`/business-reviews?id=${activity.host.id}&name=${encodeURIComponent(activity.host.name || '')}`)}
+              activeOpacity={0.7}
+            >
               <View style={styles.infoRow}>
                 <IconSymbol name="star.fill" size={20} color="#F59E0B" />
                 <View style={styles.infoContent}>
@@ -820,8 +826,9 @@ export default function ActivityDetailScreen() {
                     {activityRating.average.toFixed(1)} ({activityRating.count} avis)
                   </Text>
                 </View>
+                <IconSymbol name="chevron.right" size={20} color={colors.textMuted} />
               </View>
-            </View>
+            </TouchableOpacity>
             <View style={styles.sectionDivider} />
           </>
         )}
@@ -994,19 +1001,53 @@ export default function ActivityDetailScreen() {
           </>
         )}
 
-        {/* SECTION: QR Check-in */}
+        {/* SECTION: Confirmation d'inscription (QR ou simple selon requires_checkin) */}
         {isJoined && !isHost && !isBusiness && !isActivityPast && !isSlotCancelled && slotParticipantId && joinedSlotId && (
           <>
             <View style={styles.sectionDivider} />
             <View style={styles.section}>
-              <CheckinQRSection
-                slotParticipantId={slotParticipantId}
-                slotId={joinedSlotId}
-                activityName={activity.title}
-                slotDate={selectedSlot?.date || ''}
-                slotTime={selectedSlot?.time || ''}
-                organizerName={activity.host?.name}
-              />
+              {activity.requiresCheckin ? (
+                <CheckinQRSection
+                  slotParticipantId={slotParticipantId}
+                  slotId={joinedSlotId}
+                  activityName={activity.title}
+                  slotDate={selectedSlot?.date || ''}
+                  slotTime={selectedSlot?.time || ''}
+                  organizerName={activity.host?.name}
+                />
+              ) : (
+                <View style={styles.simpleJoinedBlock}>
+                  <View style={styles.simpleJoinedIconCircle}>
+                    <IconSymbol name="checkmark.circle.fill" size={40} color="#34C759" />
+                  </View>
+                  <Text style={styles.simpleJoinedTitle}>Vous êtes inscrit !</Text>
+                  <Text style={styles.simpleJoinedSubtitle}>
+                    {(() => {
+                      const parts: string[] = [];
+                      if (selectedSlot?.date) {
+                        try {
+                          parts.push(
+                            'le ' +
+                              new Date(selectedSlot.date).toLocaleDateString('fr-FR', {
+                                weekday: 'long',
+                                day: 'numeric',
+                                month: 'long',
+                              }),
+                          );
+                        } catch {
+                          parts.push('le ' + selectedSlot.date);
+                        }
+                      }
+                      if (selectedSlot?.time) {
+                        parts.push('à ' + selectedSlot.time.slice(0, 5));
+                      }
+                      return parts.length > 0
+                        ? 'On se retrouve ' + parts.join(' ') + '.'
+                        : 'Rendez-vous confirmé.';
+                    })()}
+                  </Text>
+                </View>
+              )}
 
               {/* Bouton Inviter +1 */}
               {!slotDiscoverMode && (
@@ -1818,5 +1859,36 @@ const styles = StyleSheet.create({
     fontSize: typography.base,
     fontFamily: 'Manrope_500Medium',
     color: colors.textSecondary,
+  },
+
+  // Bloc "Vous êtes inscrit" (activités sans check-in QR)
+  simpleJoinedBlock: {
+    backgroundColor: 'rgba(52, 199, 89, 0.06)',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+  },
+  simpleJoinedIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(52, 199, 89, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  simpleJoinedTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1C1C1E',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  simpleJoinedSubtitle: {
+    fontSize: 14,
+    color: '#48484A',
+    textAlign: 'center',
+    lineHeight: 20,
+    paddingHorizontal: 8,
   },
 });

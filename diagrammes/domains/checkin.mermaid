@@ -1,13 +1,17 @@
 flowchart TD
 
-  subgraph CHK["✅ Check-in"]
+  subgraph CHK["✅ Check-in (opt-in par activité)"]
     direction TB
     CL["checkin_logs\n─────────────\nid · slot_participant_id\nperformed_by · action\nresult · ip_address · metadata"]
+    GATE["Gate requires_checkin\n─────────────\nactivities.requires_checkin = true ?\n→ QR généré + no-show détecté\nsinon : simple message 'Vous êtes inscrit !'\n(aucune pénalité possible)"]
   end
 
-  %% Ref externe
+  %% Ref externes
+  A_REF["activities\n(ref)\nrequires_checkin boolean"]:::ref
   SP_REF["slot_participants\n(ref)"]:::ref
 
+  A_REF -->|"gate d'activation"| GATE
+  GATE -->|"si on"| SP_REF
   SP_REF -->|"audit trail"| CL
 
   classDef ref fill:#f5f5f5,stroke:#aaa,stroke-dasharray:4 4,color:#888

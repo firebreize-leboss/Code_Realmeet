@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   Modal,
   Platform,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -56,6 +57,8 @@ export default function EditActivityScreen() {
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [selectingCategory, setSelectingCategory] = useState<1 | 2>(1);
 
+  const [requiresCheckin, setRequiresCheckin] = useState(false);
+
   const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
 
@@ -94,6 +97,7 @@ export default function EditActivityScreen() {
       setLatitude(data.latitude || null);
       setLongitude(data.longitude || null);
       setAddressSelected(!!(data.latitude && data.longitude));
+      setRequiresCheckin(!!data.requires_checkin);
     } catch (error: any) {
       console.error('Erreur chargement activité:', error);
       Alert.alert('Erreur', 'Impossible de charger l\'activité', [
@@ -224,6 +228,7 @@ export default function EditActivityScreen() {
           latitude: latitude,
           longitude: longitude,
           prix: prix.trim() ? parseFloat(prix) : null,
+          requires_checkin: requiresCheckin,
           updated_at: new Date().toISOString(),
         })
         .eq('id', activityId);
@@ -451,9 +456,26 @@ export default function EditActivityScreen() {
               />
             </View>
           </View>
+
+          {/* Check-in QR à l'entrée */}
+          <View style={styles.checkinToggleRow}>
+            <View style={styles.checkinToggleTextWrap}>
+              <Text style={styles.checkinToggleLabel}>Check-in QR à l'entrée</Text>
+              <Text style={styles.checkinToggleHelper}>
+                Active le billet QR scannable et les pénalités en cas d'absence. À réserver aux activités payantes où la présence est critique.
+              </Text>
+            </View>
+            <Switch
+              value={requiresCheckin}
+              onValueChange={setRequiresCheckin}
+              trackColor={{ false: '#E5E5EA', true: colors.primary }}
+              thumbColor="#FFFFFF"
+              ios_backgroundColor="#E5E5EA"
+            />
+          </View>
         </View>
-        
-        
+
+
         {/* Bouton de sauvegarde */}
         <TouchableOpacity
           style={[styles.saveButton, (saving || uploadingImage || !addressSelected) && styles.saveButtonDisabled]}
@@ -823,5 +845,29 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#EF4444',
+  },
+  checkinToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  checkinToggleTextWrap: {
+    flex: 1,
+  },
+  checkinToggleLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  checkinToggleHelper: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    lineHeight: 17,
   },
 });

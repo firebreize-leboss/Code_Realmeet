@@ -297,28 +297,16 @@ export default function ActivityCalendar({
 
           let countBySlotId: Record<string, number> = {};
           if (slotIds.length > 0) {
-            // Récupérer les participants de slot_participants
+            // slot_participants (status='active') = source de vérité.
+            // slot_group_members n'est pas nettoyé quand un user annule ou no-show,
+            // donc l'utiliser ici sur-compte les inscrits du créneau.
             const { data: participants, error: pErr } = await supabase
               .from('slot_participants')
               .select('slot_id, user_id')
               .in('slot_id', slotIds)
               .eq('status', 'active');
 
-            // Récupérer aussi les membres des groupes (slot_group_members via slot_groups)
-            const { data: slotGroupsWithMembers } = await supabase
-              .from('slot_groups')
-              .select(`
-                slot_id,
-                slot_group_members (
-                  user_id
-                )
-              `)
-              .in('slot_id', slotIds);
-
-            // Compter les participants uniques par slot (user_id + slot_id)
             const seenUserSlotCombos = new Set<string>();
-
-            // D'abord les participants de slot_participants
             if (!pErr && participants) {
               participants.forEach((row: any) => {
                 const key = `${row.user_id}-${row.slot_id}`;
@@ -326,19 +314,6 @@ export default function ActivityCalendar({
                   seenUserSlotCombos.add(key);
                   countBySlotId[row.slot_id] = (countBySlotId[row.slot_id] || 0) + 1;
                 }
-              });
-            }
-
-            // Ensuite les membres des groupes qui ne sont pas déjà comptés
-            if (slotGroupsWithMembers) {
-              slotGroupsWithMembers.forEach((group: any) => {
-                (group.slot_group_members || []).forEach((member: any) => {
-                  const key = `${member.user_id}-${group.slot_id}`;
-                  if (!seenUserSlotCombos.has(key)) {
-                    seenUserSlotCombos.add(key);
-                    countBySlotId[group.slot_id] = (countBySlotId[group.slot_id] || 0) + 1;
-                  }
-                });
               });
             }
           }
@@ -405,7 +380,9 @@ export default function ActivityCalendar({
           // Récupérer tous les slotIds pour compter les participants
           const allSlotIds = filtered.map(s => s.id);
 
-          // Compter les participants (slot_participants + slot_group_members) pour chaque slot
+          // slot_participants (status='active') = source de vérité.
+          // slot_group_members n'est pas nettoyé quand un user annule ou no-show,
+          // donc l'utiliser ici sur-compte les inscrits du créneau.
           let countBySlotIdSelect: Record<string, number> = {};
           if (allSlotIds.length > 0) {
             const { data: participants } = await supabase
@@ -414,18 +391,7 @@ export default function ActivityCalendar({
               .in('slot_id', allSlotIds)
               .eq('status', 'active');
 
-            const { data: slotGroupsWithMembers } = await supabase
-              .from('slot_groups')
-              .select(`
-                slot_id,
-                slot_group_members (
-                  user_id
-                )
-              `)
-              .in('slot_id', allSlotIds);
-
             const seenUserSlotCombos = new Set<string>();
-
             if (participants) {
               participants.forEach((row: any) => {
                 const key = `${row.user_id}-${row.slot_id}`;
@@ -433,18 +399,6 @@ export default function ActivityCalendar({
                   seenUserSlotCombos.add(key);
                   countBySlotIdSelect[row.slot_id] = (countBySlotIdSelect[row.slot_id] || 0) + 1;
                 }
-              });
-            }
-
-            if (slotGroupsWithMembers) {
-              slotGroupsWithMembers.forEach((group: any) => {
-                (group.slot_group_members || []).forEach((member: any) => {
-                  const key = `${member.user_id}-${group.slot_id}`;
-                  if (!seenUserSlotCombos.has(key)) {
-                    seenUserSlotCombos.add(key);
-                    countBySlotIdSelect[group.slot_id] = (countBySlotIdSelect[group.slot_id] || 0) + 1;
-                  }
-                });
               });
             }
           }

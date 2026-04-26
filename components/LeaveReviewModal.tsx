@@ -1,5 +1,5 @@
 // components/LeaveReviewModal.tsx
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,8 +12,14 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Animated,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
+import { motion } from '@/styles/motionTokens';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
 import RatingStars from '@/components/RatingStars';
@@ -39,17 +45,19 @@ export default function LeaveReviewModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Entry animation for inner content
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(16)).current;
+  const fadeAnim = useSharedValue(0);
+  const slideAnim = useSharedValue(16);
+  const contentAnimStyle = useAnimatedStyle(() => ({
+    opacity: fadeAnim.value,
+    transform: [{ translateY: slideAnim.value }],
+  }));
 
   useEffect(() => {
     if (visible) {
-      fadeAnim.setValue(0);
-      slideAnim.setValue(16);
-      Animated.parallel([
-        Animated.timing(fadeAnim, { toValue: 1, duration: 320, useNativeDriver: true }),
-        Animated.spring(slideAnim, { toValue: 0, tension: 50, friction: 8, useNativeDriver: true }),
-      ]).start();
+      fadeAnim.value = 0;
+      slideAnim.value = 16;
+      fadeAnim.value = withTiming(1, { duration: motion.duration.normal });
+      slideAnim.value = withSpring(0, motion.spring.gentle);
     }
   }, [visible]);
 
@@ -132,7 +140,7 @@ export default function LeaveReviewModal({
           </View>
 
           <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-            <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+            <Animated.View style={contentAnimStyle}>
             <Text style={styles.activityTitle} numberOfLines={2}>
               {activityTitle}
             </Text>
@@ -215,7 +223,7 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: colors.scrim,
   },
   container: {
     backgroundColor: colors.background,

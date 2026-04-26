@@ -1,14 +1,21 @@
 // components/signup/steps/StepSuccess.tsx
 // Écran de confirmation après création du compte
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
   Image,
   StyleSheet,
-  Animated,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withDelay,
+} from 'react-native-reanimated';
+import { motion } from '@/styles/motionTokens';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useSignup } from '@/contexts/SignupContext';
 import { colors, spacing, typography, borderRadius, shadows } from '@/styles/commonStyles';
@@ -17,58 +24,36 @@ export function StepSuccess() {
   const { formData } = useSignup();
 
   // Animations
-  const scaleAnim = useRef(new Animated.Value(0)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
+  const scaleAnim = useSharedValue(0);
+  const fadeAnim = useSharedValue(0);
+  const slideAnim = useSharedValue(30);
+
+  const iconAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scaleAnim.value }],
+  }));
+  const contentAnimStyle = useAnimatedStyle(() => ({
+    opacity: fadeAnim.value,
+    transform: [{ translateY: slideAnim.value }],
+  }));
 
   useEffect(() => {
-    // Animation d'entrée
-    Animated.sequence([
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: true,
-      }),
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-      ]),
-    ]).start();
+    // Icône pop avec spring bouncy, puis contenu glisse vers le haut
+    scaleAnim.value = withSpring(1, motion.spring.bouncy);
+    fadeAnim.value = withDelay(280, withTiming(1, { duration: motion.duration.slow }));
+    slideAnim.value = withDelay(280, withTiming(0, { duration: motion.duration.slow }));
   }, []);
 
   return (
     <View style={styles.container}>
       {/* Icône de succès animée */}
-      <Animated.View
-        style={[
-          styles.successIconContainer,
-          { transform: [{ scale: scaleAnim }] },
-        ]}
-      >
+      <Animated.View style={[styles.successIconContainer, iconAnimStyle]}>
         <View style={styles.successIcon}>
           <IconSymbol name="checkmark" size={48} color={colors.textOnPrimary} />
         </View>
       </Animated.View>
 
       {/* Contenu */}
-      <Animated.View
-        style={[
-          styles.content,
-          {
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }],
-          },
-        ]}
-      >
+      <Animated.View style={[styles.content, contentAnimStyle]}>
         <Text style={styles.title}>Bienvenue, {formData.firstName} !</Text>
         <Text style={styles.subtitle}>
           Votre compte a été créé avec succès

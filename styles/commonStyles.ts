@@ -1,94 +1,160 @@
 
-import { StyleSheet, ViewStyle, TextStyle } from 'react-native';
+import { StyleSheet, TextStyle } from 'react-native';
+import { Easing } from 'react-native-reanimated';
 
-// ============================================================
-// PREMIUM DESIGN SYSTEM - Orange Accent Only
-// Inspired by Airbnb, Revolut, premium apps
-// Palette: White, Grays (multiple levels), Black, Desaturated Orange
-// ============================================================
+// ============================================================================
+// REALMEET — DESIGN SYSTEM
+// ============================================================================
+//
+// Principes (à respecter dans tout l'app) :
+//
+// 1. CHALEUREUX MAIS SOBRE
+//    L'orange #F2994A est un GUIDE visuel ponctuel (CTA, focus, accents).
+//    Jamais dominant. Le fond reste blanc/gris très clair, les surfaces
+//    respirent.
+//
+// 2. WHITESPACE GÉNÉREUX
+//    Préférer spacing.xl/xxl entre blocs, padding lg/xl dans les cartes.
+//    Une UI aérée = perçue comme premium et calme.
+//
+// 3. TYPOGRAPHIE EXPRESSIVE
+//    Manrope est LA font officielle (chargée dans app/_layout.tsx).
+//    Utiliser fontFamily.* (jamais de système font hardcodée).
+//    Utiliser typographyPresets.* pour les styles de texte canoniques.
+//
+// 4. ANIMATIONS SENSIBLES
+//    Durées courtes (motion.duration.fast/base), easings doux
+//    (motion.easing.standard pour les transitions, motion.spring.gentle
+//    pour les apparitions). Reanimated UNIQUEMENT — pas Animated.
+//
+// 5. PROFONDEUR SUBTILE
+//    Ombres légères (shadows.sm/md). Jamais de shadow xl sans raison.
+//    Préférer la séparation par couleur de fond + bordure subtile.
+//
+// 6. RAYONS GÉNÉREUX
+//    radius.md (12) ou lg (16) par défaut. Ne descendre à sm qu'en
+//    cas d'élément serré. radius.full uniquement pour avatars/badges.
+//
+// 7. ACCESSIBILITÉ
+//    Hit slop minimum hitSlop.md (8) sur toute zone tactile < 44pt.
+//    Contraste texte sur fond toujours >= 4.5:1.
+//
+// ============================================================================
+
+// ============================================================================
+// COLORS — Palette canonique RealMeet
+// ============================================================================
 
 export const colors = {
-  // Primary accent - Premium Intermediate Orange (guide visuel, pas dominant)
-  // Teinte principale: #F2994A - équilibre entre énergie et douceur
-  primary: '#F2994A', // Orange intermédiaire premium (chaleureux, énergique mais pas criard)
-  primaryMuted: '#D4A574', // Orange désaturé ~70% pour icônes et badges secondaires
+  // ── Primary accent : Premium Intermediate Orange ─────────────────────────
+  // #F2994A : équilibre entre énergie et chaleur — guide visuel, pas dominant.
+  primary: '#F2994A',
+  primaryMuted: '#D4A574',                       // Orange désaturé pour icônes/badges secondaires
   primaryDesaturated: 'rgba(242, 153, 74, 0.70)', // Orange atténué pour accents subtils
-  primaryLight: '#FEF4EB', // Orange très pâle pour fonds subtils (léger réchauffement)
-  primaryDark: '#D97B2F', // Orange plus sombre pour états press/active
+  primaryLight: '#FEF4EB',                       // Orange très pâle pour fonds subtils
+  primaryDark: '#D97B2F',                        // Orange sombre pour états press/active
+  primaryPressed: '#C26C20',                     // Orange encore plus sombre pour active
 
-  // Pas de couleur secondaire - Orange uniquement comme accent
-  secondary: '#F2994A', // Même que primary (cohérence totale)
+  // ── Secondary (alias primary — pas de couleur secondaire dans la DA) ────
+  secondary: '#F2994A',
   secondaryLight: '#FEF4EB',
   secondaryDark: '#D97B2F',
 
-  // Backgrounds - Blanc et nuances de gris très subtiles
-  background: '#FAFAFA', // Gris très clair (fond principal)
-  backgroundAlt: '#FFFFFF', // Blanc pur (cartes, modales)
-  backgroundAccent: '#F5F5F5', // Gris légèrement plus foncé
-  backgroundWarm: '#FFFBF8', // Blanc chaud très subtil
+  // ── Backgrounds ──────────────────────────────────────────────────────────
+  background: '#FAFAFA',         // Fond principal (gris très clair)
+  backgroundAlt: '#FFFFFF',      // Cartes, modales
+  backgroundAccent: '#F5F5F5',   // Fond légèrement plus marqué
+  backgroundWarm: '#FFFBF8',     // Blanc chaud (sections premium)
+  backgroundElevated: '#FFFFFF', // Surfaces élevées (drawers, sheets)
 
-  // Text colors - Hiérarchie claire
-  text: '#1C1C1E', // Noir/gris très foncé (titres)
-  textSecondary: '#48484A', // Gris foncé (descriptions)
-  textTertiary: '#8E8E93', // Gris moyen (métadonnées, lieux)
-  textMuted: '#AEAEB2', // Gris clair (placeholders, hints)
-  textOnPrimary: '#FFFFFF', // Blanc sur fonds colorés
+  // ── Text ─────────────────────────────────────────────────────────────────
+  text: '#1C1C1E',           // Titres, contenu principal
+  textSecondary: '#48484A',  // Descriptions
+  textTertiary: '#8E8E93',   // Métadonnées, lieux
+  textMuted: '#AEAEB2',      // Placeholders, hints
+  textDisabled: '#C7C7CC',   // États désactivés
+  textOnPrimary: '#FFFFFF',  // Texte sur fond orange/sombre
+  textInverse: '#FFFFFF',    // Alias pour textOnPrimary
 
-  // Card & Surface
-  card: '#FFFFFF', // Blanc pur
-  cardBorder: '#E5E5EA', // Gris très subtil
-  cardShadow: 'rgba(0, 0, 0, 0.06)', // Ombre très douce
+  // ── Surfaces ─────────────────────────────────────────────────────────────
+  card: '#FFFFFF',
+  cardBorder: '#E5E5EA',
+  cardShadow: 'rgba(0, 0, 0, 0.06)',
 
-  // Borders & Dividers - Gamme de gris
-  border: '#D1D1D6', // Gris bordure standard
-  borderLight: '#E5E5EA', // Gris bordure léger
-  borderSubtle: '#F2F2F7', // Gris bordure très subtil
-  divider: '#E5E5EA', // Lignes de séparation
+  // ── Borders & Dividers ───────────────────────────────────────────────────
+  border: '#D1D1D6',
+  borderLight: '#E5E5EA',
+  borderSubtle: '#F2F2F7',
+  divider: '#E5E5EA',
 
-  // Status colors - Tons naturels
-  success: '#34C759', // Vert iOS
+  // ── Status ───────────────────────────────────────────────────────────────
+  success: '#34C759',
   successLight: '#E8F9ED',
-  error: '#FF3B30', // Rouge iOS
+  successDark: '#248A3D',
+  error: '#FF3B30',
   errorLight: '#FFE5E5',
-  warning: '#F2994A', // Orange premium (notre accent)
+  errorDark: '#C9190E',
+  warning: '#F2994A',         // Volontairement = primary (chaleur cohérente)
   warningLight: '#FEF4EB',
-  info: '#8E8E93', // Gris (pas de bleu)
+  warningDark: '#D97B2F',
+  info: '#8E8E93',            // Gris (pas de bleu dans la DA)
   infoLight: '#F2F2F7',
 
-  // Special UI elements
-  badge: '#F2F2F7', // Fond gris très clair pour badges discrets
-  badgeText: '#48484A', // Texte gris foncé
-  badgeAccent: '#F2994A', // Orange premium pour badges actifs
-  highlight: '#FFFBF8', // Fond blanc chaud
-  overlay: 'rgba(0, 0, 0, 0.4)', // Overlay sombre
-  overlayLight: 'rgba(0, 0, 0, 0.2)', // Overlay léger
-  imageOverlay: 'rgba(0, 0, 0, 0.25)', // Overlay sur images
+  // ── Special UI ───────────────────────────────────────────────────────────
+  badge: '#F2F2F7',
+  badgeText: '#48484A',
+  badgeAccent: '#F2994A',
+  highlight: '#FFFBF8',
+  overlay: 'rgba(0, 0, 0, 0.4)',
+  overlayLight: 'rgba(0, 0, 0, 0.2)',
+  overlayDark: 'rgba(0, 0, 0, 0.6)',
+  imageOverlay: 'rgba(0, 0, 0, 0.25)',
+  scrim: 'rgba(28, 28, 30, 0.55)', // Pour bottom sheets
 
-  // Input fields
-  inputBackground: '#F2F2F7', // Gris très clair
-  inputBorder: '#D1D1D6', // Gris bordure
-  inputFocus: '#F2994A', // Orange premium au focus
-  inputPlaceholder: '#AEAEB2', // Gris placeholder
+  // ── Inputs ───────────────────────────────────────────────────────────────
+  inputBackground: '#F2F2F7',
+  inputBorder: '#D1D1D6',
+  inputFocus: '#F2994A',
+  inputPlaceholder: '#AEAEB2',
+  inputDisabled: '#F5F5F5',
 
-  // Prix - Orange premium pour attirer l'attention sur les prix clés
-  price: '#48484A', // Gris foncé par défaut
-  priceAccent: '#D4A574', // Orange muted pour prix secondaires
+  // ── Prix ─────────────────────────────────────────────────────────────────
+  price: '#48484A',
+  priceAccent: '#D4A574',
 
-  // Category colors - Tous en nuances de gris/orange
-  categoryRomance: '#E8D5CE', // Beige rosé
-  categoryFood: '#F0E0D0', // Beige chaud
-  categoryFestival: '#E5E0E8', // Gris lavande
-  categoryBar: '#F0DDD5', // Beige corail
-  categoryLeisure: '#E0E8E5', // Gris-vert
-  categorySport: '#E0E8E0', // Gris-vert clair
-  categoryParty: '#E8E0E8', // Gris-violet
-  categoryCulture: '#E0E5E8', // Gris-bleu
+  // ── Catégories (tons doux pour harmonie visuelle) ────────────────────────
+  categoryRomance: '#E8D5CE',
+  categoryFood: '#F0E0D0',
+  categoryFestival: '#E5E0E8',
+  categoryBar: '#F0DDD5',
+  categoryLeisure: '#E0E8E5',
+  categorySport: '#E0E8E0',
+  categoryParty: '#E8E0E8',
+  categoryCulture: '#E0E5E8',
 
-  // Accent (legacy compatibility)
+  // ── Compatibilité legacy ────────────────────────────────────────────────
   accent: '#F2994A',
 };
 
-// Typography scale
+// ============================================================================
+// TYPOGRAPHY
+// ============================================================================
+
+/**
+ * Police officielle RealMeet : Manrope.
+ * Chargée dans app/_layout.tsx. Toujours référencer via fontFamily.* —
+ * jamais de string brute pour permettre un swap futur.
+ */
+export const fontFamily = {
+  regular: 'Manrope_400Regular',
+  medium: 'Manrope_500Medium',
+  semibold: 'Manrope_600SemiBold',
+  bold: 'Manrope_700Bold',
+} as const;
+
+/**
+ * Échelle typographique. Garde xs..xxxl + display pour les titres hero.
+ */
 export const typography = {
   // Font sizes
   xs: 12,
@@ -98,21 +164,158 @@ export const typography = {
   xl: 20,
   xxl: 24,
   xxxl: 28,
+  display: 32,        // Hero / page titles
+  displayLarge: 40,   // Splash / onboarding only
 
-  // Font weights
+  // Font weights (utilisés en fallback quand fontFamily n'est pas appliqué)
   regular: '400' as const,
   medium: '500' as const,
   semibold: '600' as const,
   bold: '700' as const,
 
-  // Line heights
+  // Line heights (multiplicateurs)
   lineHeightTight: 1.2,
   lineHeightNormal: 1.5,
   lineHeightRelaxed: 1.75,
 };
 
-// Spacing scale (consistent spacing units)
+/**
+ * Letter spacing tokens. Utiliser les valeurs négatives pour les gros titres
+ * (resserre l'optique) et positives pour les labels en uppercase.
+ */
+export const letterSpacing = {
+  tighter: -0.7,  // Display
+  tight: -0.5,    // Title
+  normal: 0,      // Body
+  wide: 0.3,      // Captions
+  wider: 0.5,     // Badges uppercase
+  widest: 1.2,    // Badges très accentués
+} as const;
+
+/**
+ * PRESETS TYPOGRAPHIQUES — appliquer un texte canonique en une ligne :
+ *
+ *   <Text style={typographyPresets.heading2}>Titre</Text>
+ *
+ * Préférer ces presets à la combinaison manuelle de fontFamily + fontSize.
+ */
+export const typographyPresets = {
+  display: {
+    fontFamily: fontFamily.bold,
+    fontSize: typography.displayLarge,
+    lineHeight: typography.displayLarge * typography.lineHeightTight,
+    letterSpacing: letterSpacing.tighter,
+    color: colors.text,
+  } as TextStyle,
+
+  heading1: {
+    fontFamily: fontFamily.bold,
+    fontSize: typography.display,
+    lineHeight: typography.display * typography.lineHeightTight,
+    letterSpacing: letterSpacing.tight,
+    color: colors.text,
+  } as TextStyle,
+
+  heading2: {
+    fontFamily: fontFamily.bold,
+    fontSize: typography.xxxl,
+    lineHeight: typography.xxxl * typography.lineHeightTight,
+    letterSpacing: letterSpacing.tight,
+    color: colors.text,
+  } as TextStyle,
+
+  heading3: {
+    fontFamily: fontFamily.bold,
+    fontSize: typography.xxl,
+    lineHeight: typography.xxl * typography.lineHeightTight,
+    color: colors.text,
+  } as TextStyle,
+
+  heading4: {
+    fontFamily: fontFamily.semibold,
+    fontSize: typography.xl,
+    lineHeight: typography.xl * typography.lineHeightTight,
+    color: colors.text,
+  } as TextStyle,
+
+  subtitle: {
+    fontFamily: fontFamily.semibold,
+    fontSize: typography.lg,
+    lineHeight: typography.lg * typography.lineHeightNormal,
+    color: colors.text,
+  } as TextStyle,
+
+  bodyLarge: {
+    fontFamily: fontFamily.regular,
+    fontSize: typography.lg,
+    lineHeight: typography.lg * typography.lineHeightNormal,
+    color: colors.text,
+  } as TextStyle,
+
+  body: {
+    fontFamily: fontFamily.regular,
+    fontSize: typography.base,
+    lineHeight: typography.base * typography.lineHeightNormal,
+    color: colors.text,
+  } as TextStyle,
+
+  bodyMedium: {
+    fontFamily: fontFamily.medium,
+    fontSize: typography.base,
+    lineHeight: typography.base * typography.lineHeightNormal,
+    color: colors.text,
+  } as TextStyle,
+
+  bodySemibold: {
+    fontFamily: fontFamily.semibold,
+    fontSize: typography.base,
+    lineHeight: typography.base * typography.lineHeightNormal,
+    color: colors.text,
+  } as TextStyle,
+
+  bodySmall: {
+    fontFamily: fontFamily.regular,
+    fontSize: typography.sm,
+    lineHeight: typography.sm * typography.lineHeightNormal,
+    color: colors.textSecondary,
+  } as TextStyle,
+
+  caption: {
+    fontFamily: fontFamily.medium,
+    fontSize: typography.xs,
+    lineHeight: typography.xs * typography.lineHeightNormal,
+    color: colors.textTertiary,
+  } as TextStyle,
+
+  label: {
+    fontFamily: fontFamily.semibold,
+    fontSize: typography.xs,
+    lineHeight: typography.xs * typography.lineHeightTight,
+    letterSpacing: letterSpacing.wider,
+    textTransform: 'uppercase',
+    color: colors.textSecondary,
+  } as TextStyle,
+
+  buttonLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: typography.base,
+    lineHeight: typography.base * typography.lineHeightTight,
+    letterSpacing: 0.2,
+  } as TextStyle,
+
+  link: {
+    fontFamily: fontFamily.semibold,
+    fontSize: typography.base,
+    color: colors.primary,
+  } as TextStyle,
+};
+
+// ============================================================================
+// SPACING — échelle 4px
+// ============================================================================
+
 export const spacing = {
+  xxs: 2,
   xs: 4,
   sm: 8,
   md: 12,
@@ -121,20 +324,37 @@ export const spacing = {
   xxl: 24,
   xxxl: 32,
   xxxxl: 40,
+  xxxxxl: 56,  // Ajouté : pour sections hero
 };
 
-// Border radius scale
+// ============================================================================
+// BORDER RADIUS
+// ============================================================================
+
 export const borderRadius = {
+  none: 0,
+  xs: 4,        // Ajouté : éléments très petits
   sm: 8,
   md: 12,
   lg: 16,
   xl: 20,
   xxl: 24,
-  full: 9999, // For circular elements
+  xxxl: 32,     // Ajouté : sheets, modals plein écran
+  full: 9999,   // Avatars, badges pilule
 };
 
-// Shadow presets for depth
+// ============================================================================
+// SHADOWS
+// ============================================================================
+
 export const shadows = {
+  none: {
+    shadowColor: 'transparent',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
+  },
   sm: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -163,10 +383,163 @@ export const shadows = {
     shadowRadius: 24,
     elevation: 12,
   },
+  /**
+   * Ombre orange subtile pour les CTA primaires hero.
+   * Donne un effet "glow" chaleureux sans saturer la palette.
+   */
+  primaryGlow: {
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 14,
+    elevation: 6,
+  },
 };
 
+// ============================================================================
+// MOTION — Animation tokens (Reanimated)
+// ============================================================================
+//
+// Règle d'or : préférer toujours motion.duration.* + motion.easing.* à des
+// valeurs hardcodées. Springs pour les apparitions / gestures, timings pour
+// les transitions d'état déterministes.
+//
+// ============================================================================
+
+export const motion = {
+  /** Durées en ms — court = réactif, long = expressif */
+  duration: {
+    instant: 100,   // Feedback tactile immédiat
+    fast: 180,      // Hover, pressed states
+    base: 240,      // Transitions standard (in/out)
+    slow: 320,      // Apparitions notables (modals, sheets)
+    slower: 480,    // Transitions emphase (success, hero)
+    page: 350,      // Transitions de navigation entre écrans
+  },
+
+  /** Courbes d'easing Reanimated */
+  easing: {
+    /** Standard out — sortie douce, idéal pour entrées */
+    standard: Easing.bezier(0.2, 0.0, 0.0, 1.0),
+    /** Decelerate — ralentit en fin, pour apparitions */
+    decelerate: Easing.bezier(0.0, 0.0, 0.2, 1.0),
+    /** Accelerate — accélère, pour disparitions */
+    accelerate: Easing.bezier(0.4, 0.0, 1.0, 1.0),
+    /** Sharp — transitions brèves et nettes */
+    sharp: Easing.bezier(0.4, 0.0, 0.6, 1.0),
+    /** Emphasized — pour transitions importantes (Material 3 emphasized) */
+    emphasized: Easing.bezier(0.2, 0.0, 0.0, 1.0),
+  },
+
+  /**
+   * Configurations de spring (à passer à `withSpring(value, motion.spring.X)`)
+   *
+   * - snappy : interactions tactiles, boutons, toggles (réactif)
+   * - gentle : apparitions de cartes, modals (calme)
+   * - bouncy : feedback positif (success, like, confetti)
+   * - stiff  : retour rapide à un état (reset, snap)
+   */
+  spring: {
+    snappy: {
+      damping: 18,
+      stiffness: 220,
+      mass: 1,
+    },
+    gentle: {
+      damping: 22,
+      stiffness: 140,
+      mass: 1,
+    },
+    bouncy: {
+      damping: 12,
+      stiffness: 200,
+      mass: 1,
+    },
+    stiff: {
+      damping: 26,
+      stiffness: 300,
+      mass: 1,
+    },
+  },
+
+  /** Échelles de feedback tactile pour press states */
+  pressScale: {
+    subtle: 0.98,
+    normal: 0.96,
+    strong: 0.94,
+  },
+} as const;
+
+// ============================================================================
+// OPACITY — états visuels canoniques
+// ============================================================================
+
+export const opacity = {
+  disabled: 0.4,
+  pressed: 0.7,
+  inactive: 0.6,
+  hover: 0.85,
+  full: 1,
+} as const;
+
+// ============================================================================
+// Z-INDEX — empilement canonique
+// ============================================================================
+
+export const zIndex = {
+  base: 0,
+  raised: 10,        // Cards élevées
+  dropdown: 100,     // Menus, dropdowns
+  sticky: 200,       // Headers sticky
+  overlay: 300,      // Overlays fond
+  modal: 400,        // Modals, sheets
+  popover: 500,      // Popovers, tooltips
+  toast: 600,        // Toasts, snackbars
+  topmost: 9999,     // Splash, loaders critiques
+} as const;
+
+// ============================================================================
+// HIT SLOP — accessibilité tactile
+// ============================================================================
+
+/**
+ * Hit slop standard à appliquer sur toute zone tactile dont la taille
+ * visuelle est inférieure à 44pt (recommandation Apple HIG).
+ *
+ *   <Pressable hitSlop={hitSlop.md} ... />
+ */
+export const hitSlop = {
+  sm: { top: 6, right: 6, bottom: 6, left: 6 },
+  md: { top: 8, right: 8, bottom: 8, left: 8 },
+  lg: { top: 12, right: 12, bottom: 12, left: 12 },
+  xl: { top: 16, right: 16, bottom: 16, left: 16 },
+} as const;
+
+// ============================================================================
+// LAYOUT — constantes de layout partagées
+// ============================================================================
+
+export const layout = {
+  /** Largeur max du contenu central (tablettes) */
+  maxContentWidth: 720,
+  /** Hauteur standard d'un input */
+  inputHeight: 52,
+  /** Hauteur standard d'un bouton primaire */
+  buttonHeight: 52,
+  /** Hauteur standard du tab bar flottant */
+  tabBarHeight: 64,
+  /** Hauteur d'un header standard */
+  headerHeight: 56,
+  /** Taille tactile minimale (Apple HIG) */
+  minTouchTarget: 44,
+} as const;
+
+// ============================================================================
+// COMMON STYLES — primitives réutilisables
+// ============================================================================
+
 export const commonStyles = StyleSheet.create({
-  // Container styles
+  // ── Containers ────────────────────────────────────────────────────────────
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -180,7 +553,7 @@ export const commonStyles = StyleSheet.create({
     backgroundColor: colors.background,
   },
 
-  // Card styles - Modern elevated cards
+  // ── Cards ─────────────────────────────────────────────────────────────────
   card: {
     backgroundColor: colors.card,
     borderRadius: borderRadius.lg,
@@ -208,64 +581,74 @@ export const commonStyles = StyleSheet.create({
     marginBottom: spacing.md,
   },
 
-  // Typography styles
+  // ── Typography (legacy — préférer typographyPresets pour les nouveaux écrans) ─
   title: {
+    fontFamily: fontFamily.bold,
     fontSize: typography.xxxl,
     fontWeight: typography.bold,
     color: colors.text,
     marginBottom: spacing.sm,
-    letterSpacing: -0.5,
+    letterSpacing: letterSpacing.tight,
   },
   titleLarge: {
-    fontSize: 32,
+    fontFamily: fontFamily.bold,
+    fontSize: typography.display,
     fontWeight: typography.bold,
     color: colors.text,
     marginBottom: spacing.md,
-    letterSpacing: -0.7,
+    letterSpacing: letterSpacing.tighter,
   },
   subtitle: {
+    fontFamily: fontFamily.semibold,
     fontSize: typography.lg,
     fontWeight: typography.semibold,
     color: colors.text,
     marginBottom: spacing.sm,
   },
   heading: {
+    fontFamily: fontFamily.semibold,
     fontSize: typography.xl,
     fontWeight: typography.semibold,
     color: colors.text,
     marginBottom: spacing.sm,
   },
   text: {
+    fontFamily: fontFamily.regular,
     fontSize: typography.base,
     color: colors.text,
     lineHeight: typography.base * typography.lineHeightNormal,
   },
   textSecondary: {
+    fontFamily: fontFamily.regular,
     fontSize: typography.sm,
     color: colors.textSecondary,
     lineHeight: typography.sm * typography.lineHeightNormal,
   },
   textTertiary: {
+    fontFamily: fontFamily.regular,
     fontSize: typography.sm,
     color: colors.textTertiary,
     lineHeight: typography.sm * typography.lineHeightNormal,
   },
   textBold: {
+    fontFamily: fontFamily.bold,
     fontWeight: typography.bold,
   },
   textSemibold: {
+    fontFamily: fontFamily.semibold,
     fontWeight: typography.semibold,
   },
   textCenter: {
     textAlign: 'center',
   },
 
-  // Button styles - Modern rounded buttons
+  // ── Buttons ───────────────────────────────────────────────────────────────
   button: {
     backgroundColor: colors.primary,
     borderRadius: borderRadius.md,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.xl,
+    minHeight: layout.buttonHeight,
     alignItems: 'center',
     justifyContent: 'center',
     ...shadows.sm,
@@ -275,6 +658,7 @@ export const commonStyles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.xxl,
+    minHeight: 56,
     alignItems: 'center',
     justifyContent: 'center',
     ...shadows.md,
@@ -284,6 +668,7 @@ export const commonStyles = StyleSheet.create({
     borderRadius: borderRadius.md,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.xl,
+    minHeight: layout.buttonHeight,
     alignItems: 'center',
     justifyContent: 'center',
     ...shadows.sm,
@@ -293,9 +678,10 @@ export const commonStyles = StyleSheet.create({
     borderRadius: borderRadius.md,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.xl,
+    minHeight: layout.buttonHeight,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: colors.primary,
   },
   buttonGhost: {
@@ -303,37 +689,46 @@ export const commonStyles = StyleSheet.create({
     borderRadius: borderRadius.md,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.xl,
+    minHeight: layout.buttonHeight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   buttonText: {
+    fontFamily: fontFamily.semibold,
     fontSize: typography.base,
     fontWeight: typography.semibold,
     color: colors.textOnPrimary,
+    letterSpacing: 0.2,
   },
   buttonTextOutline: {
+    fontFamily: fontFamily.semibold,
     fontSize: typography.base,
     fontWeight: typography.semibold,
     color: colors.primary,
+    letterSpacing: 0.2,
   },
   buttonTextGhost: {
+    fontFamily: fontFamily.semibold,
     fontSize: typography.base,
     fontWeight: typography.semibold,
     color: colors.text,
+    letterSpacing: 0.2,
   },
   buttonDisabled: {
     backgroundColor: colors.borderLight,
-    opacity: 0.6,
+    opacity: opacity.disabled,
   },
   buttonTextDisabled: {
     color: colors.textSecondary,
   },
 
-  // Input styles - Clean modern inputs
+  // ── Inputs ────────────────────────────────────────────────────────────────
   input: {
     backgroundColor: colors.inputBackground,
     borderRadius: borderRadius.md,
     padding: spacing.lg,
+    minHeight: layout.inputHeight,
+    fontFamily: fontFamily.regular,
     fontSize: typography.base,
     color: colors.text,
     borderWidth: 1,
@@ -352,7 +747,7 @@ export const commonStyles = StyleSheet.create({
     textAlignVertical: 'top',
   },
 
-  // Badge styles
+  // ── Badges ────────────────────────────────────────────────────────────────
   badge: {
     backgroundColor: colors.badge,
     borderRadius: borderRadius.full,
@@ -361,11 +756,12 @@ export const commonStyles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   badgeText: {
+    fontFamily: fontFamily.semibold,
     fontSize: typography.xs,
     fontWeight: typography.semibold,
     color: colors.badgeText,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: letterSpacing.wider,
   },
   badgeOutline: {
     backgroundColor: 'transparent',
@@ -377,14 +773,15 @@ export const commonStyles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   badgeOutlineText: {
+    fontFamily: fontFamily.semibold,
     fontSize: typography.xs,
     fontWeight: typography.semibold,
     color: colors.primary,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: letterSpacing.wider,
   },
 
-  // Section styles
+  // ── Sections ──────────────────────────────────────────────────────────────
   section: {
     marginBottom: spacing.xxl,
   },
@@ -395,12 +792,13 @@ export const commonStyles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   sectionTitle: {
+    fontFamily: fontFamily.bold,
     fontSize: typography.xl,
     fontWeight: typography.bold,
     color: colors.text,
   },
 
-  // Divider
+  // ── Dividers ──────────────────────────────────────────────────────────────
   divider: {
     height: 1,
     backgroundColor: colors.divider,
@@ -412,7 +810,7 @@ export const commonStyles = StyleSheet.create({
     marginVertical: spacing.lg,
   },
 
-  // List item styles
+  // ── List items ────────────────────────────────────────────────────────────
   listItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -430,7 +828,7 @@ export const commonStyles = StyleSheet.create({
     marginBottom: 1,
   },
 
-  // Avatar styles
+  // ── Avatars ───────────────────────────────────────────────────────────────
   avatar: {
     width: 48,
     height: 48,
@@ -456,7 +854,7 @@ export const commonStyles = StyleSheet.create({
     backgroundColor: colors.borderLight,
   },
 
-  // Empty state
+  // ── Empty state ───────────────────────────────────────────────────────────
   emptyState: {
     flex: 1,
     justifyContent: 'center',
@@ -464,6 +862,7 @@ export const commonStyles = StyleSheet.create({
     padding: spacing.xxxl,
   },
   emptyStateText: {
+    fontFamily: fontFamily.regular,
     fontSize: typography.base,
     color: colors.textSecondary,
     textAlign: 'center',
@@ -471,49 +870,55 @@ export const commonStyles = StyleSheet.create({
     lineHeight: typography.base * typography.lineHeightRelaxed,
   },
 
-  // Centered content
+  // ── Centering ─────────────────────────────────────────────────────────────
   centered: {
     justifyContent: 'center',
     alignItems: 'center',
   },
 
-  // Padding & Margin utilities
-  p: {
-    padding: spacing.lg,
-  },
-  px: {
-    paddingHorizontal: spacing.lg,
-  },
-  py: {
-    paddingVertical: spacing.lg,
-  },
-  m: {
-    margin: spacing.lg,
-  },
-  mx: {
-    marginHorizontal: spacing.lg,
-  },
-  my: {
-    marginVertical: spacing.lg,
-  },
+  // ── Padding & Margin utilities ────────────────────────────────────────────
+  p: { padding: spacing.lg },
+  px: { paddingHorizontal: spacing.lg },
+  py: { paddingVertical: spacing.lg },
+  m: { margin: spacing.lg },
+  mx: { marginHorizontal: spacing.lg },
+  my: { marginVertical: spacing.lg },
 
-  // Flex utilities
-  row: {
-    flexDirection: 'row',
-  },
-  rowCenter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+  // ── Flex utilities ────────────────────────────────────────────────────────
+  row: { flexDirection: 'row' },
+  rowCenter: { flexDirection: 'row', alignItems: 'center' },
   rowBetween: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  column: {
-    flexDirection: 'column',
-  },
-  flex1: {
-    flex: 1,
-  },
+  column: { flexDirection: 'column' },
+  flex1: { flex: 1 },
 });
+
+// ============================================================================
+// EXPORTS GROUPÉS — facilitent l'import en bloc :
+//
+//   import { theme } from '@/styles/commonStyles';
+//   theme.colors.primary
+//   theme.motion.spring.snappy
+//   theme.typographyPresets.heading2
+// ============================================================================
+
+export const theme = {
+  colors,
+  fontFamily,
+  typography,
+  typographyPresets,
+  letterSpacing,
+  spacing,
+  borderRadius,
+  shadows,
+  motion,
+  opacity,
+  zIndex,
+  hitSlop,
+  layout,
+} as const;
+
+export type Theme = typeof theme;

@@ -111,13 +111,23 @@ export default function HelpSupportScreen() {
           />
           <View style={styles.separator} />
           <FAQItem
-            question="Comment réserver une activité ?"
-            answer="Parcours les activités disponibles depuis l'onglet Explorer, sélectionne celle qui t'intéresse, choisis un créneau et confirme ta réservation. Le paiement s'effectue directement dans l'application."
+            question="Comment s'inscrire à une activité ?"
+            answer="Parcours les activités disponibles depuis l'onglet Explorer, sélectionne celle qui t'intéresse, choisis un créneau et confirme ton inscription. L'inscription est gratuite — tu paies uniquement sur place le jour de l'activité (consommations, entrées, etc.)."
           />
           <View style={styles.separator} />
           <FAQItem
-            question="Comment annuler une réservation ?"
-            answer="Rends-toi dans l'onglet Mes Activités, sélectionne la réservation concernée et appuie sur « Annuler ». Les conditions d'annulation et de remboursement dépendent de l'activité et sont précisées dans les Conditions Générales de Vente."
+            question="Comment annuler une inscription ?"
+            answer="Rends-toi dans l'onglet Mes Activités, sélectionne l'activité concernée et appuie sur « Annuler ». Tu peux annuler sans pénalité jusqu'à 24h avant l'heure du créneau. Au-delà, une pénalité sera comptabilisée."
+          />
+          <View style={styles.separator} />
+          <FAQItem
+            question="Que se passe-t-il si je ne viens pas ?"
+            answer="Si tu ne te présentes pas à une activité (no-show), une pénalité est comptabilisée sur ton compte. Au bout de 2 pénalités, ton compte est définitivement banni. Pense à annuler à temps si tu ne peux pas venir !"
+          />
+          <View style={styles.separator} />
+          <FAQItem
+            question="Comment fonctionne le check-in QR ?"
+            answer="Le jour de l'activité, un QR code est généré dans l'application. Présente-le au personnel sur place pour confirmer ta présence. C'est rapide et obligatoire pour valider ta participation."
           />
           <View style={styles.separator} />
           <FAQItem
@@ -156,6 +166,26 @@ export default function HelpSupportScreen() {
           >
             <IconSymbol name="shield.fill" size={18} color={colors.textSecondary} />
             <Text style={styles.linkText}>Politique de confidentialité</Text>
+            <IconSymbol name="chevron.right" size={14} color={colors.textMuted} />
+          </TouchableOpacity>
+          <View style={styles.separator} />
+          <TouchableOpacity
+            style={styles.linkItem}
+            onPress={() => router.push('/legal-mentions')}
+            activeOpacity={0.7}
+          >
+            <IconSymbol name="building.columns.fill" size={18} color={colors.textSecondary} />
+            <Text style={styles.linkText}>Mentions légales</Text>
+            <IconSymbol name="chevron.right" size={14} color={colors.textMuted} />
+          </TouchableOpacity>
+          <View style={styles.separator} />
+          <TouchableOpacity
+            style={styles.linkItem}
+            onPress={() => router.push('/about')}
+            activeOpacity={0.7}
+          >
+            <IconSymbol name="heart.fill" size={18} color={colors.textSecondary} />
+            <Text style={styles.linkText}>À propos de REALMEET</Text>
             <IconSymbol name="chevron.right" size={14} color={colors.textMuted} />
           </TouchableOpacity>
         </View>

@@ -1,12 +1,18 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ActivityIndicator,
   TouchableOpacity,
-  Animated,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
+import { motion } from '@/styles/motionTokens';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -39,8 +45,12 @@ export function CheckinQRSection({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Animation values
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.92)).current;
+  const fadeAnim = useSharedValue(0);
+  const scaleAnim = useSharedValue(0.92);
+  const entranceAnimStyle = useAnimatedStyle(() => ({
+    opacity: fadeAnim.value,
+    transform: [{ scale: scaleAnim.value }],
+  }));
 
   useEffect(() => {
     checkStatus();
@@ -49,19 +59,8 @@ export function CheckinQRSection({
   // Trigger entrance animation when status resolves
   useEffect(() => {
     if (!loading) {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          friction: 8,
-          tension: 40,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      fadeAnim.value = withTiming(1, { duration: motion.duration.slow });
+      scaleAnim.value = withSpring(1, motion.spring.gentle);
     }
   }, [loading, checkedIn, errorMessage]);
 
@@ -127,7 +126,7 @@ export function CheckinQRSection({
   // GROUPES PAS ENCORE FORMÉS → Message d'attente
   if (status === 'waiting') {
     return (
-      <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: scaleAnim }] }}>
+      <Animated.View style={entranceAnimStyle}>
         <View style={styles.waitingContainer}>
           <View style={styles.waitingIconWrapper}>
             <IconSymbol name="clock.fill" size={28} color="#F2994A" />
@@ -150,7 +149,7 @@ export function CheckinQRSection({
   if (status === 'success') {
     const scannedTime = formatCheckedInTime(checkedInAt);
     return (
-      <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: scaleAnim }] }}>
+      <Animated.View style={entranceAnimStyle}>
         <LinearGradient
           colors={['#FFF6ED', '#FFE8D8']}
           start={{ x: 0, y: 0 }}
@@ -178,7 +177,7 @@ export function CheckinQRSection({
   // ERREUR → Error state
   if (status === 'error') {
     return (
-      <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: scaleAnim }] }}>
+      <Animated.View style={entranceAnimStyle}>
         <LinearGradient
           colors={['#FFF4E5', '#FFE2C7']}
           start={{ x: 0, y: 0 }}
@@ -196,8 +195,8 @@ export function CheckinQRSection({
             style={styles.filledButton}
             onPress={() => {
               setLoading(true);
-              fadeAnim.setValue(0);
-              scaleAnim.setValue(0.92);
+              fadeAnim.value = 0;
+              scaleAnim.value = 0.92;
               checkStatus();
             }}
             activeOpacity={0.8}
@@ -211,7 +210,7 @@ export function CheckinQRSection({
 
   // GROUPES FORMÉS → Afficher le QR code
   return (
-    <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: scaleAnim }] }}>
+    <Animated.View style={entranceAnimStyle}>
       <View style={styles.qrContainer}>
         <CheckinQRCode
           slotParticipantId={slotParticipantId}

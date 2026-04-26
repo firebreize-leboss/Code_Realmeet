@@ -71,13 +71,15 @@ flowchart TB
   end
 
   %% ============================================================
-  %% FLOW 3 — CHECK-IN QR LE JOUR J
+  %% FLOW 3 — CHECK-IN QR LE JOUR J (opt-in par activité)
   %% ============================================================
-  subgraph FLOW3 ["Flow 3 — Check-in QR le jour J"]
+  subgraph FLOW3 ["Flow 3 — Check-in QR le jour J (opt-in)"]
     direction TB
 
     F3_START(["Participant ouvre app"]):::user
-    F3_START --> F3_QR["App genere QR Code JWT<br/>sp - nonce - type ck - exp 5min"]:::app
+    F3_START --> F3_GATE{"activities.requires_checkin ?"}:::app
+    F3_GATE -->|false (défaut)| F3_SIMPLE["Affiche 'Vous êtes inscrit !'<br/>Aucun QR - aucune pénalité possible"]:::check
+    F3_GATE -->|true| F3_QR["App genere QR Code JWT<br/>sp - nonce - type ck - exp 5min"]:::app
 
     F3_QR --> F3_SHOW["Presente QR au staff"]:::user
     F3_SHOW --> F3_SCAN["Staff scanne<br/>POST /api/checkin/verify"]:::server
@@ -98,6 +100,7 @@ flowchart TB
     F3_LOG --> F3_DONE(["Participant enregistre"]):::check
 
     F3_FALLBACK["Fallback : POST /manual-validate<br/>par slot_participant_id<br/>si QR ou camera ne marche pas"]:::note
+    F3_NOSHOW["detect_no_shows (pg_cron 1h)<br/>ignore les activités requires_checkin=false"]:::note
   end
 
   %% ============================================================
@@ -119,9 +122,10 @@ flowchart TB
     F4_WEB --> F4_APP_OPEN["App s ouvre<br/>/invite/token"]:::app
 
     F4_APP_OPEN --> F4_AUTH_CHECK{"Connecte ?"}:::app
-    F4_AUTH_CHECK -->|Non| F4_LOGIN["Redirect login<br/>avec redirect_after"]:::app
+    F4_AUTH_CHECK -->|Non| F4_LOGIN["Redirect login<br/>setPendingInviteToken<br/>AsyncStorage @realmeet:pending_invite_token"]:::app
     F4_AUTH_CHECK -->|Oui| F4_VALIDATE
-    F4_LOGIN --> F4_VALIDATE
+    F4_LOGIN --> F4_AUTH_OK["Login ou signup OK<br/>consumePendingInviteToken<br/>router.replace /invite/token"]:::app
+    F4_AUTH_OK --> F4_VALIDATE
 
     F4_VALIDATE["RPC validate_plus_one_token<br/>Preview : activite - date - inviteur"]:::db
     F4_VALIDATE --> F4_EXPIRED{"Token expire ?"}:::app
@@ -134,7 +138,8 @@ flowchart TB
     F4_ACCEPT --> F4_RPC["RPC accept_plus_one_invitation"]:::db
     F4_RPC --> F4_INSERT_GUEST["INSERT slot_participants<br/>is_plus_one: true<br/>invited_by: host_id"]:::db
     F4_INSERT_GUEST --> F4_UPDATE_INV["UPDATE plus_one_invitations<br/>status: accepted"]:::db
-    F4_UPDATE_INV --> F4_DONE(["Rejoint en tant que +1"]):::check
+    F4_UPDATE_INV --> F4_JOIN_CONV["handleSlotGroup<br/>INSERT conversation_participants<br/>+ message systeme rejoint"]:::db
+    F4_JOIN_CONV --> F4_DONE(["Rejoint en tant que +1<br/>+ visible dans conv groupe"]):::check
   end
 
   %% ============================================================

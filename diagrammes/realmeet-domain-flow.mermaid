@@ -41,6 +41,7 @@ flowchart TB
   ACTIVITIES --- ACT_F6[Carte MapLibre · browse]:::done
   ACTIVITIES --- ACT_F7[Annulation par l'hote]:::done
   ACTIVITIES --- ACT_F8[Capacite max par creneau]:::done
+  ACTIVITIES --- ACT_F9[Flag requires_checkin · opt-in par activite]:::done
 
   GROUPS[Formation de Groupes]:::groups
   GROUPS --- GRP_F1[form_groups_v3 · affinite interets]:::done
@@ -51,7 +52,7 @@ flowchart TB
   GROUPS --- GRP_F6[Gestion timezone Paris / UTC]:::done
 
   PENALTY[Penalites no-show]:::payment
-  PENALTY --- PEN_F1[Detection automatique no-show · pg_cron 1h]:::done
+  PENALTY --- PEN_F1[Detection auto no-show · pg_cron 1h · uniquement si requires_checkin]:::done
   PENALTY --- PEN_F2[user_penalties · historique penalites]:::done
   PENALTY --- PEN_F3[Bannissement auto · 2 no-shows]:::done
   PENALTY --- PEN_F4[banned_phones · blocage par telephone]:::done
@@ -67,7 +68,8 @@ flowchart TB
   PLUSONE --- PLUS_F6["Expiration 10 min"]:::done
   PLUSONE --- PLUS_F7[Share natif systeme]:::done
 
-  CHECKIN[Check-in QR]:::checkin
+  CHECKIN[Check-in QR · opt-in]:::checkin
+  CHECKIN --- CHK_F0[Opt-in par activite · flag requires_checkin default false]:::done
   CHECKIN --- CHK_F1[QR Code JWT par participant]:::done
   CHECKIN --- CHK_F2[Interface staff · checkin.realmeet.fr]:::done
   CHECKIN --- CHK_F3[Scan · Verify · Validate · 2 etapes]:::done
@@ -119,8 +121,8 @@ flowchart TB
   PROFILE ==>|interets| ACTIVITIES
   PROFILE ==>|amis| SOCIAL
   ACTIVITIES ==>|creneaux| GROUPS
-  ACTIVITIES ==>|presence| PENALTY
-  ACTIVITIES ==>|presence| CHECKIN
+  ACTIVITIES ==>|requires_checkin| PENALTY
+  ACTIVITIES ==>|requires_checkin| CHECKIN
   ACTIVITIES ==>|inviter +1| PLUSONE
   GROUPS ==>|conv. auto| MESSAGING
   SOCIAL ==>|chat prive| MESSAGING

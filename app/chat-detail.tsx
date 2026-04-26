@@ -18,9 +18,12 @@ import {
 import { Image } from 'expo-image';
 import Animated, {
   useAnimatedStyle,
+  useSharedValue,
+  withSpring,
   FadeInDown,
   Easing,
 } from 'react-native-reanimated';
+import { motion } from '@/styles/motionTokens';
 import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
@@ -31,6 +34,7 @@ import { randomUUID } from 'expo-crypto';
 import { useMessages, useConversations, TransformedMessage } from '@/hooks/useMessaging';
 import { messageStorageService } from '@/services/message-storage.service';
 import { voiceMessageService } from '@/services/voice-message.service';
+import VoiceWaveform, { generateWaveformFromId } from '@/components/VoiceWaveform';
 import { blockService } from '@/services/block.service';
 import ReportModal from '@/components/ReportModal';
 import { useDataCache } from '@/contexts/DataCacheContext';
@@ -117,6 +121,8 @@ export default function ChatDetailScreen() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [playingVoiceId, setPlayingVoiceId] = useState<string | null>(null);
+  const [recordingLevels, setRecordingLevels] = useState<number[]>([]);
+  const [playbackProgress, setPlaybackProgress] = useState(0);
 
   // États pour la conversation fermée
   const [conversationStatus, setConversationStatus] = useState<ConversationStatus>({
@@ -152,6 +158,12 @@ export default function ChatDetailScreen() {
 
   // État pour la visionneuse d'image fullscreen
   const [fullscreenImageUrl, setFullscreenImageUrl] = useState<string | null>(null);
+
+  // Animation bouton envoi
+  const sendButtonScale = useSharedValue(1);
+  const sendButtonAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: sendButtonScale.value }],
+  }));
 
   const { messages, loading: messagesLoading, sendMessage, deleteMessage, currentUserId } = useMessages(conversationId as string);
 
@@ -243,6 +255,15 @@ export default function ChatDetailScreen() {
       const convData = convDataRaw as any;
       if (!convData) return;
       console.log('[CONV-INFO] convData:', JSON.stringify({name: convData?.name, is_group: convData?.is_group, slot_id: convData?.slot_id, activity_id: convData?.activity_id}));
+
+      // Bloquer immédiatement l'input si la conversation est déjà fermée en DB
+      if (convData.is_closed) {
+        setConversationStatus({
+          isClosed: true,
+          closedReason: convData.closed_reason,
+          closedAt: convData.closed_at,
+        });
+      }
 
       // Vérifier si c'est une conversation avec invitation en attente
       if (convData.friend_request_id) {
@@ -674,10 +695,20 @@ export default function ChatDetailScreen() {
     }
 
     try {
+      // Configurer le callback de metering pour la waveform live
+      voiceMessageService.setMeteringCallback((level) => {
+        setRecordingLevels(prev => {
+          const next = [...prev, level];
+          // Garder les 40 derniers samples pour la fenêtre glissante
+          return next.length > 40 ? next.slice(-40) : next;
+        });
+      });
+
       const started = await voiceMessageService.startRecording();
       if (started) {
         setIsRecording(true);
         setRecordingTime(0);
+        setRecordingLevels([]);
         recordingIntervalRef.current = setInterval(() => {
           setRecordingTime(prev => prev + 1);
         }, 1000);
@@ -692,11 +723,13 @@ export default function ChatDetailScreen() {
       clearInterval(recordingIntervalRef.current);
       recordingIntervalRef.current = null;
     }
+    voiceMessageService.setMeteringCallback(null);
 
     try {
       const result = await voiceMessageService.stopRecording();
       setIsRecording(false);
       setRecordingTime(0);
+      setRecordingLevels([]);
 
       if (!result.success || !result.uri) {
         console.error('Erreur enregistrement:', result.error);
@@ -724,6 +757,7 @@ export default function ChatDetailScreen() {
       console.error('Erreur stop recording:', error);
       setIsRecording(false);
       setRecordingTime(0);
+      setRecordingLevels([]);
     }
   };
 
@@ -731,11 +765,22 @@ export default function ChatDetailScreen() {
     if (playingVoiceId === messageId) {
       await voiceMessageService.stopPlayback();
       setPlayingVoiceId(null);
+      setPlaybackProgress(0);
     } else {
       if (playingVoiceId) await voiceMessageService.stopPlayback();
+      setPlaybackProgress(0);
+
+      // Configurer les callbacks de progression et de fin
+      voiceMessageService.setPlaybackCallbacks(
+        (progress) => setPlaybackProgress(progress),
+        () => {
+          setPlayingVoiceId(null);
+          setPlaybackProgress(0);
+        },
+      );
+
       await voiceMessageService.playVoiceMessage(voiceUrl);
       setPlayingVoiceId(messageId);
-      setTimeout(() => setPlayingVoiceId(null), 5000);
     }
   };
 
@@ -960,18 +1005,11 @@ export default function ChatDetailScreen() {
                   color={isOwnMessage ? COLORS.orangePrimary : COLORS.white}
                 />
               </View>
-              <View style={styles.waveformContainer}>
-                {[...Array(12)].map((_, i) => (
-                  <View
-                    key={i}
-                    style={[
-                      styles.waveformBar,
-                      { height: 8 + Math.random() * 14 },
-                      isOwnMessage && styles.waveformBarOwn
-                    ]}
-                  />
-                ))}
-              </View>
+              <VoiceWaveform
+                levels={generateWaveformFromId(msg.id)}
+                progress={playingVoiceId === msg.id ? playbackProgress : 0}
+                isOwnMessage={isOwnMessage}
+              />
               <Text style={[styles.voiceDuration, isOwnMessage && styles.voiceDurationOwn]}>
                 {formatDuration(msg.voiceDuration || 0)}
               </Text>
@@ -1024,7 +1062,7 @@ export default function ChatDetailScreen() {
         {messageContent}
       </View>
     );
-  }, [currentUserId, isGroup, playingVoiceId]);
+  }, [currentUserId, isGroup, playingVoiceId, playbackProgress]);
 
   const inputWarning = getInputWarning();
   const hasText = message.trim().length > 0;
@@ -1144,6 +1182,13 @@ export default function ChatDetailScreen() {
               <View style={styles.recordingDot} />
               <Text style={styles.recordingTime}>{formatRecordingTime(recordingTime)}</Text>
             </View>
+            <View style={styles.recordingWaveformContainer}>
+              <VoiceWaveform
+                levels={recordingLevels.length > 0 ? recordingLevels : Array(20).fill(0.05)}
+                progress={0}
+                isOwnMessage={false}
+              />
+            </View>
             <TouchableOpacity style={styles.stopRecordingButton} onPress={handleStopRecording}>
               <IconSymbol name="stop.fill" size={22} color={COLORS.error} />
             </TouchableOpacity>
@@ -1177,13 +1222,18 @@ export default function ChatDetailScreen() {
             </View>
 
             {hasText ? (
-              <TouchableOpacity
-                style={styles.sendButton}
-                onPress={handleSend}
-                disabled={!canSendMessages()}
-              >
-                <IconSymbol name="paperplane.fill" size={17} color={COLORS.white} />
-              </TouchableOpacity>
+              <Animated.View style={sendButtonAnimStyle}>
+                <TouchableOpacity
+                  style={styles.sendButton}
+                  onPress={handleSend}
+                  onPressIn={() => { sendButtonScale.value = withSpring(motion.scale.press, motion.spring.snappy); }}
+                  onPressOut={() => { sendButtonScale.value = withSpring(motion.scale.normal, motion.spring.snappy); }}
+                  disabled={!canSendMessages()}
+                  activeOpacity={1}
+                >
+                  <IconSymbol name="paperplane.fill" size={17} color={COLORS.white} />
+                </TouchableOpacity>
+              </Animated.View>
             ) : (
               <TouchableOpacity
                 style={styles.inputIconButton}
@@ -1769,20 +1819,6 @@ const styles = StyleSheet.create({
   voicePlayButtonOwn: {
     backgroundColor: 'rgba(255,255,255,0.3)',
   },
-  waveformContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    flex: 1,
-  },
-  waveformBar: {
-    width: 3,
-    backgroundColor: COLORS.grayText,
-    borderRadius: 2,
-  },
-  waveformBarOwn: {
-    backgroundColor: 'rgba(255,255,255,0.6)',
-  },
   voiceDuration: {
     fontSize: 11,
     fontFamily: 'Manrope_500Medium',
@@ -1915,6 +1951,10 @@ const styles = StyleSheet.create({
     fontFamily: 'Manrope_600SemiBold',
     fontWeight: '600',
     color: COLORS.charcoal,
+  },
+  recordingWaveformContainer: {
+    flex: 1,
+    marginHorizontal: 12,
   },
   stopRecordingButton: {
     width: 44,

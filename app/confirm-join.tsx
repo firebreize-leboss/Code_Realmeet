@@ -1,18 +1,25 @@
 // app/confirm-join.tsx
 // Écran de confirmation d'inscription à une activité (remplace le flow payment)
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  Animated,
   Alert,
   ActivityIndicator,
   Share,
   ScrollView,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  withDelay,
+} from 'react-native-reanimated';
+import { motion } from '@/styles/motionTokens';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Check, Calendar, AlertTriangle, Users, Copy, Share2, Clock, Info, XCircle } from 'lucide-react-native';
@@ -47,8 +54,18 @@ export default function ConfirmJoinScreen() {
 
   const [isInscribing, setIsInscribing] = useState(false);
   const [inscriptionDone, setInscriptionDone] = useState(false);
-  const checkmarkScale = useRef(new Animated.Value(0)).current;
-  const checkmarkOpacity = useRef(new Animated.Value(0)).current;
+  const checkmarkScale = useSharedValue(0);
+  const checkmarkOpacity = useSharedValue(0);
+  const checkmarkAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: checkmarkScale.value }],
+    opacity: checkmarkOpacity.value,
+  }));
+
+  // Press scale pour le bouton de confirmation
+  const buttonScale = useSharedValue(1);
+  const buttonAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: buttonScale.value }],
+  }));
 
   // Duo mode state
   const [duoInvitationToken, setDuoInvitationToken] = useState<string | null>(null);
@@ -83,22 +100,8 @@ export default function ConfirmJoinScreen() {
   }, [duoExpiresAt]);
 
   const animateSuccess = () => {
-    Animated.sequence([
-      Animated.delay(200),
-      Animated.parallel([
-        Animated.spring(checkmarkScale, {
-          toValue: 1,
-          friction: 4,
-          tension: 100,
-          useNativeDriver: true,
-        }),
-        Animated.timing(checkmarkOpacity, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]),
-    ]).start();
+    checkmarkScale.value = withDelay(200, withSpring(1, motion.spring.bouncy));
+    checkmarkOpacity.value = withDelay(200, withTiming(1, { duration: motion.duration.normal }));
   };
 
   // Fonction pour envoyer un message système dans le groupe
@@ -176,6 +179,13 @@ export default function ConfirmJoinScreen() {
           setIsInscribing(false);
           return;
         }
+
+        // Rejoindre la conversation du groupe du créneau (si elle existe déjà)
+        const acceptedSlotId = result.slotId || slotId;
+        if (acceptedSlotId) {
+          await handleSlotGroup(acceptedSlotId);
+        }
+
         setInscriptionDone(true);
         animateSuccess();
         Alert.alert('Bienvenue !', 'Tu as rejoint en tant que +1 !');
@@ -201,7 +211,7 @@ export default function ConfirmJoinScreen() {
       if (!data.success) {
         const errorMessages: Record<string, string> = {
           'NOT_AUTHENTICATED': 'Vous devez être connecté.',
-          'USER_BANNED': 'Votre compte a été suspendu suite à des absences répétées.',
+          'USER_BANNED': 'Votre compte est bloqué. Vous ne pouvez pas vous inscrire.',
           'SLOT_NOT_FOUND': 'Créneau introuvable.',
           'SLOT_CANCELLED': 'Ce créneau a été annulé.',
           'REGISTRATION_CLOSED': 'Les inscriptions sont fermées pour ce créneau.',
@@ -284,15 +294,7 @@ export default function ConfirmJoinScreen() {
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <ScrollView contentContainerStyle={styles.successContent}>
           {/* Checkmark animé */}
-          <Animated.View
-            style={[
-              styles.checkmarkContainer,
-              {
-                transform: [{ scale: checkmarkScale }],
-                opacity: checkmarkOpacity,
-              },
-            ]}
-          >
+          <Animated.View style={[styles.checkmarkContainer, checkmarkAnimStyle]}>
             <LinearGradient
               colors={['#34C759', '#30B350']}
               style={styles.checkmarkCircle}
@@ -425,30 +427,34 @@ export default function ConfirmJoinScreen() {
         <View style={styles.infoCard}>
           <Info size={18} color={colors.primary} />
           <Text style={styles.infoCardText}>
-            Annulation gratuite jusqu'à 24h avant l'activité.
+            Annulation sans pénalité jusqu'à 24h avant l'activité.
           </Text>
         </View>
       </ScrollView>
 
       {/* Footer avec bouton */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
-        <TouchableOpacity
-          style={[styles.confirmButton, isInscribing && styles.confirmButtonDisabled]}
-          onPress={handleConfirm}
-          disabled={isInscribing}
-          activeOpacity={0.8}
-        >
-          {isInscribing ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : (
-            <>
-              <Check size={20} color="#FFFFFF" />
-              <Text style={styles.confirmButtonText}>
-                {isPlusOne ? 'Rejoindre en +1' : 'Confirmer l\'inscription'}
-              </Text>
-            </>
-          )}
-        </TouchableOpacity>
+        <Animated.View style={buttonAnimStyle}>
+          <TouchableOpacity
+            style={[styles.confirmButton, isInscribing && styles.confirmButtonDisabled]}
+            onPress={handleConfirm}
+            onPressIn={() => { buttonScale.value = withSpring(motion.scale.press, motion.spring.snappy); }}
+            onPressOut={() => { buttonScale.value = withSpring(motion.scale.normal, motion.spring.snappy); }}
+            disabled={isInscribing}
+            activeOpacity={1}
+          >
+            {isInscribing ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <Check size={20} color="#FFFFFF" />
+                <Text style={styles.confirmButtonText}>
+                  {isPlusOne ? 'Rejoindre en +1' : 'Confirmer l\'inscription'}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </Animated.View>
       </View>
     </SafeAreaView>
   );

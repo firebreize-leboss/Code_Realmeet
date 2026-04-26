@@ -17,10 +17,11 @@ import {
   StatusBar,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import ReportModal from '@/components/ReportModal';
+import FullScreenImageModal from '@/components/FullScreenImageModal';
 import { colors } from '@/styles/commonStyles';
 import { supabase, removeFriend } from '@/lib/supabase';
 import { blockService } from '@/services/block.service';
@@ -47,6 +48,7 @@ export default function UserProfileScreen() {
   const { id } = useLocalSearchParams();
   const { profile: currentUserProfile } = useAuth();
   const { refreshFriends } = useDataCache();
+  const insets = useSafeAreaInsets();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,6 +59,7 @@ export default function UserProfileScreen() {
   const [removingFriend, setRemovingFriend] = useState(false);
   const [showInvitationModal, setShowInvitationModal] = useState(false);
   const [invitationMessage, setInvitationMessage] = useState('');
+  const [showFullScreenAvatar, setShowFullScreenAvatar] = useState(false);
 
   const [fontsLoaded] = useFonts({
     Manrope_400Regular,
@@ -386,13 +389,17 @@ export default function UserProfileScreen() {
 
         {/* 2. Avatar chevauchant */}
         <View style={styles.avatarWrapper}>
-          <View style={styles.avatarBorder}>
+          <TouchableOpacity
+            style={styles.avatarBorder}
+            onPress={() => profile.avatar_url && setShowFullScreenAvatar(true)}
+            activeOpacity={0.8}
+          >
             <Image
               source={{ uri: profile.avatar_url || '' }}
               style={styles.avatar}
               transition={200}
             />
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* 3. Nom + Localisation + Badge ami */}
@@ -471,7 +478,7 @@ export default function UserProfileScreen() {
 
       {/* 8. Barre d'action fixe en bas */}
       {!isCurrentUserBusiness && (
-        <View style={styles.bottomBar}>
+        <View style={[styles.bottomBar, { paddingBottom: Math.max(20, insets.bottom + 8) }]}>
           {isBlocked ? (
             <TouchableOpacity style={styles.bottomButtonSecondary} onPress={handleUnblockUser}>
               <IconSymbol name="hand.raised.slash" size={18} color={colors.text} />
@@ -574,6 +581,13 @@ export default function UserProfileScreen() {
         targetName={profile.full_name}
       />
 
+      {/* Modal photo plein écran */}
+      <FullScreenImageModal
+        visible={showFullScreenAvatar}
+        imageUri={profile.avatar_url || ''}
+        onClose={() => setShowFullScreenAvatar(false)}
+      />
+
       {/* Modal d'invitation */}
       <Modal
         visible={showInvitationModal}
@@ -583,7 +597,8 @@ export default function UserProfileScreen() {
       >
         <KeyboardAvoidingView
           style={styles.invitationModalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
         >
           <TouchableOpacity
             style={styles.invitationModalBackdrop}
@@ -598,50 +613,56 @@ export default function UserProfileScreen() {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.invitationRecipient}>
-              <Image
-                source={{ uri: profile.avatar_url || '' }}
-                style={styles.invitationRecipientAvatar}
-                transition={200}
-              />
-              <Text style={styles.invitationRecipientName}>{profile.full_name}</Text>
-            </View>
-
-            <Text style={styles.invitationHint}>
-              Écrivez un message pour vous présenter. {profile.full_name} devra accepter votre invitation pour pouvoir discuter.
-            </Text>
-
-            <TextInput
-              style={styles.invitationInput}
-              placeholder="Bonjour ! J'aimerais faire votre connaissance..."
-              placeholderTextColor={colors.textMuted}
-              value={invitationMessage}
-              onChangeText={setInvitationMessage}
-              multiline
-              maxLength={500}
-              textAlignVertical="top"
-            />
-
-            <View style={styles.invitationCharCount}>
-              <Text style={styles.invitationCharCountText}>
-                {invitationMessage.length}/500
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              style={[
-                styles.invitationSendButton,
-                !invitationMessage.trim() && styles.invitationSendButtonDisabled,
-              ]}
-              onPress={handleSendInvitation}
-              disabled={!invitationMessage.trim() || sendingRequest}
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              bounces={false}
             >
-              {sendingRequest ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <Text style={styles.invitationSendButtonText}>Envoyer l'invitation</Text>
-              )}
-            </TouchableOpacity>
+              <View style={styles.invitationRecipient}>
+                <Image
+                  source={{ uri: profile.avatar_url || '' }}
+                  style={styles.invitationRecipientAvatar}
+                  transition={200}
+                />
+                <Text style={styles.invitationRecipientName}>{profile.full_name}</Text>
+              </View>
+
+              <Text style={styles.invitationHint}>
+                Écrivez un message pour vous présenter. {profile.full_name} devra accepter votre invitation pour pouvoir discuter.
+              </Text>
+
+              <TextInput
+                style={styles.invitationInput}
+                placeholder="Bonjour ! J'aimerais faire votre connaissance..."
+                placeholderTextColor={colors.textMuted}
+                value={invitationMessage}
+                onChangeText={setInvitationMessage}
+                multiline
+                maxLength={500}
+                textAlignVertical="top"
+              />
+
+              <View style={styles.invitationCharCount}>
+                <Text style={styles.invitationCharCountText}>
+                  {invitationMessage.length}/500
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.invitationSendButton,
+                  !invitationMessage.trim() && styles.invitationSendButtonDisabled,
+                ]}
+                onPress={handleSendInvitation}
+                disabled={!invitationMessage.trim() || sendingRequest}
+              >
+                {sendingRequest ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.invitationSendButtonText}>Envoyer l'invitation</Text>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -989,6 +1010,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     padding: 20,
     paddingBottom: 40,
+    maxHeight: '80%',
   },
   invitationModalHeader: {
     flexDirection: 'row',

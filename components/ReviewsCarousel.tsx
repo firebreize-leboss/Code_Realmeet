@@ -8,8 +8,14 @@ import {
   StyleSheet,
   TouchableOpacity,
   Dimensions,
-  Animated,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  runOnJS,
+} from 'react-native-reanimated';
+import { motion } from '@/styles/motionTokens';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
@@ -40,7 +46,9 @@ export default function ReviewsCarousel({ businessId, onPressReview }: ReviewsCa
   const [reviews, setReviews] = useState<Review[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const fadeAnim = useSharedValue(1);
+  const cardAnimStyle = useAnimatedStyle(() => ({ opacity: fadeAnim.value }));
+  const currentIndexRef = useRef(0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -117,27 +125,21 @@ export default function ReviewsCarousel({ businessId, onPressReview }: ReviewsCa
     }
   };
 
+  const goToNext = (nextIndex: number) => {
+    currentIndexRef.current = nextIndex;
+    setCurrentIndex(nextIndex);
+    fadeAnim.value = withTiming(1, { duration: motion.duration.base });
+  };
+
   const startAutoScroll = () => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
     }
 
     intervalRef.current = setInterval(() => {
-      // Animation de fade out
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }).start(() => {
-        // Changer l'index
-        setCurrentIndex(prev => (prev + 1) % reviews.length);
-        
-        // Animation de fade in
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }).start();
+      const nextIndex = (currentIndexRef.current + 1) % reviews.length;
+      fadeAnim.value = withTiming(0, { duration: motion.duration.base }, (finished) => {
+        if (finished) runOnJS(goToNext)(nextIndex);
       });
     }, AUTO_SCROLL_INTERVAL);
   };
@@ -179,7 +181,7 @@ export default function ReviewsCarousel({ businessId, onPressReview }: ReviewsCa
 
   return (
     <View style={styles.container}>
-      <Animated.View style={[styles.card, { opacity: fadeAnim }]}>
+      <Animated.View style={[styles.card, cardAnimStyle]}>
         {/* Header avec étoiles */}
         <View style={styles.header}>
           <View style={styles.stars}>

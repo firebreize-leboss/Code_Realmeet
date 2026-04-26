@@ -1,15 +1,22 @@
 // services/voice-message.service.ts
-// Service de gestion des messages vocaux
+// Service de gestion des messages vocaux avec metering et progression
 
-import { Audio } from 'expo-av';
+import { Audio, AVPlaybackStatus } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import { supabase } from '@/lib/supabase';
 import { decode } from 'base64-arraybuffer';
+
+export type MeteringCallback = (level: number) => void;
+export type PlaybackProgressCallback = (progress: number) => void;
+export type PlaybackFinishCallback = () => void;
 
 class VoiceMessageService {
   private recording: Audio.Recording | null = null;
   private sound: Audio.Sound | null = null;
   private recordingStartTime: number = 0;
+  private meteringCallback: MeteringCallback | null = null;
+  private playbackProgressCallback: PlaybackProgressCallback | null = null;
+  private playbackFinishCallback: PlaybackFinishCallback | null = null;
 
   /**
    * Demander les permissions audio
@@ -38,7 +45,25 @@ class VoiceMessageService {
   }
 
   /**
-   * Démarrer l'enregistrement
+   * Configurer le callback de metering (appelé pendant l'enregistrement)
+   */
+  setMeteringCallback(callback: MeteringCallback | null): void {
+    this.meteringCallback = callback;
+  }
+
+  /**
+   * Configurer les callbacks de lecture
+   */
+  setPlaybackCallbacks(
+    onProgress: PlaybackProgressCallback | null,
+    onFinish: PlaybackFinishCallback | null,
+  ): void {
+    this.playbackProgressCallback = onProgress;
+    this.playbackFinishCallback = onFinish;
+  }
+
+  /**
+   * Démarrer l'enregistrement avec metering activé
    */
   async startRecording(): Promise<{ success: boolean; error?: string }> {
     try {
@@ -55,7 +80,21 @@ class VoiceMessageService {
       }
 
       const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
+        {
+          ...Audio.RecordingOptionsPresets.HIGH_QUALITY,
+          isMeteringEnabled: true,
+        },
+        // Callback de statut avec metering
+        (status) => {
+          if (status.isRecording && status.metering !== undefined && this.meteringCallback) {
+            // Normaliser le metering de dB (-160..0) vers 0..1
+            const minDb = -50;
+            const maxDb = 0;
+            const normalized = Math.max(0.05, Math.min(1, (status.metering - minDb) / (maxDb - minDb)));
+            this.meteringCallback(normalized);
+          }
+        },
+        100 // Mise à jour toutes les 100ms
       );
 
       this.recording = recording;
@@ -83,10 +122,10 @@ class VoiceMessageService {
       }
 
       const duration = Math.floor((Date.now() - this.recordingStartTime) / 1000);
-      
+
       await this.recording.stopAndUnloadAsync();
       const uri = this.recording.getURI();
-      
+
       this.recording = null;
 
       // Réinitialiser le mode audio
@@ -164,7 +203,7 @@ class VoiceMessageService {
   }
 
   /**
-   * Jouer un message vocal
+   * Jouer un message vocal avec suivi de la progression
    */
   async playVoiceMessage(url: string): Promise<{ success: boolean; error?: string }> {
     try {
@@ -173,15 +212,24 @@ class VoiceMessageService {
 
       const { sound } = await Audio.Sound.createAsync(
         { uri: url },
-        { shouldPlay: true }
+        { shouldPlay: true, progressUpdateIntervalMillis: 80 }
       );
 
       this.sound = sound;
 
-      // Écouter la fin de la lecture
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
+      // Écouter la progression et la fin de la lecture
+      sound.setOnPlaybackStatusUpdate((status: AVPlaybackStatus) => {
+        if (!status.isLoaded) return;
+
+        if (status.didJustFinish) {
+          this.playbackFinishCallback?.();
           this.stopPlayback();
+          return;
+        }
+
+        if (status.isPlaying && status.durationMillis && status.durationMillis > 0) {
+          const progress = status.positionMillis / status.durationMillis;
+          this.playbackProgressCallback?.(Math.min(1, progress));
         }
       });
 

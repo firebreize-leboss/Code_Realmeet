@@ -24,6 +24,7 @@ import { userService } from '@/services/user.service';
 import { storageService } from '@/services/storage.service';
 import { CityAutocomplete } from '@/components/CityAutocomplete';
 import { PhoneInput, PhoneValue, validatePhone, formatFullPhone } from '@/components/PhoneInput';
+import { consumePendingInviteToken } from '@/lib/pendingInvite';
 
 export default function SignupIndividualScreen() {
   const [firstName, setFirstName] = useState('');
@@ -146,13 +147,22 @@ export default function SignupIndividualScreen() {
         console.error('Erreur mise à jour profil:', updateResult.error);
       }
 
+      // Si un invite +1 est en attente, rediriger vers la page d'invitation après inscription
+      const pendingInviteToken = await consumePendingInviteToken().catch(() => null);
+
       Alert.alert(
         'Bienvenue !',
         'Votre compte a été créé avec succès !',
         [
           {
             text: 'Commencer',
-            onPress: () => router.replace('/(tabs)/browse')
+            onPress: () => {
+              if (pendingInviteToken) {
+                router.replace(`/invite/${pendingInviteToken}`);
+              } else {
+                router.replace('/(tabs)/browse');
+              }
+            }
           }
         ]
       );

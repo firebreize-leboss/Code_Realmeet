@@ -57,6 +57,7 @@ const MAPPING = {
   "plus.circle.fill": "add-circle",
   "minus": "remove",
   "xmark": "close",
+  "xmark.circle.fill": "cancel",
   "checkmark": "check",
   "checkmark.circle.fill": "check-circle",
   "checkmark.circle": "check-circle-outline",
@@ -163,6 +164,7 @@ const MAPPING = {
   "clock": "access-time",
   "calendar": "event",
   "calendar.badge.plus": "event",
+  "calendar.badge.exclamationmark": "event-busy",
   "timer": "timer",
 
   // User & Profile

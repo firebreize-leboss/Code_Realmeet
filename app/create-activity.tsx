@@ -13,6 +13,7 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -59,6 +60,7 @@ export default function CreateActivityScreen() {
   const [pendingSlots, setPendingSlots] = useState<{date: string; time: string; duration: number}[]>([]);
   const [calendarKey, setCalendarKey] = useState(0);
   const [calendarWeekOffset, setCalendarWeekOffset] = useState(0);
+  const [requiresCheckin, setRequiresCheckin] = useState(false);
   const { profile } = useAuth();
   const isBusiness = profile?.account_type === 'business';
 
@@ -187,6 +189,7 @@ export default function CreateActivityScreen() {
         longitude: longitude,
         prix: prix.trim() ? parseFloat(prix) : undefined,
         status: isBusiness ? 'draft' : 'active',
+        requires_checkin: requiresCheckin,
       });
 
       if (result.success) {
@@ -409,7 +412,24 @@ export default function CreateActivityScreen() {
               />
             </View>
           </View>
-          
+
+          {/* Check-in QR à l'entrée (option pour activités où la présence est critique) */}
+          <View style={styles.checkinToggleRow}>
+            <View style={styles.checkinToggleTextWrap}>
+              <Text style={styles.checkinToggleLabel}>Check-in QR à l'entrée</Text>
+              <Text style={styles.checkinToggleHelper}>
+                Active le billet QR scannable et les pénalités en cas d'absence. À réserver aux activités payantes où la présence est critique.
+              </Text>
+            </View>
+            <Switch
+              value={requiresCheckin}
+              onValueChange={setRequiresCheckin}
+              trackColor={{ false: '#E5E5EA', true: colors.primary }}
+              thumbColor="#FFFFFF"
+              ios_backgroundColor="#E5E5EA"
+            />
+          </View>
+
           {/* Créneaux horaires - Uniquement pour les entreprises */}
           {isBusiness && (
             <View style={styles.inputGroup}>
@@ -766,5 +786,29 @@ const styles = StyleSheet.create({
   },
   categoryItemTextDisabled: {
     color: colors.textSecondary,
+  },
+  checkinToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  checkinToggleTextWrap: {
+    flex: 1,
+  },
+  checkinToggleLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  checkinToggleHelper: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    lineHeight: 17,
   },
 });

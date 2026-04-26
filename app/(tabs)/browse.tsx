@@ -25,6 +25,8 @@ import { supabase } from '@/lib/supabase';
 import { PREDEFINED_CATEGORIES } from '@/constants/categories';
 import { useDataCache } from '@/contexts/DataCacheContext';
 import { useLocation } from '@/contexts/LocationContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { geocodingService } from '@/services/geocoding.service';
 import ActivityCard from '@/components/ActivityCard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FLOATING_TAB_BAR_HEIGHT } from '@/components/FloatingTabBar';
@@ -109,7 +111,10 @@ export default function BrowseScreen() {
   const params = useLocalSearchParams();
   const { cache, loading: cacheLoading, refreshActivities } = useDataCache();
   const { userLocation, refreshLocation, setIsMapViewActive } = useLocation();
+  const { profile } = useAuth();
   const insets = useSafeAreaInsets();
+  const [profileCityCoords, setProfileCityCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const profileCityGeocodedRef = useRef<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('liste');
 
@@ -198,6 +203,42 @@ export default function BrowseScreen() {
     return count;
   }, [filters]);
 
+
+  // Géocoder la ville du profil une seule fois pour servir de fallback de centrage carte
+  // quand la géolocalisation instantanée n'est pas disponible.
+  useEffect(() => {
+    const city = profile?.city?.trim();
+    if (!city || profileCityGeocodedRef.current === city) return;
+    let cancelled = false;
+    profileCityGeocodedRef.current = city;
+    (async () => {
+      const result = await geocodingService.geocodeAddress(city);
+      if (!cancelled && result && geocodingService.areCoordinatesValid(result.latitude, result.longitude)) {
+        setProfileCityCoords({ latitude: result.latitude, longitude: result.longitude });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [profile?.city]);
+
+  // Centre prioritaire à appliquer à la carte : géoloc instantanée > ville du profil > undefined
+  const mapPreferredCenter = useMemo<{ latitude: number; longitude: number } | null>(() => {
+    if (userLocation) return { latitude: userLocation.latitude, longitude: userLocation.longitude };
+    if (profileCityCoords) return profileCityCoords;
+    return null;
+  }, [userLocation, profileCityCoords]);
+
+  // Quand l'utilisateur ouvre la carte, recentrer sur géoloc / ville profil si dispo.
+  useEffect(() => {
+    if (viewMode !== 'maps' || !mapPreferredCenter || !webViewRef.current) return;
+    if (hasCenteredOnActivity.current) return;
+    webViewRef.current.postMessage(JSON.stringify({
+      type: 'centerOnUser',
+      latitude: mapPreferredCenter.latitude,
+      longitude: mapPreferredCenter.longitude,
+    }));
+  }, [viewMode, mapPreferredCenter]);
 
   // Mettre à jour le marker utilisateur quand la localisation change (debounced 500ms)
   useEffect(() => {
@@ -351,19 +392,28 @@ export default function BrowseScreen() {
 })),
 
         userLocation,
+        // Fallback ville profil si géoloc instantanée absente : la WebView centre dessus
+        // sans dessiner de marker utilisateur.
+        preferredCenter:
+          !userLocation && profileCityCoords
+            ? { latitude: profileCityCoords.latitude, longitude: profileCityCoords.longitude }
+            : null,
         shouldCenter,
       }));
     }
   };
 
   const centerOnUser = () => {
-    if (userLocation && webViewRef.current) {
-      webViewRef.current.postMessage(JSON.stringify({
-        type: 'centerOnUser',
-        latitude: userLocation.latitude,
-        longitude: userLocation.longitude,
-      }));
-    }
+    if (!webViewRef.current) return;
+    const target = userLocation
+      ? { latitude: userLocation.latitude, longitude: userLocation.longitude }
+      : profileCityCoords;
+    if (!target) return;
+    webViewRef.current.postMessage(JSON.stringify({
+      type: 'centerOnUser',
+      latitude: target.latitude,
+      longitude: target.longitude,
+    }));
   };
 
   // Fonction de filtrage réutilisable
@@ -458,7 +508,9 @@ export default function BrowseScreen() {
 
   const defaultCenter = userLocation
     ? [userLocation.longitude, userLocation.latitude]
-    : [2.3522, 48.8566];
+    : profileCityCoords
+      ? [profileCityCoords.longitude, profileCityCoords.latitude]
+      : [2.3522, 48.8566];
 
   const mapHTML = useMemo(() => `
 <!DOCTYPE html>
@@ -640,6 +692,8 @@ export default function BrowseScreen() {
           if (data.shouldCenter !== false) {
             if (data.userLocation) {
               map.setCenter([data.userLocation.longitude, data.userLocation.latitude]);
+            } else if (data.preferredCenter) {
+              map.setCenter([data.preferredCenter.longitude, data.preferredCenter.latitude]);
             } else if (activities.length > 0) {
               map.setCenter([activities[0].longitude, activities[0].latitude]);
             }

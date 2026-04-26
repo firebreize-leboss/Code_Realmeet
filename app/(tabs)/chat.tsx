@@ -12,7 +12,6 @@ import {
   ActivityIndicator,
   TextInput,
   Alert,
-  Animated as RNAnimated,
   Pressable,
   Dimensions,
   LayoutAnimation,
@@ -161,14 +160,31 @@ const ChatItem = React.memo(function ChatItem({
               {chat.lastMessageTime}
             </Text>
             {chat.isPastActivity && (
-              <Text style={{
-                fontSize: 10,
-                fontFamily: 'Manrope_500Medium',
-                color: chat.isCancelled ? '#EF4444' : colors.textMuted,
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 3,
                 marginLeft: 6,
+                paddingHorizontal: 6,
+                paddingVertical: 2,
+                borderRadius: 6,
+                backgroundColor: chat.isCancelled
+                  ? 'rgba(239, 68, 68, 0.1)'
+                  : 'rgba(107, 114, 128, 0.12)',
               }}>
-                {chat.isCancelled ? 'Annulée' : 'Terminée'}
-              </Text>
+                <IconSymbol
+                  name={chat.isCancelled ? 'xmark.circle.fill' : 'checkmark.circle.fill'}
+                  size={11}
+                  color={chat.isCancelled ? '#EF4444' : colors.textMuted}
+                />
+                <Text style={{
+                  fontSize: 10,
+                  fontFamily: 'Manrope_600SemiBold',
+                  color: chat.isCancelled ? '#EF4444' : colors.textMuted,
+                }}>
+                  {chat.isCancelled ? 'Annulée' : 'Terminée'}
+                </Text>
+              </View>
             )}
           </View>
 
@@ -209,7 +225,7 @@ export default function ChatScreen() {
   const { setCurrentTabIndex } = useTabIndex();
   const [showFriendsModal, setShowFriendsModal] = useState(false);
   const [activeFilter, setActiveFilter] = useState<ChatFilter>('all');
-  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const { cache, markConversationAsRead, refreshConversations, refreshFriends, removeConversationFromCache, toggleMuteConversation } = useDataCache();
   const { pendingCount: pendingRequestsCount, refresh: refreshFriendRequests } = useFriendRequests();
@@ -217,6 +233,7 @@ export default function ChatScreen() {
   const [activityContacts, setActivityContacts] = useState<Friend[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [headerSearchQuery, setHeaderSearchQuery] = useState('');
+  const isCreatingConversation = useRef(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -243,7 +260,55 @@ export default function ChatScreen() {
   const privateCount = conversations.filter(c => !c.isGroup).length;
 
   const handleCreateConversation = async (friendId: string) => {
+    if (isCreatingConversation.current) return;
+    isCreatingConversation.current = true;
     try {
+      // Vérifier si une conversation directe existe déjà avec cet ami
+      const existingConv = conversations.find(c =>
+        !c.isGroup && !c.isActivityGroup && c.id &&
+        // On cherche dans les conversations privées 1:1
+        !c.activityId && !c.slotId
+      );
+
+      // Chercher plus précisément via les participants en cache
+      // Si on trouve une conv existante avec cet ami, y rediriger directement
+      const { data: existingDirect } = await supabase
+        .from('conversation_participants')
+        .select('conversation_id, conversations!inner(id, is_group, activity_id, slot_id)')
+        .eq('user_id', friendId)
+        .filter('conversations.is_group', 'eq', false)
+        .filter('conversations.activity_id', 'is', null)
+        .filter('conversations.slot_id', 'is', null);
+
+      if (existingDirect && existingDirect.length > 0) {
+        // Vérifier que l'utilisateur courant est aussi participant
+        const { data: userData } = await supabase.auth.getUser();
+        if (userData?.user) {
+          for (const entry of existingDirect) {
+            const { data: myParticipation } = await supabase
+              .from('conversation_participants')
+              .select('conversation_id')
+              .eq('conversation_id', entry.conversation_id)
+              .eq('user_id', userData.user.id)
+              .single();
+
+            if (myParticipation) {
+              // Réinitialiser is_hidden si besoin
+              await supabase
+                .from('conversation_participants')
+                .update({ is_hidden: false })
+                .eq('conversation_id', entry.conversation_id)
+                .eq('user_id', userData.user.id);
+
+              setShowFriendsModal(false);
+              router.push(`/chat-detail?id=${entry.conversation_id}`);
+              return;
+            }
+          }
+        }
+      }
+
+      // Pas de conversation existante → en créer une
       const { data: convId, error: rpcError } = await supabase.rpc('create_direct_conversation', {
         p_friend_id: friendId,
       });
@@ -257,6 +322,9 @@ export default function ChatScreen() {
       router.push(`/chat-detail?id=${convId as string}`);
     } catch (error) {
       console.error('Error creating conversation:', error);
+    } finally {
+      // Délai pour éviter les doubles navigations pendant la transition
+      setTimeout(() => { isCreatingConversation.current = false; }, 1000);
     }
   };
 
@@ -360,25 +428,27 @@ export default function ChatScreen() {
     }
   };
 
-  const handleDeleteConversation = async (conversationId: string) => {
+  const handleDeleteSelectedConversations = async () => {
     try {
       const { data: currentUser } = await supabase.auth.getUser();
       if (!currentUser?.user?.id) return;
 
-      removeConversationFromCache(conversationId);
+      for (const convId of selectedIds) {
+        removeConversationFromCache(convId);
 
-      const { error } = await supabase
-        .from('conversation_participants')
-        .update({ is_hidden: true })
-        .eq('conversation_id', conversationId)
-        .eq('user_id', currentUser.user.id);
+        const { error } = await supabase
+          .from('conversation_participants')
+          .update({ is_hidden: true })
+          .eq('conversation_id', convId)
+          .eq('user_id', currentUser.user.id);
 
-      if (error) {
-        await refreshConversations();
-        throw error;
+        if (error) {
+          await refreshConversations();
+          throw error;
+        }
       }
 
-      setSelectedConversation(null);
+      setSelectedIds(new Set());
     } catch (error) {
       console.error('Erreur suppression conversation:', error);
       Alert.alert('Erreur', 'Impossible de supprimer la conversation');
@@ -386,32 +456,45 @@ export default function ChatScreen() {
   };
 
   const handleCloseActionBar = () => {
-    setSelectedConversation(null);
+    setSelectedIds(new Set());
   };
 
-  const handleMuteConversation = async () => {
-    if (!selectedConversation) return;
-
-    const newMutedState = await toggleMuteConversation(selectedConversation.id);
-    setSelectedConversation(null);
+  const handleMuteSelectedConversations = async () => {
+    for (const convId of selectedIds) {
+      await toggleMuteConversation(convId);
+    }
+    setSelectedIds(new Set());
   };
 
   const handleArchiveConversation = () => {
-    Alert.alert('Archiver', `Conversation "${selectedConversation?.name}" archivée`);
-    setSelectedConversation(null);
+    Alert.alert('Archiver', `${selectedIds.size} conversation(s) archivée(s)`);
+    setSelectedIds(new Set());
   };
 
   const handleChatItemPress = useCallback((chat: Conversation) => {
-    if (selectedConversation) {
-      setSelectedConversation(null);
+    if (selectedIds.size > 0) {
+      // En mode sélection : toggle l'élément
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        if (next.has(chat.id)) {
+          next.delete(chat.id);
+        } else {
+          next.add(chat.id);
+        }
+        return next;
+      });
     } else {
       markConversationAsRead(chat.id);
       router.push(`/chat-detail?id=${chat.id}`);
     }
-  }, [selectedConversation, markConversationAsRead, router]);
+  }, [selectedIds.size, markConversationAsRead, router]);
 
   const handleChatItemLongPress = useCallback((chat: Conversation) => {
-    setSelectedConversation(chat);
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.add(chat.id);
+      return next;
+    });
   }, []);
 
   const renderChatItem = (chat: Conversation) => {
@@ -419,18 +502,27 @@ export default function ChatScreen() {
       <ChatItem
         key={chat.id}
         chat={chat}
-        isSelected={selectedConversation?.id === chat.id}
+        isSelected={selectedIds.has(chat.id)}
         onPress={handleChatItemPress}
         onLongPress={handleChatItemLongPress}
       />
     );
   };
 
+  const [loadingFriendId, setLoadingFriendId] = useState<string | null>(null);
+
+  const handleFriendPress = async (friendId: string) => {
+    setLoadingFriendId(friendId);
+    await handleCreateConversation(friendId);
+    setLoadingFriendId(null);
+  };
+
   const renderFriendItem = ({ item }: { item: Friend }) => (
     <TouchableOpacity
       style={styles.friendItem}
-      onPress={() => handleCreateConversation(item.id)}
+      onPress={() => handleFriendPress(item.id)}
       activeOpacity={0.7}
+      disabled={loadingFriendId !== null}
     >
       <View style={styles.friendAvatarContainer}>
         <Image source={{ uri: item.avatar }} style={styles.friendAvatar} />
@@ -444,7 +536,11 @@ export default function ChatScreen() {
           {item.is_online ? 'En ligne' : 'Hors ligne'}
         </Text>
       </View>
-      <IconSymbol name="chevron.right" size={18} color={colors.textMuted} />
+      {loadingFriendId === item.id ? (
+        <ActivityIndicator size="small" color={colors.primary} />
+      ) : (
+        <IconSymbol name="chevron.right" size={18} color={colors.textMuted} />
+      )}
     </TouchableOpacity>
   );
 
@@ -502,7 +598,7 @@ export default function ChatScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       {/* Barre d'actions contextuelle */}
-      {selectedConversation && (
+      {selectedIds.size > 0 && (
         <View style={styles.actionBarContainer}>
           <SafeAreaView edges={['top']} style={styles.actionBarSafeArea}>
             <View style={styles.actionBar}>
@@ -513,15 +609,15 @@ export default function ChatScreen() {
                 <IconSymbol name="xmark" size={20} color={colors.text} />
               </TouchableOpacity>
 
-              <Text style={styles.actionBarTitle}>1 sélectionné</Text>
+              <Text style={styles.actionBarTitle}>{selectedIds.size} sélectionné{selectedIds.size > 1 ? 's' : ''}</Text>
 
               <View style={styles.actionBarActions}>
                 <TouchableOpacity
                   style={styles.actionBarButton}
-                  onPress={handleMuteConversation}
+                  onPress={handleMuteSelectedConversations}
                 >
                   <IconSymbol
-                    name={selectedConversation?.isMuted ? "bell.fill" : "bell.slash.fill"}
+                    name="bell.slash.fill"
                     size={20}
                     color={colors.textSecondary}
                   />
@@ -536,7 +632,7 @@ export default function ChatScreen() {
 
                 <TouchableOpacity
                   style={styles.actionBarButton}
-                  onPress={() => handleDeleteConversation(selectedConversation.id)}
+                  onPress={handleDeleteSelectedConversations}
                 >
                   <IconSymbol name="trash" size={20} color={colors.error} />
                 </TouchableOpacity>
@@ -547,7 +643,7 @@ export default function ChatScreen() {
       )}
 
       {/* Header - fond clair */}
-      {!selectedConversation && (
+      {selectedIds.size === 0 && (
         <SafeAreaView edges={['top']} style={styles.headerSafeArea}>
           <View style={styles.header}>
             <View style={styles.headerTop}>

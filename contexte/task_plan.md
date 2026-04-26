@@ -1,97 +1,55 @@
 # Task Plan: RealMeet — Pre-Launch Sprint
 
 ## Goal
-Préparer RealMeet pour le lancement en production. 6 chantiers parallèles à finaliser.
+Paufinner et rendre le produit prêt pour le lancement une bonne fois pour toute.
 
 ## Phases
 
-### Phase 0 : retirer le système de paiement ✅
+### Phase finale : Inscription téléphone
 
-- [x] on va rentrer dans un système où les gens ne paient pas à l'avance
-- [x] les gens vont juste avoir un ordre de prix que ça coutera.
-- [x] pas de stripe
-- [x] Ce sera basé sur du show / no-show : système de QR CODE pour justifier de la présence
-- [x] Si la personne ne vient pas 2 fois (2 pénalités), alors il est banni (compte associé au numéro de téléphone)
-- [x] Si la personne annule 24h avant : c'est ok et pas de pénalité.
-- [x] Diagrammes synchronisés (user-flows, domain-flow, ERD, domaines)
-- [x] CLAUDE.md mis à jour (Flow 1 + nouvelles RPCs)
+- [ ] le message de vérification ne s'envoie pas comme voulu, voici le bug sur twilio :
+SMa3210c8fade406f265f2e0e384cdda09
+2026-04-22 21:03:49.67 UTC	FAILED	+14783752290	+26269347XXXX	Telco OI	
+From: United States
+To: Réunion
+Error code : 21408	
+MG5e8214130365b4d4a813e9b876829853
+RealMeet
 
-### Phase 1: Performance & Smoothness ✅
-- [x] A1: Memoize DataCacheContext provider value (useMemo sur contextValue)
-- [x] A2: Remplacer JSON.stringify par shallow comparison dans browse.tsx
-- [x] A3: Stabiliser la subscription Realtime (ref pour blockedUserIds)
-- [x] A4: React.memo sur ActivityCard avec comparateur custom
-- [x] A5: Extraire ChatItem au scope module + React.memo
-- [x] A6: Convertir browse.tsx de .map() à FlatList virtualisée
-- [x] A7: Props de perf sur tous les FlatList (activity, blocked-users, met-people, friend-requests, business-group-view)
-- [x] B1: Migration expo-image sur 24 fichiers + placeholder local + suppression via.placeholder.com
-- [x] B2: Convertir chat.tsx conversations en FlatList (all/friends filters)
-- [x] B3: Debounce 500ms du postMessage location vers WebView
-- [x] C1: Clustering des marqueurs MapLibre avec supercluster
-- [x] C2: React.memo sur FloatingTabBar TabItem + useCallback handleTabPress + useMemo tabPressHandlers
-**Fichiers concernés** : contexts/DataCacheContext.tsx, app/(tabs)/*.tsx, components/*.tsx, 24 fichiers pour expo-image
-**Flows impactés** : Tous (smoothness générale)
-**Status** : DONE
+SM1c6ef240fc1c60457267e14f15ceaac7
+2026-04-22 21:01:39.54 UTC	FAILED	+14783752290	+26269347XXXX	Telco OI	
+From: United States
+To: Réunion
+Error code : 21408	
+MG5e8214130365b4d4a813e9b876829853
+RealMeet
 
-### Phase 2: Tests pré-production ✅
-- [x] Tests du Flow 1 complet (inscription → paiement → conversation groupe)
-- [x] Tests du Flow 2 (formation de groupes — vérifier pg_cron + form_groups_v3)
-- [x] Tests du Flow 3 (check-in QR — scan → verify → validate sur checkin.realmeet.fr)
-- [x] Tests du Flow 4 (invitation +1 — création → lien → deep link → acceptation)
-- [x] Tests du Flow 5 (social — demande ami → acceptation → chat privé → block)
-- [x] Tests auth (inscription, login, session refresh, logout)
-- [x] Tests edge cases (réseau lent, double-tap, back navigation, token expiré)
-- [x] Vérifier les RLS policies sur toutes les tables — audit complet + hardening (45 fonctions, 3 migrations critiques)
-- [x] Diagrammes synchronisés (groups-chat.mermaid, social.mermaid, CHANGELOG-DIAGRAMS.md créé)
-**Fichiers concernés** : Tous les flows, services/*.service.ts, RPC Supabase
-**Flows impactés** : Flow 1-5
-**Status** : DONE ✅
+SM3535e674f8ac9aeba664049299c55d2c
+2026-04-22 21:00:58.59 UTC	FAILED	+14783752290	+26269347XXXX	Unknown	
+From: United States
+To: Réunion
+Error code : 21408	
+MG5e8214130365b4d4a813e9b876829853
+RealMeet
 
-### Phase 3: Design & Identité visuelle
-- [ ] Définir la DA RealMeet (palette, typographie, spacing, border-radius)
-- [ ] Refactorer commonStyles.ts avec les nouveaux tokens de design
-- [ ] Retravailler les animations (transitions écrans, micro-interactions boutons)
-- [ ] Ajouter des animations de feedback (like, inscription réussie, envoi message)
-- [ ] Revoir les cartes d'activité (ombres, images, layout)
-- [ ] Rendre le tab bar plus distinctif
-- [ ] Harmoniser les modals et bottom sheets
-- [ ] S'assurer de la cohérence dark mode si applicable
-**Fichiers concernés** : styles/commonStyles.ts, components/*.tsx, app/(tabs)/*.tsx
-**Flows impactés** : Tous (visuel)
-**Status** : NOT STARTED
 
-### Phase 4: Lien +1 (Deep Link)
-- [ ] Tester le flow complet : création lien → partage → ouverture dans navigateur → redirect deep link → app
-- [ ] Vérifier invite.html sur VPS (redirect vers le bon scheme)
-- [ ] Tester le cas "utilisateur non connecté" (redirect login → retour invite)
-- [ ] Tester le cas "token expiré" (message d'erreur clair)
-- [ ] Tester le cas "utilisateur déjà inscrit au créneau"
-- [ ] Vérifier le flow paiement duo (host_pays / guest_pays)
-- [ ] Tester sur iOS et Android réels
-**Fichiers concernés** : app/invite/[token].tsx, services/invitation.service.ts, invite.html (VPS)
-**Flows impactés** : Flow 4
-**Diagramme** : realmeet-user-flows.mermaid > FLOW4
-**Status** : NOT STARTED
-**Notes** : Faire tout ce qui est possible sans test réel (avec supabase). A la fin, faire une note sur .claude/notes avec ce qui reste à être vérifié manuellement sur expo-go directement.
+### Phase finale : debuggage
 
-### Phase 5: Pages légales & administratives
-- [ ] Vérifier que terms-of-use.tsx est complet et à jour
-- [ ] Vérifier que privacy-policy.tsx est complet et à jour
-- [ ] Créer la page "À propos" si pas encore faite
-- [ ] Créer la page "Aide & Support" (contact@realmeet.fr)
-- [ ] Vérifier que les liens vers ces pages sont accessibles depuis le profil/settings
-- [ ] Mentions légales (éditeur, hébergeur, CNIL)
-**Fichiers concernés** : app/terms-of-use.tsx, app/privacy-policy.tsx, app/about.tsx, app/help-support.tsx
-**Flows impactés** : Aucun flow critique
-**Status** : NOT STARTED
-**Notes** : Si tu vois que des documents sont manquants et pourtant essentiels, fais en part durant la session. Il faut que tout soit en ordre à la fin de cette phase administrativement.
+- [x] Compteur participants cohérent sur la page activité. Cause : `ActivityCalendar` additionnait `slot_group_members` (jamais nettoyé après `cancel_slot_participation` ou `detect_no_shows`) en plus des `slot_participants`. Fix : la source de vérité est désormais `slot_participants WHERE status='active'` uniquement (les deux chemins de chargement du calendrier).
 
-## Decisions Made
-- (aucune pour l'instant)
 
-## Errors Encountered
-- (aucune pour l'instant)
+### Phase finale : ajouts de fonctionnalité
+- [x] La carte Maps centre désormais en priorité sur la géoloc instantanée, sinon sur la ville du profil (géocodée via Nominatim, mise en cache pour la session), sinon sur la première activité. Le bouton "centrer sur moi" et le centre par défaut de la WebView suivent la même priorité.
+
+### Phase finale : mettre en pause une fonctionnalité
+- [x] Mise en pause du mode QR / validation. Flag opt-in `activities.requires_checkin` (défaut `false`) : toggle Switch sur create-activity et edit-activity, bloc "Vous êtes inscrit !" par défaut sur la page activité, QR conservé uniquement pour les activités qui l'activent. `detect_no_shows` ignore désormais les activités sans check-in → aucune pénalité possible quand le flag est off.
+
+
+
 
 ## Status
-**Phase actuelle** : Phase 3 / Phase 4 /Phase 5
-**Ordre recommandé** : Phase 5 (Important) → Phase 4 (Rapide) → Phase 3 (Polish)
+**Phase actuelle** : Phase finale réduction des lags terminée ✅
+**Toutes les phases sont terminées.**
+
+**Phase 1 terminée (2026-04-09)** : 7 tâches visuelles corrigées — navbar, profile épuré, dev invite removed, interest selector modal, RealMeetAlertModal brandé, icônes discussions terminées/annulées, titres activités entreprise sur gradient.
+**Phase 4 terminée (2026-04-09)** : 5 bugs corrigés — multi-sélection chat, vérification manuelle sans caméra, duplicate conversation, latence discussion fermée, navbar Android overlap.

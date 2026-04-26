@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "realmeet.entreprise",
+      "bundleIdentifier": "fr.realmeet.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },

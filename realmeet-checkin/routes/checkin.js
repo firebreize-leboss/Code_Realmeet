@@ -455,7 +455,7 @@ router.get('/slot-status/:slotId', partnerAuth, async (req, res) => {
 router.get('/today-slots', partnerAuth, async (req, res) => {
   const partnerId = req.partner.id;
   const today = new Date().toISOString().split('T')[0];
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+  const in48h = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString().split('T')[0];
 
   try {
     const { data: slots } = await supabase
@@ -466,7 +466,7 @@ router.get('/today-slots', partnerAuth, async (req, res) => {
       `)
       .eq('activities.host_id', partnerId)
       .gte('date', today)
-      .lte('date', tomorrow)
+      .lte('date', in48h)
       .order('date', { ascending: true })
       .order('time', { ascending: true });
 

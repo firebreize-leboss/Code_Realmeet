@@ -372,8 +372,11 @@ async function startScanner() {
     () => {} // ignore errors
   ).catch(err => {
     console.error('Camera error:', err);
-    document.getElementById('scanner-section').innerHTML =
-      '<div class="empty"><div class="empty-icon">📷</div><p>Impossible d\'accéder à la caméra.<br>Vérifiez les permissions.</p></div>';
+    // Remplacer uniquement le scanner box, garder le bouton manual
+    const scannerBox = document.querySelector('.scanner-box');
+    const scannerLabel = document.querySelector('.scanner-label');
+    if (scannerBox) scannerBox.innerHTML = '<div class="empty" style="padding:30px 20px"><div class="empty-icon">📷</div><p>Caméra non disponible.<br>Utilisez la validation manuelle ci-dessous.</p></div>';
+    if (scannerLabel) scannerLabel.style.display = 'none';
   });
 }
 

@@ -1,17 +1,31 @@
 // hooks/useActivityCancellationListener.ts
-// Écoute en temps réel les annulations d'activités via Supabase Realtime
-// Notifie l'utilisateur immédiatement (Alert en foreground, notification locale en background)
+// Écoute en temps réel les annulations d'activités via Supabase Realtime.
+// En foreground, retourne un état à afficher dans un modal brandé RealMeet.
+// En background, envoie une notification locale.
 
-import { useEffect } from 'react';
-import { Alert, AppState, AppStateStatus } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 
+export interface ActivityCancellationAlertState {
+  visible: boolean;
+  title: string;
+  message: string;
+  activityId: string | null;
+}
+
 export function useActivityCancellationListener() {
   const { user } = useAuth();
   const router = useRouter();
+  const [alert, setAlert] = useState<ActivityCancellationAlertState>({
+    visible: false,
+    title: '',
+    message: '',
+    activityId: null,
+  });
 
   useEffect(() => {
     if (!user?.id) return;
@@ -22,7 +36,6 @@ export function useActivityCancellationListener() {
       currentAppState = nextState;
     });
 
-    // Vérifie si l'utilisateur est inscrit à l'activité donnée
     async function isUserParticipant(activityId: string): Promise<boolean> {
       const { data, error } = await supabase
         .from('slot_participants')
@@ -38,20 +51,14 @@ export function useActivityCancellationListener() {
       return data !== null && data.length > 0;
     }
 
-    // Notifie l'utilisateur selon l'état de l'app
     function notifyUser(activityId: string, activityName: string) {
       if (currentAppState === 'active') {
-        Alert.alert(
-          '😔 Activité annulée',
-          `L'activité "${activityName}" a été annulée.`,
-          [
-            { text: 'Fermer', style: 'cancel' },
-            {
-              text: 'Voir détails',
-              onPress: () => router.push(`/activity-detail?id=${activityId}`),
-            },
-          ]
-        );
+        setAlert({
+          visible: true,
+          title: 'Activité annulée',
+          message: `L'activité « ${activityName} » a été annulée. Vous serez intégralement remboursé.`,
+          activityId,
+        });
       } else {
         Notifications.scheduleNotificationAsync({
           content: {
@@ -66,7 +73,6 @@ export function useActivityCancellationListener() {
       }
     }
 
-    // Écouter les UPDATE sur activities (status -> paused ou ended)
     const channel = supabase
       .channel(`activity-cancellations-${user.id}`)
       .on(
@@ -80,7 +86,6 @@ export function useActivityCancellationListener() {
           const newRecord = payload.new as { id: string; nom: string; status: string };
           const oldRecord = payload.old as { id: string; status: string };
 
-          // Ne réagir que si le status vient de changer vers paused ou ended
           if (
             (newRecord.status === 'paused' || newRecord.status === 'ended') &&
             oldRecord.status !== newRecord.status
@@ -117,4 +122,18 @@ export function useActivityCancellationListener() {
       appStateListener.remove();
     };
   }, [user?.id]);
+
+  const dismiss = useCallback(() => {
+    setAlert((prev) => ({ ...prev, visible: false }));
+  }, []);
+
+  const viewDetails = useCallback(() => {
+    const activityId = alert.activityId;
+    setAlert((prev) => ({ ...prev, visible: false }));
+    if (activityId) {
+      router.push(`/activity-detail?id=${activityId}`);
+    }
+  }, [alert.activityId, router]);
+
+  return { alert, dismiss, viewDetails };
 }

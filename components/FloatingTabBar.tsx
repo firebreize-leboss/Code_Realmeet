@@ -87,10 +87,10 @@ const TabItem = React.memo(function TabItem({
         <Text
           style={[
             styles.tabLabel,
-            { color: colors.textTertiary },
+            { color: colors.textTertiary, fontFamily: 'Manrope_500Medium' },
             isActive && {
               color: colors.primary,
-              fontWeight: '600'
+              fontFamily: 'Manrope_700Bold',
             },
           ]}
         >
@@ -172,8 +172,12 @@ export default function FloatingTabBar({
 
   // Remove unnecessary tabBarStyle animation to prevent flickering
 
+  // Compute tab + indicator geometry so the indicator is perfectly centered on each tab
+  const tabWidth = (containerWidth - 16) / tabs.length; // 8px padding on each side of container
+  const indicatorHorizontalPadding = 4; // px inset inside each tab slot
+  const indicatorWidthPx = Math.max(0, tabWidth - indicatorHorizontalPadding * 2);
+
   const indicatorStyle = useAnimatedStyle(() => {
-    const tabWidth = (containerWidth - 16) / tabs.length; // Account for container padding (8px on each side)
     // Use real-time scroll progress when available, otherwise fall back to spring animation
     const progress = scrollProgress ? scrollProgress.value : animatedValue.value;
     return {
@@ -214,8 +218,9 @@ export default function FloatingTabBar({
     },
     indicator: {
       ...styles.indicator,
-      backgroundColor: 'rgba(255, 255, 255, 0.4)', // Increased opacity for better contrast
-      width: `${(100 / tabs.length) - 3}%`, // Dynamic width based on number of tabs
+      backgroundColor: 'rgba(242, 153, 74, 0.13)', // Orange-teinté pour l'onglet actif
+      left: 8 + indicatorHorizontalPadding, // Center the indicator inside the first tab slot
+      width: indicatorWidthPx,
     },
   };
 
@@ -291,11 +296,9 @@ const styles = StyleSheet.create({
   indicator: {
     position: 'absolute',
     top: 8,
-    left: 8,
     bottom: 8,
     borderRadius: 17,
-    width: `${(100 / 2) - 3}%`, // Default for 2 tabs, will be overridden by dynamic styles
-    // Dynamic styling applied in component
+    // left and width are applied dynamically (computed per tab count)
   },
   tabsContainer: {
     flexDirection: 'row',
@@ -316,8 +319,8 @@ const styles = StyleSheet.create({
   },
   tabLabel: {
     fontSize: 11,
+    fontFamily: 'Manrope_500Medium',
     fontWeight: '500',
     marginTop: 2,
-    // Dynamic styling applied in component
   },
 });
