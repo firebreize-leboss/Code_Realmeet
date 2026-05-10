@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "991391527486",
+    "project_id": "real-meet-2j8ldl",
+    "storage_bucket": "real-meet-2j8ldl.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:991391527486:android:412b919c6f9886a9c5176f",
+        "android_client_info": {
+          "package_name": "com.flutterflow.homeU"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC5TqMo5M5O8CCoZJa5_welJ4cgb6qQlaA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:991391527486:android:fb9d4effad1a1b99c5176f",
+        "android_client_info": {
+          "package_name": "realmeet.entreprise"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC5TqMo5M5O8CCoZJa5_welJ4cgb6qQlaA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
