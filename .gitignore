@@ -35,7 +35,5 @@ ios/
 netlify.toml
 .netlify/
 
-pnpm-lock.yaml
-package-lock.json
 .env
 real-meet-2j8ldl-4f663f403e10.json
